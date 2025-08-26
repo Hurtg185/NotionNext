@@ -341,6 +341,8 @@ const LayoutSlug = props => {
   const { locale, fullWidth } = useGlobal()
 
   const [hasCode, setHasCode] = useState(false)
+  // 控制弹窗的显示状态
+  const [showGroupModal, setShowGroupModal] = useState(false);
 
   useEffect(() => {
     const hasCode = document.querySelectorAll('[class^="language-"]').length > 0
@@ -404,6 +406,82 @@ const LayoutSlug = props => {
               </section>
 
               <ShareBar post={post} />
+              
+              {/* --- 插入新的按钮组和弹窗 --- */}
+              <div className='bg-white shadow-md my-2 p-4 rounded-md dark:bg-black'>
+                <div className='grid grid-cols-3 gap-3'> {/* 强制3列，gap-3 */}
+                  {/* 按钮1：加入通知群 - 点击打开弹窗 */}
+                  <button
+                    onClick={() => setShowGroupModal(true)} // 使用状态控制弹窗
+                    className='flex flex-col items-center justify-center p-4 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-all duration-200 shadow-sm'>
+                    <i className='fas fa-bell text-2xl mb-2'></i>
+                    <span className='text-sm font-semibold text-center line-clamp-1'>通知群</span>
+                  </button>
+
+                  {/* 按钮2：免费资料 */}
+                  <SmartLink href='#' target='_blank' rel='noopener noreferrer' passHref className='flex flex-col items-center justify-center p-4 rounded-lg bg-green-500 text-white hover:bg-green-600 transition-all duration-200 shadow-sm'>
+                    <i className='fas fa-book-open text-2xl mb-2'></i>
+                    <span className='text-sm font-semibold text-center line-clamp-1'>免费资料</span>
+                  </SmartLink>
+
+                  {/* 按钮3：找工作 */}
+                  <SmartLink href='#' target='_blank' rel='noopener noreferrer' passHref className='flex flex-col items-center justify-center p-4 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-all duration-200 shadow-sm'>
+                    <i className='fas fa-briefcase text-2xl mb-2'></i>
+                    <span className='text-sm font-semibold text-center line-clamp-1'>找工作</span>
+                  </SmartLink>
+
+                  {/* 如果您想要4个按钮，可以取消注释下面的代码，并调整 grid-cols-3 为 grid-cols-4 */}
+                  {/*
+                  <SmartLink href='#' passHref className='flex flex-col items-center justify-center p-4 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-all duration-200 shadow-sm'>
+                    <i className='fas fa-users text-2xl mb-2'></i>
+                    <span className='text-sm font-semibold text-center line-clamp-1'>加入频道</span>
+                  </SmartLink>
+                  */}
+                </div>
+              </div>
+
+              {/* 模态弹窗：选择群组平台 */}
+              {showGroupModal && ( // 根据状态显示/隐藏弹窗
+                <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'>
+                  <div className='bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-sm w-full mx-4'>
+                    <h3 className='text-lg font-bold mb-4 dark:text-gray-200'>选择加入平台</h3>
+                    <div className='space-y-3'>
+                      {/* 群组平台按钮 - Telegram */}
+                      <SmartLink href='https://t.me/your_telegram_group' target='_blank' rel='noopener noreferrer' passHref className='flex items-center p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200'>
+                        <i className='fab fa-telegram-plane text-xl mr-3'></i>
+                        <span className='font-semibold'>Telegram 通知群</span>
+                      </SmartLink>
+
+                      {/* 群组平台按钮 - WeChat */}
+                      <SmartLink href='https://your_wechat_group_qr_code_link' target='_blank' rel='noopener noreferrer' passHref className='flex items-center p-3 rounded-lg bg-green-500 text-white hover:bg-green-600 transition-all duration-200'>
+                        <i className='fab fa-weixin text-xl mr-3'></i>
+                        <span className='font-semibold'>微信通知群</span>
+                      </SmartLink>
+
+                      {/* 群组平台按钮 - Line (如果适用) */}
+                      <SmartLink href='https://line.me/R/ti/g/your_line_group_id' target='_blank' rel='noopener noreferrer' passHref className='flex items-center p-3 rounded-lg bg-green-400 text-white hover:bg-green-500 transition-all duration-200'>
+                        <i className='fab fa-line text-xl mr-3'></i>
+                        <span className='font-semibold'>Line 通知群</span>
+                      </SmartLink>
+
+                      {/* 群组平台按钮 - Facebook Group (如果适用) */}
+                      <SmartLink href='https://www.facebook.com/groups/your_facebook_group_id' target='_blank' rel='noopener noreferrer' passHref className='flex items-center p-3 rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-all duration-200'>
+                        <i className='fab fa-facebook-f text-xl mr-3'></i>
+                        <span className='font-semibold'>Facebook 群组</span>
+                      </SmartLink>
+
+                      {/* ... 可以添加更多平台 ... */}
+                    </div>
+                    <button
+                      onClick={() => setShowGroupModal(false)} // 使用状态控制弹窗
+                      className='mt-6 w-full py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-200'>
+                      关闭
+                    </button>
+                  </div>
+                </div>
+              )}
+              {/* --- 按钮组和弹窗插入结束 --- */}
+
               {post?.type === 'Post' && (
                 <div className='px-5'>
                   {/* --- 移除 PostAdjacent (上一篇/下一篇) --- */}
