@@ -59,7 +59,7 @@ const LoadingCover = ({ banners }) => {
     <div
       id='loading-cover'
       style={loadingCoverStyle}
-      // 添加 Ken Burns 动画效果 (背景缓慢缩放和平移)
+      // 使用在 tailwind.config.js 中定义的动画
       className={`
         fixed top-0 left-0 w-full h-full z-50 flex justify-center items-center
         ${!randomBanner && 'bg-white dark:bg-black'}
@@ -83,36 +83,6 @@ const LoadingCover = ({ banners }) => {
         {/* 加载动画 */}
         <style>
           {`
-          /* Ken Burns 动画效果 */
-          @keyframes kenburns-top {
-            0% {
-              transform: scale(1) translateY(0);
-              transform-origin: 50% 16%;
-            }
-            100% {
-              transform: scale(1.25) translateY(-15px);
-              transform-origin: top;
-            }
-          }
-          .animate-ken-burns {
-            animation: kenburns-top 7s ease-out both;
-          }
-
-          /* 弹窗动画 */
-          @keyframes modal-pop-in {
-            0% {
-              transform: scale(0.9);
-              opacity: 0;
-            }
-            100% {
-              transform: scale(1);
-              opacity: 1;
-            }
-          }
-          .animate-modal-pop {
-            animation: modal-pop-in 0.3s ease-out both;
-          }
-
           .loader {
             width: 20px;
             aspect-ratio: 1;
