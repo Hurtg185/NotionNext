@@ -1,3 +1,5 @@
+// tailwind.config.js
+
 const BLOG = require('./blog.config')
 const { fontFamilies } = require('./lib/font')
 
@@ -77,7 +79,35 @@ module.exports = {
         'testimonial-btn': '0px 8px 15px 0px rgba(72, 72, 138, 0.08)',
         1: '0px 1px 3px 0px rgba(166, 175, 195, 0.40)',
         2: '0px 5px 12px 0px rgba(0, 0, 0, 0.10)'
+      },
+      // --- 从这里开始是新增的动画配置 ---
+      keyframes: {
+        'kenburns-top': {
+          '0%': {
+            transform: 'scale(1) translateY(0)',
+            'transform-origin': '50% 16%'
+          },
+          '100%': {
+            transform: 'scale(1.25) translateY(-15px)',
+            'transform-origin': 'top'
+          }
+        },
+        'modal-pop-in': {
+          '0%': {
+            transform: 'scale(0.9)',
+            opacity: '0'
+          },
+          '100%': {
+            transform: 'scale(1)',
+            opacity: '1'
+          }
+        }
+      },
+      animation: {
+        'ken-burns': 'kenburns-top 7s ease-out both',
+        'modal-pop': 'modal-pop-in 0.3s ease-out both'
       }
+      // --- 新增配置结束 ---
     }
   },
   variants: {
