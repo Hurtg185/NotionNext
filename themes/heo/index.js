@@ -40,15 +40,24 @@ import AISummary from '@/components/AISummary'
 import ArticleExpirationNotice from '@/components/ArticleExpirationNotice'
 import GlosbeSearchCard from '@/components/GlosbeSearchCard'
 
-// --- 新增：随机图片数组 ---
-// 请确保您的图片放在 /public/images/random/ 文件夹下，并更新下面的列表
-const RANDOM_BANNERS = [
-  '/images/random/1.jpg',
-  '/images/random/2.jpg',
-  '/images/random/3.png',
-  '/images/random/4.jpg',
-  '/images/random/5.jpg'
-  // ... 添加更多图片路径
+// --- 新增：随机宣传图片数组 (用于非开屏位置) ---
+// 请确保您的图片放在 /public/images/xuanchuan/ 文件夹下，并更新下面的列表
+const XUANCHUAN_BANNERS = [
+  '/images/xuanchuan/xuanchuan1.jpg',
+  '/images/xuanchuan/xuanchuan2.jpg',
+  '/images/xuanchuan/xuanchuan3.png',
+  '/images/xuanchuan/xuanchuan4.jpg',
+  '/images/xuanchuan/xuanchuan5.jpg'
+  // ... 请务必在这里列出所有您上传到 /public/images/xuanchuan/ 的图片路径
+]
+
+// --- 新增：开屏随机图片数组 ---
+// 请确保您的开屏图片放在 /public/images/kaiping/ 文件夹下，并更新下面的列表
+const KAIPING_BANNERS = [
+  '/images/kaiping/kaiping1.jpg',
+  '/images/kaiping/kaiping2.jpg',
+  '/images/kaiping/kaiping3.png'
+  // ... 请务必在这里列出所有您上传到 /public/images/kaiping/ 的图片路径
 ]
 
 // --- 新增：通用弹窗组件 ---
@@ -57,7 +66,7 @@ const Modal = ({ isOpen, onClose, title, intro, children }) => {
 
   return (
     <div className='fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4' onClick={onClose}>
-      <div className='bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-sm w-full mx-auto' onClick={(e) => e.stopPropagation()}>
+      <div className='bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-sm w-full mx-auto animate-modal-pop' onClick={(e) => e.stopPropagation()}>
         <h3 className='text-xl font-bold mb-2 dark:text-gray-100'>{title}</h3>
         {intro && <p className='text-sm text-gray-600 dark:text-gray-400 mb-4'>{intro}</p>}
         <div className='space-y-3'>{children}</div>
@@ -134,7 +143,7 @@ const LayoutBase = props => {
         </div>
       </main>
       <Footer />
-      {HEO_LOADING_COVER && <LoadingCover banners={RANDOM_BANNERS} />}
+      {HEO_LOADING_COVER && <LoadingCover banners={KAIPING_BANNERS} />}
     </div>
   )
 }
@@ -191,7 +200,7 @@ const QuickAccessGrid = ({ setActiveModal }) => {
   const functions = [
     { title: '报名课程', icon: 'fa-solid fa-graduation-cap', modal: 'enroll' },
     { title: '找工作', icon: 'fa-solid fa-briefcase', modal: 'jobs' },
-    { title: '通知群', icon: 'fa-solid fa-bell', modal: 'notifications' }
+    { title: '试看课程', icon: 'fa-solid fa-video', modal: 'trial' }
   ]
   return (
     <div className='py-2'>
@@ -316,6 +325,18 @@ const LayoutIndex = props => {
         </>
       )
     },
+    trial: {
+      title: '试看课程',
+      intro: '免费体验我们的教学质量，即刻开始您的中文学习之旅！',
+      children: (
+        <>
+          <SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>入门发音课</SmartLink>
+          <SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>HSK1 体验课</SmartLink>
+          <SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>日常对话片段</SmartLink>
+          <SmartLink href='#' className='block p-2 text-center rounded bg-indigo-500 text-white hover:bg-indigo-600 mt-2'>查看更多试看</SmartLink>
+        </>
+      )
+    },
     notifications: {
       title: '加入通知群',
       intro: '获取最新课程优惠、免费资料、招聘信息、直播通知，重要消息不遗漏！',
@@ -375,7 +396,7 @@ const LayoutIndex = props => {
           <BlogPostListScroll {...props} />
         )}
         <StudyToolsGrid setActiveModal={setActiveModal} />
-        <RandomImageCard banners={RANDOM_BANNERS} linkUrl="#" alt="课程价格与联系信息" />
+        <RandomImageCard banners={XUANCHUAN_BANNERS} linkUrl="#" alt="课程价格与联系信息" />
       </div>
       <Modal isOpen={!!activeModal} onClose={() => setActiveModal(null)} title={currentModal?.title} intro={currentModal?.intro}>
         {currentModal?.children}
@@ -583,7 +604,7 @@ const LayoutSlug = props => {
                 
               {/* 文章页顶部随机图片 */}
               <div className='px-5'>
-                <RandomImageCard banners={RANDOM_BANNERS} linkUrl="#" alt="培训班简介" />
+                <RandomImageCard banners={XUANCHUAN_BANNERS} linkUrl="#" alt="培训班简介" />
               </div>
               
               <section
@@ -613,7 +634,7 @@ const LayoutSlug = props => {
               {post?.type === 'Post' && (
                 <div className='px-5'>
                   {/* 招聘图片使用随机卡片 */}
-                  <RandomImageCard banners={RANDOM_BANNERS} linkUrl="/jobs" alt="招聘信息" />
+                  <RandomImageCard banners={XUANCHUAN_BANNERS} linkUrl="/jobs" alt="招聘信息" />
                 </div>
               )}
             </article>
