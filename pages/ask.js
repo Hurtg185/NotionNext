@@ -1,7 +1,8 @@
-// pages/ask.js - 提问交流区列表页 (最终修复版)
+// pages/ask.js - 提问交流区列表页 (最终修复版 - 使用 LayoutBase)
 
 import { getGlobalData } from '@/lib/db/getSiteData'
-import { Layout } from '@/themes' // <-- 使用 @/themes 别名路径
+// 关键修改：直接引入 LayoutBase，并重命名为 Layout，这样下面的代码不用改
+import { LayoutBase as Layout } from '@/themes' 
 import { useState, useEffect, useCallback } from 'react'
 import twikoo from 'twikoo'
 import SmartLink from '@/components/SmartLink'
