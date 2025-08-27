@@ -1,11 +1,10 @@
-// pages/ask/[id].js - 问题详情页 (最终修复版 - 使用 LayoutBase)
+// pages/ask/[id].js - 问题详情页 (最终修复版)
 
 import { getGlobalData } from '@/lib/db/getSiteData'
-// 关键修改：直接引入 LayoutBase，并重命名为 Layout
-import { LayoutBase as Layout } from '@/themes' 
+import { Layout } from '@/themes'
 import { useRouter } from 'next/router'
 import Comment from '@/components/Comment'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import twikoo from 'twikoo'
 
 const AskDetailPage = (props) => {
@@ -24,7 +23,6 @@ const AskDetailPage = (props) => {
       setLoading(false);
       return;
     }
-
     setLoading(true);
     twikoo.getComments({ envId: TWIKOO_ENV_ID, urls: [`/ask/${id}`] })
       .then(res => {
@@ -53,13 +51,11 @@ const AskDetailPage = (props) => {
     }
   }, [router.isReady, fetchTopicDetails]);
 
-
   return (
     <Layout {...props}>
       <div className='px-5 pt-10 pb-20'>
         {loading && <div className="text-center dark:text-white">加载中...</div>}
         {error && <div className="text-center text-red-500 mb-8">{error}</div>}
-
         {!loading && !error && topic && (
           <div className='w-full max-w-4xl mx-auto bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md'>
             <div className='mb-6'>
@@ -70,16 +66,9 @@ const AskDetailPage = (props) => {
                 <i className='far fa-clock mr-1'></i> {new Date(topic.time).toLocaleString()}
               </div>
             </div>
-
             <hr className='border-dashed my-6 dark:border-gray-700' />
-
             <h3 className='text-xl font-bold dark:text-white mb-4'>所有回复</h3>
-            <Comment frontMatter={{
-              id: `/ask/${id}`,
-              title: `提问交流 - ${topic.comment.substring(0, 20)}...`,
-              slug: `/ask/${id}`,
-              type: 'Page'
-            }} />
+            <Comment frontMatter={{ id: `/ask/${id}`, title: `提问交流 - ${topic.comment.substring(0, 20)}...`, slug: `/ask/${id}`, type: 'Page' }} />
           </div>
         )}
       </div>
@@ -95,22 +84,11 @@ export async function getStaticProps(context) {
   delete props.posts;
   delete props.postCount;
   delete props.latestPosts;
-  return {
-    props: {
-      ...props,
-      id
-    },
-    revalidate: parseInt(
-      props.NOTION_CONFIG?.POSTS_PAGE_REVALIDATE_SECONDS || '3600'
-    ),
-  };
+  return { props: { ...props, id }, revalidate: parseInt(props.NOTION_CONFIG?.POSTS_PAGE_REVALIDATE_SECONDS || '3600') };
 }
 
 export async function getStaticPaths() {
-  return {
-    paths: [],
-    fallback: 'blocking',
-  };
+  return { paths: [], fallback: 'blocking' };
 }
 
 export default AskDetailPage;
