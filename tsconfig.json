@@ -5,7 +5,6 @@
       "@/blog.config": ["./blog.config"],
       "@/components/*": ["components/*"],
       "@/hooks/*": ["hooks/*"],
-      "@/themes": ["themes/index"], // <-- 新增
       "@/themes/*": ["themes/*"],
       "@/pages/*": ["pages/*"],
       "@/data/*": ["data/*"],
