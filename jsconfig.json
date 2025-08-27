@@ -1,15 +1,18 @@
 {
   "compilerOptions": {
+    "target": "es6",
+    "module": "commonjs",
+    "jsx": "react",
+    "allowJs": true,
+    "checkJs": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["*"],
-      "@/themes": ["themes/index"],
-      "@/themes/*": ["themes/*"],
+      "@/*": ["./*"],
       "@/components/*": ["components/*"],
+      "@/theme/*": ["theme/*"],
+      "@/data/*": ["data/*"],
       "@/lib/*": ["lib/*"],
-      "@/styles/*": ["styles/*"],
-      "@/data/*": ["data/*"]
+      "@/styles/*": ["styles/*"]
     }
-  },
-  "exclude": ["node_modules", ".next", "out"]
+  }
 }
