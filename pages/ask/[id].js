@@ -1,7 +1,8 @@
-// pages/ask/[id].js - 问题详情页 (最终修复版)
+// pages/ask/[id].js - 问题详情页 (最终修复版 - 使用 LayoutBase)
 
 import { getGlobalData } from '@/lib/db/getSiteData'
-import { Layout } from '@/themes' // <-- 使用 @/themes 别名路径
+// 关键修改：直接引入 LayoutBase，并重命名为 Layout
+import { LayoutBase as Layout } from '@/themes' 
 import { useRouter } from 'next/router'
 import Comment from '@/components/Comment'
 import { useState, useEffect, useCallback, useRef } from 'react'
