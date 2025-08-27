@@ -1,33 +1,11 @@
-// pages/ask/[id].js - 问题详情页
+// pages/ask/[id].js - 问题详情页 (已修复)
 
 import { getGlobalData } from '@/lib/db/getSiteData'
-import { Layout } from '@/components/Layout'
+import { Layout } from '@/themes' // 1. 修复了 Layout 的引入路径
 import { useRouter } from 'next/router'
-import { useState, useEffect, useCallback } from 'react'
+import Comment from '@/components/Comment' // 使用 NotionNext 内置的通用评论组件
+import { useState, useEffect, useCallback, useRef } from 'react' // 引入 useRef
 import twikoo from 'twikoo' // 直接引入 twikoo 库
-
-// Twikoo 的评论组件（手动渲染）
-const TwikooCommentComponent = ({ envId, href, url }) => {
-    const commentRef = useRef(null);
-
-    useEffect(() => {
-        if (commentRef.current && envId) {
-            twikoo.init({
-                envId: envId,
-                el: commentRef.current, // 评论框容器
-                href: href,
-                url: url
-            }).then(() => {
-                console.log('Twikoo comment initialized for:', href);
-            }).catch(err => {
-                console.error('Twikoo initialization failed:', err);
-            });
-        }
-    }, [envId, href, url]);
-
-    return <div id="twikoo-comments-container" ref={commentRef}></div>;
-};
-
 
 const AskDetailPage = (props) => {
   const router = useRouter()
@@ -38,7 +16,7 @@ const AskDetailPage = (props) => {
 
   const TWIKOO_ENV_ID = props?.NOTION_CONFIG?.COMMENT_TWIKOO_ENV_ID;
 
-  // 获取当前问题的详情（即该评论及其所有回复）
+  // 获取当前问题的详情
   const fetchTopicDetails = useCallback(() => {
     if (!TWIKOO_ENV_ID || !id) {
       if (!TWIKOO_ENV_ID) setError('Twikoo ENV_ID 未配置');
@@ -48,12 +26,16 @@ const AskDetailPage = (props) => {
     }
 
     setLoading(true);
-    // 获取该评论及其所有回复
-    twikoo.getComment({ envId: TWIKOO_ENV_ID, href: `/ask/${id}` })
+    // 使用 Twikoo API 直接获取单个评论
+    twikoo.getComments({ envId: TWIKOO_ENV_ID, urls: [`/ask/${id}`] })
       .then(res => {
-        // getComment 返回的是一个数组，我们取第一个作为主评论
-        if (res.data && res.data.length > 0 && res.data[0].id === id) {
-          setTopic(res.data[0]); 
+        if (res[0].data && res[0].data.length > 0) {
+          const mainComment = res[0].data.find(c => c.id === id);
+          if(mainComment) {
+            setTopic(mainComment);
+          } else {
+            setError('未找到该问题或已被删除。');
+          }
         } else {
           setError('未找到该问题或已被删除。');
         }
@@ -67,8 +49,10 @@ const AskDetailPage = (props) => {
   }, [TWIKOO_ENV_ID, id]);
 
   useEffect(() => {
-    fetchTopicDetails();
-  }, [fetchTopicDetails]);
+    if(router.isReady) {
+        fetchTopicDetails();
+    }
+  }, [router.isReady, fetchTopicDetails]);
 
 
   return (
@@ -80,13 +64,11 @@ const AskDetailPage = (props) => {
         {!loading && !error && topic && (
           <div className='w-full max-w-4xl mx-auto bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md'>
             <div className='mb-6'>
-              <h1 className='text-2xl font-bold dark:text-white mb-2'>{topic.comment}</h1>
+              <h1 className='text-2xl font-bold dark:text-white mb-2 whitespace-pre-wrap'>{topic.comment}</h1>
               <div className='flex items-center text-sm text-gray-500 dark:text-gray-400'>
                 <i className='fas fa-user-circle mr-2'></i> {topic.nick}
                 <span className='mx-2'>·</span>
                 <i className='far fa-clock mr-1'></i> {new Date(topic.time).toLocaleString()}
-                <span className='mx-2'>·</span>
-                <i className='fas fa-reply mr-1'></i> {topic.replies ? topic.replies.length : 0} 回复
               </div>
             </div>
 
@@ -111,8 +93,11 @@ export async function getStaticProps(context) {
   const { locale, params } = context;
   const { id } = params; // 获取路由参数中的 id
   const props = await getGlobalData({ from: 'ask-detail-page', locale });
-  // 我们不在这里直接获取 Twikoo 评论，因为它是客户端渲染的
-  // 只传递全局数据和 id
+  // 删除不必要的数据，减小页面大小
+  delete props.allPages;
+  delete props.posts;
+  delete props.postCount;
+  delete props.latestPosts;
   return {
     props: {
       ...props,
@@ -125,13 +110,9 @@ export async function getStaticProps(context) {
 }
 
 export async function getStaticPaths() {
-  // 在这里，如果你希望预渲染一些最热门的评论主题，
-  // 你可以调用 Twikoo API 来获取一些评论的 ID。
-  // 但对于新创建的社区，最初可以返回空数组或一些已知ID，
-  // 启用 fallback: 'blocking'，让 Next.js 在运行时生成页面。
   return {
-    paths: [], // 初始不预渲染任何路径
-    fallback: 'blocking', // 或者 true，让 Next.js 在运行时生成页面
+    paths: [],
+    fallback: 'blocking',
   };
 }
 
