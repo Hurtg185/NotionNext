@@ -27,7 +27,7 @@ module.exports = {
   COMMENT_GISCUS_MAPPING: 'pathname', // 你的Github Discussions 使用哪種方式來標定文章, 預設 'pathname'
   COMMENT_GISCUS_REACTIONS_ENABLED: '1', // 你的 Giscus 是否開啟文章表情符號 '1' 開啟 "0" 關閉 預設開啟
   COMMENT_GISCUS_EMIT_METADATA: '0', // 你的 Giscus 是否提取 Metadata '1' 開啟 '0' 關閉 預設關閉
-  COMMENT_GISCUS_INPUT_POSITION: 'bottom', // 你的 Giscus 發表留言位置 'bottom' 尾部 'top' 頂部, 預設 'bottom'
+  COMMENT_GISCUS_INPUT_POSITION: 'bottom', // 你的Giscus 發表留言位置 'bottom' 尾部 'top' 頂部, 預設 'bottom'
   COMMENT_GISCUS_LANG: 'zh-CN', // 你的 Giscus 語言 e.g 'en', 'zh-TW', 'zh-CN', 預設 'en'
   COMMENT_GISCUS_LOADING: 'lazy', // 你的 Giscus 載入是否漸進式載入, 預設 'lazy'
   COMMENT_GISCUS_CROSSORIGIN: 'anonymous', // 你的 Giscus 可以跨網域, 預設 'anonymous'
@@ -62,7 +62,7 @@ module.exports = {
   COMMENT_WALINE_RECENT: false, // 最新评论
 
   // 此评论系统基于WebMention，细节可参考https://webmention.io
-  // 它是一个基于IndieWeb理念的开放式评论系统，下方COMMENT_WEBMENTION包含的属性皆需配置：
+  // 它是基于IndieWeb理念的开放式评论系统，下方COMMENT_WEBMENTION包含的属性皆需配置：
   // ENABLE: 是否开启
   // AUTH: Webmention使用的IndieLogin，可使用Twitter或Github个人页面连结
   // HOSTNAME: Webmention绑定之网域，通常即为本站网址
