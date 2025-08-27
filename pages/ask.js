@@ -1,12 +1,12 @@
-// pages/ask.js - 提问交流区列表页 (已修复)
+// pages/ask.js - 提问交流区列表页 (最终修复版)
 
 import { getGlobalData } from '@/lib/db/getSiteData'
-import { Layout } from '@/themes' // 1. 修复了 Layout 的引入路径
+import { Layout } from '../themes' // 1. 使用相对路径，确保能找到 Layout
 import { useState, useEffect, useCallback } from 'react'
-import twikoo from 'twikoo' // 直接引入 twikoo 库
+import twikoo from 'twikoo'
 import SmartLink from '@/components/SmartLink'
 
-// --- 新增：提问弹窗组件 ---
+// --- 提问弹窗组件 ---
 const AskModal = ({ isOpen, onClose, onSubmit, askForm, setAskForm }) => {
   if (!isOpen) return null;
 
@@ -65,12 +65,11 @@ const AskPage = (props) => {
   const [topics, setTopics] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [showAskModal, setShowAskModal] = useState(false) // 控制提问弹窗
+  const [showAskModal, setShowAskModal] = useState(false)
   const [askForm, setAskForm] = useState({ nick: '', mail: '', link: '', comment: '' })
 
-  const TWIKOO_ENV_ID = props?.NOTION_CONFIG?.COMMENT_TWIKOO_ENV_ID; // 从 props 获取 envId
+  const TWIKOO_ENV_ID = props?.NOTION_CONFIG?.COMMENT_TWIKOO_ENV_ID;
 
-  // 获取 Twikoo 评论列表作为“问题列表”
   const fetchTopics = useCallback(() => {
     if (!TWIKOO_ENV_ID) {
       setError('Twikoo ENV_ID 未配置，请检查 blog.config.js');
@@ -79,10 +78,8 @@ const AskPage = (props) => {
     }
 
     setLoading(true);
-    // 获取所有评论作为主题列表
     twikoo.getRecentComments({ envId: TWIKOO_ENV_ID, includeReply: false, pageSize: 20 })
       .then(res => {
-        // 过滤掉回复，只保留主评论作为“问题”
         const mainComments = res.data.filter(item => !item.replyId);
         setTopics(mainComments);
         setLoading(false);
@@ -98,7 +95,6 @@ const AskPage = (props) => {
     fetchTopics();
   }, [fetchTopics]);
 
-  // 提交提问
   const handleSubmitAsk = async () => {
     if (!TWIKOO_ENV_ID || !askForm.nick || !askForm.comment) {
       alert('昵称和提问内容不能为空！');
@@ -108,8 +104,8 @@ const AskPage = (props) => {
     try {
       await twikoo.postComment({
         envId: TWIKOO_ENV_ID,
-        href: '/ask', // 所有提问的主评论都指向这个统一的 href
-        url: '/ask', // 同样指向这个统一的 url
+        href: '/ask',
+        url: '/ask',
         nick: askForm.nick,
         mail: askForm.mail,
         link: askForm.link,
@@ -118,7 +114,7 @@ const AskPage = (props) => {
       alert('提问已提交，请等待审核后显示！');
       setShowAskModal(false);
       setAskForm({ nick: '', mail: '', link: '', comment: '' });
-      fetchTopics(); // 提交后重新加载评论列表
+      fetchTopics();
     } catch (error) {
       console.error('提交提问失败', error);
       alert('提交提问失败，请稍后再试。');
@@ -170,7 +166,6 @@ const AskPage = (props) => {
         )}
       </div>
 
-      {/* 提问弹窗组件 */}
       <AskModal 
         isOpen={showAskModal}
         onClose={() => setShowAskModal(false)}
@@ -185,7 +180,6 @@ const AskPage = (props) => {
 export async function getStaticProps(context) {
   const { locale } = context;
   const props = await getGlobalData({ from: 'ask-page', locale });
-  // 删除不必要的数据，减小页面大小
   delete props.allPages;
   delete props.posts;
   delete props.postCount;
