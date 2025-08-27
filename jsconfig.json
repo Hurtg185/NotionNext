@@ -9,7 +9,8 @@
     "paths": {
       "@/*": ["./*"],
       "@/components/*": ["components/*"],
-      "@/themes/*": ["themes/*"], // <-- 这里已经帮您修正了
+      "@/themes": ["themes/index"],
+      "@/themes/*": ["themes/*"],
       "@/data/*": ["data/*"],
       "@/lib/*": ["lib/*"],
       "@/styles/*": ["styles/*"]
