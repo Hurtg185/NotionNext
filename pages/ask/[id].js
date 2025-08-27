@@ -1,7 +1,7 @@
 // pages/ask/[id].js - 问题详情页 (最终修复版)
 
 import { getGlobalData } from '@/lib/db/getSiteData'
-import { Layout } from '../../themes' // 1. 使用相对路径，确保能找到 Layout
+import { Layout } from '@/themes' // <-- 使用 @/themes 别名路径
 import { useRouter } from 'next/router'
 import Comment from '@/components/Comment'
 import { useState, useEffect, useCallback, useRef } from 'react'
