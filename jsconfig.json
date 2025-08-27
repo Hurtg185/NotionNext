@@ -9,7 +9,7 @@
     "paths": {
       "@/*": ["./*"],
       "@/components/*": ["components/*"],
-      "@/themes": ["themes/index"],
+      "@/themes": ["themes/index"], // <-- 新增
       "@/themes/*": ["themes/*"],
       "@/data/*": ["data/*"],
       "@/lib/*": ["lib/*"],
