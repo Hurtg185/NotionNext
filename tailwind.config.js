@@ -15,13 +15,9 @@ module.exports = {
     fontFamily: fontFamilies,
     screens: {
       sm: '540px',
-      // => @media (min-width: 576px) { ... }
       md: '720px',
-      // => @media (min-width: 768px) { ... }
       lg: '960px',
-      // => @media (min-width: 992px) { ... }
       xl: '1140px',
-      // => @media (min-width: 1200px) { ... }
       '2xl': '1536px'
     },
     container: {
@@ -41,7 +37,6 @@ module.exports = {
           'black-gray': '#101414',
           'light-gray': '#e5e5e5'
         },
-        // black: '#212b36',
         'dark-700': '#090e34b3',
         dark: {
           DEFAULT: '#111928',
@@ -80,7 +75,7 @@ module.exports = {
         1: '0px 1px 3px 0px rgba(166, 175, 195, 0.40)',
         2: '0px 5px 12px 0px rgba(0, 0, 0, 0.10)'
       },
-      // --- 从这里开始是新增的动画配置 ---
+      // --- 新增的动画配置 ---
       keyframes: {
         'kenburns-top': {
           '0%': {
@@ -92,7 +87,7 @@ module.exports = {
             'transform-origin': 'top'
           }
         },
-        'modal-pop-in': {
+        'modal-pop-in': { // 这个是给弹窗用的，可以先留着
           '0%': {
             transform: 'scale(0.9)',
             opacity: '0'
@@ -107,7 +102,6 @@ module.exports = {
         'ken-burns': 'kenburns-top 7s ease-out both',
         'modal-pop': 'modal-pop-in 0.3s ease-out both'
       }
-      // --- 新增配置结束 ---
     }
   },
   variants: {
