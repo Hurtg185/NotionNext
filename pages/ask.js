@@ -1,7 +1,7 @@
-// pages/ask.js - 提问交流区列表页 (论坛样式)
+// pages/ask.js - 提问交流区列表页 (已修复)
 
 import { getGlobalData } from '@/lib/db/getSiteData'
-import { Layout } from '@/components/Layout'
+import { Layout } from '@/themes' // 1. 修复了 Layout 的引入路径
 import { useState, useEffect, useCallback } from 'react'
 import twikoo from 'twikoo' // 直接引入 twikoo 库
 import SmartLink from '@/components/SmartLink'
@@ -79,7 +79,7 @@ const AskPage = (props) => {
     }
 
     setLoading(true);
-    // 获取所有评论作为主题列表，Twikoov1.6.36后 getRecentComments 支持获取所有评论
+    // 获取所有评论作为主题列表
     twikoo.getRecentComments({ envId: TWIKOO_ENV_ID, includeReply: false, pageSize: 20 })
       .then(res => {
         // 过滤掉回复，只保留主评论作为“问题”
@@ -114,7 +114,6 @@ const AskPage = (props) => {
         mail: askForm.mail,
         link: askForm.link,
         comment: askForm.comment,
-        // category: 'ask' // 可以增加一个分类
       });
       alert('提问已提交，请等待审核后显示！');
       setShowAskModal(false);
@@ -161,10 +160,9 @@ const AskPage = (props) => {
                     <span className='mx-2'>·</span>
                     <i className='far fa-clock mr-1'></i> {new Date(topic.time).toLocaleString()}
                     <span className='mx-2'>·</span>
-                    {/* Twikoo v1.6.36+ 的 getRecentComments 返回的 replies 已经包含了子评论 */}
                     <i className='fas fa-reply mr-1'></i> {topic.replies ? topic.replies.length : 0} 回复
                   </div>
-                  <h2 className='text-lg font-semibold dark:text-white mb-2 line-clamp-2'>{topic.comment}</h2> {/* 显示评论内容作为标题 */}
+                  <h2 className='text-lg font-semibold dark:text-white mb-2 line-clamp-2'>{topic.comment}</h2>
                 </div>
               </SmartLink>
             ))}
