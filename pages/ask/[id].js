@@ -1,22 +1,21 @@
-// pages/ask/[id].js - 问题详情页 (已修复)
+// pages/ask/[id].js - 问题详情页 (最终修复版)
 
 import { getGlobalData } from '@/lib/db/getSiteData'
-import { Layout } from '@/themes' // 1. 修复了 Layout 的引入路径
+import { Layout } from '../../themes' // 1. 使用相对路径，确保能找到 Layout
 import { useRouter } from 'next/router'
-import Comment from '@/components/Comment' // 使用 NotionNext 内置的通用评论组件
-import { useState, useEffect, useCallback, useRef } from 'react' // 引入 useRef
-import twikoo from 'twikoo' // 直接引入 twikoo 库
+import Comment from '@/components/Comment'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import twikoo from 'twikoo'
 
 const AskDetailPage = (props) => {
   const router = useRouter()
-  const { id } = router.query // 获取 URL 中的问题 ID
+  const { id } = router.query
   const [topic, setTopic] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
   const TWIKOO_ENV_ID = props?.NOTION_CONFIG?.COMMENT_TWIKOO_ENV_ID;
 
-  // 获取当前问题的详情
   const fetchTopicDetails = useCallback(() => {
     if (!TWIKOO_ENV_ID || !id) {
       if (!TWIKOO_ENV_ID) setError('Twikoo ENV_ID 未配置');
@@ -26,7 +25,6 @@ const AskDetailPage = (props) => {
     }
 
     setLoading(true);
-    // 使用 Twikoo API 直接获取单个评论
     twikoo.getComments({ envId: TWIKOO_ENV_ID, urls: [`/ask/${id}`] })
       .then(res => {
         if (res[0].data && res[0].data.length > 0) {
@@ -75,9 +73,8 @@ const AskDetailPage = (props) => {
             <hr className='border-dashed my-6 dark:border-gray-700' />
 
             <h3 className='text-xl font-bold dark:text-white mb-4'>所有回复</h3>
-            {/* 嵌入评论组件，用于显示该问题的回复和回复框 */}
             <Comment frontMatter={{
-              id: `/ask/${id}`, // 评论ID，确保每个问题详情页的评论区唯一
+              id: `/ask/${id}`,
               title: `提问交流 - ${topic.comment.substring(0, 20)}...`,
               slug: `/ask/${id}`,
               type: 'Page'
@@ -91,9 +88,8 @@ const AskDetailPage = (props) => {
 
 export async function getStaticProps(context) {
   const { locale, params } = context;
-  const { id } = params; // 获取路由参数中的 id
+  const { id } = params;
   const props = await getGlobalData({ from: 'ask-detail-page', locale });
-  // 删除不必要的数据，减小页面大小
   delete props.allPages;
   delete props.posts;
   delete props.postCount;
@@ -101,7 +97,7 @@ export async function getStaticProps(context) {
   return {
     props: {
       ...props,
-      id // 传递 id 到页面组件
+      id
     },
     revalidate: parseInt(
       props.NOTION_CONFIG?.POSTS_PAGE_REVALIDATE_SECONDS || '3600'
