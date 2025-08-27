@@ -1,4 +1,4 @@
-// components/LoadingCover.js
+// components/LoadingCover.js (最终版 - 仅开屏动画)
 
 'use client' // 确保这是一个客户端组件
 import { useGlobal } from '@/lib/global'
@@ -14,7 +14,7 @@ const LoadingCover = ({ banners }) => {
   const [fadeOut, setFadeOut] = useState(false) // 用于控制淡出动画
 
   // 自动消失的计时器（秒）
-  const AUTO_HIDE_DELAY = 5 // 5秒后自动隐藏
+  const AUTO_HIDE_DELAY = 4 // 修改为4秒
 
   // 使用 useMemo 确保随机图片只在组件挂载时计算一次
   const randomBanner = useMemo(() => {
@@ -59,6 +59,7 @@ const LoadingCover = ({ banners }) => {
     <div
       id='loading-cover'
       style={loadingCoverStyle}
+      onClick={handleHide} // 给整个背景添加点击事件
       // 使用在 tailwind.config.js 中定义的动画
       className={`
         fixed top-0 left-0 w-full h-full z-50 flex justify-center items-center
@@ -66,6 +67,7 @@ const LoadingCover = ({ banners }) => {
         transition-opacity duration-1000
         ${fadeOut ? 'opacity-0 pointer-events-none' : 'opacity-100'}
         animate-ken-burns
+        cursor-pointer
       `}
     >
       {/* 半透明遮罩层 */}
@@ -73,13 +75,16 @@ const LoadingCover = ({ banners }) => {
       
       {/* 右上角跳过按钮 */}
       <button 
-        onClick={handleHide}
+        onClick={(e) => {
+          e.stopPropagation(); // 阻止事件冒泡，避免触发两次 handleHide
+          handleHide();
+        }}
         className="absolute top-6 right-6 z-10 px-4 py-2 bg-black bg-opacity-40 text-white text-sm rounded-full hover:bg-opacity-60 transition-all duration-200"
       >
         跳过 ({AUTO_HIDE_DELAY}s)
       </button>
 
-      <div className="relative mx-auto">
+      <div className="relative mx-auto pointer-events-none"> {/* 让加载动画不响应点击 */}
         {/* 加载动画 */}
         <style>
           {`
