@@ -47,6 +47,7 @@
     "react-hotkeys-hook": "^4.5.0",
     "react-notion-x": "7.3.0",
     "react-share": "^5.2.2",
+    "twikoo": "^1.6.36", // <-- 在这里添加 Twikoo 的依赖
     "react-tweet-embed": "~2.0.0"
   },
   "devDependencies": {
