@@ -1,7 +1,7 @@
 // pages/ask.js - 提问交流区列表页 (最终修复版)
 
 import { getGlobalData } from '@/lib/db/getSiteData'
-import { Layout } from '../themes' // 1. 使用相对路径，确保能找到 Layout
+import { Layout } from '@/themes' // <-- 使用 @/themes 别名路径
 import { useState, useEffect, useCallback } from 'react'
 import twikoo from 'twikoo'
 import SmartLink from '@/components/SmartLink'
