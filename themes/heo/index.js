@@ -204,9 +204,16 @@ const QuickAccessGrid = ({ setActiveModal }) => {
 
 // --- 新增：提问交流模块 ---
 const AskQuestionModule = () => {
+  const facebookGroupUrl = "https://www.facebook.com/share/g/15Fh7mrpa8/"; // 替换为您的 Facebook 小组 URL
+
   return (
     <div className='py-4'>
-      <SmartLink href='/ask' className='group flex items-center justify-between p-4 bg-white dark:bg-[#1e1e1e] border dark:border-gray-700 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200'>
+      <a // 使用 <a> 标签替换 SmartLink
+        href={facebookGroupUrl} // 设置 href 属性
+        target="_blank" // 在新标签页中打开链接
+        rel="noopener noreferrer" // 增加安全性
+        className='group flex items-center justify-between p-4 bg-white dark:bg-[#1e1e1e] border dark:border-gray-700 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200'
+      >
         <div className='flex items-center'>
           <i className='fas fa-question-circle text-3xl text-indigo-500 mr-4'></i>
           <div>
@@ -215,7 +222,7 @@ const AskQuestionModule = () => {
           </div>
         </div>
         <i className='fas fa-arrow-right text-gray-400 group-hover:translate-x-1 transition-transform duration-200'></i>
-      </SmartLink>
+      </a>
     </div>
   )
 }
