@@ -18,7 +18,7 @@ const SplashScreen = () => {
 
     if (!hasSeenSplash) {
       setShow(true); // 如果没看过，就显示闪屏
-      // 设置一个定时器，在 4 秒后隐藏闪屏
+      // 设置一个定时器，在 2 秒后隐藏闪屏
       const timer = setTimeout(() => {
         setShow(false);
         // 记录用户已经看过闪屏，这样刷新页面或切换页面时就不会再出现
