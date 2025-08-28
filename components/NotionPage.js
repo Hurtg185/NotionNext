@@ -1,11 +1,94 @@
+// /components/NotionPage.js
+
 import { siteConfig } from '@/lib/config'
 import { compressImage, mapImgUrl } from '@/lib/notion/mapImage'
 import { isBrowser, loadExternalResource } from '@/lib/utils'
 import mediumZoom from '@fisch0920/medium-zoom'
 import 'katex/dist/katex.min.css'
-import dynamic from 'next/dynamic'
-import { useEffect, useRef } from 'react'
+import dynamic from 'next/dynamic' // 确保 dynamic 已导入
+import React, { useEffect, useRef } from 'react' // 确保 React 已导入
 import { NotionRenderer } from 'react-notion-x'
+
+// ===================================================================================================================
+// START: 自定义组件解析逻辑 (新增部分)
+// ===================================================================================================================
+
+// 定义一个映射表，用于存储可以动态加载的自定义组件
+// 这里的路径是相对于项目根目录的，例如 '@/components/MultipleChoiceQuestion'
+// 请确保这些组件文件确实存在于你指定的路径
+const CUSTOM_COMPONENTS_MAP = {
+  '/components/MultipleChoiceQuestion.js': dynamic(() => import('@/components/MultipleChoiceQuestion'), { ssr: false }),
+  '/components/PinyinInputExercise.js': dynamic(() => import('@/components/PinyinInputExercise'), { ssr: false }),
+  '/components/Flashcard.js': dynamic(() => import('@/components/Flashcard'), { ssr: false }),
+  '/components/AudioComprehension.js': dynamic(() => import('@/components/AudioComprehension'), { ssr: false }),
+  // ... 如果你创建了其他自定义组件，也在这里添加它们的映射
+};
+
+// 创建一个自定义的 Code 块渲染器
+const CustomCodeRenderer = ({ block, className }) => {
+  // 确保 block 和其属性存在，并且是 Code 块类型
+  if (!block || block.type !== 'code') {
+    // 如果不是代码块，或者没有内容，就用默认的 Code 组件渲染（这里我们仍然需要一个默认的 Code 组件）
+    // 为了避免循环引用，我们直接使用 react-notion-x 的 Code 组件
+    const DefaultCode = dynamic(
+      () => import('react-notion-x/build/third-party/code').then(m => m.Code),
+      { ssr: false }
+    );
+    return <DefaultCode block={block} className={className} />;
+  }
+
+  const codeContent = block.properties?.title?.[0]?.[0]; // 代码块的内容
+  const language = block.properties?.language?.[0]?.[0]; // 代码块的语言
+
+  // 检查是否是 'plain' 语言的代码块，并且内容以 '!include' 开头
+  if (language === 'plain' && codeContent && codeContent.startsWith('!include')) {
+    try {
+      // 解析 !include 语句
+      const includeRegex = /^!include\s+(\S+)\s*(\{.*\})?$/;
+      const match = codeContent.match(includeRegex);
+
+      if (match) {
+        const componentPath = match[1]; // 获取组件路径，例如 '/components/MultipleChoiceQuestion.js'
+        const propsJson = match[2] ? JSON.parse(match[2]) : {}; // 获取 JSON props
+
+        const DynamicComponent = CUSTOM_COMPONENTS_MAP[componentPath];
+
+        if (DynamicComponent) {
+          return <DynamicComponent {...propsJson} />;
+        } else {
+          // 如果组件未在 CUSTOM_COMPONENTS_MAP 中定义
+          console.error(`Error: Custom component not found for path: ${componentPath}. Please add it to CUSTOM_COMPONENTS_MAP.`);
+          return (
+            <div className="bg-red-100 text-red-700 p-3 rounded-md my-2 dark:bg-red-900 dark:text-red-200">
+              错误：无法加载自定义组件 "{componentPath}"。请检查路径或是否已在代码中注册。
+            </div>
+          );
+        }
+      }
+    } catch (e) {
+      console.error('Error parsing !include block:', e, codeContent);
+      return (
+        <div className="bg-red-100 text-red-700 p-3 rounded-md my-2 dark:bg-red-900 dark:text-red-200">
+          错误：解析自定义组件 `!include` 块时出错。请检查语法。
+          <pre className="whitespace-pre-wrap text-sm">{codeContent}</pre>
+          <pre className="whitespace-pre-wrap text-sm text-red-500">{e.message}</pre>
+        </div>
+      );
+    }
+  }
+
+  // 如果不是 !include 块，就用 react-notion-x 默认的 Code 组件渲染
+  const DefaultCode = dynamic(
+    () => import('react-notion-x/build/third-party/code').then(m => m.Code),
+    { ssr: false }
+  );
+  return <DefaultCode block={block} className={className} />;
+};
+
+// ===================================================================================================================
+// END: 自定义组件解析逻辑
+// ===================================================================================================================
+
 
 /**
  * 整个站点的核心组件
@@ -125,7 +208,7 @@ const NotionPage = ({ post, className }) => {
         mapPageUrl={mapPageUrl}
         mapImageUrl={mapImgUrl}
         components={{
-          Code,
+          Code: CustomCodeRenderer, // <-- 关键修改：使用你的 CustomCodeRenderer
           Collection,
           Equation,
           Modal,
@@ -225,14 +308,20 @@ function getMediumZoomMargin() {
   }
 }
 
-// 代码
-const Code = dynamic(
-  () =>
-    import('react-notion-x/build/third-party/code').then(m => {
-      return m.Code
-    }),
-  { ssr: false }
-)
+// ===================================================================================================================
+// START: 原始的动态导入 (部分已不再直接使用，但仍保留导入供其他组件使用)
+// ===================================================================================================================
+
+// 代码 (这个 Code 变量在 NotionRenderer 中被 CustomCodeRenderer 替换了，但其内部可能仍被 CustomCodeRenderer 引用)
+// 实际上 CustomCodeRenderer 内部会动态导入 react-notion-x 的 Code 组件，所以这里可以删除，
+// 但为了保持原文件结构清晰，暂时保留，但它不再是 NotionRenderer 直接使用的 Code。
+// const Code = dynamic( // <-- 这个Code变量不再直接用于NotionRenderer，而是CustomCodeRenderer内部处理
+//   () =>
+//     import('react-notion-x/build/third-party/code').then(m => {
+//       return m.Code
+//     }),
+//   { ssr: false }
+// )
 
 // 公式
 const Equation = dynamic(
@@ -294,5 +383,10 @@ const Modal = dynamic(
 const Tweet = ({ id }) => {
   return <TweetEmbed tweetId={id} />
 }
+
+// ===================================================================================================================
+// END: 原始的动态导入
+// ===================================================================================================================
+
 
 export default NotionPage
