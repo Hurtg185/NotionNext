@@ -40,27 +40,19 @@ const SplashScreen = () => {
         clearInterval(interval);
         if (videoElement) {
           videoElement.onended = null;
-          videoElement.oncanplay = null;
+          // videoElement.oncanplay = null; // 移除 onCanPlay 监听，交给 autoplay 属性和用户交互
         }
       };
 
       if (videoElement) {
-        // 当视频准备好播放时，尝试播放
-        const tryPlayVideo = () => {
-          videoElement.play().catch(error => {
-            console.warn("Video autoplay failed (onCanPlay):", error);
-            // 自动播放失败，但闪屏依然会根据计时器关闭
-          });
-        };
-
-        // 监听视频准备好播放的事件
-        videoElement.oncanplay = tryPlayVideo;
-        
-        // 如果视频已经准备好 (例如，从缓存加载)，立即尝试播放
-        if (videoElement.readyState >= 3) { // HTMLMediaElement.HAVE_FUTURE_DATA 或更高
-          tryPlayVideo();
+        // 如果视频已经准备好，尝试播放 (即使 autoplay 失败，这个也可以作为尝试)
+        // 主要是依赖 autoplay 属性和用户交互
+        if (videoElement.readyState >= 3 && videoElement.paused) { // 检查是否已准备好且暂停
+            videoElement.play().catch(error => {
+                console.warn("Initial video play attempt failed:", error);
+            });
         }
-
+        
         // 监听视频播放结束事件，如果视频比倒计时短，就提前关闭闪屏
         videoElement.onended = hideSplash;
       }
@@ -104,8 +96,10 @@ const SplashScreen = () => {
           muted // 建议默认静音，避免突兀的声音
           playsInline // iOS Safari 上的重要属性，允许内联播放
           autoplay // <-- 新增：直接在标签上添加 autoplay 属性
-          // loop // 视频闪屏不建议循环，除非它非常短且无缝
           preload="auto" // 预加载视频以加快播放
+          // 可以在这里添加 onPlay, onPause 事件进行调试
+          // onPlay={() => console.log('Video started playing')}
+          // onPause={() => console.log('Video paused')}
         />
       </SmartLink>
       
@@ -113,6 +107,12 @@ const SplashScreen = () => {
       <button
         onClick={(e) => {
           e.stopPropagation(); // 阻止点击事件冒泡到 SmartLink
+          // 在用户点击“跳过”时，尝试播放视频 (用户交互后通常允许播放)
+          if (videoRef.current && videoRef.current.paused) {
+            videoRef.current.play().catch(error => {
+              console.warn("Video play on skip failed:", error);
+            });
+          }
           hideSplash(); // 使用统一的隐藏逻辑
         }}
         className="absolute top-4 right-4 bg-black/30 text-white text-sm px-3 py-1 rounded-full backdrop-blur-sm"
