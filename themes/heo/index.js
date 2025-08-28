@@ -43,7 +43,7 @@ import GlosbeSearchCard from '@/components/GlosbeSearchCard'
 // --- 新增：随机宣传图片数组 (用于非开屏位置) ---
 // 请确保您的图片放在 /public/images/xuanchuan/ 文件夹下，并更新下面的列表
 const XUANCHUAN_BANNERS = [
-  '/images/xuanchuan3.png',
+  '/images/xuanchuan3.jpg',
   '/images/xuanchuan4.jpg',
   '/images/xuanchuan5.jpg'
   // ... 请务必在这里列出所有您上传到 /public/images/xuanchuan/ 的图片路径
