@@ -51,6 +51,7 @@ const XUANCHUAN_BANNERS = [
   // ... 请务必在这里列出所有您上传到 /public/images/xuanchuan/ 的图片路径
 ]
 
+/*
 // --- 新增：开屏随机图片数组 ---
 // 请确保您的开屏图片放在 /public/images/kaiping/ 文件夹下，并更新下面的列表
 const KAIPING_BANNERS = [
@@ -59,6 +60,7 @@ const KAIPING_BANNERS = [
   '/images/kaiping/kaiping3.png'
   // ... 请务必在这里列出所有您上传到 /public/images/kaiping/ 的图片路径
 ]
+/*
 
 // --- 新增：通用弹窗组件 ---
 const Modal = ({ isOpen, onClose, title, intro, children }) => {
