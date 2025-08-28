@@ -26,19 +26,28 @@ const CUSTOM_COMPONENTS_MAP = {
 
 // 创建一个自定义的 Code 块渲染器
 const CustomCodeRenderer = ({ block, className }) => {
+  // --- 关键调试日志：查看接收到的整个 block 对象 ---
+  console.log('--- CustomCodeRenderer DEBUG START ---');
+  console.log('Received block:', JSON.stringify(block, null, 2)); // 打印完整的 block 对象
+
   // 确保 block 和其属性存在，并且是 Code 块类型
   if (!block || block.type !== 'code') {
-    // 如果不是代码块，或者没有内容，就用默认的 Code 组件渲染。
-    // 为了避免循环引用，我们直接使用 react-notion-x 的 Code 组件。
+    console.log('Block is not a code block or is undefined.');
     const DefaultCode = dynamic(
       () => import('react-notion-x/build/third-party/code').then(m => m.Code),
       { ssr: false }
     );
+    console.log('--- CustomCodeRenderer DEBUG END (Not code block) ---');
     return <DefaultCode block={block} className={className} />;
   }
 
-  const codeContent = block.properties?.title?.[0]?.[0]; // 代码块的内容
-  const language = block.properties?.language?.[0]?.[0]; // 代码块的语言
+  const codeContent = block.properties?.title?.[0]?.[0]; // 尝试获取代码块内容
+  const language = block.properties?.language?.[0]?.[0]; // 尝试获取代码块语言
+
+  // --- 关键调试日志：查看提取到的内容和语言 ---
+  console.log('  Extracted Code Block Content:', codeContent);
+  console.log('  Extracted Code Block Language:', language);
+  console.log('  Is language "plain" and content starts with "!include"? ', language === 'plain' && codeContent && codeContent.startsWith('!include'));
 
   // 检查是否是 'plain' 语言的代码块，并且内容以 '!include' 开头
   if (language === 'plain' && codeContent && codeContent.startsWith('!include')) {
@@ -48,25 +57,32 @@ const CustomCodeRenderer = ({ block, className }) => {
       const match = codeContent.match(includeRegex);
 
       if (match) {
-        const componentPath = match[1]; // 获取组件路径，例如 '/components/MultipleChoiceQuestion.js'
-        const propsJson = match[2] ? JSON.parse(match[2]) : {}; // 获取 JSON props
+        const componentPath = match[1];
+        const propsJson = match[2] ? JSON.parse(match[2]) : {};
+
+        console.log('  Matched !include. Path:', componentPath, 'Props:', propsJson);
 
         const DynamicComponent = CUSTOM_COMPONENTS_MAP[componentPath];
 
         if (DynamicComponent) {
+          console.log('  Found DynamicComponent for path:', componentPath);
+          console.log('--- CustomCodeRenderer DEBUG END (Component rendered) ---');
           return <DynamicComponent {...propsJson} />;
         } else {
-          // 如果组件未在 CUSTOM_COMPONENTS_MAP 中定义
           console.error(`Error: Custom component not found for path: ${componentPath}. Please add it to CUSTOM_COMPONENTS_MAP.`);
+          console.log('--- CustomCodeRenderer DEBUG END (Component not found) ---');
           return (
             <div className="bg-red-100 text-red-700 p-3 rounded-md my-2 dark:bg-red-900 dark:text-red-200">
               错误：无法加载自定义组件 "{componentPath}"。请检查路径或是否已在代码中注册。
             </div>
           );
         }
+      } else {
+        console.log('  Code block is "plain" but does not match !include regex.');
       }
     } catch (e) {
       console.error('Error parsing !include block:', e, codeContent);
+      console.log('--- CustomCodeRenderer DEBUG END (Parse error) ---');
       return (
         <div className="bg-red-100 text-red-700 p-3 rounded-md my-2 dark:bg-red-900 dark:text-red-200">
           错误：解析自定义组件 `!include` 块时出错。请检查语法。
@@ -82,6 +98,7 @@ const CustomCodeRenderer = ({ block, className }) => {
     () => import('react-notion-x/build/third-party/code').then(m => m.Code),
     { ssr: false }
   );
+  console.log('--- CustomCodeRenderer DEBUG END (Default Code block rendered) ---');
   return <DefaultCode block={block} className={className} />;
 };
 
