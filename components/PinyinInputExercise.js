@@ -38,10 +38,11 @@ const PinyinInputExercise = ({ question, pinyinPrompt, correctAnswer, explanatio
   };
 
   return (
-    <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow-sm mb-4 font-sans text-base">
+    // 优化：增加左右边距和最大宽度，使其居中且不那么靠左
+    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md mb-6 font-sans text-base mx-auto max-w-2xl">
       {/* 题目问题 */}
       {question && (
-        <p className="mb-3 text-gray-700 dark:text-gray-200">
+        <p className="mb-3 text-gray-700 dark:text-gray-200 leading-relaxed">
           <strong>问题：</strong>{question}
         </p>
       )}
@@ -49,7 +50,7 @@ const PinyinInputExercise = ({ question, pinyinPrompt, correctAnswer, explanatio
       {/* 拼音提示 */}
       {pinyinPrompt && (
         <p className="mb-3 text-gray-600 dark:text-gray-400">
-          请根据拼音提示输入汉字：<code className="bg-gray-200 dark:bg-gray-700 px-1 py-0.5 rounded-sm text-sm">{pinyinPrompt}</code>
+          请根据拼音提示输入汉字：<code className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-1.5 py-0.5 rounded-sm text-base font-semibold">{pinyinPrompt}</code>
         </p>
       )}
 
@@ -59,20 +60,20 @@ const PinyinInputExercise = ({ question, pinyinPrompt, correctAnswer, explanatio
         value={userInput}
         onChange={handleInputChange}
         placeholder="在此输入汉字..."
-        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full p-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200"
       />
 
       {/* 按钮组 */}
       <div className="flex space-x-2">
         <button
           onClick={checkAnswer}
-          className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors duration-200"
+          className="px-5 py-2.5 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors duration-200 font-medium"
         >
           检查答案
         </button>
         <button
           onClick={resetExercise}
-          className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50 transition-colors duration-200"
+          className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50 transition-colors duration-200 font-medium"
         >
           重置
         </button>
@@ -80,7 +81,7 @@ const PinyinInputExercise = ({ question, pinyinPrompt, correctAnswer, explanatio
 
       {/* 反馈信息 */}
       {feedback && (
-        <p className={`mt-3 font-semibold ${feedback.startsWith('✅') ? 'text-green-600' : 'text-red-600'} dark:${feedback.startsWith('✅') ? 'text-green-400' : 'text-red-400'}`}>
+        <p className={`mt-4 font-semibold ${feedback.startsWith('✅') ? 'text-green-600' : 'text-red-600'} dark:${feedback.startsWith('✅') ? 'text-green-400' : 'text-red-400'} text-lg`}>
           {feedback}
         </p>
       )}
@@ -89,7 +90,7 @@ const PinyinInputExercise = ({ question, pinyinPrompt, correctAnswer, explanatio
       {showExplanation && explanation && (
         <div className="mt-4 p-3 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-md">
           <p className="font-semibold mb-1">正确答案：<span className="text-green-700 dark:text-green-300">{correctAnswer}</span></p>
-          <p>解析：{explanation}</p>
+          <p>{explanation}</p>
         </div>
       )}
     </div>
