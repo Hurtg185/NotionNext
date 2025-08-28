@@ -5,12 +5,12 @@ import { compressImage, mapImgUrl } from '@/lib/notion/mapImage'
 import { isBrowser, loadExternalResource } from '@/lib/utils'
 import mediumZoom from '@fisch0920/medium-zoom'
 import 'katex/dist/katex.min.css'
-import dynamic from 'next/dynamic' // 确保 dynamic 已导入
-import React, { useEffect, useRef } from 'react' // 确保 React 已导入
+import dynamic from 'next/dynamic'
+import React, { useEffect, useRef } from 'react'
 import { NotionRenderer } from 'react-notion-x'
 
 // ===================================================================================================================
-// START: 自定义组件解析逻辑 (新增部分)
+// START: 自定义组件解析逻辑 (新增和修改部分)
 // ===================================================================================================================
 
 // 定义一个映射表，用于存储可以动态加载的自定义组件
@@ -28,8 +28,8 @@ const CUSTOM_COMPONENTS_MAP = {
 const CustomCodeRenderer = ({ block, className }) => {
   // 确保 block 和其属性存在，并且是 Code 块类型
   if (!block || block.type !== 'code') {
-    // 如果不是代码块，或者没有内容，就用默认的 Code 组件渲染（这里我们仍然需要一个默认的 Code 组件）
-    // 为了避免循环引用，我们直接使用 react-notion-x 的 Code 组件
+    // 如果不是代码块，或者没有内容，就用默认的 Code 组件渲染。
+    // 为了避免循环引用，我们直接使用 react-notion-x 的 Code 组件。
     const DefaultCode = dynamic(
       () => import('react-notion-x/build/third-party/code').then(m => m.Code),
       { ssr: false }
@@ -312,16 +312,7 @@ function getMediumZoomMargin() {
 // START: 原始的动态导入 (部分已不再直接使用，但仍保留导入供其他组件使用)
 // ===================================================================================================================
 
-// 代码 (这个 Code 变量在 NotionRenderer 中被 CustomCodeRenderer 替换了，但其内部可能仍被 CustomCodeRenderer 引用)
-// 实际上 CustomCodeRenderer 内部会动态导入 react-notion-x 的 Code 组件，所以这里可以删除，
-// 但为了保持原文件结构清晰，暂时保留，但它不再是 NotionRenderer 直接使用的 Code。
-// const Code = dynamic( // <-- 这个Code变量不再直接用于NotionRenderer，而是CustomCodeRenderer内部处理
-//   () =>
-//     import('react-notion-x/build/third-party/code').then(m => {
-//       return m.Code
-//     }),
-//   { ssr: false }
-// )
+// 注意：原始的 Code 动态导入已被移除，因为 CustomCodeRenderer 会动态导入 react-notion-x 的 Code 组件。
 
 // 公式
 const Equation = dynamic(
