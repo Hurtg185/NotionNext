@@ -4,7 +4,7 @@ import Comment from '@/components/Comment'
 import { AdSlot } from '@/components/GoogleAdsense'
 import { HashTag } from '@/components/HeroIcons'
 import LazyImage from '@/components/LazyImage'
-import LoadingCover from '@/components/LoadingCover'
+// import LoadingCover from '@/components/LoadingCover' // <-- 已删除：不再需要 LoadingCover 组件
 import replaceSearchResult from '@/components/Mark'
 import NotionPage from '@/components/NotionPage'
 import ShareBar from '@/components/ShareBar'
@@ -51,16 +51,7 @@ const XUANCHUAN_BANNERS = [
   // ... 请务必在这里列出所有您上传到 /public/images/xuanchuan/ 的图片路径
 ]
 
-/*
-// --- 新增：开屏随机图片数组 ---
-// 请确保您的开屏图片放在 /public/images/kaiping/ 文件夹下，并更新下面的列表
-const KAIPING_BANNERS = [
-  '/images/kaiping/kaiping1.jpg',
-  '/images/kaiping/kaiping2.jpg',
-  '/images/kaiping/kaiping3.png'
-  // ... 请务必在这里列出所有您上传到 /public/images/kaiping/ 的图片路径
-]
-/*
+// <-- 已删除：KAIPING_BANNERS 数组及其注释块已完全移除 -->
 
 // --- 新增：通用弹窗组件 ---
 const Modal = ({ isOpen, onClose, title, intro, children }) => {
@@ -116,7 +107,7 @@ const LayoutBase = props => {
     false,
     CONFIG
   )
-  const HEO_LOADING_COVER = siteConfig('HEO_LOADING_COVER', false, CONFIG)
+  // const HEO_LOADING_COVER = siteConfig('HEO_LOADING_COVER', false, CONFIG) // <-- 已删除：HEO_LOADING_COVER 配置项不再需要
 
   useEffect(() => {
     loadWowJS()
@@ -145,7 +136,7 @@ const LayoutBase = props => {
         </div>
       </main>
       <Footer />
-      {HEO_LOADING_COVER && <LoadingCover banners={KAIPING_BANNERS} />}
+      {/* {HEO_LOADING_COVER && <LoadingCover banners={KAIPING_BANNERS} />} */} {/* <-- 已删除：LoadingCover 组件不再被渲染 */}
     </div>
   )
 }
@@ -253,7 +244,17 @@ const StudyToolsGrid = ({ setActiveModal }) => {
 
 // --- 新增/重构：随机图片卡片组件 ---
 const RandomImageCard = ({ banners, linkUrl, alt }) => {
-  const randomImage = useMemo(() => banners[Math.floor(Math.random() * banners.length)], [banners])
+  const randomImage = useMemo(() => {
+    // <-- 优化开始：检查 banners 数组是否为空，如果为空则提供默认图片
+    if (!banners || banners.length === 0) {
+      // 请确保在 /public/images/ 目录下放置一个名为 default-xuanchuan.jpg 的默认图片
+      console.warn("XUANCHUAN_BANNERS is empty or undefined. Using default fallback image.");
+      return '/images/default-xuanchuan.jpg'; 
+    }
+    // <-- 优化结束
+    return banners[Math.floor(Math.random() * banners.length)];
+  }, [banners]);
+
   return (
     <section className='mt-4'>
       <SmartLink href={linkUrl || '#'}>
@@ -347,7 +348,7 @@ const LayoutIndex = props => {
           <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200'><i className='fab fa-telegram-plane text-xl mr-3'></i> <span className='font-semibold'>Telegram</span></SmartLink>
           <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-green-400 text-white hover:bg-green-500 transition-all duration-200'><i className='fab fa-line text-xl mr-3'></i> <span className='font-semibold'>Line</span></SmartLink>
           <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-all duration-200'><i className='fab fa-viber text-xl mr-3'></i> <span className='font-semibold'>Viber</span></SmartLink>
-          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-all duration-200'><i className='fab fa-facebook-f text-xl mr-3'></i> <span className='font-semibold'>Facebook Group</span></SmartLink>
+          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-all duration-200'><i className='fab fa-facebook-f text-xl mr-3'></i> <span className='font-semibold'>Facebook 个人主页</span></SmartLink>
           <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-black text-white hover:bg-gray-800 transition-all duration-200'><i className='fab fa-tiktok text-xl mr-3'></i> <span className='font-semibold'>TikTok</span></SmartLink>
         </>
       )
@@ -562,7 +563,7 @@ const LayoutSlug = props => {
           <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200'><i className='fab fa-telegram-plane text-xl mr-3'></i> <span className='font-semibold'>Telegram</span></SmartLink>
           <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-green-400 text-white hover:bg-green-500 transition-all duration-200'><i className='fab fa-line text-xl mr-3'></i> <span className='font-semibold'>Line</span></SmartLink>
           <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-all duration-200'><i className='fab fa-viber text-xl mr-3'></i> <span className='font-semibold'>Viber</span></SmartLink>
-          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-all duration-200'><i className='fab fa-facebook-f text-xl mr-3'></i> <span className='font-semibold'>Facebook Group</span></SmartLink>
+          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-all duration-200'><i className='fab fa-facebook-f text-xl mr-3'></i> <span className='font-semibold'>Facebook 个人主页</span></SmartLink>
           <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-black text-white hover:bg-gray-800 transition-all duration-200'><i className='fab fa-tiktok text-xl mr-3'></i> <span className='font-semibold'>TikTok</span></SmartLink>
         </>
       )
@@ -809,4 +810,4 @@ export {
   LayoutSlug,
   LayoutTagIndex,
   CONFIG as THEME_CONFIG
-    }
+}
