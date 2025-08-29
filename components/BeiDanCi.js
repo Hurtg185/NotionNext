@@ -1,13 +1,14 @@
-// /components/BeiDanCi.js (最终版本，包含全屏、随机/顺序、多信息显示、左右切换、键盘导航、z-index等)
+// /components/BeiDanCi.js (取消全屏，优化翻转，美化样式)
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import TextToSpeechButton from './TextToSpeechButton'; // 导入朗读组件
+import TextToSpeechButton from './TextToSpeechButton';
 
 /**
  * 背单词卡片组件 (Flashcard)
- * 点击卡片翻转，显示单词、词义、例句。支持左右触摸滑动切换卡片。
+ * 不再全屏显示，而是作为页面内容，但尺寸较大。
+ * 点击卡片翻转，显示单词、拼音、缅文、释义、例句。支持左右触摸滑动切换卡片。
  * 卡片背景可使用随机图片。
  *
- * @param {Array<Object>} flashcards - 单词卡片数据数组，每个对象应包含:
+ * @param {Array<Object>|string} flashcards - 单词卡片数据数组，或 JSON 字符串。
  *   {
  *     id: string | number,
  *     word: string, // 中文单词 (正面显示)
@@ -21,154 +22,165 @@ import TextToSpeechButton from './TextToSpeechButton'; // 导入朗读组件
  *   }
  * @param {string} questionTitle - 组件标题
  * @param {string} lang - 朗读语言，默认为 'zh-CN'
- * @param {Array<string>} backgroundImages - 背景图片URL数组
+ * @param {Array<string>|string} backgroundImages - 背景图片URL数组，或 JSON 字符串。
  * @param {boolean} isShuffle - 是否随机排序，控制卡片顺序 (由父组件传入)
  */
 const BeiDanCi = ({
-  flashcards,
+  flashcards: flashcardsProp, // 将 prop 名称改为 flashcardsProp 以避免混淆
   questionTitle = '背单词',
   lang = 'zh-CN',
-  backgroundImages = [],
+  backgroundImages: backgroundImagesProp = [], // 同样改名
   isShuffle = false,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false); // 卡片是否翻转，初始为false (正面)
-  const [touchStartX, setTouchStartX] = useState(null); // 记录触摸开始时的 X 坐标
-  const [displayFlashcards, setDisplayFlashcards] = useState([]); // 实际展示的卡片顺序
+  const [touchStartX, setTouchStartX] = useState(null);
+  const [displayFlashcards, setDisplayFlashcards] = useState([]);
+  const [parsedBackgroundImages, setParsedBackgroundImages] = useState([]);
 
-  const flipAudioRef = useRef(null);
+
+  // 处理 flashcards prop (可以接收字符串或数组)
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      // flipAudioRef.current = new Audio('/sounds/flip.mp3');
+    let cards = [];
+    if (typeof flashcardsProp === 'string') {
+      try {
+        cards = JSON.parse(flashcardsProp);
+      } catch (e) {
+        console.error("Error parsing flashcards JSON string:", e);
+        cards = [];
+      }
+    } else if (Array.isArray(flashcardsProp)) {
+      cards = flashcardsProp;
     }
-  }, []);
 
-  // 根据 isShuffle 状态和 flashcards 变化来更新 displayFlashcards
-  useEffect(() => {
-    if (!flashcards || flashcards.length === 0) {
-        setDisplayFlashcards([]);
-        setCurrentIndex(0);
-        setIsFlipped(false);
-        return;
+    if (!cards || cards.length === 0) {
+      setDisplayFlashcards([]);
+      setCurrentIndex(0);
+      setIsFlipped(false);
+      return;
     }
 
     if (isShuffle) {
-      const shuffled = [...flashcards].sort(() => Math.random() - 0.5);
+      const shuffled = [...cards].sort(() => Math.random() - 0.5);
       setDisplayFlashcards(shuffled);
     } else {
-      setDisplayFlashcards([...flashcards]); // 保持原始顺序
+      setDisplayFlashcards([...cards]);
     }
-    setCurrentIndex(0); // 排序或切换模式后重置到第一张卡片
-    setIsFlipped(false); // 重置翻转状态到正面
-  }, [flashcards, isShuffle]);
+    setCurrentIndex(0);
+    setIsFlipped(false);
+  }, [flashcardsProp, isShuffle]);
+
+  // 处理 backgroundImages prop (可以接收字符串或数组)
+  useEffect(() => {
+    let images = [];
+    if (typeof backgroundImagesProp === 'string') {
+      try {
+        images = JSON.parse(backgroundImagesProp);
+      } catch (e) {
+        console.error("Error parsing backgroundImages JSON string:", e);
+        images = [];
+      }
+    } else if (Array.isArray(backgroundImagesProp)) {
+      images = backgroundImagesProp;
+    }
+    setParsedBackgroundImages(images);
+  }, [backgroundImagesProp]);
+
 
   const handleFlip = useCallback(() => {
     setIsFlipped((prev) => !prev);
-    // if (flipAudioRef.current) {
-    //   flipAudioRef.current.currentTime = 0;
-    //   flipAudioRef.current.play().catch(e => console.error("Error playing flip sound:", e));
-    // }
   }, []);
 
   const handleNext = useCallback(() => {
     setIsFlipped(false); // 切换前先翻回正面
-    setTimeout(() => {
+    setTimeout(() => { // 延迟切换，给翻转动画时间
       setCurrentIndex((prevIndex) => (prevIndex + 1) % displayFlashcards.length);
-    }, 150);
+    }, 150); // 匹配翻转动画时间
   }, [displayFlashcards.length]);
 
   const handlePrev = useCallback(() => {
     setIsFlipped(false); // 切换前先翻回正面
-    setTimeout(() => {
+    setTimeout(() => { // 延迟切换，给翻转动画时间
       setCurrentIndex(
         (prevIndex) => (prevIndex - 1 + displayFlashcards.length) % displayFlashcards.length
       );
-    }, 150);
+    }, 150); // 匹配翻转动画时间
   }, [displayFlashcards.length]);
 
   // 键盘事件监听
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (displayFlashcards.length === 0) return; // 没有卡片时不响应键盘事件
+      if (displayFlashcards.length === 0) return;
 
       if (e.key === 'ArrowRight') {
         handleNext();
       } else if (e.key === 'ArrowLeft') {
         handlePrev();
-      } else if (e.key === ' ' || e.key === 'Enter') { // 空格键或回车键翻转
-        e.preventDefault(); // 阻止页面滚动
+      } else if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
         handleFlip();
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [handleNext, handlePrev, handleFlip, displayFlashcards.length]);
 
-  // 触摸开始事件
+  // 触摸事件
   const handleTouchStart = (e) => {
-    // 阻止默认的触摸行为，例如页面滚动，但要小心可能阻止其他需要滚动的元素
-    // e.preventDefault(); // 暂时注释，如果影响页面其他滚动再启用
     setTouchStartX(e.touches[0].clientX);
   };
 
-  // 触摸移动事件 (可选，如果需要实时拖动效果)
-  const handleTouchMove = (e) => {
-    // e.preventDefault(); // 阻止滚动
-  };
-
-  // 触摸结束事件
   const handleTouchEnd = (e) => {
     if (touchStartX === null) {
       return;
     }
-
     const touchEndX = e.changedTouches[0].clientX;
     const deltaX = touchEndX - touchStartX;
+    const SWIPE_THRESHOLD = 50;
 
-    const SWIPE_THRESHOLD = 50; // 滑动阈值
+    // 检查是否在卡片主体区域进行了触摸，避免点击按钮也被误判为卡片点击
+    // target.closest() 方法可以帮助我们判断触摸事件是否发生在某个特定元素或其子元素上
+    const isCardBodyClick = e.changedTouches[0].target.closest('.flashcard-body');
 
-    if (deltaX > SWIPE_THRESHOLD) {
-      // 右滑
-      handlePrev();
-    } else if (deltaX < -SWIPE_THRESHOLD) {
-      // 左滑
-      handleNext();
-    } else if (Math.abs(deltaX) <= SWIPE_THRESHOLD && e.changedTouches[0].target.closest('.flashcard-body')) {
-      // 如果滑动距离很小，则认为是点击事件，用于翻转卡片
-      // 确保点击区域在卡片主体内，避免点击按钮也翻转
-      handleFlip();
+    if (Math.abs(deltaX) > SWIPE_THRESHOLD) { // 明显的滑动
+        if (deltaX > SWIPE_THRESHOLD) {
+            handlePrev();
+        } else {
+            handleNext();
+        }
+    } else if (isCardBodyClick) { // 短距离触摸且在卡片主体上，视为点击翻转
+        handleFlip();
     }
-
-    setTouchStartX(null); // 重置触摸起始坐标
+    setTouchStartX(null);
   };
 
 
   const currentCard = displayFlashcards[currentIndex];
-  const currentBackgroundImage = backgroundImages[currentIndex % backgroundImages.length];
+  // 循环使用背景图
+  const currentBackgroundImage = parsedBackgroundImages[currentIndex % parsedBackgroundImages.length];
 
   if (!displayFlashcards || displayFlashcards.length === 0) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center bg-day-DEFAULT dark:bg-night-DEFAULT text-body-color dark:text-dark-7 z-[9999]">
-        <p className="text-lg font-semibold text-center p-4">没有卡片数据。请提供 flashcards 数组。</p>
+      <div className="max-w-4xl mx-auto my-8 p-6 bg-day-DEFAULT dark:bg-night-DEFAULT rounded-xl shadow-2xl border border-stroke dark:border-dark-3 text-body-color dark:text-dark-7">
+        <p className="text-lg font-semibold text-center">没有卡片数据。请提供 flashcards 数组。</p>
       </div>
     );
   }
 
   return (
-    // 全屏容器，使用高 z-index 确保覆盖其他内容
-    <div className="fixed inset-0 flex flex-col items-center justify-center bg-day-DEFAULT dark:bg-night-DEFAULT p-4 sm:p-8 overflow-hidden z-[9999]">
-      <h3 className="text-3xl sm:text-4xl font-extrabold mb-4 text-dark-DEFAULT dark:text-gray-1 text-center">
+    // 不再使用 fixed inset-0，改为普通 div，并设置最大宽度和高度
+    <div className="max-w-4xl mx-auto my-8 p-4 bg-transparent"> {/* bg-transparent 让其不遮挡父级背景 */}
+      <h3 className="text-2xl sm:text-3xl font-extrabold mb-6 text-dark-DEFAULT dark:text-gray-1 text-center">
         {questionTitle}
       </h3>
 
       <div
-        className="relative w-full max-w-4xl h-[calc(100vh-180px)] sm:h-[calc(100vh-200px)] perspective-1000 my-4"
-        onTouchStart={handleTouchStart} // 监听触摸开始
-        onTouchMove={handleTouchMove}   // 监听触摸移动
-        onTouchEnd={handleTouchEnd}     // 监听触摸结束
+        className="relative w-full h-[500px] sm:h-[600px] md:h-[700px] aspect-w-16 aspect-h-9 perspective-1000 my-4 touch-action-none" // 增加高度，aspect-ratio 确保比例
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        // onTouchMove={e => e.preventDefault()} // 阻止卡片区域滑动时页面滚动
       >
         <div
           className={`absolute w-full h-full preserve-3d transition-transform duration-300 rounded-xl shadow-2xl border border-stroke dark:border-dark-4
@@ -191,11 +203,10 @@ const BeiDanCi = ({
 
           {/* 卡片正面 */}
           <div
-            onClick={handleFlip} // 点击正面翻转
             className={`flashcard-body absolute w-full h-full backface-hidden rounded-xl flex flex-col items-center justify-center p-6 sm:p-8 select-none cursor-pointer z-10
                       ${currentBackgroundImage ? 'text-white' : 'text-dark-DEFAULT dark:text-gray-1 bg-gray-100 dark:bg-dark-3'} `}
           >
-            <p className="text-5xl sm:text-7xl font-bold text-center flex items-center">
+            <p className="text-5xl sm:text-7xl font-bold text-center flex items-center leading-tight"> {/* leading-tight 减少行高 */}
               {currentCard.word}
               <TextToSpeechButton text={currentCard.word} lang={lang} className="ml-4 text-4xl sm:text-5xl" />
             </p>
@@ -203,12 +214,11 @@ const BeiDanCi = ({
 
           {/* 卡片背面 */}
           <div
-            onClick={handleFlip} // 点击背面翻转
             className={`flashcard-body absolute w-full h-full backface-hidden rounded-xl flex flex-col justify-center p-6 sm:p-8 rotate-y-180 select-none cursor-pointer z-10
                       ${currentBackgroundImage ? 'text-white' : 'text-body-color dark:text-dark-7 bg-gray-1 dark:bg-dark-3'} `}
           >
             <h4
-              className="text-3xl sm:text-4xl font-extrabold text-center mb-4 flex items-center justify-center"
+              className="text-3xl sm:text-4xl font-extrabold text-center mb-4 flex items-center justify-center leading-tight"
               style={{ color: currentBackgroundImage ? 'white' : 'var(--text-primary)' }}
             >
               {currentCard.word}
