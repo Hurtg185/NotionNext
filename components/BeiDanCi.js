@@ -1,4 +1,4 @@
-// /components/BeiDanCi.js - 最终稳定版：区域点击，无外部依赖，优化布局和样式
+// /components/BeiDanCi.js - 最终稳定版 v2：修复朗读按钮冲突，优化布局和美观度
 import React, { useState, useEffect, useCallback } from 'react';
 import TextToSpeechButton from './TextToSpeechButton'; // 导入朗读组件
 
@@ -23,11 +23,11 @@ const BeiDanCi = ({
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showBack, setShowBack] = useState(false); // 控制背面信息显示/隐藏
+  const [isTransitioning, setIsTransitioning] = useState(false); // 用于卡片切换动画的状态
 
   const [displayFlashcards, setDisplayFlashcards] = useState([]);
   const [parsedBackgroundImages, setParsedBackgroundImages] = useState([]);
   const [internalIsShuffle, setInternalIsShuffle] = useState(false);
-  const [isTransitioning, setIsTransitioning] = useState(false); // 用于卡片切换动画的状态
 
   // --- Prop 解析和数据初始化 ---
   useEffect(() => {
@@ -69,13 +69,13 @@ const BeiDanCi = ({
   const handleToggleBack = useCallback(() => setShowBack((prev) => !prev), []);
 
   const changeCard = (newIndex) => {
-    if (isTransitioning) return; // 防止动画期间重复点击
+    if (isTransitioning) return;
     setIsTransitioning(true);
     setShowBack(false);
     setTimeout(() => {
       setCurrentIndex(newIndex);
       setIsTransitioning(false);
-    }, 200); // 匹配淡出动画时间
+    }, 200);
   };
 
   const handleNext = useCallback(() => {
@@ -102,11 +102,6 @@ const BeiDanCi = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleNext, handlePrev, handleToggleBack, displayFlashcards.length]);
-  
-  // 封装一个函数来处理朗读按钮的点击事件
-  const handleTtsClick = (e) => {
-    e.stopPropagation(); // 关键：阻止事件冒泡到父元素
-  };
 
   // --- 渲染部分 ---
   const currentCard = displayFlashcards[currentIndex];
@@ -119,6 +114,13 @@ const BeiDanCi = ({
       </div>
     );
   }
+  
+  // 封装一个朗读按钮，内置事件拦截
+  const TtsButtonWrapper = ({ text, lang, className }) => (
+    <div onClick={e => e.stopPropagation()} className="inline-block">
+      <TextToSpeechButton text={text} lang={lang} className={className} />
+    </div>
+  );
 
   return (
     <div className="max-w-4xl mx-auto my-8 p-4 bg-transparent">
@@ -129,11 +131,11 @@ const BeiDanCi = ({
       <div
         className="relative w-full overflow-hidden rounded-2xl shadow-2xl my-4 touch-action-pan-y"
         style={{
-          height: '550px', // 增加高度
+          height: '550px',
           maxWidth: '700px',
           margin: '0 auto',
           border: '1px solid var(--border-color-subtle, rgba(0,0,0,0.1))',
-          backgroundColor: 'var(--bg-card-default, #f0f0f0)',
+          backgroundColor: currentBackgroundImage ? 'transparent' : 'var(--bg-card-default, #f0f0f0)',
         }}
       >
         {/* 背景图层 */}
@@ -143,37 +145,53 @@ const BeiDanCi = ({
             backgroundImage: `url('${currentBackgroundImage}')`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
-            opacity: isTransitioning ? 0 : 1, // 切换时背景淡出淡入
+            opacity: isTransitioning ? 0 : 1,
           }}
         >
           <div className="absolute inset-0 bg-black opacity-40"></div>
         </div>
+        
+        {/* 图钉装饰 */}
+        <div className="absolute top-4 right-4 text-4xl transform -rotate-45 opacity-80 z-20">
+          📌
+        </div>
 
         {/* 内容容器 */}
-        <div className={`absolute inset-0 z-20 transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
+        <div className={`absolute inset-0 z-10 transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
           {/* 正面：大中文单词 */}
           <div className={`absolute inset-0 p-6 sm:p-8 flex flex-col items-center justify-center transition-opacity duration-300 ${showBack ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
             <p className="text-5xl sm:text-7xl font-bold leading-tight text-white select-none flex items-center drop-shadow-lg">
               {currentCard.word}
-              <span onClick={handleTtsClick} className="inline-block ml-4">
-                <TextToSpeechButton text={currentCard.word} lang={lang} className="text-4xl sm:text-5xl drop-shadow-md" />
-              </span>
+              <TtsButtonWrapper text={currentCard.word} lang={lang} className="ml-4 text-4xl sm:text-5xl drop-shadow-md" />
             </p>
           </div>
 
           {/* 背面：所有详细信息 */}
-          <div className={`absolute inset-0 p-6 sm:p-8 flex flex-col justify-start items-center rounded-xl transition-opacity duration-300 ease-in-out ${showBack ? 'opacity-100' : 'opacity-0 pointer-events-none'} text-white pt-16`}>
+          <div className={`absolute inset-0 p-6 sm:p-8 flex flex-col items-center justify-center transition-opacity duration-300 ease-in-out ${showBack ? 'opacity-100' : 'opacity-0 pointer-events-none'} text-white`}>
             <div className="w-full h-full max-h-full overflow-y-auto custom-scrollbar p-2 text-center">
               <h4 className="text-2xl sm:text-3xl font-extrabold mb-4 flex items-center justify-center leading-tight drop-shadow-md">
                 {currentCard.word}
-                <span onClick={handleTtsClick} className="inline-block ml-4"><TextToSpeechButton text={currentCard.word} lang={lang} className="text-2xl sm:text-3xl drop-shadow-sm" /></span>
+                <TtsButtonWrapper text={currentCard.word} lang={lang} className="ml-4 text-2xl sm:text-3xl drop-shadow-sm" />
               </h4>
-              {/* ... (其他背面信息，并为每个朗读按钮包裹span) ... */}
-              {currentCard.pinyin && <p className="text-lg sm:text-xl mb-2 flex items-center justify-center drop-shadow-sm"><span className="font-semibold mr-2">拼音:</span>{currentCard.pinyin}<span onClick={handleTtsClick} className="inline-block ml-2"><TextToSpeechButton text={currentCard.pinyin} lang={lang} className="text-lg" /></span></p>}
-              {currentCard.myanmar && <p className="text-lg sm:text-xl mb-2 flex items-center justify-center font-myanmar drop-shadow-sm"><span className="font-semibold mr-2">缅文:</span>{currentCard.myanmar}<span onClick={handleTtsClick} className="inline-block ml-2"><TextToSpeechButton text={currentCard.myanmar} lang="my-MM" className="text-lg" /></span></p>}
-              <p className="text-lg sm:text-xl mb-2 flex items-center justify-center drop-shadow-sm"><span className="font-semibold mr-2">释义:</span>{currentCard.meaning}<span onClick={handleTtsClick} className="inline-block ml-2"><TextToSpeechButton text={currentCard.meaning} lang={lang} className="text-lg" /></span></p>
-              {currentCard.example1 && <div className="mt-4 text-center"><p className="text-base sm:text-lg italic flex items-start justify-center drop-shadow-sm"><span className="font-semibold not-italic mr-2">例句1:</span>{currentCard.example1}<span onClick={handleTtsClick} className="inline-block ml-2 shrink-0"><TextToSpeechButton text={currentCard.example1} lang={lang} className="text-base" /></span></p>{currentCard.example1Translation && <p className="text-sm sm:text-base flex items-start justify-center drop-shadow-sm opacity-80"><span className="font-semibold mr-2">翻译:</span>{currentCard.example1Translation}<span onClick={handleTtsClick} className="inline-block ml-2 shrink-0"><TextToSpeechButton text={currentCard.example1Translation} lang={lang} className="text-sm" /></span></p>}</div>}
-              {currentCard.example2 && <div className="mt-2 text-center"><p className="text-base sm:text-lg italic flex items-start justify-center drop-shadow-sm"><span className="font-semibold not-italic mr-2">例句2:</span>{currentCard.example2}<span onClick={handleTtsClick} className="inline-block ml-2 shrink-0"><TextToSpeechButton text={currentCard.example2} lang={lang} className="text-base" /></span></p>{currentCard.example2Translation && <p className="text-sm sm:text-base flex items-start justify-center drop-shadow-sm opacity-80"><span className="font-semibold mr-2">翻译:</span>{currentCard.example2Translation}<span onClick={handleTtsClick} className="inline-block ml-2 shrink-0"><TextToSpeechButton text={currentCard.example2Translation} lang={lang} className="text-sm" /></span></p>}</div>}
+              
+              {currentCard.pinyin && <p className="text-lg sm:text-xl mb-2 flex items-center justify-center drop-shadow-sm text-yellow-300"> {/* 拼音颜色 */}
+                <span className="font-semibold mr-2 text-white">拼音:</span>{currentCard.pinyin}
+                <TtsButtonWrapper text={currentCard.pinyin} lang={lang} className="ml-2 text-lg" />
+              </p>}
+              
+              {currentCard.myanmar && <p className="text-lg sm:text-xl mb-2 flex items-center justify-center font-myanmar drop-shadow-sm text-green-300"> {/* 缅文颜色 */}
+                <span className="font-semibold mr-2 text-white">缅文:</span>{currentCard.myanmar}
+                <TtsButtonWrapper text={currentCard.myanmar} lang="my-MM" className="ml-2 text-lg" />
+              </p>}
+              
+              <p className="text-lg sm:text-xl mb-2 flex items-center justify-center drop-shadow-sm">
+                <span className="font-semibold mr-2">释义:</span>{currentCard.meaning}
+                <TtsButtonWrapper text={currentCard.meaning} lang={lang} className="ml-2 text-lg" />
+              </p>
+              
+              {currentCard.example1 && <div className="mt-4 text-center"><p className="text-base sm:text-lg italic flex items-start justify-center drop-shadow-sm"><span className="font-semibold not-italic mr-2">例句1:</span>{currentCard.example1}<TtsButtonWrapper text={currentCard.example1} lang={lang} className="ml-2 shrink-0 text-base" /></p>{currentCard.example1Translation && <p className="text-sm sm:text-base flex items-start justify-center drop-shadow-sm opacity-80"><span className="font-semibold mr-2">翻译:</span>{currentCard.example1Translation}<TtsButtonWrapper text={currentCard.example1Translation} lang={lang} className="ml-2 shrink-0 text-sm" /></p>}</div>}
+              
+              {currentCard.example2 && <div className="mt-2 text-center"><p className="text-base sm:text-lg italic flex items-start justify-center drop-shadow-sm"><span className="font-semibold not-italic mr-2">例句2:</span>{currentCard.example2}<TtsButtonWrapper text={currentCard.example2} lang={lang} className="ml-2 shrink-0 text-base" /></p>{currentCard.example2Translation && <p className="text-sm sm:text-base flex items-start justify-center drop-shadow-sm opacity-80"><span className="font-semibold mr-2">翻译:</span>{currentCard.example2Translation}<TtsButtonWrapper text={currentCard.example2Translation} lang={lang} className="ml-2 shrink-0 text-sm" /></p>}</div>}
             </div>
           </div>
         </div>
@@ -189,7 +207,7 @@ const BeiDanCi = ({
         </div>
       </div>
       
-      {/* 底部导航按钮 (可选，如果想保留) */}
+      {/* 底部导航按钮 */}
       <div className="flex justify-between w-full max-w-4xl mx-auto mt-4 sm:mt-8 px-4">
         <button onClick={handlePrev} className="flex items-center px-6 py-3 bg-dark-6 text-white font-medium rounded-lg shadow-md hover:bg-dark-5 focus:outline-none focus:ring-2 focus:ring-dark-7 focus:ring-offset-2 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-lg sm:text-xl">
           <i className="fas fa-arrow-left mr-2"></i> 上一个
