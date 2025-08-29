@@ -1,19 +1,18 @@
-// /components/BeiDanCi.js - 最终版本：恢复 3D 翻转效果，强制关键 CSS 属性
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+// /components/BeiDanCi.js - 最终版：区域点击交互，淡入淡出动画，样式优化
+import React, { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion'; // 导入 Framer Motion 以实现流畅动画
 import TextToSpeechButton from './TextToSpeechButton'; // 导入朗读组件
 
 /**
  * 背单词卡片组件 (Flashcard)
- * 作为页面内容的一部分显示，尺寸较大，具有 3D 翻转效果和动画。
- * 点击卡片可翻转到背面，再次点击翻回正面。
- * 支持左右触摸滑动或按钮切换卡片。
- * 支持从 `!include` 语句中接收 JSON 字符串形式的 props。
+ * 交互模式：左侧1/3区域点击“上一个”，右侧1/3区域点击“下一个”，中间区域点击显示/隐藏详情。
+ * 动画：单词切换时有淡入淡出效果，显示/隐藏详情也有平滑动画。
+ * 数据源：支持从 `!include` 语句中接收 JSON 字符串。
  *
  * @param {Array<Object>|string} flashcards - 单词卡片数据数组，或其 JSON 字符串表示。
  * @param {string} questionTitle - 组件标题。
  * @param {string} lang - 朗读语言，默认为 'zh-CN'。
  * @param {Array<string>|string} backgroundImages - 背景图片URL数组，或其 JSON 字符串表示。
- *   图片路径应相对于 `public` 文件夹，例如 `"/images/bg.jpg"`。
  * @param {boolean|string} isShuffle - 是否随机排序。可以为布尔值或 "true"/"false" 字符串。
  */
 const BeiDanCi = ({
@@ -24,8 +23,8 @@ const BeiDanCi = ({
   isShuffle: isShuffleProp = false,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isFlipped, setIsFlipped] = useState(false); // 控制翻转状态
-  const [touchStartX, setTouchStartX] = useState(null);
+  const [showBack, setShowBack] = useState(false); // 控制背面信息显示/隐藏
+  const [direction, setDirection] = useState(0); // 动画方向：0=初始, 1=下一个, -1=上一个
 
   const [displayFlashcards, setDisplayFlashcards] = useState([]);
   const [parsedBackgroundImages, setParsedBackgroundImages] = useState([]);
@@ -41,7 +40,7 @@ const BeiDanCi = ({
     if (!cards || cards.length === 0) {
       setDisplayFlashcards([]);
       setCurrentIndex(0);
-      setIsFlipped(false); // 重置翻转状态
+      setShowBack(false);
       return;
     }
 
@@ -52,7 +51,7 @@ const BeiDanCi = ({
       setDisplayFlashcards([...cards]);
     }
     setCurrentIndex(0);
-    setIsFlipped(false); // 重置为只显示正面
+    setShowBack(false);
   }, [flashcardsProp, internalIsShuffle]);
 
   useEffect(() => {
@@ -73,72 +72,53 @@ const BeiDanCi = ({
 
   // --- 交互逻辑 ---
 
-  const handleFlip = useCallback(() => {
-    setIsFlipped((prev) => !prev);
+  const handleToggleBack = useCallback(() => {
+    setShowBack((prev) => !prev);
   }, []);
 
   const handleNext = useCallback(() => {
-    setIsFlipped(false); // 切换前先翻回正面
-    setTimeout(() => { // 延迟切换，给翻转动画时间
-      setCurrentIndex((prevIndex) => (prevIndex + 1) % displayFlashcards.length);
-    }, 500); // 匹配翻转动画时间 (现在是 500ms)
+    setDirection(1); // 设置动画方向为“下一个”
+    setShowBack(false);
+    setCurrentIndex((prevIndex) => (prevIndex + 1) % displayFlashcards.length);
   }, [displayFlashcards.length]);
 
   const handlePrev = useCallback(() => {
-    setIsFlipped(false); // 切换前先翻回正面
-    setTimeout(() => { // 延迟切换，给翻转动画时间
-      setCurrentIndex(
-        (prevIndex) => (prevIndex - 1 + displayFlashcards.length) % displayFlashcards.length
-      );
-    }, 500); // 匹配翻转动画时间
+    setDirection(-1); // 设置动画方向为“上一个”
+    setShowBack(false);
+    setCurrentIndex((prevIndex) => (prevIndex - 1 + displayFlashcards.length) % displayFlashcards.length);
   }, [displayFlashcards.length]);
 
   // 键盘事件监听
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (displayFlashcards.length === 0) return;
-      if (e.key === 'ArrowRight') {
-        handleNext();
-      } else if (e.key === 'ArrowLeft') {
-        handlePrev();
-      } else if (e.key === ' ' || e.key === 'Enter') {
+      if (e.key === 'ArrowRight') handleNext();
+      else if (e.key === 'ArrowLeft') handlePrev();
+      else if (e.key === ' ' || e.key === 'Enter') {
         e.preventDefault();
-        handleFlip();
+        handleToggleBack();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [handleNext, handlePrev, handleFlip, displayFlashcards.length]);
-
-  // 触摸事件
-  const handleTouchStart = (e) => {
-    setTouchStartX(e.touches[0].clientX);
-  };
-
-  const handleTouchEnd = (e) => {
-    if (touchStartX === null || displayFlashcards.length === 0) {
-      return;
-    }
-    const touchEndX = e.changedTouches[0].clientX;
-    const deltaX = touchEndX - touchStartX;
-    const SWIPE_THRESHOLD = 50;
-
-    const isCardBodyClick = e.changedTouches[0].target.closest('.flashcard-body');
-
-    if (Math.abs(deltaX) > SWIPE_THRESHOLD) {
-      if (deltaX > SWIPE_THRESHOLD) { handlePrev(); } else { handleNext(); }
-    } else if (isCardBodyClick) {
-      handleFlip();
-    }
-    setTouchStartX(null);
-  };
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleNext, handlePrev, handleToggleBack, displayFlashcards.length]);
 
   // --- 渲染部分 ---
 
   const currentCard = displayFlashcards[currentIndex];
   const currentBackgroundImage = parsedBackgroundImages[currentIndex % parsedBackgroundImages.length];
+
+  // Framer Motion 动画变体
+  const cardVariants = {
+    enter: { opacity: 1, scale: 1, x: 0 },
+    center: { zIndex: 1, x: 0, opacity: 1, scale: 1 },
+    exit: direction => ({
+      zIndex: 0,
+      x: direction < 0 ? 100 : -100, // 根据方向决定滑出位置
+      opacity: 0,
+      scale: 0.95
+    }),
+  };
 
   if (!displayFlashcards || displayFlashcards.length === 0) {
     return (
@@ -149,175 +129,138 @@ const BeiDanCi = ({
   }
 
   return (
-    // 外层容器：最大宽度、居中、有垂直外边距
-    <div className="max-w-5xl mx-auto my-8 p-4 bg-transparent">
-      {/* 标题 */}
+    <div className="max-w-4xl mx-auto my-8 p-4 bg-transparent">
       <h3 className="text-2xl sm:text-3xl font-extrabold mb-6 text-dark-DEFAULT dark:text-gray-1 text-center">
         {questionTitle}
       </h3>
 
-      {/* 卡片外部包装器，提供 perspective */}
+      {/* 卡片主体容器 */}
       <div
-        className="relative w-full overflow-hidden rounded-xl shadow-2xl hover:shadow-3xl transition-shadow duration-300 transform hover:scale-105 my-4 touch-action-none"
+        className="relative w-full overflow-hidden rounded-xl shadow-2xl my-4"
         style={{
-          height: '500px', // 固定高度
-          maxWidth: '800px', // 限制最大宽度
-          margin: '0 auto', // 居中
-          border: '1px solid var(--border-color-subtle, #e0e0e0)', // 精致边框
-          backgroundColor: currentBackgroundImage ? 'transparent' : 'var(--bg-card-default, #ffffff)', // 无背景图时的默认背景色
-          perspective: '1000px !important', // 强制透视效果
+          height: '500px',
+          maxWidth: '700px',
+          margin: '0 auto',
+          border: '1px solid var(--border-color-subtle, rgba(0,0,0,0.1))',
+          backgroundColor: 'var(--bg-card-default, #f0f0f0)',
         }}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
       >
-        {/* 卡片背景图层 (作为最底层的元素，确保不被翻转内容覆盖) */}
-        {currentBackgroundImage && (
-          <div
+        {/* 背景图层 */}
+        <AnimatePresence initial={false}>
+          <motion.div
+            key={currentIndex}
             className="absolute inset-0 rounded-xl"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, transition: { duration: 0.5 } }}
+            exit={{ opacity: 0, transition: { duration: 0.5 } }}
             style={{
               backgroundImage: `url('${currentBackgroundImage}')`,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
               backgroundRepeat: 'no-repeat',
-              opacity: 0.9,
-              zIndex: 0, // 确保在最底层
+              zIndex: 0,
             }}
           >
-            {/* 半透明颜色叠加层，位于背景图之上 */}
             <div className="absolute inset-0 bg-black opacity-30 dark:opacity-50 rounded-xl z-10"></div>
-          </div>
-        )}
+          </motion.div>
+        </AnimatePresence>
 
-        {/* 卡片翻转容器，包含正面和背面，并应用 transform-style */}
-        <div
-          className={`absolute w-full h-full transition-transform duration-500 ease-in-out`} // 增加 duration 和 ease-in-out
-          style={{
-            transformStyle: 'preserve-3d !important', // 强制 preserve-3d
-            transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
-            zIndex: 20, // 确保在背景图和叠加层之上
-          }}
-        >
-          {/* 卡片正面 */}
-          <div
-            onClick={handleFlip} // 点击正面翻转
-            className={`flashcard-body absolute w-full h-full rounded-xl flex flex-col items-center justify-center p-6 sm:p-8 select-none cursor-pointer text-white`}
-            style={{
-                backfaceVisibility: 'hidden !important', // 强制隐藏背面
-                backgroundColor: currentBackgroundImage ? 'transparent' : 'var(--bg-card-default, #ffffff)', // 无背景图时默认背景色
+        {/* 内容动画容器 */}
+        <AnimatePresence custom={direction} initial={false}>
+          <motion.div
+            key={currentIndex}
+            custom={direction}
+            variants={cardVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{
+              x: { type: "spring", stiffness: 300, damping: 30 },
+              opacity: { duration: 0.2 }
             }}
+            className="absolute inset-0 flex flex-col items-center justify-center p-6 sm:p-8 z-20"
           >
-            <p className="text-5xl sm:text-7xl font-bold text-center flex items-center leading-tight drop-shadow-lg">
-              {currentCard.word}
-              <TextToSpeechButton text={currentCard.word} lang={lang} className="ml-4 text-4xl sm:text-5xl drop-shadow-md" />
-            </p>
-          </div>
-
-          {/* 卡片背面 */}
-          <div
-            onClick={handleFlip} // 点击背面翻转
-            className={`flashcard-body absolute w-full h-full rounded-xl flex flex-col justify-center p-6 sm:p-8 select-none cursor-pointer text-white`}
-            style={{
-                transform: 'rotateY(180deg)', // 背面初始状态翻转
-                backfaceVisibility: 'hidden !important', // 强制隐藏背面
-                backgroundColor: currentBackgroundImage ? 'transparent' : 'var(--bg-card-default, #ffffff)', // 无背景图时默认背景色
-            }}
-          >
-            {/* 背面内容需要一个可滚动区域，以防内容过多 */}
-            <div className="w-full h-full max-h-[100%] overflow-y-auto custom-scrollbar p-2">
-              <h4
-                className="text-2xl sm:text-3xl font-extrabold text-center mb-4 flex items-center justify-center leading-tight drop-shadow-md"
-                style={{ color: currentBackgroundImage ? 'white' : 'var(--text-primary)' }}
-              >
+            {/* 正面：大中文单词 - 始终可见 */}
+            <div className={`text-center transition-opacity duration-300 ${showBack ? 'opacity-0' : 'opacity-100'}`}>
+              <p className="text-5xl sm:text-7xl font-bold leading-tight text-white select-none flex items-center drop-shadow-lg">
                 {currentCard.word}
-                <TextToSpeechButton text={currentCard.word} lang={lang} className="ml-4 text-2xl sm:text-3xl drop-shadow-sm" />
-              </h4>
-
-              {currentCard.pinyin && (
-                <p
-                  className="text-lg sm:text-xl mb-2 flex items-center drop-shadow-sm"
-                  style={{ color: currentBackgroundImage ? 'white' : 'var(--text-body-color-or-dark7)' }}
-                >
-                  <span className="font-semibold mr-2">拼音:</span>
-                  {currentCard.pinyin}
-                  <TextToSpeechButton text={currentCard.pinyin} lang={lang} className="ml-2 text-lg" />
-                </p>
-              )}
-
-              {currentCard.myanmar && (
-                <p
-                  className="text-lg sm:text-xl mb-2 flex items-center font-myanmar drop-shadow-sm"
-                  style={{ color: currentBackgroundImage ? 'white' : 'var(--text-body-color-or-dark7)' }}
-                >
-                  <span className="font-semibold mr-2">缅文:</span>
-                  {currentCard.myanmar}
-                  <TextToSpeechButton text={currentCard.myanmar} lang="my-MM" className="ml-2 text-xl" />
-                </p>
-              )}
-
-              <p
-                className="text-lg sm:text-xl mb-2 flex items-center drop-shadow-sm"
-                style={{ color: currentBackgroundImage ? 'white' : 'var(--text-body-color-or-dark7)' }}
-              >
-                <span className="font-semibold mr-2">释义:</span>
-                {currentCard.meaning}
-                <TextToSpeechButton text={currentCard.meaning} lang={lang} className="ml-2 text-lg" />
+                <TextToSpeechButton text={currentCard.word} lang={lang} className="ml-4 text-4xl sm:text-5xl drop-shadow-md" />
               </p>
-
-              {currentCard.example1 && (
-                <>
-                  <p
-                    className="text-base sm:text-lg italic flex items-start mt-2 drop-shadow-sm"
-                    style={{ color: currentBackgroundImage ? 'white' : 'var(--text-body-secondary-or-dark6)' }}
-                  >
-                    <span className="font-semibold not-italic mr-2">例句1:</span>
-                    {currentCard.example1}
-                    <TextToSpeechButton text={currentCard.example1} lang={lang} className="ml-2 text-base" />
-                  </p>
-                  {currentCard.example1Translation && (
-                    <p
-                      className="text-sm sm:text-base flex items-start drop-shadow-sm"
-                      style={{ color: currentBackgroundImage ? 'white' : 'var(--text-body-secondary-or-dark6)' }}
-                    >
-                      <span className="font-semibold mr-2">翻译:</span>
-                      {currentCard.example1Translation}
-                      <TextToSpeechButton text={currentCard.example1Translation} lang={lang} className="ml-2 text-base" />
-                    </p>
-                  )}
-                </>
-              )}
-
-              {currentCard.example2 && (
-                <>
-                  <p
-                    className="text-base sm:text-lg italic flex items-start mt-2 drop-shadow-sm"
-                    style={{ color: currentBackgroundImage ? 'white' : 'var(--text-body-secondary-or-dark6)' }}
-                  >
-                    <span className="font-semibold not-italic mr-2">例句2:</span>
-                    {currentCard.example2}
-                    <TextToSpeechButton text={currentCard.example2} lang={lang} className="ml-2 text-base" />
-                  </p>
-                  {currentCard.example2Translation && (
-                    <p
-                      className="text-sm sm:text-base flex items-start drop-shadow-sm"
-                      style={{ color: currentBackgroundImage ? 'white' : 'var(--text-body-secondary-or-dark6)' }}
-                    >
-                      <span className="font-semibold mr-2">翻译:</span>
-                      {currentCard.example2Translation}
-                      <TextToSpeechButton text={currentCard.example2Translation} lang={lang} className="ml-2 text-base" />
-                    </p>
-                  )}
-                </>
-              )}
             </div>
-          </div>
+
+            {/* 背面：所有详细信息 */}
+            <div
+              className={`absolute inset-0 p-6 sm:p-8 flex flex-col justify-center items-center rounded-xl transition-opacity duration-300 ease-in-out ${
+                showBack ? 'opacity-100' : 'opacity-0 pointer-events-none'
+              } text-white`}
+            >
+              <div className="w-full h-full max-h-full overflow-y-auto custom-scrollbar p-2">
+                <h4 className="text-2xl sm:text-3xl font-extrabold text-center mb-4 flex items-center justify-center leading-tight drop-shadow-md">
+                  {currentCard.word}
+                  <TextToSpeechButton text={currentCard.word} lang={lang} className="ml-4 text-2xl sm:text-3xl drop-shadow-sm" />
+                </h4>
+                {currentCard.pinyin && (
+                  <p className="text-lg sm:text-xl mb-2 flex items-center justify-center drop-shadow-sm">
+                    <span className="font-semibold mr-2">拼音:</span>{currentCard.pinyin}
+                    <TextToSpeechButton text={currentCard.pinyin} lang={lang} className="ml-2 text-lg" />
+                  </p>
+                )}
+                {/* ... 其他背面信息 ... */}
+                 {currentCard.myanmar && (
+                  <p className="text-lg sm:text-xl mb-2 flex items-center justify-center font-myanmar drop-shadow-sm">
+                    <span className="font-semibold mr-2">缅文:</span>{currentCard.myanmar}
+                    <TextToSpeechButton text={currentCard.myanmar} lang="my-MM" className="ml-2 text-lg" />
+                  </p>
+                )}
+                <p className="text-lg sm:text-xl mb-2 flex items-center justify-center drop-shadow-sm">
+                  <span className="font-semibold mr-2">释义:</span>{currentCard.meaning}
+                  <TextToSpeechButton text={currentCard.meaning} lang={lang} className="ml-2 text-lg" />
+                </p>
+                {currentCard.example1 && (
+                  <div className="mt-4 text-center">
+                    <p className="text-base sm:text-lg italic drop-shadow-sm">
+                      <span className="font-semibold not-italic mr-2">例句1:</span>{currentCard.example1}
+                      <TextToSpeechButton text={currentCard.example1} lang={lang} className="ml-2 text-base" />
+                    </p>
+                    {currentCard.example1Translation && (
+                      <p className="text-sm sm:text-base drop-shadow-sm opacity-80">
+                        <span className="font-semibold mr-2">翻译:</span>{currentCard.example1Translation}
+                        <TextToSpeechButton text={currentCard.example1Translation} lang={lang} className="ml-2 text-sm" />
+                      </p>
+                    )}
+                  </div>
+                )}
+                {currentCard.example2 && (
+                   <div className="mt-2 text-center">
+                    <p className="text-base sm:text-lg italic drop-shadow-sm">
+                      <span className="font-semibold not-italic mr-2">例句2:</span>{currentCard.example2}
+                      <TextToSpeechButton text={currentCard.example2} lang={lang} className="ml-2 text-base" />
+                    </p>
+                    {currentCard.example2Translation && (
+                      <p className="text-sm sm:text-base drop-shadow-sm opacity-80">
+                        <span className="font-semibold mr-2">翻译:</span>{currentCard.example2Translation}
+                        <TextToSpeechButton text={currentCard.example2Translation} lang={lang} className="ml-2 text-sm" />
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        </AnimatePresence>
+        
+        {/* 交互覆盖层 */}
+        <div className="absolute inset-0 z-30 flex">
+          <div className="w-1/3 h-full cursor-pointer" onClick={handlePrev}></div>
+          <div className="w-1/3 h-full cursor-pointer" onClick={handleToggleBack}></div>
+          <div className="w-1/3 h-full cursor-pointer" onClick={handleNext}></div>
         </div>
       </div>
-
+      
       {/* 底部导航按钮和卡片计数 */}
-      <div className="flex justify-between w-full max-w-5xl mt-4 sm:mt-8 px-4">
+      <div className="flex justify-between w-full max-w-5xl mx-auto mt-4 sm:mt-8 px-4">
         <button
           onClick={handlePrev}
-          disabled={displayFlashcards.length <= 1}
           className="flex items-center px-6 py-3 bg-dark-6 text-white font-medium rounded-lg shadow-md hover:bg-dark-5 focus:outline-none focus:ring-2 focus:ring-dark-7 focus:ring-offset-2 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-lg sm:text-xl"
         >
           <i className="fas fa-arrow-left mr-2"></i> 上一个
@@ -327,7 +270,6 @@ const BeiDanCi = ({
         </span>
         <button
           onClick={handleNext}
-          disabled={displayFlashcards.length <= 1}
           className="flex items-center px-6 py-3 bg-primary text-white font-medium rounded-lg shadow-md hover:bg-blue-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-lg sm:text-xl"
         >
           下一个 <i className="fas fa-arrow-right ml-2"></i>
