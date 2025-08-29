@@ -22,6 +22,7 @@ const CUSTOM_COMPONENTS_MAP = {
   '/components/PaiXuTi.js': dynamic(() => import('@/components/PaiXuTi'), { ssr: false }),
   '/components/PinyinHanziQuiz.js': dynamic(() => import('@/components/PinyinHanziQuiz'), { ssr: false }),
   '/components/LianXianTi.js': dynamic(() => import('@/components/LianXianTi'), { ssr: false }),
+  '/components/AiCorrector.js': dynamic(() => import('@/components/AiCorrector'), { ssr: false }),
   '/components/BeiDanCi.js': dynamic(() => import('@/components/BeiDanCi'), { ssr: false }), // 背单词组件
   // ======================================
   
