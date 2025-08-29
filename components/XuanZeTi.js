@@ -1,4 +1,4 @@
-// /components/XuanZeTi.js
+// /components/XuanZeTi.js (最终版：点击选项文本时朗读并选择，点击题目/解释朗读按钮只朗读)
 import React, { useState, useEffect, useRef } from 'react'
 import TextToSpeechButton from './TextToSpeechButton' // 导入朗读组件
 
@@ -9,12 +9,29 @@ const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => {
 
   const correctAudioRef = useRef(null)
   const wrongAudioRef = useRef(null)
+  
+  // SpeechSynthesisUtterance 实例，用于朗读选项文本
+  const speechSynthesisUtteranceRef = useRef(null);
+  const speechSynthesisRef = useRef(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       correctAudioRef.current = new Audio('/sounds/correct.mp3') 
       wrongAudioRef.current = new Audio('/sounds/wrong.mp3')   
+      
+      // 初始化 SpeechSynthesis
+      speechSynthesisRef.current = window.speechSynthesis;
+      speechSynthesisUtteranceRef.current = new SpeechSynthesisUtterance();
+      speechSynthesisUtteranceRef.current.lang = 'zh-CN'; // 默认中文
+      speechSynthesisUtteranceRef.current.rate = 1;
+      speechSynthesisUtteranceRef.current.pitch = 1;
     }
+
+    return () => { // 清理函数
+      if (speechSynthesisRef.current && speechSynthesisRef.current.speaking) {
+        speechSynthesisRef.current.cancel();
+      }
+    };
   }, [])
 
   const playSound = (isCorrect) => {
@@ -27,7 +44,18 @@ const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => {
     }
   }
 
-  const handleOptionClick = (index) => {
+  // 新增：朗读选项文本的函数
+  const speakOptionText = (textToSpeak) => {
+    if (speechSynthesisRef.current && textToSpeak) {
+      if (speechSynthesisRef.current.speaking) {
+        speechSynthesisRef.current.cancel(); // 如果正在朗读，先停止
+      }
+      speechSynthesisUtteranceRef.current.text = textToSpeak;
+      speechSynthesisRef.current.speak(speechSynthesisUtteranceRef.current);
+    }
+  };
+
+  const handleOptionClick = (index, optionText) => { // 接收 optionText 参数
     if (isAnswered) return
 
     setSelectedOptionIndex(index)
@@ -35,10 +63,14 @@ const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => {
     setShowFeedback(true)
 
     playSound(index === correctAnswerIndex)
+    speakOptionText(optionText); // 点击选项时朗读选项文本
   }
 
   const handleReset = () => {
     setShowFeedback(false)
+    if (speechSynthesisRef.current && speechSynthesisRef.current.speaking) {
+      speechSynthesisRef.current.cancel(); // 重置时停止朗读
+    }
     setTimeout(() => {
       setSelectedOptionIndex(null)
       setIsAnswered(false)
@@ -73,7 +105,7 @@ const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => {
 
   return (
     <div className="max-w-xl mx-auto my-8 p-6 bg-day-DEFAULT dark:bg-night-DEFAULT rounded-xl shadow-2 border border-stroke dark:border-dark-3">
-      <h3 className="text-2xl font-bold mb-6 text-dark-DEFAULT dark:text-gray-1 flex items-center"> {/* flex items-center 用于对齐朗读按钮 */}
+      <h3 className="text-2xl font-bold mb-6 text-dark-DEFAULT dark:text-gray-1 flex items-center">
         {question}
         <TextToSpeechButton text={question} lang="zh-CN" /> {/* 朗读问题按钮 */}
       </h3>
@@ -82,13 +114,14 @@ const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => {
         {options.map((option, index) => (
           <button
             key={index}
-            onClick={() => handleOptionClick(index)}
+            // 修改：点击整个按钮时，传递选项文本给 handleOptionClick
+            onClick={() => handleOptionClick(index, option)} 
             disabled={isAnswered}
             className={getOptionClasses(index)}
           >
-            <span className="text-lg font-semibold flex-1 flex items-center"> {/* flex items-center 用于对齐朗读按钮 */}
+            <span className="text-lg font-semibold flex-1 flex items-center">
               {String.fromCharCode(65 + index)}. {option}
-              <TextToSpeechButton text={option} lang="zh-CN" /> {/* 朗读选项按钮 */}
+              {/* 这里不再需要 TextToSpeechButton，因为点击选项本身就会朗读 */}
             </span>
           </button>
         ))}
@@ -110,7 +143,7 @@ const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => {
 
           {explanation && (
             <div className="mt-4 p-4 bg-gray-1 dark:bg-dark-2 border-t-2 border-stroke dark:border-dark-3 rounded-b-xl text-body-color dark:text-dark-7 shadow-inner animate-fade-in-fast">
-              <h4 className="font-bold text-lg mb-2 text-dark-DEFAULT dark:text-gray-1 flex items-center"> {/* flex items-center 用于对齐朗读按钮 */}
+              <h4 className="font-bold text-lg mb-2 text-dark-DEFAULT dark:text-gray-1 flex items-center">
                 <i className="fas fa-lightbulb mr-2 text-warning"></i>解释：
                 <TextToSpeechButton text={explanation} lang="zh-CN" /> {/* 朗读解释按钮 */}
               </h4>
