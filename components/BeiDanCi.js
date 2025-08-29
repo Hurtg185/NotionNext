@@ -18,7 +18,6 @@ import { NotionRenderer } from 'react-notion-x'
 // 值为 dynamic(() => import('@/components/ComponentName')) 这种形式，它会使用你的路径别名来正确导入组件。
 const CUSTOM_COMPONENTS_MAP = {
   // 你已有的组件映射 (请根据你实际的文件名和路径进行微调)
-  '/components/MultipleChoiceQuestion.js': dynamic(() => import('@/components/MultipleChoiceQuestion'), { ssr: false }),
   '/components/PinyinInputExercise.js': dynamic(() => import('@/components/PinyinInputExercise'), { ssr: false }),
   '/components/Flashcard.js': dynamic(() => import('@/components/Flashcard'), { ssr: false }),
   '/components/AudioComprehension.js': dynamic(() => import('@/components/AudioComprehension'), { ssr: false }),
