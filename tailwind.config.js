@@ -96,11 +96,36 @@ module.exports = {
             transform: 'scale(1)',
             opacity: '1'
           }
+        },
+        // === 新增：反馈信息弹出动画 ===
+        'fade-in-up': {
+          '0%': {
+            opacity: '0',
+            transform: 'translateY(10px)'
+          },
+          '100%': {
+            opacity: '1',
+            transform: 'translateY(0)'
+          }
+        },
+        'fade-in': { // 简单的淡入
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' }
+        },
+        'fade-out': { // 简单的淡出
+          '0%': { opacity: '1' },
+          '100%': { opacity: '0' }
         }
+        // ============================
       },
       animation: {
         'ken-burns': 'kenburns-top 7s ease-out both',
-        'modal-pop': 'modal-pop-in 0.3s ease-out both'
+        'modal-pop': 'modal-pop-in 0.3s ease-out both',
+        // === 新增：反馈信息动画 ===
+        'fade-in-up-fast': 'fade-in-up 0.3s ease-out forwards',
+        'fade-in-fast': 'fade-in 0.3s ease-out forwards',
+        'fade-out-fast': 'fade-out 0.3s ease-out forwards'
+        // ============================
       }
     }
   },
