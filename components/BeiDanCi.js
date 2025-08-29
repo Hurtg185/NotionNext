@@ -1,4 +1,4 @@
-// /components/BeiDanCi.js (取消全屏，优化翻转，美化样式)
+// /components/BeiDanCi.js (此版本支持通过 `!include` 传递 isShuffle)
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import TextToSpeechButton from './TextToSpeechButton';
 
@@ -9,34 +9,24 @@ import TextToSpeechButton from './TextToSpeechButton';
  * 卡片背景可使用随机图片。
  *
  * @param {Array<Object>|string} flashcards - 单词卡片数据数组，或 JSON 字符串。
- *   {
- *     id: string | number,
- *     word: string, // 中文单词 (正面显示)
- *     pinyin: string, // 拼音 (背面显示)
- *     myanmar: string, // 缅文 (背面显示)
- *     meaning: string, // 释义 (背面显示)
- *     example1: string, // 例句1 (背面显示)
- *     example1Translation: string, // 例句1翻译 (背面显示)
- *     example2: string, // 例句2 (背面显示)
- *     example2Translation: string, // 例句2翻译 (背面显示)
- *   }
  * @param {string} questionTitle - 组件标题
  * @param {string} lang - 朗读语言，默认为 'zh-CN'
  * @param {Array<string>|string} backgroundImages - 背景图片URL数组，或 JSON 字符串。
- * @param {boolean} isShuffle - 是否随机排序，控制卡片顺序 (由父组件传入)
+ * @param {boolean|string} isShuffle - 是否随机排序，控制卡片顺序 (可以为布尔值或 "true"/"false" 字符串)。
  */
 const BeiDanCi = ({
-  flashcards: flashcardsProp, // 将 prop 名称改为 flashcardsProp 以避免混淆
+  flashcards: flashcardsProp,
   questionTitle = '背单词',
   lang = 'zh-CN',
-  backgroundImages: backgroundImagesProp = [], // 同样改名
-  isShuffle = false,
+  backgroundImages: backgroundImagesProp = [],
+  isShuffle: isShuffleProp = false, // 接收 isShuffle prop
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isFlipped, setIsFlipped] = useState(false); // 卡片是否翻转，初始为false (正面)
+  const [isFlipped, setIsFlipped] = useState(false);
   const [touchStartX, setTouchStartX] = useState(null);
   const [displayFlashcards, setDisplayFlashcards] = useState([]);
   const [parsedBackgroundImages, setParsedBackgroundImages] = useState([]);
+  const [internalIsShuffle, setInternalIsShuffle] = useState(false); // 内部状态来管理是否随机
 
 
   // 处理 flashcards prop (可以接收字符串或数组)
@@ -60,7 +50,8 @@ const BeiDanCi = ({
       return;
     }
 
-    if (isShuffle) {
+    // 根据 internalIsShuffle 状态来排序
+    if (internalIsShuffle) {
       const shuffled = [...cards].sort(() => Math.random() - 0.5);
       setDisplayFlashcards(shuffled);
     } else {
@@ -68,7 +59,8 @@ const BeiDanCi = ({
     }
     setCurrentIndex(0);
     setIsFlipped(false);
-  }, [flashcardsProp, isShuffle]);
+  }, [flashcardsProp, internalIsShuffle]); // 依赖 flashcardsProp 和 internalIsShuffle 变化
+
 
   // 处理 backgroundImages prop (可以接收字符串或数组)
   useEffect(() => {
@@ -85,6 +77,15 @@ const BeiDanCi = ({
     }
     setParsedBackgroundImages(images);
   }, [backgroundImagesProp]);
+
+  // 处理 isShuffle prop (可以接收布尔值或 "true"/"false" 字符串)
+  useEffect(() => {
+    if (typeof isShuffleProp === 'string') {
+      setInternalIsShuffle(isShuffleProp === 'true');
+    } else {
+      setInternalIsShuffle(!!isShuffleProp); // 转换为布尔值
+    }
+  }, [isShuffleProp]);
 
 
   const handleFlip = useCallback(() => {
@@ -140,8 +141,6 @@ const BeiDanCi = ({
     const deltaX = touchEndX - touchStartX;
     const SWIPE_THRESHOLD = 50;
 
-    // 检查是否在卡片主体区域进行了触摸，避免点击按钮也被误判为卡片点击
-    // target.closest() 方法可以帮助我们判断触摸事件是否发生在某个特定元素或其子元素上
     const isCardBodyClick = e.changedTouches[0].target.closest('.flashcard-body');
 
     if (Math.abs(deltaX) > SWIPE_THRESHOLD) { // 明显的滑动
@@ -158,7 +157,6 @@ const BeiDanCi = ({
 
 
   const currentCard = displayFlashcards[currentIndex];
-  // 循环使用背景图
   const currentBackgroundImage = parsedBackgroundImages[currentIndex % parsedBackgroundImages.length];
 
   if (!displayFlashcards || displayFlashcards.length === 0) {
@@ -170,23 +168,20 @@ const BeiDanCi = ({
   }
 
   return (
-    // 不再使用 fixed inset-0，改为普通 div，并设置最大宽度和高度
-    <div className="max-w-4xl mx-auto my-8 p-4 bg-transparent"> {/* bg-transparent 让其不遮挡父级背景 */}
+    <div className="max-w-4xl mx-auto my-8 p-4 bg-transparent">
       <h3 className="text-2xl sm:text-3xl font-extrabold mb-6 text-dark-DEFAULT dark:text-gray-1 text-center">
         {questionTitle}
       </h3>
 
       <div
-        className="relative w-full h-[500px] sm:h-[600px] md:h-[700px] aspect-w-16 aspect-h-9 perspective-1000 my-4 touch-action-none" // 增加高度，aspect-ratio 确保比例
+        className="relative w-full h-[500px] sm:h-[600px] md:h-[700px] aspect-w-16 aspect-h-9 perspective-1000 my-4 touch-action-none"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
-        // onTouchMove={e => e.preventDefault()} // 阻止卡片区域滑动时页面滚动
       >
         <div
           className={`absolute w-full h-full preserve-3d transition-transform duration-300 rounded-xl shadow-2xl border border-stroke dark:border-dark-4
             ${isFlipped ? 'rotate-y-180' : ''}`}
         >
-          {/* 卡片背景图层 */}
           {currentBackgroundImage && (
             <div
               className="absolute inset-0 rounded-xl"
@@ -196,7 +191,6 @@ const BeiDanCi = ({
                 backgroundPosition: 'center',
               }}
             >
-              {/* 半透明颜色叠加层，确保文本可读性 */}
               <div className="absolute inset-0 bg-black opacity-30 dark:opacity-50 rounded-xl"></div>
             </div>
           )}
@@ -206,7 +200,7 @@ const BeiDanCi = ({
             className={`flashcard-body absolute w-full h-full backface-hidden rounded-xl flex flex-col items-center justify-center p-6 sm:p-8 select-none cursor-pointer z-10
                       ${currentBackgroundImage ? 'text-white' : 'text-dark-DEFAULT dark:text-gray-1 bg-gray-100 dark:bg-dark-3'} `}
           >
-            <p className="text-5xl sm:text-7xl font-bold text-center flex items-center leading-tight"> {/* leading-tight 减少行高 */}
+            <p className="text-5xl sm:text-7xl font-bold text-center flex items-center leading-tight">
               {currentCard.word}
               <TextToSpeechButton text={currentCard.word} lang={lang} className="ml-4 text-4xl sm:text-5xl" />
             </p>
