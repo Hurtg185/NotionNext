@@ -14,64 +14,65 @@ import { NotionRenderer } from 'react-notion-x'
 // ===================================================================================================================
 
 // 定义一个映射表，用于存储可以动态加载的自定义组件
+// 这里的键（key）必须与你在 Notion 中 !include 语句中使用的路径完全一致（例如 '/components/ComponentName.js'）。
+// 值为 dynamic(() => import('@/components/ComponentName')) 这种形式，它会使用你的路径别名来正确导入组件。
 const CUSTOM_COMPONENTS_MAP = {
-  // === 暂时只保留我们目前已开发的交互式题目组件，以解决编译错误 ===
+  // === 我们目前已开发的交互式题目组件 ===
   '/components/XuanZeTi.js': dynamic(() => import('@/components/XuanZeTi'), { ssr: false }),
   '/components/PaiXuTi.js': dynamic(() => import('@/components/PaiXuTi'), { ssr: false }),
-  '/components/BeiDanCi.js': dynamic(() => import('@/components/BeiDanCi'), { ssr: false }), 
-  // ===================================================================================================================
+  '/components/BeiDanCi.js': dynamic(() => import('@/components/BeiDanCi'), { ssr: false }), // 背单词组件
+  // ======================================
   
-  // === 所有其他你原有项目中的自定义组件，暂时全部禁用 ===
-  // 如果你需要使用它们，请逐一取消注释，并在取消注释前，确保该文件本身没有编译错误，
-  // 并且该文件内部没有导入任何不存在的模块 (例如 MultipleChoiceQuestion)。
-  // ===================================================================================================================
+  // === 如果你原有项目中有其他自定义组件，并且你需要它们，请在这里手动添加 ===
+  // 例如：
+  // '/components/MultipleChoiceQuestion.js': dynamic(() => import('@/components/MultipleChoiceQuestion'), { ssr: false }),
+  // '/components/PinyinInputExercise.js': dynamic(() => import('@/components/PinyinInputExercise'), { ssr: false }),
+  // '/components/Flashcard.js': dynamic(() => import('@/components/Flashcard'), { ssr: false }),
+  // '/components/AudioComprehension.js': dynamic(() => import('@/components/AudioComprehension'), { ssr: false }),
+  // ==========================================================================
 };
 
+/**
+ * 辅助函数：从Notion富文本数组中提取纯文本内容
+ * Notion API 的富文本通常是 [[text, style], [text, style]] 这样的结构
+ */
 const getTextContent = (richTextArray) => {
   if (!richTextArray || !Array.isArray(richTextArray)) {
     return '';
   }
+  // 遍历所有文本片段并拼接
   return richTextArray.map(segment => segment[0]).join('');
 };
 
+// 重要的修改：将 react-notion-x 默认的 Code 组件的动态导入移到 CustomCodeRenderer 外部
+// 这样可以避免在渲染函数内部重复调用 dynamic，解决潜在的编译和运行时问题。
 const DefaultNotionCodeRenderer = dynamic(
   () => import('react-notion-x/build/third-party/code').then(m => m.Code),
   { ssr: false }
 );
 
+// 创建一个自定义的 Code 块渲染器
 const CustomCodeRenderer = ({ block, className }) => {
+  // 确保 block 和其属性存在，并且是 Code 块类型
   if (!block || block.type !== 'code') {
     return <DefaultNotionCodeRenderer block={block} className={className} />;
   }
 
-  const codeContent = getTextContent(block.properties?.title);
-  const language = getTextContent(block.properties?.language);
+  // 使用 getTextContent 辅助函数提取内容和语言
+  const codeContent = getTextContent(block.properties?.title); // 获取代码块内容
+  const language = getTextContent(block.properties?.language); // 获取代码块语言
 
+  // 检查是否是 'Plain Text' 语言的代码块，并且内容以 '!include' 开头
   if (language === 'Plain Text' && codeContent && codeContent.startsWith('!include')) {
     try {
+      // 解析 !include 语句
       const includeRegex = /^!include\s+(\S+)\s*(\{.*\})?$/;
       const match = codeContent.match(includeRegex);
 
       if (match) {
-        const componentPath = match[1];
-        const propsJsonString = match[2];
+        const componentPath = match[1]; // 提取组件路径，例如 /components/XuanZeTi.js
+        const propsJson = match[2] ? JSON.parse(match[2]) : {}; // 提取 JSON 格式的 props
 
-        let propsJson = {};
-        if (propsJsonString) {
-          try {
-            propsJson = JSON.parse(propsJsonString);
-          } catch (jsonError) {
-            console.error('Error parsing JSON for custom component:', jsonError, propsJsonString);
-            return (
-              <div className="bg-red-100 text-red-700 p-3 rounded-md my-2 dark:bg-red-900 dark:text-red-200">
-                错误：自定义组件的参数 (JSON) 解析失败。请检查 Notion 代码块中的 JSON 语法。
-                <pre className="whitespace-pre-wrap text-sm mt-2">{propsJsonString}</pre>
-                <pre className="whitespace-pre-wrap text-sm text-red-500 mt-1">错误信息: {jsonError.message}</pre>
-              </div>
-            );
-          }
-        }
-        
         const DynamicComponent = CUSTOM_COMPONENTS_MAP[componentPath];
 
         if (DynamicComponent) {
@@ -86,12 +87,12 @@ const CustomCodeRenderer = ({ block, className }) => {
         }
       }
     } catch (e) {
-      console.error('Error processing !include block:', e, codeContent);
+      console.error('Error parsing !include block:', e, codeContent);
       return (
         <div className="bg-red-100 text-red-700 p-3 rounded-md my-2 dark:bg-red-900 dark:text-red-200">
-          错误：处理自定义组件 `!include` 块时出错。
-          <pre className="whitespace-pre-wrap text-sm mt-2">{codeContent}</pre>
-          <pre className="whitespace-pre-wrap text-sm text-red-500 mt-1">错误信息: {e.message}</pre>
+          错误：解析自定义组件 `!include` 块时出错。请检查语法。
+          <pre className="whitespace-pre-wrap text-sm">{codeContent}</pre>
+          <pre className="whitespace-pre-wrap text-sm text-red-500">{e.message}</pre>
         </div>
       );
     }
@@ -163,4 +164,198 @@ const NotionPage = ({ post, className }) => {
       attributes: true,
       subtree: true,
       attributeFilter: ['class']
+    })
+
+    return () => {
+      observer.disconnect()
     }
+  }, [post])
+
+  useEffect(() => {
+    if (SPOILER_TEXT_TAG) {
+      import('lodash/escapeRegExp').then(escapeRegExp => {
+        Promise.all([
+          loadExternalResource('/js/spoilerText.js', 'js'),
+          loadExternalResource('/css/spoiler-text.css', 'css')
+        ]).then(() => {
+          window.textToSpoiler &&
+            window.textToSpoiler(escapeRegExp.default(SPOILER_TEXT_TAG))
+        })
+      })
+    }
+
+    const timer = setTimeout(() => {
+      const elements = document.querySelectorAll(
+        '.notion-collection-page-properties'
+      )
+      elements?.forEach(element => {
+        element?.remove()
+      })
+    }, 1000)
+
+    return () => clearTimeout(timer)
+  }, [post])
+
+  return (
+    <div
+      id='notion-article'
+      className={`mx-auto overflow-hidden ${className || ''}`}>
+      <NotionRenderer
+        recordMap={post?.blockMap}
+        mapPageUrl={mapPageUrl}
+        mapImageUrl={mapImgUrl}
+        components={{
+          Code: CustomCodeRenderer,
+          Collection,
+          Equation,
+          Modal,
+          Pdf,
+          Tweet
+        }}
+      />
+
+      <AdEmbed />
+      <PrismMac />
+    </div>
+  )
+}
+
+/**
+ * 页面的数据库链接禁止跳转，只能查看
+ */
+const processDisableDatabaseUrl = () => {
+  if (isBrowser) {
+    const links = document.querySelectorAll('.notion-table a')
+    for (const e of links) {
+      e.removeAttribute('href')
+    }
+  }
+}
+
+/**
+ * gallery视图，点击后是放大图片还是跳转到gallery的内部页面
+ */
+const processGalleryImg = zoom => {
+  setTimeout(() => {
+    if (isBrowser) {
+      const imgList = document?.querySelectorAll(
+        '.notion-collection-card-cover img'
+      )
+      if (imgList && zoom) {
+        for (let i = 0; i < imgList.length; i++) {
+          zoom.attach(imgList[i])
+        }
+      }
+
+      const cards = document.getElementsByClassName('notion-collection-card')
+      for (const e of cards) {
+        e.removeAttribute('href')
+      }
+    }
+  }, 800)
+}
+
+/**
+ * 根据url参数自动滚动到锚位置
+ */
+const autoScrollToHash = () => {
+  setTimeout(() => {
+    const hash = window?.location?.hash
+    const needToJumpToTitle = hash && hash.length > 0
+    if (needToJumpToTitle) {
+      console.log('jump to hash', hash)
+      const tocNode = document.getElementById(hash.substring(1))
+      if (tocNode && tocNode?.className?.indexOf('notion') > -1) {
+        tocNode.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      }
+    }
+  }, 180)
+}
+
+/**
+ * 将id映射成博文内部链接。
+ * @param {*} id
+ * @returns
+ */
+const mapPageUrl = id => {
+  return '/' + id.replace(/-/g, '')
+}
+
+/**
+ * 缩放
+ * @returns
+ */
+function getMediumZoomMargin() {
+  const width = window.innerWidth
+
+  if (width < 500) {
+    return 8
+  } else if (width < 800) {
+    return 20
+  } else if (width < 1280) {
+    return 30
+  } else if (width < 1600) {
+    return 40
+  } else if (width < 1920) {
+    return 48
+  } else {
+    return 72
+  }
+}
+
+// ===================================================================================================================
+// START: 原始的动态导入 (部分已不再直接使用，但仍保留导入供其他组件使用)
+// ===================================================================================================================
+
+// 公式
+const Equation = dynamic(
+  () =>
+    import('@/components/Equation').then(async m => {
+      await import('@/lib/plugins/mhchem')
+      return m.Equation
+    }),
+  { ssr: false }
+)
+
+const Pdf = dynamic(() => import('@/components/Pdf').then(m => m.Pdf), {
+  ssr: false
+})
+
+const PrismMac = dynamic(() => import('@/components/PrismMac'), {
+  ssr: false
+})
+
+const TweetEmbed = dynamic(() => import('react-tweet-embed'), {
+  ssr: false
+})
+
+const AdEmbed = dynamic(
+  () => import('@/components/GoogleAdsense').then(m => m.AdEmbed),
+  { ssr: true }
+)
+
+const Collection = dynamic(
+  () =>
+    import('react-notion-x/build/third-party/collection').then(
+      m => m.Collection
+    ),
+  {
+    ssr: true
+  }
+)
+
+const Modal = dynamic(
+  () => import('react-notion-x/build/third-party/modal').then(m => m.Modal),
+  { ssr: false }
+)
+
+const Tweet = ({ id }) => {
+  return <TweetEmbed tweetId={id} />
+}
+
+// ===================================================================================================================
+// END: 原始的动态导入
+// ===================================================================================================================
+
+
+export default NotionPage
