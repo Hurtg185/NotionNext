@@ -1,18 +1,12 @@
-// /components/BeiDanCi.js - 最终稳定版 v3：优化布局，修复交互冲突
+// /components/BeiDanCi.js - 最终完美版 v5：区域点击，布局优化，交互无冲突
 import React, { useState, useEffect, useCallback } from 'react';
 import TextToSpeechButton from './TextToSpeechButton'; // 导入朗读组件
 
 /**
  * 背单词卡片组件 (Flashcard)
- * 交互模式：点击卡片显示详情，点击详情背景隐藏详情，点击详情内容不隐藏。
+ * 交互模式：左下角区域点击“上一个”，右下角区域点击“下一个”，中下区域点击显示/隐藏详情。
  * 动画：使用纯 CSS 过渡实现平滑的淡入淡出和位移动画。
  * 数据源：支持从 `!include` 语句中接收 JSON 字符串。
- *
- * @param {Array<Object>|string} flashcards - 单词卡片数据数组，或其 JSON 字符串表示。
- * @param {string} questionTitle - 组件标题。
- * @param {string} lang - 朗读语言，默认为 'zh-CN'。
- * @param {Array<string>|string} backgroundImages - 背景图片URL数组，或其 JSON 字符串表示。
- * @param {boolean|string} isShuffle - 是否随机排序。
  */
 const BeiDanCi = ({
   flashcards: flashcardsProp,
@@ -22,8 +16,8 @@ const BeiDanCi = ({
   isShuffle: isShuffleProp = false,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [showBack, setShowBack] = useState(false); // 控制背面信息显示/隐藏
-  const [isTransitioning, setIsTransitioning] = useState(false); // 用于卡片切换动画的状态
+  const [showBack, setShowBack] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   const [displayFlashcards, setDisplayFlashcards] = useState([]);
   const [parsedBackgroundImages, setParsedBackgroundImages] = useState([]);
@@ -66,22 +60,16 @@ const BeiDanCi = ({
   }, [isShuffleProp]);
 
   // --- 交互逻辑 ---
-  const handleShowBack = useCallback(() => {
-    if (!showBack) setShowBack(true);
-  }, [showBack]);
+  const handleToggleBack = useCallback(() => setShowBack((prev) => !prev), []);
 
-  const handleHideBack = useCallback(() => {
-    if (showBack) setShowBack(false);
-  }, [showBack]);
-  
   const changeCard = (newIndex) => {
-    if (isTransitioning) return; // 防止动画期间重复点击
+    if (isTransitioning) return;
     setIsTransitioning(true);
     setShowBack(false);
     setTimeout(() => {
       setCurrentIndex(newIndex);
       setIsTransitioning(false);
-    }, 200); // 匹配淡出动画时间
+    }, 200);
   };
 
   const handleNext = useCallback(() => {
@@ -102,13 +90,13 @@ const BeiDanCi = ({
       else if (e.key === 'ArrowLeft') handlePrev();
       else if (e.key === ' ' || e.key === 'Enter') {
         e.preventDefault();
-        setShowBack(prev => !prev);
+        handleToggleBack();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleNext, handlePrev, displayFlashcards.length]);
-  
+  }, [handleNext, handlePrev, handleToggleBack, displayFlashcards.length]);
+
   // --- 渲染部分 ---
   const currentCard = displayFlashcards[currentIndex];
   const currentBackgroundImage = parsedBackgroundImages[currentIndex % parsedBackgroundImages.length];
@@ -128,8 +116,7 @@ const BeiDanCi = ({
       </h3>
 
       <div
-        onClick={handleShowBack} // 点击卡片任何地方都会尝试显示背面
-        className="relative w-full overflow-hidden rounded-2xl shadow-2xl my-4 touch-action-pan-y cursor-pointer"
+        className="relative w-full overflow-hidden rounded-2xl shadow-2xl my-4 touch-action-pan-y"
         style={{
           height: '550px',
           maxWidth: '700px',
@@ -151,16 +138,11 @@ const BeiDanCi = ({
           <div className="absolute inset-0 bg-black opacity-40"></div>
         </div>
         
-        {/* 图钉装饰 */}
-        <div className="absolute top-4 right-4 text-4xl transform -rotate-45 opacity-80 z-20">
-          📌
-        </div>
-
+        
         {/* 内容容器 */}
         <div className={`absolute inset-0 z-10 transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
           {/* 正面：大中文单词 */}
           <div className={`w-full h-full p-6 sm:p-8 flex flex-col items-center justify-center transition-opacity duration-300 ${showBack ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-            {/* 占位符，把单词往下推 */}
             <div className="flex-grow-[1]"></div>
             <p className="text-5xl sm:text-7xl font-bold leading-tight text-white select-none flex items-center drop-shadow-lg">
               {currentCard.word}
@@ -168,16 +150,11 @@ const BeiDanCi = ({
                 <TextToSpeechButton text={currentCard.word} lang={lang} className="ml-4 text-4xl sm:text-5xl drop-shadow-md" />
               </span>
             </p>
-            {/* 占位符，与上面的对称 */}
             <div className="flex-grow-[1.5]"></div>
           </div>
 
           {/* 背面：所有详细信息 */}
-          <div
-            onClick={handleHideBack} // 点击背面背景会隐藏
-            className={`absolute inset-0 p-6 sm:p-8 flex flex-col items-center transition-opacity duration-300 ease-in-out ${showBack ? 'opacity-100' : 'opacity-0 pointer-events-none'} text-white`}
-          >
-            {/* 内容盒子，点击它不会隐藏 */}
+          <div className={`absolute inset-0 p-6 sm:p-8 flex flex-col items-center justify-center transition-opacity duration-300 ease-in-out ${showBack ? 'opacity-100' : 'opacity-0 pointer-events-none'} text-white`}>
             <div 
               onClick={e => e.stopPropagation()}
               className="w-full h-full max-h-full overflow-y-auto custom-scrollbar p-4 text-center bg-black bg-opacity-20 rounded-lg backdrop-blur-sm"
@@ -207,6 +184,16 @@ const BeiDanCi = ({
               {currentCard.example2 && <div className="mt-2 text-center"><p className="text-base sm:text-lg italic flex items-start justify-center drop-shadow-sm"><span className="font-semibold not-italic mr-2">例句2:</span>{currentCard.example2}<TextToSpeechButton text={currentCard.example2} lang={lang} className="ml-2 shrink-0 text-base" /></p>{currentCard.example2Translation && <p className="text-sm sm:text-base flex items-start justify-center drop-shadow-sm opacity-80"><span className="font-semibold mr-2">翻译:</span>{currentCard.example2Translation}<TextToSpeechButton text={currentCard.example2Translation} lang={lang} className="ml-2 shrink-0 text-sm" /></p>}</div>}
             </div>
           </div>
+        </div>
+        
+        {/* 交互覆盖层 (左下、右下、中下区域) */}
+        <div className="absolute inset-0 z-30 grid grid-cols-4 grid-rows-3 pointer-events-none">
+          {/* 中下区域，用于切换详情 */}
+          <div className="col-start-2 col-span-2 row-start-3 pointer-events-auto cursor-pointer" onClick={handleToggleBack}></div>
+          {/* 左下角 */}
+          <div className="col-start-1 row-start-3 pointer-events-auto cursor-pointer" onClick={handlePrev}></div>
+          {/* 右下角 */}
+          <div className="col-start-4 row-start-3 pointer-events-auto cursor-pointer" onClick={handleNext}></div>
         </div>
       </div>
       
