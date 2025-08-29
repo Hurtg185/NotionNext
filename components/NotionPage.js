@@ -10,27 +10,27 @@ import React, { useEffect, useRef } from 'react'
 import { NotionRenderer } from 'react-notion-x'
 
 // ===================================================================================================================
-// START: 自定义组件解析逻辑 (新增和修改部分)
+// START: 自定义组件解析逻辑
 // ===================================================================================================================
 
 // 定义一个映射表，用于存储可以动态加载的自定义组件
 // 这里的键（key）必须与你在 Notion 中 !include 语句中使用的路径完全一致（例如 '/components/ComponentName.js'）。
 // 值为 dynamic(() => import('@/components/ComponentName')) 这种形式，它会使用你的路径别名来正确导入组件。
 const CUSTOM_COMPONENTS_MAP = {
-  // 你已有的组件映射 (请根据你实际的文件名和路径进行微调)
+  // === 你原有项目中可能存在的组件映射 (请确保这些文件实际存在) ===
+  '/components/MultipleChoiceQuestion.js': dynamic(() => import('@/components/MultipleChoiceQuestion'), { ssr: false }),
   '/components/PinyinInputExercise.js': dynamic(() => import('@/components/PinyinInputExercise'), { ssr: false }),
   '/components/Flashcard.js': dynamic(() => import('@/components/Flashcard'), { ssr: false }),
   '/components/AudioComprehension.js': dynamic(() => import('@/components/AudioComprehension'), { ssr: false }),
+  // ==================================================================
   
-  // =====================================================================================
-  // 新增你的题目组件映射在这里！
-  // 确保键（key）是 '/components/ComponentName.js' 形式，与 Notion 中的 !include 语句匹配。
-  // =====================================================================================
+  // === 我们目前已开发的交互式题目组件 ===
   '/components/XuanZeTi.js': dynamic(() => import('@/components/XuanZeTi'), { ssr: false }),
-  '/components/TianKongTi.js': dynamic(() => import('@/components/TianKongTi'), { ssr: false }),
   '/components/PaiXuTi.js': dynamic(() => import('@/components/PaiXuTi'), { ssr: false }),
-  '/components/BeiDanCi.js': dynamic(() => import('@/components/BeiDanCi'), { ssr: false }),
-  // '/components/DuoXuanTi.js': dynamic(() => import('@/components/DuoXuanTi'), { ssr: false }), // 多选题暂时不添加
+  '/components/BeiDanCi.js': dynamic(() => import('@/components/BeiDanCi'), { ssr: false }), // 确保 BeiDanCi.js 被正确注册
+  // ======================================
+  
+  // 按照你的要求，TianKongTi.js 已被移除，所以这里不再包含它的映射
 };
 
 /**
