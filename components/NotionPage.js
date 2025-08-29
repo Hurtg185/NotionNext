@@ -14,16 +14,23 @@ import { NotionRenderer } from 'react-notion-x'
 // ===================================================================================================================
 
 // 定义一个映射表，用于存储可以动态加载的自定义组件
-// 这里的路径是相对于项目根目录的，例如 '@/components/MultipleChoiceQuestion'
-// 请确保这些组件文件确实存在于你指定的路径
+// 这里的键（key）必须与你在 Notion 中 !include 语句中使用的路径完全一致（例如 '/components/ComponentName.js'）。
+// 值为 dynamic(() => import('@/components/ComponentName')) 这种形式，它会使用你的路径别名来正确导入组件。
 const CUSTOM_COMPONENTS_MAP = {
+  // 你已有的组件映射 (请根据你实际的文件名和路径进行微调)
   '/components/MultipleChoiceQuestion.js': dynamic(() => import('@/components/MultipleChoiceQuestion'), { ssr: false }),
   '/components/PinyinInputExercise.js': dynamic(() => import('@/components/PinyinInputExercise'), { ssr: false }),
   '/components/Flashcard.js': dynamic(() => import('@/components/Flashcard'), { ssr: false }),
-  '/components/TianKongTi.js': dynamic(() => import('@/components/TianKongTi'), { ssr: false }),
- '/components/PaiXuTi.js': dynamic(() => import('@/components/PaiXuTi'), { ssr: false }),
   '/components/AudioComprehension.js': dynamic(() => import('@/components/AudioComprehension'), { ssr: false }),
-  // ... 如果你创建了其他自定义组件，也在这里添加它们的映射
+  
+  // =====================================================================================
+  // 新增你的题目组件映射在这里！
+  // 确保键（key）是 '/components/ComponentName.js' 形式，与 Notion 中的 !include 语句匹配。
+  // =====================================================================================
+  '/components/XuanZeTi.js': dynamic(() => import('@/components/XuanZeTi'), { ssr: false }),
+  '/components/TianKongTi.js': dynamic(() => import('@/components/TianKongTi'), { ssr: false }),
+  '/components/PaiXuTi.js': dynamic(() => import('@/components/PaiXuTi'), { ssr: false }),
+  // '/components/DuoXuanTi.js': dynamic(() => import('@/components/DuoXuanTi'), { ssr: false }), // 多选题暂时不添加
 };
 
 /**
@@ -47,67 +54,41 @@ const DefaultNotionCodeRenderer = dynamic(
 
 // 创建一个自定义的 Code 块渲染器
 const CustomCodeRenderer = ({ block, className }) => {
-  // --- 关键调试日志：查看接收到的整个 block 对象 ---
-  console.log('--- CustomCodeRenderer DEBUG START ---');
-  if (block) {
-      console.log('  Block Type:', block.type);
-      console.log('  Block Properties (partial):', JSON.stringify(block.properties, null, 2)); // 只打印 properties
-  } else {
-      console.log('  Block is undefined/null.');
-  }
-  // --- 调试日志结束 ---
-
   // 确保 block 和其属性存在，并且是 Code 块类型
   if (!block || block.type !== 'code') {
-    console.log('  Block is not a code block or is undefined/null. Falling back to default.');
-    console.log('--- CustomCodeRenderer DEBUG END (Not code block) ---');
-    return <DefaultNotionCodeRenderer block={block} className={className} />; // 使用外部定义的 DefaultNotionCodeRenderer
+    return <DefaultNotionCodeRenderer block={block} className={className} />;
   }
 
-  // --- 关键修改：使用 getTextContent 辅助函数提取内容和语言 ---
+  // 使用 getTextContent 辅助函数提取内容和语言
   const codeContent = getTextContent(block.properties?.title); // 获取代码块内容
   const language = getTextContent(block.properties?.language); // 获取代码块语言
 
-  // --- 关键调试日志：查看提取到的内容和语言 ---
-  console.log('  Extracted Code Block Content:', codeContent);
-  console.log('  Extracted Code Block Language:', language);
-  // 修改匹配的语言为 "Plain Text"
-  console.log('  Is language "Plain Text" and content starts with "!include"? ', language === 'Plain Text' && codeContent && codeContent.startsWith('!include'));
-
   // 检查是否是 'Plain Text' 语言的代码块，并且内容以 '!include' 开头
-  if (language === 'Plain Text' && codeContent && codeContent.startsWith('!include')) { // <-- 关键修改：匹配 "Plain Text"
+  if (language === 'Plain Text' && codeContent && codeContent.startsWith('!include')) {
     try {
       // 解析 !include 语句
       const includeRegex = /^!include\s+(\S+)\s*(\{.*\})?$/;
       const match = codeContent.match(includeRegex);
 
       if (match) {
-        const componentPath = match[1];
-        const propsJson = match[2] ? JSON.parse(match[2]) : {};
-
-        console.log('  Matched !include. Path:', componentPath, 'Props:', propsJson);
+        const componentPath = match[1]; // 提取组件路径，例如 /components/XuanZeTi.js
+        const propsJson = match[2] ? JSON.parse(match[2]) : {}; // 提取 JSON 格式的 props
 
         const DynamicComponent = CUSTOM_COMPONENTS_MAP[componentPath];
 
         if (DynamicComponent) {
-          console.log('  Found DynamicComponent for path:', componentPath);
-          console.log('--- CustomCodeRenderer DEBUG END (Component rendered) ---');
           return <DynamicComponent {...propsJson} />;
         } else {
           console.error(`Error: Custom component not found for path: ${componentPath}. Please add it to CUSTOM_COMPONENTS_MAP.`);
-          console.log('--- CustomCodeRenderer DEBUG END (Component not found) ---');
           return (
             <div className="bg-red-100 text-red-700 p-3 rounded-md my-2 dark:bg-red-900 dark:text-red-200">
               错误：无法加载自定义组件 "{componentPath}"。请检查路径或是否已在代码中注册。
             </div>
           );
         }
-      } else {
-        console.log('  Code block is "Plain Text" but does not match !include regex.');
       }
     } catch (e) {
       console.error('Error parsing !include block:', e, codeContent);
-      console.log('--- CustomCodeRenderer DEBUG END (Parse error) ---');
       return (
         <div className="bg-red-100 text-red-700 p-3 rounded-md my-2 dark:bg-red-900 dark:text-red-200">
           错误：解析自定义组件 `!include` 块时出错。请检查语法。
@@ -119,8 +100,7 @@ const CustomCodeRenderer = ({ block, className }) => {
   }
 
   // 如果不是 !include 块，就用 react-notion-x 默认的 Code 组件渲染
-  console.log('--- CustomCodeRenderer DEBUG END (Default Code block rendered) ---');
-  return <DefaultNotionCodeRenderer block={block} className={className} />; // 使用外部定义的 DefaultNotionCodeRenderer
+  return <DefaultNotionCodeRenderer block={block} className={className} />;
 };
 
 // ===================================================================================================================
@@ -135,7 +115,6 @@ const CustomCodeRenderer = ({ block, className }) => {
  * @returns
  */
 const NotionPage = ({ post, className }) => {
-  // 是否关闭数据库和画册的点击跳转
   const POST_DISABLE_GALLERY_CLICK = siteConfig('POST_DISABLE_GALLERY_CLICK')
   const POST_DISABLE_DATABASE_CLICK = siteConfig('POST_DISABLE_DATABASE_CLICK')
   const SPOILER_TEXT_TAG = siteConfig('SPOILER_TEXT_TAG')
@@ -143,35 +122,26 @@ const NotionPage = ({ post, className }) => {
   const zoom =
     isBrowser &&
     mediumZoom({
-      //   container: '.notion-viewport',
       background: 'rgba(0, 0, 0, 0.2)',
       margin: getMediumZoomMargin()
     })
 
   const zoomRef = useRef(zoom ? zoom.clone() : null)
   const IMAGE_ZOOM_IN_WIDTH = siteConfig('IMAGE_ZOOM_IN_WIDTH', 1200)
-  // 页面首次打开时执行的勾子
+
   useEffect(() => {
-    // 检测当前的url并自动滚动到对应目标
     autoScrollToHash()
   }, [])
 
-  // 页面文章发生变化时会执行的勾子
   useEffect(() => {
-    // 相册视图点击禁止跳转，只能放大查看图片
     if (POST_DISABLE_GALLERY_CLICK) {
-      // 针对页面中的gallery视图，点击后是放大图片还是跳转到gallery的内部页面
       processGalleryImg(zoomRef?.current)
     }
 
-    // 页内数据库点击禁止跳转，只能查看
     if (POST_DISABLE_DATABASE_CLICK) {
       processDisableDatabaseUrl()
     }
 
-    /**
-     * 放大查看图片时替换成高清图像
-     */
     const observer = new MutationObserver((mutationsList, observer) => {
       mutationsList.forEach(mutation => {
         if (
@@ -179,11 +149,8 @@ const NotionPage = ({ post, className }) => {
           mutation.attributeName === 'class'
         ) {
           if (mutation.target.classList.contains('medium-zoom-image--opened')) {
-            // 等待动画完成后替换为更高清的图像
             setTimeout(() => {
-              // 获取该元素的 src 属性
               const src = mutation?.target?.getAttribute('src')
-              //   替换为更高清的图像
               mutation?.target?.setAttribute(
                 'src',
                 compressImage(src, IMAGE_ZOOM_IN_WIDTH)
@@ -194,7 +161,6 @@ const NotionPage = ({ post, className }) => {
       })
     })
 
-    // 监视页面元素和属性变化
     observer.observe(document.body, {
       attributes: true,
       subtree: true,
@@ -207,7 +173,6 @@ const NotionPage = ({ post, className }) => {
   }, [post])
 
   useEffect(() => {
-    // Spoiler文本功能
     if (SPOILER_TEXT_TAG) {
       import('lodash/escapeRegExp').then(escapeRegExp => {
         Promise.all([
@@ -220,20 +185,15 @@ const NotionPage = ({ post, className }) => {
       })
     }
 
-    // 查找所有具有 'notion-collection-page-properties' 类的元素,删除notion自带的页面properties
     const timer = setTimeout(() => {
-      // 查找所有具有 'notion-collection-page-properties' 类的元素
       const elements = document.querySelectorAll(
         '.notion-collection-page-properties'
       )
-
-      // 遍历这些元素并将其从 DOM 中移除
       elements?.forEach(element => {
         element?.remove()
       })
-    }, 1000) // 1000 毫秒 = 1 秒
+    }, 1000)
 
-    // 清理定时器，防止组件卸载时执行
     return () => clearTimeout(timer)
   }, [post])
 
@@ -246,7 +206,7 @@ const NotionPage = ({ post, className }) => {
         mapPageUrl={mapPageUrl}
         mapImageUrl={mapImgUrl}
         components={{
-          Code: CustomCodeRenderer, // <-- 关键修改：使用你的 CustomCodeRenderer
+          Code: CustomCodeRenderer,
           Collection,
           Equation,
           Modal,
@@ -301,7 +261,6 @@ const processGalleryImg = zoom => {
  */
 const autoScrollToHash = () => {
   setTimeout(() => {
-    // 跳转到指定标题
     const hash = window?.location?.hash
     const needToJumpToTitle = hash && hash.length > 0
     if (needToJumpToTitle) {
@@ -320,7 +279,6 @@ const autoScrollToHash = () => {
  * @returns
  */
 const mapPageUrl = id => {
-  // return 'https://www.notion.so/' + id.replace(/-/g, '')
   return '/' + id.replace(/-/g, '')
 }
 
@@ -350,45 +308,28 @@ function getMediumZoomMargin() {
 // START: 原始的动态导入 (部分已不再直接使用，但仍保留导入供其他组件使用)
 // ===================================================================================================================
 
-// 注意：原始的 Code 动态导入已被移除，因为 CustomCodeRenderer 会动态导入 react-notion-x 的 Code 组件。
-
 // 公式
 const Equation = dynamic(
   () =>
     import('@/components/Equation').then(async m => {
-      // 化学方程式
       await import('@/lib/plugins/mhchem')
       return m.Equation
     }),
   { ssr: false }
 )
 
-// 原版文档
-// const Pdf = dynamic(
-//   () => import('react-notion-x/build/third-party/pdf').then(m => m.Pdf),
-//   {
-//     ssr: false
-//   }
-// )
 const Pdf = dynamic(() => import('@/components/Pdf').then(m => m.Pdf), {
   ssr: false
 })
 
-// 美化代码 from: https://github.com/txs
 const PrismMac = dynamic(() => import('@/components/PrismMac'), {
   ssr: false
 })
 
-/**
- * tweet嵌入
- */
 const TweetEmbed = dynamic(() => import('react-tweet-embed'), {
   ssr: false
 })
 
-/**
- * 文内google广告
- */
 const AdEmbed = dynamic(
   () => import('@/components/GoogleAdsense').then(m => m.AdEmbed),
   { ssr: true }
