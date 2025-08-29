@@ -1,360 +1,159 @@
-// /components/NotionPage.js
-
-import { siteConfig } from '@/lib/config'
-import { compressImage, mapImgUrl } from '@/lib/notion/mapImage'
-import { isBrowser, loadExternalResource } from '@/lib/utils'
-import mediumZoom from '@fisch0920/medium-zoom'
-import 'katex/dist/katex.min.css'
-import dynamic from 'next/dynamic'
-import React, { useEffect, useRef } from 'react'
-import { NotionRenderer } from 'react-notion-x'
-
-// ===================================================================================================================
-// START: 自定义组件解析逻辑
-// ===================================================================================================================
-
-// 定义一个映射表，用于存储可以动态加载的自定义组件
-// 这里的键（key）必须与你在 Notion 中 !include 语句中使用的路径完全一致（例如 '/components/ComponentName.js'）。
-// 值为 dynamic(() => import('@/components/ComponentName')) 这种形式，它会使用你的路径别名来正确导入组件。
-const CUSTOM_COMPONENTS_MAP = {
-  // 你已有的组件映射 (请根据你实际的文件名和路径进行微调)
-  '/components/PinyinInputExercise.js': dynamic(() => import('@/components/PinyinInputExercise'), { ssr: false }),
-  '/components/Flashcard.js': dynamic(() => import('@/components/Flashcard'), { ssr: false }),
-  '/components/AudioComprehension.js': dynamic(() => import('@/components/AudioComprehension'), { ssr: false }),
-  
-  // =====================================================================================
-  // 新增你的题目组件映射在这里！
-  // 确保键（key）是 '/components/ComponentName.js' 形式，与 Notion 中的 !include 语句匹配。
-  // =====================================================================================
-  '/components/XuanZeTi.js': dynamic(() => import('@/components/XuanZeTi'), { ssr: false }),
-  '/components/PaiXuTi.js': dynamic(() => import('@/components/PaiXuTi'), { ssr: false }),
-  '/components/BeiDanCi.js': dynamic(() => import('@/components/BeiDanCi'), { ssr: false }), // <--- 背单词组件已添加
-};
+// /components/BeiDanCi.js (最终版：简化颜色逻辑，确保文本可见)
+import React, { useState, useRef, useEffect } from 'react'
+import TextToSpeechButton from './TextToSpeechButton' // 导入朗读组件
 
 /**
- * 辅助函数：从Notion富文本数组中提取纯文本内容
- * Notion API 的富文本通常是 [[text, style], [text, style]] 这样的结构
+ * 背单词卡片组件 (Flashcard)
+ * 点击卡片翻转，显示单词、词义、例句。支持左右切换卡片。
+ * 卡片背景可使用随机图片。
+ *
+ * @param {object[]} flashcards - 闪卡数据数组。
+ * @param {string} flashcards[].word - 单词或词组 (正面显示)。
+ * @param {string} flashcards[].meaning - 词义 (背面显示)。
+ * @param {string} flashcards[].example - 例句 (背面显示)。
+ * @param {string} flashcards[].exampleTranslation - 例句翻译 (背面显示，可选)。
+ * @param {string} [questionTitle] - 整个组件的标题，默认为“背单词”。
+ * @param {string} [lang='zh-CN'] - 朗读语言，默认为中文。
+ * @param {string[]} [backgroundImages=[]] - 卡片背景图片 URL 数组。如果提供，将随机或循环使用。
  */
-const getTextContent = (richTextArray) => {
-  if (!richTextArray || !Array.isArray(richTextArray)) {
-    return '';
-  }
-  // 遍历所有文本片段并拼接
-  return richTextArray.map(segment => segment[0]).join('');
-};
+const BeiDanCi = ({ flashcards, questionTitle = '背单词', lang = 'zh-CN', backgroundImages = [] }) => {
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [isFlipped, setIsFlipped] = useState(false) // 卡片是否翻转
 
-// 重要的修改：将 react-notion-x 默认的 Code 组件的动态导入移到 CustomCodeRenderer 外部
-// 这样可以避免在渲染函数内部重复调用 dynamic，解决潜在的编译和运行时问题。
-const DefaultNotionCodeRenderer = dynamic(
-  () => import('react-notion-x/build/third-party/code').then(m => m.Code),
-  { ssr: false }
-);
-
-// 创建一个自定义的 Code 块渲染器
-const CustomCodeRenderer = ({ block, className }) => {
-  // 确保 block 和其属性存在，并且是 Code 块类型
-  if (!block || block.type !== 'code') {
-    return <DefaultNotionCodeRenderer block={block} className={className} />;
-  }
-
-  // 使用 getTextContent 辅助函数提取内容和语言
-  const codeContent = getTextContent(block.properties?.title); // 获取代码块内容
-  const language = getTextContent(block.properties?.language); // 获取代码块语言
-
-  // 检查是否是 'Plain Text' 语言的代码块，并且内容以 '!include' 开头
-  if (language === 'Plain Text' && codeContent && codeContent.startsWith('!include')) {
-    try {
-      // 解析 !include 语句
-      const includeRegex = /^!include\s+(\S+)\s*(\{.*\})?$/;
-      const match = codeContent.match(includeRegex);
-
-      if (match) {
-        const componentPath = match[1]; // 提取组件路径，例如 /components/XuanZeTi.js
-        const propsJson = match[2] ? JSON.parse(match[2]) : {}; // 提取 JSON 格式的 props
-
-        const DynamicComponent = CUSTOM_COMPONENTS_MAP[componentPath];
-
-        if (DynamicComponent) {
-          return <DynamicComponent {...propsJson} />;
-        } else {
-          console.error(`Error: Custom component not found for path: ${componentPath}. Please add it to CUSTOM_COMPONENTS_MAP.`);
-          return (
-            <div className="bg-red-100 text-red-700 p-3 rounded-md my-2 dark:bg-red-900 dark:text-red-200">
-              错误：无法加载自定义组件 "{componentPath}"。请检查路径或是否已在代码中注册。
-            </div>
-          );
-        }
-      }
-    } catch (e) {
-      console.error('Error parsing !include block:', e, codeContent);
-      return (
-        <div className="bg-red-100 text-red-700 p-3 rounded-md my-2 dark:bg-red-900 dark:text-red-200">
-          错误：解析自定义组件 `!include` 块时出错。请检查语法。
-          <pre className="whitespace-pre-wrap text-sm">{codeContent}</pre>
-          <pre className="whitespace-pre-wrap text-sm text-red-500">{e.message}</pre>
-        </div>
-      );
+  const flipAudioRef = useRef(null);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // 如果有翻转音效文件 (例如 public/sounds/flip.mp3)，取消下一行的注释
+      // flipAudioRef.current = new Audio('/sounds/flip.mp3'); 
     }
+  }, []);
+
+  const handleFlip = () => {
+    setIsFlipped(!isFlipped)
+    // 如果有翻转音效，取消下一段的注释
+    // if (flipAudioRef.current) {
+    //   flipAudioRef.current.currentTime = 0;
+    //   flipAudioRef.current.play().catch(e => console.error("Error playing flip sound:", e));
+    // }
   }
 
-  // 如果不是 !include 块，就用 react-notion-x 默认的 Code 组件渲染
-  return <DefaultNotionCodeRenderer block={block} className={className} />;
-};
+  const handleNext = () => {
+    setIsFlipped(false) // 切换前先翻回正面
+    setTimeout(() => { // 延迟切换，给翻转动画时间
+      setCurrentIndex((prevIndex) => (prevIndex + 1) % flashcards.length)
+    }, 150) // 匹配翻转动画时间
+  }
 
-// ===================================================================================================================
-// END: 自定义组件解析逻辑
-// ===================================================================================================================
+  const handlePrev = () => {
+    setIsFlipped(false) // 切换前先翻回正面
+    setTimeout(() => { // 延迟切换，给翻转动画时间
+      setCurrentIndex((prevIndex) => (prevIndex - 1 + flashcards.length) % flashcards.length)
+    }, 150) // 匹配翻转动画时间
+  }
 
+  const currentCard = flashcards[currentIndex]
+  const currentBackgroundImage = backgroundImages[currentIndex % backgroundImages.length]; // 循环使用背景图
 
-/**
- * 整个站点的核心组件
- * 将Notion数据渲染成网页
- * @param {*} param0
- * @returns
- */
-const NotionPage = ({ post, className }) => {
-  const POST_DISABLE_GALLERY_CLICK = siteConfig('POST_DISABLE_GALLERY_CLICK')
-  const POST_DISABLE_DATABASE_CLICK = siteConfig('POST_DISABLE_DATABASE_CLICK')
-  const SPOILER_TEXT_TAG = siteConfig('SPOILER_TEXT_TAG')
-
-  const zoom =
-    isBrowser &&
-    mediumZoom({
-      background: 'rgba(0, 0, 0, 0.2)',
-      margin: getMediumZoomMargin()
-    })
-
-  const zoomRef = useRef(zoom ? zoom.clone() : null)
-  const IMAGE_ZOOM_IN_WIDTH = siteConfig('IMAGE_ZOOM_IN_WIDTH', 1200)
-
-  useEffect(() => {
-    autoScrollToHash()
-  }, [])
-
-  useEffect(() => {
-    if (POST_DISABLE_GALLERY_CLICK) {
-      processGalleryImg(zoomRef?.current)
-    }
-
-    if (POST_DISABLE_DATABASE_CLICK) {
-      processDisableDatabaseUrl()
-    }
-
-    const observer = new MutationObserver((mutationsList, observer) => {
-      mutationsList.forEach(mutation => {
-        if (
-          mutation.type === 'attributes' &&
-          mutation.attributeName === 'class'
-        ) {
-          if (mutation.target.classList.contains('medium-zoom-image--opened')) {
-            setTimeout(() => {
-              const src = mutation?.target?.getAttribute('src')
-              mutation?.target?.setAttribute(
-                'src',
-                compressImage(src, IMAGE_ZOOM_IN_WIDTH)
-              )
-            }, 800)
-          }
-        }
-      })
-    })
-
-    observer.observe(document.body, {
-      attributes: true,
-      subtree: true,
-      attributeFilter: ['class']
-    })
-
-    return () => {
-      observer.disconnect()
-    }
-  }, [post])
-
-  useEffect(() => {
-    if (SPOILER_TEXT_TAG) {
-      import('lodash/escapeRegExp').then(escapeRegExp => {
-        Promise.all([
-          loadExternalResource('/js/spoilerText.js', 'js'),
-          loadExternalResource('/css/spoiler-text.css', 'css')
-        ]).then(() => {
-          window.textToSpoiler &&
-            window.textToSpoiler(escapeRegExp.default(SPOILER_TEXT_TAG))
-        })
-      })
-    }
-
-    const timer = setTimeout(() => {
-      const elements = document.querySelectorAll(
-        '.notion-collection-page-properties'
-      )
-      elements?.forEach(element => {
-        element?.remove()
-      })
-    }, 1000)
-
-    return () => clearTimeout(timer)
-  }, [post])
+  if (!flashcards || flashcards.length === 0) {
+    return (
+      <div className="max-w-xl mx-auto my-8 p-6 bg-day-DEFAULT dark:bg-night-DEFAULT rounded-xl shadow-2 border border-stroke dark:border-dark-3 text-body-color dark:text-dark-7">
+        <p className="text-lg font-semibold text-center">没有卡片数据。请提供 flashcards 数组。</p>
+      </div>
+    )
+  }
 
   return (
-    <div
-      id='notion-article'
-      className={`mx-auto overflow-hidden ${className || ''}`}>
-      <NotionRenderer
-        recordMap={post?.blockMap}
-        mapPageUrl={mapPageUrl}
-        mapImageUrl={mapImgUrl}
-        components={{
-          Code: CustomCodeRenderer,
-          Collection,
-          Equation,
-          Modal,
-          Pdf,
-          Tweet
-        }}
-      />
+    <div className="max-w-xl mx-auto my-8 p-6 bg-day-DEFAULT dark:bg-night-DEFAULT rounded-xl shadow-2 border border-stroke dark:border-dark-3">
+      <h3 className="text-2xl font-bold mb-6 text-dark-DEFAULT dark:text-gray-1 text-center">
+        {questionTitle}
+      </h3>
 
-      <AdEmbed />
-      <PrismMac />
+      <div className="relative w-full h-64 perspective-1000 my-8">
+        <div
+          onClick={handleFlip}
+          className={`absolute w-full h-full preserve-3d transition-transform duration-300 cursor-pointer rounded-lg shadow-lg border border-stroke dark:border-dark-4
+            ${isFlipped ? 'rotate-y-180' : ''}`}
+        >
+          {/* 卡片背景图层 */}
+          {currentBackgroundImage && (
+            <div
+              className="absolute inset-0 rounded-lg"
+              style={{
+                backgroundImage: `url(${currentBackgroundImage})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }}
+            >
+              {/* 半透明颜色叠加层，确保文本可读性，在暗色模式下也调整透明度 */}
+              <div className="absolute inset-0 bg-black opacity-30 dark:bg-black dark:opacity-50 rounded-lg"></div>
+            </div>
+          )}
+
+          {/* 卡片正面：始终为白色文本，背景色使用 Tailwind 类 */}
+          <div className={`absolute w-full h-full backface-hidden rounded-lg flex flex-col items-center justify-center p-6 z-10
+                      ${currentBackgroundImage ? 'text-white' : 'text-dark-DEFAULT dark:text-gray-1'}
+                      ${!currentBackgroundImage && !isFlipped ? 'bg-white dark:bg-dark-2' : ''}
+                      ${!currentBackgroundImage && isFlipped ? 'bg-gray-1 dark:bg-dark-3' : ''} `}>
+            <p className="text-4xl font-bold text-center select-none flex items-center">
+              {currentCard.word}
+              <TextToSpeechButton text={currentCard.word} lang={lang} />
+            </p>
+          </div>
+
+          {/* 卡片背面：始终为白色文本，背景色使用 Tailwind 类 */}
+          <div className={`absolute w-full h-full backface-hidden rounded-lg flex flex-col justify-center p-6 rotate-y-180 z-10
+                      ${currentBackgroundImage ? 'text-white' : 'text-body-color dark:text-dark-7'}
+                      ${!currentBackgroundImage && isFlipped ? 'bg-gray-1 dark:bg-dark-3' : ''}
+                      ${!currentBackgroundImage && !isFlipped ? 'bg-white dark:bg-dark-2' : ''} `}>
+            <h4 className="text-xl font-bold text-center mb-2 select-none flex items-center
+                ${currentBackgroundImage ? 'text-white' : 'text-primary dark:text-primary'}"> {/* 标题在有图时为白，无图时为主题色 */}
+              {currentCard.word}
+              <TextToSpeechButton text={currentCard.word} lang={lang} />
+            </h4>
+            <p className="text-lg mb-2 select-none flex items-center
+               ${currentBackgroundImage ? 'text-white' : 'text-body-color dark:text-dark-7'}">
+              <span className="font-semibold">词义: </span>{currentCard.meaning}
+              <TextToSpeechButton text={currentCard.meaning} lang={lang} />
+            </p>
+            {currentCard.example && (
+              <p className="text-base italic select-none flex items-center
+                 ${currentBackgroundImage ? 'text-white' : 'text-body-secondary dark:text-dark-6'}">
+                <span className="font-semibold not-italic">例句: </span>{currentCard.example}
+                <TextToSpeechButton text={currentCard.example} lang={lang} />
+              </p>
+            )}
+            {currentCard.exampleTranslation && (
+              <p className="text-base select-none flex items-center
+                 ${currentBackgroundImage ? 'text-white' : 'text-body-secondary dark:text-dark-6'}">
+                <span className="font-semibold">翻译: </span>{currentCard.exampleTranslation}
+                <TextToSpeechButton text={currentCard.exampleTranslation} lang={lang} />
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-between mt-8">
+        <button
+          onClick={handlePrev}
+          disabled={flashcards.length <= 1}
+          className="px-6 py-3 bg-dark-6 text-white font-medium rounded-lg shadow-md hover:bg-dark-5 focus:outline-none focus:ring-2 focus:ring-dark-7 focus:ring-offset-2 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <i className="fas fa-arrow-left mr-2"></i> 上一个
+        </button>
+        <span className="text-body-color dark:text-dark-7 text-lg font-medium self-center">
+          {currentIndex + 1} / {flashcards.length}
+        </span>
+        <button
+          onClick={handleNext}
+          disabled={flashcards.length <= 1}
+          className="px-6 py-3 bg-primary text-white font-medium rounded-lg shadow-md hover:bg-blue-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          下一个 <i className="fas fa-arrow-right ml-2"></i>
+        </button>
+      </div>
     </div>
   )
 }
 
-/**
- * 页面的数据库链接禁止跳转，只能查看
- */
-const processDisableDatabaseUrl = () => {
-  if (isBrowser) {
-    const links = document.querySelectorAll('.notion-table a')
-    for (const e of links) {
-      e.removeAttribute('href')
-    }
-  }
-}
-
-/**
- * gallery视图，点击后是放大图片还是跳转到gallery的内部页面
- */
-const processGalleryImg = zoom => {
-  setTimeout(() => {
-    if (isBrowser) {
-      const imgList = document?.querySelectorAll(
-        '.notion-collection-card-cover img'
-      )
-      if (imgList && zoom) {
-        for (let i = 0; i < imgList.length; i++) {
-          zoom.attach(imgList[i])
-        }
-      }
-
-      const cards = document.getElementsByClassName('notion-collection-card')
-      for (const e of cards) {
-        e.removeAttribute('href')
-      }
-    }
-  }, 800)
-}
-
-/**
- * 根据url参数自动滚动到锚位置
- */
-const autoScrollToHash = () => {
-  setTimeout(() => {
-    const hash = window?.location?.hash
-    const needToJumpToTitle = hash && hash.length > 0
-    if (needToJumpToTitle) {
-      console.log('jump to hash', hash)
-      const tocNode = document.getElementById(hash.substring(1))
-      if (tocNode && tocNode?.className?.indexOf('notion') > -1) {
-        tocNode.scrollIntoView({ block: 'start', behavior: 'smooth' })
-      }
-    }
-  }, 180)
-}
-
-/**
- * 将id映射成博文内部链接。
- * @param {*} id
- * @returns
- */
-const mapPageUrl = id => {
-  return '/' + id.replace(/-/g, '')
-}
-
-/**
- * 缩放
- * @returns
- */
-function getMediumZoomMargin() {
-  const width = window.innerWidth
-
-  if (width < 500) {
-    return 8
-  } else if (width < 800) {
-    return 20
-  } else if (width < 1280) {
-    return 30
-  } else if (width < 1600) {
-    return 40
-  } else if (width < 1920) {
-    return 48
-  } else {
-    return 72
-  }
-}
-
-// ===================================================================================================================
-// START: 原始的动态导入 (部分已不再直接使用，但仍保留导入供其他组件使用)
-// ===================================================================================================================
-
-// 公式
-const Equation = dynamic(
-  () =>
-    import('@/components/Equation').then(async m => {
-      await import('@/lib/plugins/mhchem')
-      return m.Equation
-    }),
-  { ssr: false }
-)
-
-const Pdf = dynamic(() => import('@/components/Pdf').then(m => m.Pdf), {
-  ssr: false
-})
-
-const PrismMac = dynamic(() => import('@/components/PrismMac'), {
-  ssr: false
-})
-
-const TweetEmbed = dynamic(() => import('react-tweet-embed'), {
-  ssr: false
-})
-
-const AdEmbed = dynamic(
-  () => import('@/components/GoogleAdsense').then(m => m.AdEmbed),
-  { ssr: true }
-)
-
-const Collection = dynamic(
-  () =>
-    import('react-notion-x/build/third-party/collection').then(
-      m => m.Collection
-    ),
-  {
-    ssr: true
-  }
-)
-
-const Modal = dynamic(
-  () => import('react-notion-x/build/third-party/modal').then(m => m.Modal),
-  { ssr: false }
-)
-
-const Tweet = ({ id }) => {
-  return <TweetEmbed tweetId={id} />
-}
-
-// ===================================================================================================================
-// END: 原始的动态导入
-// ===================================================================================================================
-
-
-export default NotionPage
+export default BeiDanCi
