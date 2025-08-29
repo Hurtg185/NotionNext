@@ -1,26 +1,27 @@
-// /components/XuanZeTi.js
+// /components/XuanZeTi.js (带音效和动画反馈)
 import React, { useState, useEffect, useRef } from 'react'
 
 const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => {
   const [selectedOptionIndex, setSelectedOptionIndex] = useState(null)
   const [isAnswered, setIsAnswered] = useState(false)
+  const [showFeedback, setShowFeedback] = useState(false) // 控制反馈动画的显示
 
   const correctAudioRef = useRef(null)
   const wrongAudioRef = useRef(null)
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      correctAudioRef.current = new Audio('/sounds/correct.mp3') 
-      wrongAudioRef.current = new Audio('/sounds/wrong.mp3')   
+      correctAudioRef.current = new Audio('/sounds/correct.mp3')
+      wrongAudioRef.current = new Audio('/sounds/wrong.mp3')
     }
   }, [])
 
   const playSound = (isCorrect) => {
     if (isCorrect && correctAudioRef.current) {
-      correctAudioRef.current.currentTime = 0; // 重置音频到开头，允许快速连续播放
+      correctAudioRef.current.currentTime = 0;
       correctAudioRef.current.play().catch(e => console.error("Error playing correct sound:", e))
     } else if (!isCorrect && wrongAudioRef.current) {
-      wrongAudioRef.current.currentTime = 0; // 重置音频到开头
+      wrongAudioRef.current.currentTime = 0;
       wrongAudioRef.current.play().catch(e => console.error("Error playing wrong sound:", e))
     }
   }
@@ -30,13 +31,19 @@ const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => {
 
     setSelectedOptionIndex(index)
     setIsAnswered(true)
+    setShowFeedback(true) // 显示反馈动画
 
     playSound(index === correctAnswerIndex)
   }
 
   const handleReset = () => {
-    setSelectedOptionIndex(null)
-    setIsAnswered(false)
+    // 重置时先隐藏反馈，再清空状态
+    setShowFeedback(false)
+    // 动画结束后再重置状态，给淡出动画一点时间
+    setTimeout(() => {
+      setSelectedOptionIndex(null)
+      setIsAnswered(false)
+    }, 300) // 与 fade-out-fast 动画时间匹配
   }
 
   const getOptionClasses = (optionIndex) => {
@@ -46,19 +53,19 @@ const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => {
 
     if (isAnswered) {
       if (isCorrectOption) {
-        classes += 'bg-secondary/[0.1] border-secondary text-secondary font-medium shadow-md ' // 增加阴影
+        classes += 'bg-secondary/[0.1] border-secondary text-secondary font-medium shadow-md '
       } else if (isSelectedOption && !isCorrectOption) {
-        classes += 'bg-red-100 border-red-400 text-red-600 font-medium dark:bg-red-900 dark:border-red-700 dark:text-red-400 shadow-md ' // 增加阴影
+        classes += 'bg-red-100 border-red-400 text-red-600 font-medium dark:bg-red-900 dark:border-red-700 dark:text-red-400 shadow-md '
       } else {
-        classes += 'bg-gray-50 dark:bg-dark-3 border-stroke dark:border-dark-4 text-body-color dark:text-dark-7 shadow-sm ' // 略微阴影
+        classes += 'bg-gray-50 dark:bg-dark-3 border-stroke dark:border-dark-4 text-body-color dark:text-dark-7 shadow-sm '
       }
       classes += 'pointer-events-none '
     } else {
       classes += 'bg-gray-50 dark:bg-dark-2 border-stroke dark:border-dark-4 hover:bg-primary/[0.05] dark:hover:bg-dark-3 '
       if (isSelectedOption) {
-        classes += 'ring-2 ring-primary/[0.5] shadow-md ' // 选中时增加阴影
+        classes += 'ring-2 ring-primary/[0.5] shadow-md scale-100 ' // 选中时
       } else {
-        classes += 'shadow-sm hover:shadow-md ' // 未选中时有轻微阴影，悬停时增强
+        classes += 'shadow-sm hover:shadow-md hover:scale-[1.01] ' // 未选中时有轻微阴影，悬停时轻微放大
       }
       classes += 'text-body-color dark:text-dark-7 '
     }
@@ -86,8 +93,8 @@ const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => {
         ))}
       </div>
 
-      {isAnswered && (
-        <div className="mt-8">
+      {isAnswered && ( // 只有在回答后才渲染反馈区域
+        <div className={`mt-8 ${showFeedback ? 'animate-fade-in-up-fast' : 'animate-fade-out-fast'}`}> {/* 添加动画类 */}
           <div className="flex items-center space-x-3 mb-4">
             {selectedOptionIndex === correctAnswerIndex ? (
               <span className="text-secondary font-bold text-xl">
@@ -101,7 +108,7 @@ const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => {
           </div>
 
           {explanation && (
-            <div className="mt-4 p-4 bg-gray-1 dark:bg-dark-2 border-t-2 border-stroke dark:border-dark-3 rounded-b-xl text-body-color dark:text-dark-7 shadow-inner"> {/* 解释区域也加阴影 */}
+            <div className="mt-4 p-4 bg-gray-1 dark:bg-dark-2 border-t-2 border-stroke dark:border-dark-3 rounded-b-xl text-body-color dark:text-dark-7 shadow-inner animate-fade-in-fast"> {/* 解释区域也加动画 */}
               <h4 className="font-bold text-lg mb-2 text-dark-DEFAULT dark:text-gray-1">
                 <i className="fas fa-lightbulb mr-2 text-warning"></i>解释：
               </h4>
