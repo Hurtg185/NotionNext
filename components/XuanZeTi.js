@@ -1,8 +1,8 @@
-// /components/XuanZeTi.js (选项卡片加入颜色)
+// /components/XuanZeTi.js (移除 HSK 标签，选项卡片颜色调整)
 import React, { useState, useEffect, useRef } from 'react'
 import TextToSpeechButton from './TextToSpeechButton'
 
-const XuanZeTi = ({ question, options, correctAnswerIndex, explanation, hskLevel }) => {
+const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => { // 移除 hskLevel prop
   const [selectedOptionIndex, setSelectedOptionIndex] = useState(null)
   const [isAnswered, setIsAnswered] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
@@ -13,32 +13,20 @@ const XuanZeTi = ({ question, options, correctAnswerIndex, explanation, hskLevel
   const speechSynthesisUtteranceRef = useRef(null);
   const speechSynthesisRef = useRef(null);
 
-  // HSK 等级颜色映射 (与 PaiXuTi 保持一致)
-  const getHskLevelColorClass = (level) => {
-    switch (level) {
-      case 1: return 'bg-green-500 text-white';
-      case 2: return 'bg-yellow-500 text-gray-800';
-      case 3: return 'bg-primary text-white';
-      case 4: return 'bg-purple-600 text-white';
-      case 5: return 'bg-red-600 text-white';
-      case 6: return 'bg-dark-DEFAULT text-white';
-      default: return 'bg-gray-500 text-white';
-    }
-  };
-
-  // 选项卡片颜色数组 (更多颜色，与 PaiXuTi 共享或类似)
+  // 选项卡片颜色数组 (调整，使其在白色背景下更突出)
   const optionCardColors = [
-    'bg-blue-50 dark:bg-blue-900 text-blue-800 dark:text-blue-100 border-blue-200 dark:border-blue-700',
-    'bg-green-50 dark:bg-green-900 text-green-800 dark:text-green-100 border-green-200 dark:border-green-700',
-    'bg-yellow-50 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-100 border-yellow-200 dark:border-yellow-700',
-    'bg-purple-50 dark:bg-purple-900 text-purple-800 dark:text-purple-100 border-purple-200 dark:border-purple-700',
-    'bg-pink-50 dark:bg-pink-900 text-pink-800 dark:text-pink-100 border-pink-200 dark:border-pink-700',
-    'bg-indigo-50 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-100 border-indigo-200 dark:border-indigo-700',
-    'bg-teal-50 dark:bg-teal-900 text-teal-800 dark:text-teal-100 border-teal-200 dark:border-teal-700', // 新增
-    'bg-orange-50 dark:bg-orange-900 text-orange-800 dark:text-orange-100 border-orange-200 dark:border-orange-700', // 新增
-    'bg-cyan-50 dark:bg-cyan-900 text-cyan-800 dark:text-cyan-100 border-cyan-200 dark:border-cyan-700', // 新增
+    'bg-primary/[0.1] text-primary border-primary/[0.3]', // 使用主题 primary 的浅色
+    'bg-secondary/[0.1] text-secondary border-secondary/[0.3]', // 使用主题 secondary 的浅色
+    'bg-blue-200 dark:bg-blue-800 text-blue-900 dark:text-blue-100 border-blue-400 dark:border-blue-700',
+    'bg-green-200 dark:bg-green-800 text-green-900 dark:text-green-100 border-green-400 dark:border-green-700',
+    'bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-100 border-yellow-400 dark:border-yellow-700',
+    'bg-purple-200 dark:bg-purple-800 text-purple-900 dark:text-purple-100 border-purple-400 dark:border-purple-700',
+    'bg-pink-200 dark:bg-pink-800 text-pink-900 dark:text-pink-100 border-pink-400 dark:border-pink-700',
+    'bg-indigo-200 dark:bg-indigo-800 text-indigo-900 dark:text-indigo-100 border-indigo-400 dark:border-indigo-700',
+    'bg-teal-200 dark:bg-teal-800 text-teal-900 dark:text-teal-100 border-teal-400 dark:border-teal-700',
+    'bg-orange-200 dark:bg-orange-800 text-orange-900 dark:text-orange-100 border-orange-400 dark:border-orange-700',
+    'bg-cyan-200 dark:bg-cyan-800 text-cyan-900 dark:text-cyan-100 border-cyan-400 dark:border-cyan-700',
   ];
-
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -116,16 +104,15 @@ const XuanZeTi = ({ question, options, correctAnswerIndex, explanation, hskLevel
       } else if (isSelectedOption && !isCorrectOption) {
         classes += 'bg-red-100 border-red-400 text-red-600 font-medium dark:bg-red-900 dark:border-red-700 dark:text-red-400 shadow-md ';
       } else {
-        // 其他未选中的错误选项，保持基础色，但禁用
-        classes += 'opacity-80 shadow-sm '; // 略微降低透明度，增加阴影
+        classes += 'opacity-80 shadow-sm ';
       }
       classes += 'pointer-events-none ';
     } else {
-      classes += 'hover:bg-opacity-80 hover:shadow-md hover:scale-[1.01] '; // 悬停时颜色变深，阴影增强，轻微放大
+      classes += 'hover:bg-opacity-80 hover:shadow-md hover:scale-[1.01] ';
       if (isSelectedOption) {
-        classes += 'ring-2 ring-offset-2 ring-primary shadow-xl scale-[1.03] '; // 选中时更强的高亮和阴影
+        classes += 'ring-2 ring-offset-2 ring-primary shadow-xl scale-[1.03] ';
       } else {
-        classes += 'shadow-sm '; // 默认轻微阴影
+        classes += 'shadow-sm ';
       }
     }
     return classes
@@ -138,12 +125,13 @@ const XuanZeTi = ({ question, options, correctAnswerIndex, explanation, hskLevel
           {question}
           <TextToSpeechButton text={question} lang="zh-CN" />
         </h3>
-        {hskLevel && (
-          <span className={`px-3 py-1 text-sm font-bold rounded-full ml-3 ${getHskLevelColorClass(hskLevel)}`}> {/* 添加 ml-3 */}
+        {/* 移除 HSK 标签 */}
+        {/* {hskLevel && (
+          <span className={`px-3 py-1 text-sm font-bold rounded-full ml-3 ${getHskLevelColorClass(hskLevel)}`}>
             HSK {hskLevel}
             <TextToSpeechButton text={`HSK ${hskLevel} 级`} lang="zh-CN" />
           </span>
-        )}
+        )} */}
       </div>
 
       <div className="space-y-3">
