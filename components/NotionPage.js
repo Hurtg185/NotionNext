@@ -20,6 +20,7 @@ const CUSTOM_COMPONENTS_MAP = {
   // === 我们目前已开发的交互式题目组件 ===
   '/components/XuanZeTi.js': dynamic(() => import('@/components/XuanZeTi'), { ssr: false }),
   '/components/PaiXuTi.js': dynamic(() => import('@/components/PaiXuTi'), { ssr: false }),
+  '/components/PinyinHanziQuiz.js': dynamic(() => import('@/components/PinyinHanziQuiz'), { ssr: false }),
   '/components/LianXianTi.js': dynamic(() => import('@/components/LianXianTi'), { ssr: false }),
   '/components/BeiDanCi.js': dynamic(() => import('@/components/BeiDanCi'), { ssr: false }), // 背单词组件
   // ======================================
