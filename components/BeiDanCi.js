@@ -151,10 +151,6 @@ const BeiDanCi = ({
           <div className="absolute inset-0 bg-black opacity-40"></div>
         </div>
         
-        {/* 图钉装饰 */}
-        <div className="absolute top-4 right-4 text-4xl transform -rotate-45 opacity-80 z-20">
-          📌
-        </div>
 
         {/* 内容容器 */}
         <div className={`absolute inset-0 z-10 transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
