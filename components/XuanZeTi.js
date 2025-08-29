@@ -1,15 +1,37 @@
 // /components/XuanZeTi.js
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 
 const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => {
   const [selectedOptionIndex, setSelectedOptionIndex] = useState(null)
   const [isAnswered, setIsAnswered] = useState(false)
+
+  const correctAudioRef = useRef(null)
+  const wrongAudioRef = useRef(null)
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      correctAudioRef.current = new Audio('/sounds/correct.mp3') 
+      wrongAudioRef.current = new Audio('/sounds/wrong.mp3')   
+    }
+  }, [])
+
+  const playSound = (isCorrect) => {
+    if (isCorrect && correctAudioRef.current) {
+      correctAudioRef.current.currentTime = 0; // 重置音频到开头，允许快速连续播放
+      correctAudioRef.current.play().catch(e => console.error("Error playing correct sound:", e))
+    } else if (!isCorrect && wrongAudioRef.current) {
+      wrongAudioRef.current.currentTime = 0; // 重置音频到开头
+      wrongAudioRef.current.play().catch(e => console.error("Error playing wrong sound:", e))
+    }
+  }
 
   const handleOptionClick = (index) => {
     if (isAnswered) return
 
     setSelectedOptionIndex(index)
     setIsAnswered(true)
+
+    playSound(index === correctAnswerIndex)
   }
 
   const handleReset = () => {
@@ -18,23 +40,25 @@ const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => {
   }
 
   const getOptionClasses = (optionIndex) => {
-    let classes = 'w-full text-left p-3 rounded-md border transition-all duration-200 flex items-start ' // 添加 flex items-start
+    let classes = 'w-full text-left p-3 rounded-md border transition-all duration-200 flex items-center '
     const isCorrectOption = optionIndex === correctAnswerIndex
     const isSelectedOption = optionIndex === selectedOptionIndex
 
     if (isAnswered) {
       if (isCorrectOption) {
-        classes += 'bg-secondary/[0.1] border-secondary text-secondary font-medium '
+        classes += 'bg-secondary/[0.1] border-secondary text-secondary font-medium shadow-md ' // 增加阴影
       } else if (isSelectedOption && !isCorrectOption) {
-        classes += 'bg-red-100 border-red-400 text-red-600 font-medium dark:bg-red-900 dark:border-red-700 dark:text-red-400 '
+        classes += 'bg-red-100 border-red-400 text-red-600 font-medium dark:bg-red-900 dark:border-red-700 dark:text-red-400 shadow-md ' // 增加阴影
       } else {
-        classes += 'bg-gray-50 dark:bg-dark-3 border-stroke dark:border-dark-4 text-body-color dark:text-dark-7 '
+        classes += 'bg-gray-50 dark:bg-dark-3 border-stroke dark:border-dark-4 text-body-color dark:text-dark-7 shadow-sm ' // 略微阴影
       }
       classes += 'pointer-events-none '
     } else {
       classes += 'bg-gray-50 dark:bg-dark-2 border-stroke dark:border-dark-4 hover:bg-primary/[0.05] dark:hover:bg-dark-3 '
       if (isSelectedOption) {
-        classes += 'ring-2 ring-primary/[0.5] '
+        classes += 'ring-2 ring-primary/[0.5] shadow-md ' // 选中时增加阴影
+      } else {
+        classes += 'shadow-sm hover:shadow-md ' // 未选中时有轻微阴影，悬停时增强
       }
       classes += 'text-body-color dark:text-dark-7 '
     }
@@ -43,7 +67,7 @@ const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => {
 
   return (
     <div className="max-w-xl mx-auto my-8 p-6 bg-day-DEFAULT dark:bg-night-DEFAULT rounded-xl shadow-2 border border-stroke dark:border-dark-3">
-      <h3 className="text-2xl font-semibold mb-6 text-dark-DEFAULT dark:text-gray-1">
+      <h3 className="text-2xl font-bold mb-6 text-dark-DEFAULT dark:text-gray-1">
         {question}
       </h3>
 
@@ -55,16 +79,9 @@ const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => {
             disabled={isAnswered}
             className={getOptionClasses(index)}
           >
-            <input
-              type="radio"
-              name="xuanzeti-option"
-              value={option}
-              checked={selectedOptionIndex === index}
-              onChange={() => handleOptionClick(index)} // onChange 也调用，以防点击input本身
-              className="mt-1 mr-3 transform scale-125 accent-primary" // 添加 mt-1 保持对齐
-              disabled={isAnswered}
-            />
-            <span className="text-lg flex-1">{String.fromCharCode(65 + index)}. {option}</span> {/* flex-1 让文本占据剩余空间 */}
+            <span className="text-lg font-semibold flex-1">
+              {String.fromCharCode(65 + index)}. {option}
+            </span>
           </button>
         ))}
       </div>
@@ -84,8 +101,8 @@ const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => {
           </div>
 
           {explanation && (
-            <div className="mt-4 p-4 bg-gray-1 dark:bg-dark-2 border-t-2 border-stroke dark:border-dark-3 rounded-b-xl text-body-color dark:text-dark-7">
-              <h4 className="font-semibold text-lg mb-2 text-dark-DEFAULT dark:text-gray-1">
+            <div className="mt-4 p-4 bg-gray-1 dark:bg-dark-2 border-t-2 border-stroke dark:border-dark-3 rounded-b-xl text-body-color dark:text-dark-7 shadow-inner"> {/* 解释区域也加阴影 */}
+              <h4 className="font-bold text-lg mb-2 text-dark-DEFAULT dark:text-gray-1">
                 <i className="fas fa-lightbulb mr-2 text-warning"></i>解释：
               </h4>
               <p>{explanation}</p>
