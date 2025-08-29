@@ -29,6 +29,7 @@ const CUSTOM_COMPONENTS_MAP = {
   '/components/XuanZeTi.js': dynamic(() => import('@/components/XuanZeTi'), { ssr: false }),
   '/components/TianKongTi.js': dynamic(() => import('@/components/TianKongTi'), { ssr: false }),
   '/components/PaiXuTi.js': dynamic(() => import('@/components/PaiXuTi'), { ssr: false }),
+  '/components/BeiDanCi.js': dynamic(() => import('@/components/BeiDanCi'), { ssr: false }),
   // '/components/DuoXuanTi.js': dynamic(() => import('@/components/DuoXuanTi'), { ssr: false }), // 多选题暂时不添加
 };
 
