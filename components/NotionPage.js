@@ -20,6 +20,8 @@ const CUSTOM_COMPONENTS_MAP = {
   '/components/MultipleChoiceQuestion.js': dynamic(() => import('@/components/MultipleChoiceQuestion'), { ssr: false }),
   '/components/PinyinInputExercise.js': dynamic(() => import('@/components/PinyinInputExercise'), { ssr: false }),
   '/components/Flashcard.js': dynamic(() => import('@/components/Flashcard'), { ssr: false }),
+  '/components/TianKongTi.js': dynamic(() => import('@/components/TianKongTi'), { ssr: false }),
+ '/components/PaiXuTi.js': dynamic(() => import('@/components/PaiXuTi'), { ssr: false }),
   '/components/AudioComprehension.js': dynamic(() => import('@/components/AudioComprehension'), { ssr: false }),
   // ... 如果你创建了其他自定义组件，也在这里添加它们的映射
 };
