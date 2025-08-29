@@ -1,8 +1,8 @@
-// /components/XuanZeTi.js (最终版：点击选项文本时朗读并选择，点击题目/解释朗读按钮只朗读)
+// /components/XuanZeTi.js (选项卡片加入颜色)
 import React, { useState, useEffect, useRef } from 'react'
-import TextToSpeechButton from './TextToSpeechButton' // 导入朗读组件
+import TextToSpeechButton from './TextToSpeechButton'
 
-const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => {
+const XuanZeTi = ({ question, options, correctAnswerIndex, explanation, hskLevel }) => {
   const [selectedOptionIndex, setSelectedOptionIndex] = useState(null)
   const [isAnswered, setIsAnswered] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
@@ -10,24 +10,49 @@ const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => {
   const correctAudioRef = useRef(null)
   const wrongAudioRef = useRef(null)
   
-  // SpeechSynthesisUtterance 实例，用于朗读选项文本
   const speechSynthesisUtteranceRef = useRef(null);
   const speechSynthesisRef = useRef(null);
+
+  // HSK 等级颜色映射 (与 PaiXuTi 保持一致)
+  const getHskLevelColorClass = (level) => {
+    switch (level) {
+      case 1: return 'bg-green-500 text-white';
+      case 2: return 'bg-yellow-500 text-gray-800';
+      case 3: return 'bg-primary text-white';
+      case 4: return 'bg-purple-600 text-white';
+      case 5: return 'bg-red-600 text-white';
+      case 6: return 'bg-dark-DEFAULT text-white';
+      default: return 'bg-gray-500 text-white';
+    }
+  };
+
+  // 选项卡片颜色数组 (更多颜色，与 PaiXuTi 共享或类似)
+  const optionCardColors = [
+    'bg-blue-50 dark:bg-blue-900 text-blue-800 dark:text-blue-100 border-blue-200 dark:border-blue-700',
+    'bg-green-50 dark:bg-green-900 text-green-800 dark:text-green-100 border-green-200 dark:border-green-700',
+    'bg-yellow-50 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-100 border-yellow-200 dark:border-yellow-700',
+    'bg-purple-50 dark:bg-purple-900 text-purple-800 dark:text-purple-100 border-purple-200 dark:border-purple-700',
+    'bg-pink-50 dark:bg-pink-900 text-pink-800 dark:text-pink-100 border-pink-200 dark:border-pink-700',
+    'bg-indigo-50 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-100 border-indigo-200 dark:border-indigo-700',
+    'bg-teal-50 dark:bg-teal-900 text-teal-800 dark:text-teal-100 border-teal-200 dark:border-teal-700', // 新增
+    'bg-orange-50 dark:bg-orange-900 text-orange-800 dark:text-orange-100 border-orange-200 dark:border-orange-700', // 新增
+    'bg-cyan-50 dark:bg-cyan-900 text-cyan-800 dark:text-cyan-100 border-cyan-200 dark:border-cyan-700', // 新增
+  ];
+
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       correctAudioRef.current = new Audio('/sounds/correct.mp3') 
       wrongAudioRef.current = new Audio('/sounds/wrong.mp3')   
       
-      // 初始化 SpeechSynthesis
       speechSynthesisRef.current = window.speechSynthesis;
       speechSynthesisUtteranceRef.current = new SpeechSynthesisUtterance();
-      speechSynthesisUtteranceRef.current.lang = 'zh-CN'; // 默认中文
+      speechSynthesisUtteranceRef.current.lang = 'zh-CN';
       speechSynthesisUtteranceRef.current.rate = 1;
       speechSynthesisUtteranceRef.current.pitch = 1;
     }
 
-    return () => { // 清理函数
+    return () => {
       if (speechSynthesisRef.current && speechSynthesisRef.current.speaking) {
         speechSynthesisRef.current.cancel();
       }
@@ -44,18 +69,17 @@ const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => {
     }
   }
 
-  // 新增：朗读选项文本的函数
   const speakOptionText = (textToSpeak) => {
     if (speechSynthesisRef.current && textToSpeak) {
       if (speechSynthesisRef.current.speaking) {
-        speechSynthesisRef.current.cancel(); // 如果正在朗读，先停止
+        speechSynthesisRef.current.cancel();
       }
       speechSynthesisUtteranceRef.current.text = textToSpeak;
       speechSynthesisRef.current.speak(speechSynthesisUtteranceRef.current);
     }
   };
 
-  const handleOptionClick = (index, optionText) => { // 接收 optionText 参数
+  const handleOptionClick = (index, optionText) => {
     if (isAnswered) return
 
     setSelectedOptionIndex(index)
@@ -63,13 +87,13 @@ const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => {
     setShowFeedback(true)
 
     playSound(index === correctAnswerIndex)
-    speakOptionText(optionText); // 点击选项时朗读选项文本
+    speakOptionText(optionText);
   }
 
   const handleReset = () => {
     setShowFeedback(false)
     if (speechSynthesisRef.current && speechSynthesisRef.current.speaking) {
-      speechSynthesisRef.current.cancel(); // 重置时停止朗读
+      speechSynthesisRef.current.cancel();
     }
     setTimeout(() => {
       setSelectedOptionIndex(null)
@@ -82,46 +106,56 @@ const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => {
     const isCorrectOption = optionIndex === correctAnswerIndex
     const isSelectedOption = optionIndex === selectedOptionIndex
 
+    // 基础颜色背景
+    const baseColorClass = optionCardColors[optionIndex % optionCardColors.length];
+    classes += baseColorClass + ' ';
+
     if (isAnswered) {
       if (isCorrectOption) {
-        classes += 'bg-secondary/[0.1] border-secondary text-secondary font-medium shadow-md '
+        classes += 'bg-secondary/[0.1] border-secondary text-secondary font-medium shadow-md ';
       } else if (isSelectedOption && !isCorrectOption) {
-        classes += 'bg-red-100 border-red-400 text-red-600 font-medium dark:bg-red-900 dark:border-red-700 dark:text-red-400 shadow-md '
+        classes += 'bg-red-100 border-red-400 text-red-600 font-medium dark:bg-red-900 dark:border-red-700 dark:text-red-400 shadow-md ';
       } else {
-        classes += 'bg-gray-50 dark:bg-dark-3 border-stroke dark:border-dark-4 text-body-color dark:text-dark-7 shadow-sm '
+        // 其他未选中的错误选项，保持基础色，但禁用
+        classes += 'opacity-80 shadow-sm '; // 略微降低透明度，增加阴影
       }
-      classes += 'pointer-events-none '
+      classes += 'pointer-events-none ';
     } else {
-      classes += 'bg-gray-50 dark:bg-dark-2 border-stroke dark:border-dark-4 hover:bg-primary/[0.05] dark:hover:bg-dark-3 '
+      classes += 'hover:bg-opacity-80 hover:shadow-md hover:scale-[1.01] '; // 悬停时颜色变深，阴影增强，轻微放大
       if (isSelectedOption) {
-        classes += 'ring-2 ring-primary/[0.5] shadow-md scale-100 '
+        classes += 'ring-2 ring-offset-2 ring-primary shadow-xl scale-[1.03] '; // 选中时更强的高亮和阴影
       } else {
-        classes += 'shadow-sm hover:shadow-md hover:scale-[1.01] '
+        classes += 'shadow-sm '; // 默认轻微阴影
       }
-      classes += 'text-body-color dark:text-dark-7 '
     }
     return classes
   }
 
   return (
     <div className="max-w-xl mx-auto my-8 p-6 bg-day-DEFAULT dark:bg-night-DEFAULT rounded-xl shadow-2 border border-stroke dark:border-dark-3">
-      <h3 className="text-2xl font-bold mb-6 text-dark-DEFAULT dark:text-gray-1 flex items-center">
-        {question}
-        <TextToSpeechButton text={question} lang="zh-CN" /> {/* 朗读问题按钮 */}
-      </h3>
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="text-2xl font-bold text-dark-DEFAULT dark:text-gray-1 flex items-center">
+          {question}
+          <TextToSpeechButton text={question} lang="zh-CN" />
+        </h3>
+        {hskLevel && (
+          <span className={`px-3 py-1 text-sm font-bold rounded-full ml-3 ${getHskLevelColorClass(hskLevel)}`}> {/* 添加 ml-3 */}
+            HSK {hskLevel}
+            <TextToSpeechButton text={`HSK ${hskLevel} 级`} lang="zh-CN" />
+          </span>
+        )}
+      </div>
 
       <div className="space-y-3">
         {options.map((option, index) => (
           <button
             key={index}
-            // 修改：点击整个按钮时，传递选项文本给 handleOptionClick
-            onClick={() => handleOptionClick(index, option)} 
+            onClick={() => handleOptionClick(index, option)}
             disabled={isAnswered}
             className={getOptionClasses(index)}
           >
             <span className="text-lg font-semibold flex-1 flex items-center">
               {String.fromCharCode(65 + index)}. {option}
-              {/* 这里不再需要 TextToSpeechButton，因为点击选项本身就会朗读 */}
             </span>
           </button>
         ))}
@@ -145,7 +179,7 @@ const XuanZeTi = ({ question, options, correctAnswerIndex, explanation }) => {
             <div className="mt-4 p-4 bg-gray-1 dark:bg-dark-2 border-t-2 border-stroke dark:border-dark-3 rounded-b-xl text-body-color dark:text-dark-7 shadow-inner animate-fade-in-fast">
               <h4 className="font-bold text-lg mb-2 text-dark-DEFAULT dark:text-gray-1 flex items-center">
                 <i className="fas fa-lightbulb mr-2 text-warning"></i>解释：
-                <TextToSpeechButton text={explanation} lang="zh-CN" /> {/* 朗读解释按钮 */}
+                <TextToSpeechButton text={explanation} lang="zh-CN" />
               </h4>
               <p>{explanation}</p>
             </div>
