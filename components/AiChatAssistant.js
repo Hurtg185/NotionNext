@@ -1,9 +1,16 @@
-// /components/AiChatAssistant.js - 多提示词管理 + 自动朗读 + UI 优化
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import TextToSpeechButton from './TextToSpeechButton'; // 导入朗读组件
+// /components/AiChatAssistant.js - 支持多 TTS 引擎选择和自动朗读
+import React, { useState, useEffect, useRef } from 'react';
+import TextToSpeechButton from './TextToSpeechButton'; // 导入我们的多引擎朗读组件
+
+// TTS 引擎枚举 (与 TextToSpeechButton 中保持一致)
+const TTS_ENGINE = {
+  GOOGLE_GENAI: 'google_genai',
+  EXTERNAL_API: 'external_api',
+  SYSTEM_TTS: 'system_tts'
+};
 
 // 简单的 Markdown 解析器，渲染朗读按钮
-const SimpleMarkdown = ({ text, lang }) => {
+const SimpleMarkdown = ({ text, lang, apiKey, selectedTtsEngine, googleVoiceName, googlePitch, googleRate, externalVoice, externalRate, externalPitch }) => {
     if (!text) return null;
 
     const lines = text.split('\n').map((line, index) => {
@@ -13,7 +20,19 @@ const SimpleMarkdown = ({ text, lang }) => {
             return (
                 <strong key={index} className="block mt-4 mb-2 text-lg text-gray-800 dark:text-gray-200 flex items-center">
                     <span className="flex-grow">{titleContent}</span>
-                    <TextToSpeechButton text={titleContent} lang={lang} className="ml-2 shrink-0 text-gray-500" />
+                    <TextToSpeechButton 
+                        text={titleContent} 
+                        lang={lang} 
+                        apiKey={apiKey} 
+                        selectedTtsEngine={selectedTtsEngine}
+                        googleVoiceName={googleVoiceName} 
+                        googlePitch={googlePitch} 
+                        googleRate={googleRate} 
+                        externalVoice={externalVoice} 
+                        externalRate={externalRate} 
+                        externalPitch={externalPitch} 
+                        className="ml-2 shrink-0 text-gray-500" 
+                    />
                 </strong>
             );
         }
@@ -22,7 +41,19 @@ const SimpleMarkdown = ({ text, lang }) => {
             return (
                 <li key={index} className="ml-5 list-disc flex items-start">
                     <span className="flex-grow">{content}</span>
-                    <TextToSpeechButton text={content} lang={lang} className="ml-2 shrink-0 text-gray-500" />
+                    <TextToSpeechButton 
+                        text={content} 
+                        lang={lang} 
+                        apiKey={apiKey} 
+                        selectedTtsEngine={selectedTtsEngine}
+                        googleVoiceName={googleVoiceName} 
+                        googlePitch={googlePitch} 
+                        googleRate={googleRate} 
+                        externalVoice={externalVoice} 
+                        externalRate={externalRate} 
+                        externalPitch={externalPitch} 
+                        className="ml-2 shrink-0 text-gray-500" 
+                    />
                 </li>
             );
         }
@@ -30,7 +61,19 @@ const SimpleMarkdown = ({ text, lang }) => {
         return (
             <p key={index} className="my-1 flex items-center">
                 <span className="flex-grow">{content}</span>
-                <TextToSpeechButton text={content} lang={lang} className="ml-2 shrink-0 text-gray-500" />
+                <TextToSpeechButton 
+                    text={content} 
+                    lang={lang} 
+                    apiKey={apiKey} 
+                    selectedTtsEngine={selectedTtsEngine}
+                    googleVoiceName={googleVoiceName} 
+                    googlePitch={googlePitch} 
+                    googleRate={googleRate} 
+                    externalVoice={externalVoice} 
+                    externalRate={externalRate} 
+                    externalPitch={externalPitch} 
+                    className="ml-2 shrink-0 text-gray-500" 
+                />
             </p>
         );
     });
@@ -38,7 +81,7 @@ const SimpleMarkdown = ({ text, lang }) => {
     return <div>{lines}</div>;
 };
 
-// 默认提示词列表 (提供几个示例)
+// 默认提示词列表
 const DEFAULT_PROMPTS = [
     { id: 'default-grammar-correction', name: '纠正中文语法', content: `你是一位专业的、耐心的中文老师和语言学习助手，你的学生是缅甸人。你的任务是帮助他们学习中文，纠正语法，解释词语，提供例句，并始终保持友好和鼓励。
     请根据学生的提问，给出清晰、简洁、实用的回答，必要时提供中文和缅甸语双语解释。
@@ -58,16 +101,25 @@ const AiChatAssistant = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     
-    // API Key 和模型设置
+    // AI 模型相关设置
     const [apiKey, setApiKey] = useState('');
     const [selectedModel, setSelectedModel] = useState('gemini-1.5-flash'); 
     
-    // 提示词管理状态
-    const [prompts, setPrompts] = useState(DEFAULT_PROMPTS); // 所有提示词列表
-    const [currentPromptId, setCurrentPromptId] = useState(DEFAULT_PROMPTS[0].id); // 当前选中的提示词ID
+    // TTS 相关设置
+    const [selectedTtsEngine, setSelectedTtsEngine] = useState(TTS_ENGINE.GOOGLE_GENAI);
+    const [googleVoiceName, setGoogleVoiceName] = useState('cmn-CN-Wavenet-A');
+    const [googlePitch, setGooglePitch] = useState(0);
+    const [googleRate, setGoogleRate] = useState(1);
+    const [externalVoice, setExternalVoice] = useState('zh-CN-XiaochenMultilingualNeural');
+    const [externalRate, setExternalRate] = useState('-20%');
+    const [externalPitch, setExternalPitch] = useState('0%');
     const [autoRead, setAutoRead] = useState(false); // 自动朗读开关
 
-    const [showSettings, setShowSettings] = useState(false); // 控制设置面板显示
+    // 提示词管理状态
+    const [prompts, setPrompts] = useState(DEFAULT_PROMPTS);
+    const [currentPromptId, setCurrentPromptId] = useState(DEFAULT_PROMPTS[0].id);
+    
+    const [showSettings, setShowSettings] = useState(false);
 
     // 多模态输入状态
     const [selectedImage, setSelectedImage] = useState(null);
@@ -82,36 +134,76 @@ const AiChatAssistant = () => {
     const recognitionRef = useRef(null);
     const [speechRecognitionError, setSpeechRecognitionError] = useState('');
 
+
     const messagesEndRef = useRef(null);
     const abortControllerRef = useRef(null);
 
-    // --- 初始化和保存 API Key/Model/Prompts/AutoRead ---
+    // --- 初始化和保存所有设置 ---
     useEffect(() => {
-        const savedApiKey = localStorage.getItem('gemini_api_key');
+        const savedApiKey = localStorage.getItem('gemini_api_key') || '';
         const savedModel = localStorage.getItem('gemini_model') || 'gemini-1.5-flash';
         const savedPrompts = JSON.parse(localStorage.getItem('gemini_prompts')) || DEFAULT_PROMPTS;
         const savedCurrentPromptId = localStorage.getItem('gemini_current_prompt_id') || savedPrompts[0]?.id;
         const savedAutoRead = localStorage.getItem('gemini_auto_read') === 'true';
+        
+        // TTS 设置
+        const savedTtsEngine = localStorage.getItem('tts_engine') || TTS_ENGINE.GOOGLE_GENAI;
+        const savedGoogleVoice = localStorage.getItem('tts_google_voice') || 'cmn-CN-Wavenet-A';
+        const savedGooglePitch = parseFloat(localStorage.getItem('tts_google_pitch')) || 0;
+        const savedGoogleRate = parseFloat(localStorage.getItem('tts_google_rate')) || 1;
+        const savedExternalVoice = localStorage.getItem('tts_external_voice') || 'zh-CN-XiaochenMultilingualNeural';
+        const savedExternalRate = localStorage.getItem('tts_external_rate') || '-20%';
+        const savedExternalPitch = localStorage.getItem('tts_external_pitch') || '0%';
 
-        if (savedApiKey) setApiKey(savedApiKey);
+
+        setApiKey(savedApiKey);
         setSelectedModel(savedModel);
         setPrompts(savedPrompts);
         setCurrentPromptId(savedCurrentPromptId);
         setAutoRead(savedAutoRead);
+
+        setSelectedTtsEngine(savedTtsEngine);
+        setGoogleVoiceName(savedGoogleVoice);
+        setGooglePitch(savedGooglePitch);
+        setGoogleRate(savedGoogleRate);
+        setExternalVoice(savedExternalVoice);
+        setExternalRate(savedExternalRate);
+        setExternalPitch(savedExternalPitch);
+
     }, []);
 
-    const handleSaveSettings = (newApiKey, newModel, newPrompts, newCurrentPromptId, newAutoRead) => {
+    const handleSaveSettings = (
+      newApiKey, newModel, newPrompts, newCurrentPromptId, newAutoRead,
+      newTtsEngine, newGoogleVoice, newGooglePitch, newGoogleRate,
+      newExternalVoice, newExternalRate, newExternalPitch
+    ) => {
         setApiKey(newApiKey);
         setSelectedModel(newModel);
         setPrompts(newPrompts);
         setCurrentPromptId(newCurrentPromptId);
         setAutoRead(newAutoRead);
 
+        setSelectedTtsEngine(newTtsEngine);
+        setGoogleVoiceName(newGoogleVoice);
+        setGooglePitch(newGooglePitch);
+        setGoogleRate(newGoogleRate);
+        setExternalVoice(newExternalVoice);
+        setExternalRate(newExternalRate);
+        setExternalPitch(newExternalPitch);
+
         localStorage.setItem('gemini_api_key', newApiKey);
         localStorage.setItem('gemini_model', newModel);
         localStorage.setItem('gemini_prompts', JSON.stringify(newPrompts));
         localStorage.setItem('gemini_current_prompt_id', newCurrentPromptId);
         localStorage.setItem('gemini_auto_read', newAutoRead);
+        
+        localStorage.setItem('tts_engine', newTtsEngine);
+        localStorage.setItem('tts_google_voice', newGoogleVoice);
+        localStorage.setItem('tts_google_pitch', newGooglePitch);
+        localStorage.setItem('tts_google_rate', newGoogleRate);
+        localStorage.setItem('tts_external_voice', newExternalVoice);
+        localStorage.setItem('tts_external_rate', newExternalRate);
+        localStorage.setItem('tts_external_pitch', newExternalPitch);
         
         setShowSettings(false);
     };
@@ -162,7 +254,7 @@ const AiChatAssistant = () => {
             }
         } catch (err) {
             console.error('Error accessing camera:', err);
-            setError('无法访问麦克风，请检查浏览器权限。'); // 这里之前写错了，应该是摄像头权限
+            setError('无法访问摄像头，请检查浏览器权限。');
         }
     };
 
@@ -265,17 +357,15 @@ const AiChatAssistant = () => {
         setError('');
         abortControllerRef.current = new AbortController();
 
-        // 获取当前选中的提示词内容
         const currentPrompt = prompts.find(p => p.id === currentPromptId)?.content || DEFAULT_PROMPTS[0].content;
         
-        // 构建包含历史消息的请求
         const history = messages.map(msg => ({
             role: msg.role === 'user' ? 'user' : 'model',
             parts: [{ text: msg.content }],
         }));
 
         const requestMessages = [
-            { role: 'system', parts: [{ text: currentPrompt }] }, // 使用选中的提示词作为 System Prompt
+            { role: 'system', parts: [{ text: currentPrompt }] },
             ...history,
             { role: 'user', parts: userMessageContent },
         ];
@@ -328,12 +418,19 @@ const AiChatAssistant = () => {
 
             // --- 自动朗读 AI 回复 ---
             if (autoRead && aiResponseContent) {
-                // 这里需要一个独立的发声器，因为 SimpleMarkdown 会创建自己的 TextToSpeechButton
-                // 暂时简单的方案是直接用 window.speechSynthesis 朗读整个文本
-                if (window.speechSynthesis) {
+                // 直接调用 TextToSpeechButton 内部的合成逻辑
+                // 这里需要创建一个临时朗读实例，或者利用 TextToSpeechButton 的 prop 传递
+                // 简单方案是实例化一个 Utterance，复杂方案是 TextToSpeechButton 提供一个外部触发函数
+                // 暂时使用 window.speechSynthesis 避免 TextToSpeechButton 的副作用，因为 TextToSpeechButton 是按钮
+                if (window.speechSynthesis && selectedTtsEngine === TTS_ENGINE.SYSTEM_TTS) {
                     const utterance = new SpeechSynthesisUtterance(aiResponseContent);
                     utterance.lang = 'zh-CN';
                     window.speechSynthesis.speak(utterance);
+                } else {
+                    // 如果不是系统 TTS，且开启自动朗读，就模拟点击一次 TextToSpeechButton (需要改造 TextToSpeechButton)
+                    // 目前 TextToSpeechButton 无法外部触发，这里只能是 system_tts 或等待用户点击
+                    // 暂时不做自动播放 external / google genai，因为涉及异步和组件间通信
+                    // 用户可以手动点击 SimpleMarkdown 中的播放按钮
                 }
             }
 
@@ -386,7 +483,18 @@ const AiChatAssistant = () => {
                             {msg.image && (
                                 <img src={msg.image} alt="用户上传图片" className="max-w-full h-auto rounded-md mb-2" />
                             )}
-                            <SimpleMarkdown text={msg.content} lang="zh-CN" />
+                            <SimpleMarkdown 
+                                text={msg.content} 
+                                lang="zh-CN" 
+                                apiKey={apiKey} 
+                                selectedTtsEngine={selectedTtsEngine}
+                                googleVoiceName={googleVoiceName} 
+                                googlePitch={googlePitch} 
+                                googleRate={googleRate} 
+                                externalVoice={externalVoice} 
+                                externalRate={externalRate} 
+                                externalPitch={externalPitch} 
+                            />
                         </div>
                     ))
                 )}
@@ -520,6 +628,13 @@ const AiChatAssistant = () => {
                     prompts={prompts}
                     currentPromptId={currentPromptId}
                     autoRead={autoRead}
+                    selectedTtsEngine={selectedTtsEngine}
+                    googleVoiceName={googleVoiceName}
+                    googlePitch={googlePitch}
+                    googleRate={googleRate}
+                    externalVoice={externalVoice}
+                    externalRate={externalRate}
+                    externalPitch={externalPitch}
                     onSave={handleSaveSettings}
                     onClose={() => setShowSettings(false)}
                 />
@@ -532,19 +647,34 @@ export default AiChatAssistant;
 
 
 // --- 设置面板组件 ---
-const SettingsModal = ({ apiKey, selectedModel, prompts, currentPromptId, autoRead, onSave, onClose }) => {
+const SettingsModal = ({ 
+    apiKey, selectedModel, prompts, currentPromptId, autoRead, 
+    selectedTtsEngine, googleVoiceName, googlePitch, googleRate, 
+    externalVoice, externalRate, externalPitch, 
+    onSave, onClose 
+}) => {
     const [tempApiKey, setTempApiKey] = useState(apiKey);
     const [tempSelectedModel, setTempSelectedModel] = useState(selectedModel);
     const [tempPrompts, setTempPrompts] = useState(prompts);
     const [tempCurrentPromptId, setTempCurrentPromptId] = useState(currentPromptId);
     const [tempAutoRead, setTempAutoRead] = useState(autoRead);
 
+    // TTS 设置
+    const [tempSelectedTtsEngine, setTempSelectedTtsEngine] = useState(selectedTtsEngine);
+    const [tempGoogleVoiceName, setTempGoogleVoiceName] = useState(googleVoiceName);
+    const [tempGooglePitch, setTempGooglePitch] = useState(googlePitch);
+    const [tempGoogleRate, setTempGoogleRate] = useState(googleRate);
+    const [tempExternalVoice, setTempExternalVoice] = useState(externalVoice);
+    const [tempExternalRate, setTempExternalRate] = useState(externalRate);
+    const [tempExternalPitch, setTempExternalPitch] = useState(externalPitch);
+
+
     const [editingPrompt, setEditingPrompt] = useState(null); // { id, name, content }
     const [newPromptName, setNewPromptName] = useState('');
     const [newPromptContent, setNewPromptContent] = useState('');
 
+    // --- 提示词管理逻辑 ---
     const handleAddPrompt = () => {
-        // 创建一个唯一的ID
         const newId = `custom-prompt-${Date.now()}`;
         setEditingPrompt({ id: newId, name: '', content: '' });
         setNewPromptName('');
@@ -562,14 +692,12 @@ const SettingsModal = ({ apiKey, selectedModel, prompts, currentPromptId, autoRe
             alert('提示词名称和内容不能为空！');
             return;
         }
-        if (editingPrompt) {
+        if (editingPrompt && editingPrompt.id) { // 编辑现有提示词
             setTempPrompts(prev => prev.map(p => p.id === editingPrompt.id ? { ...p, name: newPromptName, content: newPromptContent } : p));
-        } else {
-            // 如果是新增，并且没有ID，就给它一个新ID
+        } else { // 新增提示词
             const newId = `custom-prompt-${Date.now()}`;
             setTempPrompts(prev => [...prev, { id: newId, name: newPromptName, content: newPromptContent }]);
-            // 如果这是第一个自定义提示词，就默认选中它
-            if (tempPrompts.length === 0) {
+            if (tempPrompts.length === 0) { // 如果这是第一个自定义提示词
                 setTempCurrentPromptId(newId);
             }
         }
@@ -579,12 +707,30 @@ const SettingsModal = ({ apiKey, selectedModel, prompts, currentPromptId, autoRe
     const handleDeletePrompt = (id) => {
         if (window.confirm('确定删除此提示词吗？')) {
             setTempPrompts(prev => prev.filter(p => p.id !== id));
-            // 如果删除的是当前选中的提示词，就重新选择第一个默认提示词
-            if (tempCurrentPromptId === id) {
-                setTempCurrentPromptId(DEFAULT_PROMPTS[0].id);
+            if (tempCurrentPromptId === id) { // 如果删除的是当前选中的
+                // 找到第一个默认提示词或第一个自定义提示词
+                const firstAvailableId = DEFAULT_PROMPTS[0]?.id || (tempPrompts.find(p => p.id !== id) || {})?.id;
+                setTempCurrentPromptId(firstAvailableId || ''); // 设置为第一个有效ID，或空
             }
         }
     };
+    
+    // --- Google Voice Options ---
+    // Google TTS API支持多种发音人，这里列出一些常用的中文 (cmn-CN) 声音
+    const googleVoiceOptions = [
+        { name: '标准男声 A', value: 'cmn-CN-Standard-A', lang: 'zh-CN', gender: 'male' },
+        { name: '标准女声 B', value: 'cmn-CN-Standard-B', lang: 'zh-CN', gender: 'female' },
+        { name: '标准男声 C', value: 'cmn-CN-Standard-C', lang: 'zh-CN', gender: 'male' },
+        { name: '标准女声 D', value: 'cmn-CN-Standard-D', lang: 'zh-CN', gender: 'female' },
+        { name: 'Wavenet 男声 A', value: 'cmn-CN-Wavenet-A', lang: 'zh-CN', gender: 'male' }, // 推荐
+        { name: 'Wavenet 女声 B', value: 'cmn-CN-Wavenet-B', lang: 'zh-CN', gender: 'female' },
+        { name: 'Wavenet 男声 C', value: 'cmn-CN-Wavenet-C', lang: 'zh-CN', gender: 'male' },
+        { name: 'Wavenet 女声 D', value: 'cmn-CN-Wavenet-D', lang: 'zh-CN', gender: 'female' },
+        // 添加一些缅甸语 (my-MM) 声音选项
+        { name: '缅甸语女声', value: 'my-MM-Standard-A', lang: 'my-MM', gender: 'female' },
+        // 更多声音可以在 Google Cloud Text-to-Speech 文档中查找
+    ];
+
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -612,7 +758,7 @@ const SettingsModal = ({ apiKey, selectedModel, prompts, currentPromptId, autoRe
                     </p>
                 </div>
 
-                {/* 模型选择设置 */}
+                {/* AI 模型选择设置 */}
                 <div className="mb-4 pb-4 border-b dark:border-gray-700">
                     <label htmlFor="modal-model-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">选择 AI 模型:</label>
                     <select
@@ -631,6 +777,107 @@ const SettingsModal = ({ apiKey, selectedModel, prompts, currentPromptId, autoRe
                     </p>
                 </div>
 
+                {/* TTS 引擎选择 */}
+                <div className="mb-4 pb-4 border-b dark:border-gray-700">
+                    <label htmlFor="tts-engine-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">选择 TTS 引擎:</label>
+                    <select
+                        id="tts-engine-select"
+                        value={tempSelectedTtsEngine}
+                        onChange={(e) => setTempSelectedTtsEngine(e.target.value)}
+                        className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                    >
+                        <option value={TTS_ENGINE.GOOGLE_GENAI}>Google GenAI TTS (推荐)</option>
+                        <option value={TTS_ENGINE.EXTERNAL_API}>第三方 API (晓辰)</option>
+                        <option value={TTS_ENGINE.SYSTEM_TTS}>浏览器系统 TTS</option>
+                    </select>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Google GenAI TTS 提供高质量语音，但可能消耗 API 额度。
+                    </p>
+                </div>
+
+                {/* Google TTS 设置 (仅当选择 Google GenAI 时显示) */}
+                {tempSelectedTtsEngine === TTS_ENGINE.GOOGLE_GENAI && (
+                    <div className="mb-4 pb-4 border-b dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
+                        <h5 className="text-md font-bold mb-2 text-gray-800 dark:text-white">Google TTS 配置</h5>
+                        <div className="mb-3">
+                            <label htmlFor="google-voice-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">发音人:</label>
+                            <select
+                                id="google-voice-select"
+                                value={tempGoogleVoiceName}
+                                onChange={(e) => setTempGoogleVoiceName(e.target.value)}
+                                className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 border rounded-md"
+                            >
+                                {googleVoiceOptions.map(voice => (
+                                    <option key={voice.value} value={voice.value}>
+                                        {voice.name} ({voice.lang}, {voice.gender === 'male' ? '男' : '女'})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="mb-3">
+                            <label htmlFor="google-rate-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">语速: {tempGoogleRate.toFixed(2)}</label>
+                            <input
+                                type="range"
+                                id="google-rate-input"
+                                min="0.5" max="2.0" step="0.05"
+                                value={tempGoogleRate}
+                                onChange={(e) => setTempGoogleRate(parseFloat(e.target.value))}
+                                className="w-full"
+                            />
+                        </div>
+                        <div className="mb-3">
+                            <label htmlFor="google-pitch-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">语调: {tempGooglePitch.toFixed(2)}</label>
+                            <input
+                                type="range"
+                                id="google-pitch-input"
+                                min="-10" max="10" step="0.5"
+                                value={tempGooglePitch}
+                                onChange={(e) => setTempGooglePitch(parseFloat(e.target.value))}
+                                className="w-full"
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {/* 外部 API TTS 设置 (仅当选择外部 API 时显示) */}
+                {tempSelectedTtsEngine === TTS_ENGINE.EXTERNAL_API && (
+                    <div className="mb-4 pb-4 border-b dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
+                        <h5 className="text-md font-bold mb-2 text-gray-800 dark:text-white">第三方 API TTS 配置</h5>
+                        <div className="mb-3">
+                            <label htmlFor="external-voice-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">发音人 (晓辰):</label>
+                            <input
+                                type="text"
+                                id="external-voice-input"
+                                value={tempExternalVoice}
+                                onChange={(e) => setTempExternalVoice(e.target.value)}
+                                className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 border rounded-md"
+                                readOnly // 默认晓辰，不可编辑
+                            />
+                        </div>
+                        <div className="mb-3">
+                            <label htmlFor="external-rate-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">语速: {tempExternalRate}</label>
+                            <input
+                                type="range"
+                                id="external-rate-input"
+                                min="-50" max="50" step="1"
+                                value={parseInt(tempExternalRate)}
+                                onChange={(e) => setTempExternalRate(`${e.target.value}%`)}
+                                className="w-full"
+                            />
+                        </div>
+                        <div className="mb-3">
+                            <label htmlFor="external-pitch-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">语调: {tempExternalPitch}</label>
+                            <input
+                                type="range"
+                                id="external-pitch-input"
+                                min="-20" max="20" step="1"
+                                value={parseInt(tempExternalPitch)}
+                                onChange={(e) => setTempExternalPitch(`${e.target.value}%`)}
+                                className="w-full"
+                            />
+                        </div>
+                    </div>
+                )}
                 {/* 自动朗读开关 */}
                 <div className="mb-4 pb-4 border-b dark:border-gray-700 flex items-center justify-between">
                     <label htmlFor="auto-read-toggle" className="block text-sm font-medium text-gray-700 dark:text-gray-300">AI 回复后自动朗读:</label>
@@ -737,11 +984,15 @@ const SettingsModal = ({ apiKey, selectedModel, prompts, currentPromptId, autoRe
                         onClick={onClose}
                         className="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
                     >
-                        取消
+                        关闭
                     </button>
                     <button
                         type="button"
-                        onClick={() => handleSave(tempApiKey, tempSelectedModel, tempPrompts, tempCurrentPromptId, tempAutoRead)}
+                        onClick={() => handleSave(
+                            tempApiKey, tempSelectedModel, tempPrompts, tempCurrentPromptId, tempAutoRead,
+                            tempSelectedTtsEngine, tempGoogleVoiceName, tempGooglePitch, tempGoogleRate,
+                            tempExternalVoice, tempExternalRate, tempExternalPitch
+                        )}
                         className="px-4 py-2 bg-primary text-white rounded-md hover:bg-blue-dark transition-colors"
                     >
                         保存设置
