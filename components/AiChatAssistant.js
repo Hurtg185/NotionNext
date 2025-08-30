@@ -1,40 +1,24 @@
-// /components/AiChatAssistant.js - 终极完整版：全新 UI，Gemini TTS，长按语音，修复所有问题
+// /components/AiChatAssistant.js - 调试 v12：恢复 API 调用功能
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import AiTtsButton, { TTS_ENGINE } from './AiTtsButton'; // 导入 AI 专用的 TTS 按钮
+import AiTtsButton, { TTS_ENGINE } from './AiTtsButton'; // 重新导入 AiTtsButton
 
 // --- 子组件定义区域 (在主组件外部) ---
 
 // 简单的 Markdown 解析器
 const SimpleMarkdown = ({ text, lang, apiKey, ttsSettings }) => {
     if (!text) return null;
-
     const lines = text.split('\n').map((line, index) => {
         if (line.trim() === '') return <br key={index} />;
         if (line.match(/\*\*(.*?)\*\*/)) {
             const content = line.replace(/\*\*/g, '');
-            return (
-                <strong key={index} className="block mt-4 mb-2 text-lg text-gray-800 dark:text-gray-200 flex items-center">
-                    <span className="flex-grow">{content}</span>
-                    <AiTtsButton text={content} lang={lang} apiKey={apiKey} ttsSettings={ttsSettings} className="ml-2 shrink-0 text-gray-500" />
-                </strong>
-            );
+            return <strong key={index} className="block mt-4 mb-2 text-lg text-gray-800 dark:text-gray-200 flex items-center"><span className="flex-grow">{content}</span><AiTtsButton text={content} lang={lang} apiKey={apiKey} ttsSettings={ttsSettings} className="ml-2 shrink-0 text-gray-500" /></strong>;
         }
         if (line.startsWith('* ') || line.startsWith('- ')) {
             const content = line.substring(2);
-            return (
-                <li key={index} className="ml-5 list-disc flex items-start">
-                    <span className="flex-grow">{content}</span>
-                    <AiTtsButton text={content} lang={lang} apiKey={apiKey} ttsSettings={ttsSettings} className="ml-2 shrink-0 text-gray-500" />
-                </li>
-            );
+            return <li key={index} className="ml-5 list-disc flex items-start"><span className="flex-grow">{content}</span><AiTtsButton text={content} lang={lang} apiKey={apiKey} ttsSettings={ttsSettings} className="ml-2 shrink-0 text-gray-500" /></li>;
         }
         const content = line;
-        return (
-            <p key={index} className="my-1 flex items-center">
-                <span className="flex-grow">{content}</span>
-                <AiTtsButton text={content} lang={lang} apiKey={apiKey} ttsSettings={ttsSettings} className="ml-2 shrink-0 text-gray-500" />
-            </p>
-        );
+        return <p key={index} className="my-1 flex items-center"><span className="flex-grow">{content}</span><AiTtsButton text={content} lang={lang} apiKey={apiKey} ttsSettings={ttsSettings} className="ml-2 shrink-0 text-gray-500" /></p>;
     });
     return <div>{lines}</div>;
 };
@@ -42,32 +26,10 @@ const SimpleMarkdown = ({ text, lang, apiKey, ttsSettings }) => {
 // 消息气泡组件
 const MessageBubble = ({ msg, settings }) => {
     const isUser = msg.role === 'user';
-    const messageRef = useRef(null);
-
-    const autoReadMessage = useCallback(() => {
-        if (!settings.autoRead || !msg.content || !messageRef.current) return;
-        const ttsButton = messageRef.current.querySelector('.tts-button');
-        if (ttsButton && !ttsButton.disabled) {
-             ttsButton.click();
-        } else {
-            if (window.speechSynthesis) {
-                const utterance = new SpeechSynthesisUtterance(msg.content);
-                utterance.lang = 'zh-CN'; 
-                window.speechSynthesis.speak(utterance);
-            }
-        }
-    }, [msg.content, settings]);
-    
-    useEffect(() => {
-        if (!isUser && msg.content && settings.autoRead) {
-            autoReadMessage();
-        }
-    }, [isUser, msg.content, settings.autoRead, autoReadMessage]);
-
     return (
         <div className={`flex items-end gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
             {!isUser && <img src={settings.aiAvatarUrl} alt="AI Avatar" className="w-8 h-8 rounded-full shrink-0" />}
-            <div ref={messageRef} className={`p-3 rounded-2xl text-left flex flex-col ${isUser ? 'bg-primary text-white rounded-br-lg' : 'bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-800 dark:text-gray-200 rounded-bl-lg'}`} style={{ maxWidth: '85%' }}>
+            <div className={`p-3 rounded-2xl text-left flex flex-col ${isUser ? 'bg-primary text-white rounded-br-lg' : 'bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-800 dark:text-gray-200 rounded-bl-lg'}`} style={{ maxWidth: '85%' }}>
                 {msg.image && <img src={msg.image} alt="用户上传" className="rounded-md mb-2 max-w-full h-auto" />}
                 <div className="prose dark:prose-invert max-w-none prose-p:my-1 prose-strong:text-current">
                     <SimpleMarkdown text={msg.content} lang="zh-CN" apiKey={settings.apiKey} ttsSettings={settings} />
@@ -84,7 +46,7 @@ const MessageBubble = ({ msg, settings }) => {
     );
 };
 
-// 设置面板组件
+// 设置面板组件 (简化版，确保稳定)
 const SettingsModal = ({ settings, onSave, onClose }) => {
     const [tempSettings, setTempSettings] = useState(settings);
 
@@ -92,128 +54,26 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
         setTempSettings(prev => ({ ...prev, [key]: value }));
     };
 
-    const handlePromptChange = (e, promptId, field) => {
-        const newPrompts = tempSettings.prompts.map(p => 
-            p.id === promptId ? { ...p, [field]: e.target.value } : p
-        );
-        handleChange('prompts', newPrompts);
-    };
-
-    const handleAddPrompt = () => {
-        const newId = `custom-${Date.now()}`;
-        const newPrompts = [...tempSettings.prompts, { id: newId, name: '新提示词', content: '请输入提示词内容...' }];
-        handleChange('prompts', newPrompts);
-    };
-
-    const handleDeletePrompt = (idToDelete) => {
-        if (window.confirm('确定删除此提示词吗？')) {
-            const newPrompts = tempSettings.prompts.filter(p => p.id !== idToDelete);
-            let newCurrentPromptId = tempSettings.currentPromptId;
-            if (newCurrentPromptId === idToDelete) {
-                newCurrentPromptId = newPrompts[0]?.id || '';
-            }
-            handleChange('prompts', newPrompts);
-            handleChange('currentPromptId', newCurrentPromptId);
-        }
-    };
-    
-    const geminiTtsVoices = [
-        { name: 'Zephyr (Bright)', value: 'Zephyr' }, { name: 'Puck (Upbeat)', value: 'Puck' },
-        { name: 'Charon (Informative)', value: 'Charon' }, { name: 'Kore (Firm)', value: 'Kore' },
-        { name: 'Fenrir (Excitable)', value: 'Fenrir' }, { name: 'Leda (Youthful)', value: 'Leda' },
-        { name: 'Orus (Firm)', value: 'Orus' }, { name: 'Aoede (Breezy)', value: 'Aoede' },
-        { name: 'Callirrhoe (Easy-going)', value: 'Callirrhoe' }, { name: 'Autonoe (Bright)', value: 'Autonoe' },
-        { name: 'Enceladus (Breathy)', value: 'Enceladus' }, { name: 'Iapetus (Clear)', value: 'Iapetus' },
-    ];
-
-    const speechLanguageOptions = [
-        { name: '中文 (普通话)', value: 'zh-CN' },
-        { name: '缅甸语', value: 'my-MM' },
-    ];
-
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg overflow-y-auto max-h-[90vh]" onClick={e => e.stopPropagation()}>
-                <h3 className="text-2xl font-bold mb-4 text-gray-800 dark:text-white">设置</h3>
-
-                <div className="mb-4 pb-4 border-b dark:border-gray-700">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">你的 Google Gemini API 密钥</label>
-                    <input type="password" value={tempSettings.apiKey} onChange={(e) => handleChange('apiKey', e.target.value)} placeholder="在此粘贴你的 API 密钥" className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md" />
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg" onClick={e => e.stopPropagation()}>
+                <h3 className="text-2xl font-bold mb-4">设置</h3>
+                <div className="mb-4">
+                    <label className="block text-sm font-medium">你的 Google Gemini API 密钥</label>
+                    <input type="password" value={tempSettings.apiKey} onChange={(e) => handleChange('apiKey', e.target.value)} placeholder="在此粘贴你的 API 密钥" className="w-full p-2 border rounded mt-1" />
                 </div>
-
-                <div className="mb-4 pb-4 border-b dark:border-gray-700">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">选择 AI 模型</label>
-                    <select value={tempSettings.selectedModel} onChange={(e) => handleChange('selectedModel', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md">
-                        <option value="gemini-1.5-flash">Gemini 1.5 Flash (推荐)</option>
-                        <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                    </select>
-                </div>
-
-                <div className="mb-4 pb-4 border-b dark:border-gray-700">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">选择 TTS 引擎</label>
-                    <select value={tempSettings.ttsEngine} onChange={(e) => handleChange('ttsEngine', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md">
-                        <option value={TTS_ENGINE_GEMINI}>Gemini TTS (推荐)</option>
-                        <option value="external_api">第三方 API (晓辰)</option>
-                    </select>
-                </div>
-
-                {tempSettings.ttsEngine === TTS_ENGINE_GEMINI && (
-                    <div className="mb-4 pb-4 border-b dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
-                        <h5 className="text-md font-bold mb-2 text-gray-800 dark:text-white">Gemini TTS 配置</h5>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">发音人</label>
-                        <select value={tempSettings.ttsVoice} onChange={(e) => handleChange('ttsVoice', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 border rounded-md">
-                            {geminiTtsVoices.map(voice => <option key={voice.value} value={voice.value}>{voice.name}</option>)}
-                        </select>
-                    </div>
-                )}
-                
-                <div className="mb-4 pb-4 border-b dark:border-gray-700">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">语音识别语言</label>
-                    <select value={tempSettings.speechLanguage} onChange={(e) => handleChange('speechLanguage', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md">
-                        {speechLanguageOptions.map(option => <option key={option.value} value={option.value}>{option.name}</option>)}
-                    </select>
-                </div>
-
-                <div className="mb-4 pb-4 border-b dark:border-gray-700 flex items-center justify-between">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">AI 回复后自动朗读</label>
-                    <input type="checkbox" checked={tempSettings.autoRead} onChange={(e) => handleChange('autoRead', e.target.checked)} className="h-5 w-5 text-primary rounded border-gray-300 focus:ring-primary" />
-                </div>
-
-                <div className="mb-6">
-                    <h4 className="text-lg font-bold mb-3 text-gray-800 dark:text-white">自定义提示词管理</h4>
-                    <div className="space-y-2 mb-4">
-                        {tempSettings.prompts.map(prompt => (
-                            <div key={prompt.id} className="flex flex-col p-2 bg-gray-100 dark:bg-gray-700 rounded-md">
-                                <div className="flex items-center justify-between">
-                                    <label className="flex items-center flex-grow cursor-pointer">
-                                        <input type="radio" name="currentPrompt" checked={tempSettings.currentPromptId === prompt.id} onChange={() => handleChange('currentPromptId', prompt.id)} className="mr-2 text-primary" />
-                                        <input type="text" value={prompt.name} onChange={(e) => handlePromptChange(e, prompt.id, 'name')} className="font-medium bg-transparent w-full border-b border-dashed" placeholder="提示词名称" />
-                                    </label>
-                                    <button onClick={() => handleDeletePrompt(prompt.id)} className="p-1 ml-2 text-sm bg-red-500 text-white rounded"><i className="fas fa-times"></i></button>
-                                </div>
-                                <textarea value={prompt.content} onChange={(e) => handlePromptChange(e, prompt.id, 'content')} className="w-full mt-2 h-24 p-2 bg-gray-50 dark:bg-gray-800 border rounded-md text-sm" placeholder="提示词内容..."></textarea>
-                            </div>
-                        ))}
-                    </div>
-                    <button onClick={handleAddPrompt} className="w-full py-2 bg-green-500 text-white rounded-md"><i className="fas fa-plus mr-2"></i>添加新提示词</button>
-                </div>
-
+                {/* 更多设置可以逐步加回 */}
                 <div className="flex justify-end gap-3 mt-6">
-                    <button onClick={onClose} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">关闭</button>
-                    <button onClick={() => onSave(tempSettings)} className="px-4 py-2 bg-primary text-white rounded-md">保存设置</button>
+                    <button onClick={onClose} className="px-4 py-2 bg-gray-200 rounded">关闭</button>
+                    <button onClick={() => onSave(tempSettings)} className="px-4 py-2 bg-primary text-white rounded">保存设置</button>
                 </div>
             </div>
         </div>
     );
 };
 
-// --- 默认提示词和设置 ---
-const DEFAULT_PROMPTS = [
-    { id: 'default-grammar-correction', name: '纠正中文语法', content: `你是一位专业的中文老师...` },
-    { id: 'explain-word', name: '解释中文词语', content: `你是一位专业的中文老师...` },
-    { id: 'translate-myanmar', name: '中缅互译', content: `你是一位专业的翻译助手...` }
-];
-
+// --- 默认设置和提示词 ---
+const DEFAULT_PROMPTS = [ { id: 'default-grammar-correction', name: '纠正中文语法', content: `你是一位专业的中文老师...` } ];
 const DEFAULT_SETTINGS = {
     apiKey: '',
     selectedModel: 'gemini-1.5-flash',
@@ -230,7 +90,166 @@ const DEFAULT_SETTINGS = {
 
 // --- 主组件：AiChatAssistant ---
 const AiChatAssistant = () => {
-    // ... (所有 useState, useRef, useEffect, 和函数定义)
+    const [isMounted, setIsMounted] = useState(false);
+    const [messages, setMessages] = useState([]);
+    const [userInput, setUserInput] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+    const [showSettings, setShowSettings] = useState(false);
+    
+    const [inputMode, setInputMode] = useState('text');
+    const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
+
+    const messagesEndRef = useRef(null);
+    const fileInputRef = useRef(null);
+    const abortControllerRef = useRef(null);
+
+    // --- 初始化和保存设置 ---
+    useEffect(() => {
+        setIsMounted(true);
+        try {
+            const savedSettings = localStorage.getItem('ai_assistant_settings_v_debug');
+            if (savedSettings) {
+                setSettings(prev => ({ ...DEFAULT_SETTINGS, ...JSON.parse(savedSettings) }));
+            }
+            setMessages([{ role: 'ai', content: '你好！有什么可以帮助你的吗？' }]);
+        } catch (e) { console.error("Failed to load settings", e); }
+    }, []);
+
+    const handleSaveSettings = useCallback((newSettings) => {
+        setSettings(newSettings);
+        try {
+            localStorage.setItem('ai_assistant_settings_v_debug', JSON.stringify(newSettings));
+        } catch (e) { console.error("Failed to save settings", e); }
+        setShowSettings(false);
+    }, []);
+
+    // 自动滚动到底部
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages]);
+
+    // --- 恢复的核心功能 ---
+    const handleSubmit = async (e) => {
+        if (e) e.preventDefault();
+        const textToProcess = userInput.trim();
+        if (!textToProcess || isLoading) return;
+        if (!settings.apiKey.trim()) {
+            setError('请先在设置中输入您的 Google Gemini API 密钥！');
+            setShowSettings(true);
+            return;
+        }
+
+        const userMessage = { role: 'user', content: textToProcess };
+        setMessages(prev => [...prev, userMessage]);
+        setUserInput('');
+
+        setIsLoading(true);
+        setError('');
+        abortControllerRef.current = new AbortController();
+
+        const currentPrompt = settings.prompts.find(p => p.id === settings.currentPromptId)?.content || DEFAULT_PROMPTS[0].content;
+        const history = messages.map(msg => ({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.content }] }));
+
+        try {
+            const response = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/${settings.selectedModel}:generateContent?key=${settings.apiKey}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ role: 'system', parts: [{ text: currentPrompt }] }, ...history, { role: 'user', parts: [{ text: textToProcess }] }],
+                        generationConfig: { temperature: 0.5, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } }
+                    }),
+                    signal: abortControllerRef.current.signal,
+                }
+            );
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error?.message || '请求失败');
+            }
+            const data = await response.json();
+            const aiResponseContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!aiResponseContent) throw new Error('AI 未能返回有效内容。');
+            
+            setMessages(prev => [...prev, { role: 'ai', content: aiResponseContent }]);
+
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                setError(err.message);
+                setMessages(prev => [...prev, { role: 'ai', content: `很抱歉，出错了：${err.message}` }]);
+            } else {
+                setError('AI 生成已停止。');
+            }
+        } finally {
+            setIsLoading(false);
+            abortControllerRef.current = null;
+        }
+    };
+    
+    const handleStopGenerating = () => {
+        abortControllerRef.current?.abort();
+    };
+
+    // --- 简化的交互逻辑 ---
+    const handleImageUpload = (e) => { alert('图片功能正在调试中'); };
+    const clearImage = () => { setImagePreviewUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; };
+
+    if (!isMounted) {
+        return <div style={{ height: '700px', border: '5px solid red' }}><p>加载中...</p></div>;
+    }
+    
+    return (
+        <div 
+            className="w-full max-w-2xl mx-auto my-8 rounded-2xl shadow-xl border flex flex-col bg-white dark:bg-gray-800"
+            style={{ height: '80vh', minHeight: '600px', maxHeight: '900px', display: 'flex !important' }}
+        >
+            <div className="flex items-center justify-between p-4 rounded-t-2xl border-b shrink-0">
+                <div className="flex items-center gap-2">
+                    <img src={settings.aiAvatarUrl} alt="AI Avatar" className="w-8 h-8 rounded-full" />
+                    <h2 className="text-lg font-bold">AI 中文老师</h2>
+                </div>
+                <button onClick={() => setShowSettings(true)} className="p-2 rounded-full" title="设置"><i className="fas fa-cog"></i></button>
+            </div>
+
+            <div 
+                className="flex-grow p-4 overflow-y-auto"
+                style={{ backgroundImage: `url('${settings.chatBackgroundUrl}')`, backgroundSize: 'cover' }}
+            >
+                <div className="flex flex-col gap-4">
+                    {messages.map((msg, index) => (
+                        <MessageBubble key={index} msg={msg} settings={settings} />
+                    ))}
+                </div>
+                <div ref={messagesEndRef} />
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-4 border-t shrink-0">
+                {imagePreviewUrl && (
+                    <div className="relative mb-2 w-24">
+                        <img src={imagePreviewUrl} alt="预览" className="rounded-lg" />
+                        <button type="button" onClick={clearImage} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1" title="移除"><i className="fas fa-times text-xs"></i></button>
+                    </div>
+                )}
+                <div className="flex items-end gap-2">
+                    <button type="button" onClick={handleImageUpload} className="p-3 rounded-full hover:bg-gray-200"><i className="fas fa-image"></i></button>
+                    <input type="file" ref={fileInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" />
+                    
+                    <textarea value={userInput} onChange={(e) => setUserInput(e.target.value)} placeholder="输入消息..." className="flex-grow px-4 py-2 rounded-2xl bg-gray-100" rows="1" />
+
+                    <button type="submit" className="p-3 bg-primary text-white rounded-full" disabled={isLoading || !userInput.trim()}>
+                        {isLoading ? <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div> : <i className="fas fa-arrow-up"></i>}
+                    </button>
+                </div>
+                 {isLoading && <button type="button" onClick={handleStopGenerating} className="w-full mt-2 text-sm text-red-500">停止生成</button>}
+            </form>
+
+            {error && <div className="p-2 m-4 bg-red-100 text-red-700 rounded-lg text-center">{error}</div>}
+
+            {showSettings && <SettingsModal settings={settings} onSave={handleSaveSettings} onClose={() => setShowSettings(false)} />}
+        </div>
+    );
 };
 
 export default AiChatAssistant;
