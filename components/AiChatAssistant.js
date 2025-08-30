@@ -1,29 +1,61 @@
-// /components/AiChatAssistant.js - 最终修复版：延迟加载，分离 TTS 引擎，修复保存
-import React, { useState, useEffect, useRef } from 'react';
+// /components/AiChatAssistant.js - 终极版：全新 UI，Gemini TTS，长按语音
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import AiTtsButton, { TTS_ENGINE } from './AiTtsButton'; // 导入新的 AiTtsButton
 
-// 简单的 Markdown 解析器
+// 简单的 Markdown 解析器 (此组件在外部定义，可以被 MessageBubble 调用)
 const SimpleMarkdown = ({ text, lang, apiKey, ttsSettings }) => {
     if (!text) return null;
+
     const lines = text.split('\n').map((line, index) => {
-        if (line.trim() === '') return <br key={index} />;
-        if (line.match(/\*\*(.*?)\*\*/)) {
-            const content = line.replace(/\*\*/g, '');
-            return <strong key={index} className="block mt-4 mb-2 text-lg text-gray-800 dark:text-gray-200 flex items-center"><span className="flex-grow">{content}</span><AiTtsButton text={content} lang={lang} apiKey={apiKey} ttsSettings={ttsSettings} className="ml-2 shrink-0 text-gray-500" /></strong>;
+        // 跳过空行
+        if (line.trim() === '') {
+            return <br key={index} />;
         }
+
+        // 匹配 **...：** 格式的标题
+        if (line.match(/\*\*(.*?)\*\*/)) {
+            const titleContent = line.replace(/\*\*/g, '');
+            return (
+                <strong key={index} className="block mt-4 mb-2 text-lg text-gray-800 dark:text-gray-200 flex items-center">
+                    <span className="flex-grow">{titleContent}</span>
+                    <AiTtsButton text={titleContent} lang={lang} apiKey={apiKey} ttsSettings={ttsSettings} className="ml-2 shrink-0 text-gray-500" />
+                </strong>
+            );
+        }
+
+        // 匹配 * 列表项 或 - 列表项
         if (line.startsWith('* ') || line.startsWith('- ')) {
             const content = line.substring(2);
-            return <li key={index} className="ml-5 list-disc flex items-start"><span className="flex-grow">{content}</span><AiTtsButton text={content} lang={lang} apiKey={apiKey} ttsSettings={ttsSettings} className="ml-2 shrink-0 text-gray-500" /></li>;
+            return (
+                <li key={index} className="ml-5 list-disc flex items-start">
+                    <span className="flex-grow">{content}</span>
+                    <AiTtsButton text={content} lang={lang} apiKey={apiKey} ttsSettings={ttsSettings} className="ml-2 shrink-0 text-gray-500" />
+                </li>
+            );
         }
+
+        // 匹配普通段落
         const content = line;
-        return <p key={index} className="my-1 flex items-center"><span className="flex-grow">{content}</span><AiTtsButton text={content} lang={lang} apiKey={apiKey} ttsSettings={ttsSettings} className="ml-2 shrink-0 text-gray-500" /></p>;
+        return (
+            <p key={index} className="my-1 flex items-center">
+                <span className="flex-grow">{content}</span>
+                <AiTtsButton text={content} lang={lang} apiKey={apiKey} ttsSettings={ttsSettings} className="ml-2 shrink-0 text-gray-500" />
+            </p>
+        );
     });
+
     return <div>{lines}</div>;
 };
 
 // 默认提示词
 const DEFAULT_PROMPTS = [
-    { id: 'default-grammar-correction', name: '纠正中文语法', content: `你是一位专业的、耐心的中文老师和语言学习助手，你的学生是缅甸人。你的任务是帮助他们学习中文，纠正语法，解释词语，提供例句，并始终保持友好和鼓励。请根据学生的提问，给出清晰、简洁、实用的回答，必要时提供中文和缅甸语双语解释。你的回答应遵循以下格式：1. 如果需要纠正句子，请先写出“**纠正后的句子：**”\n2. 如果需要解释词语或语法，请先写出“**解释：**”，并提供中缅双语。\n3. 最后，提供 1-2 个使用正确语法的额外例句，并用列表符号“-”开头，标题为“**更多例句：**”。\n4. 你的回答要简洁、友好、鼓励学生。` },
+    { id: 'default-grammar-correction', name: '纠正中文语法', content: `你是一位专业的、耐心的中文老师和语言学习助手，你的学生是缅甸人。你的任务是帮助他们学习中文，纠正语法，解释词语，提供例句，并始终保持友好和鼓励。
+    请根据学生的提问，给出清晰、简洁、实用的回答，必要时提供中文和缅甸语双语解释。
+    你的回答应遵循以下格式：
+    1.  如果需要纠正句子，请先写出“**纠正后的句子：**”
+    2.  如果需要解释词语或语法，请先写出“**解释：**”，并提供中缅双语。
+    3.  最后，提供 1-2 个使用正确语法的额外例句，并用列表符号“-”开头，标题为“**更多例句：**”。
+    4.  你的回答要简洁、友好、鼓励学生。` },
     { id: 'explain-word', name: '解释中文词语', content: `你是一位专业的、耐心的中文老师，你的学生是缅甸人。请用中文和缅甸语双语，详细解释学生提供的中文词语的含义、用法，并给出2-3个例句。` },
     { id: 'translate-myanmar', name: '中缅互译', content: `你是一位专业的翻译助手，你的学生是缅甸人。请将学生提供的中文句子翻译成缅甸语，或将缅甸语句子翻译成中文。` }
 ];
@@ -35,13 +67,12 @@ const DEFAULT_SETTINGS = {
     prompts: DEFAULT_PROMPTS,
     currentPromptId: DEFAULT_PROMPTS[0]?.id,
     autoRead: false,
-    selectedTtsEngine: TTS_ENGINE.GOOGLE_GENAI,
-    googleVoiceName: 'cmn-CN-Wavenet-A',
-    googlePitch: 0,
-    googleRate: 1,
-    externalVoice: 'zh-CN-XiaochenMultilingualNeural',
-    externalRate: '-20%',
-    externalPitch: '0%'
+    ttsEngine: 'gemini-tts-1',
+    ttsVoice: 'Zephyr',
+    speechLanguage: 'zh-CN', // 语音识别语言
+    chatBackgroundUrl: '/images/chat-bg.jpg', // 默认聊天背景图
+    userAvatarUrl: '/images/user-avatar.png', // 默认用户头像
+    aiAvatarUrl: '/images/ai-avatar.png', // 默认 AI 头像
 };
 
 const AiChatAssistant = () => {
@@ -55,59 +86,72 @@ const AiChatAssistant = () => {
     // *** 关键修复：延迟渲染，解决 Hydration Error ***
     const [isMounted, setIsMounted] = useState(false);
 
-    // 多模态和语音输入状态
+    // UI 状态
+    const [inputMode, setInputMode] = useState('text'); // 'text' or 'voice'
+
+    // 多模态输入状态
     const [selectedImage, setSelectedImage] = useState(null);
     const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
-    const [isCameraActive, setIsCameraActive] = useState(false);
+    const [isCameraActive, setIsCameraActive] = useState(false); // 摄像头是否激活
+
+    // 语音输入状态
     const [isListening, setIsListening] = useState(false);
     const [speechRecognitionError, setSpeechRecognitionError] = useState('');
-
-    const fileInputRef = useRef(null);
-    const videoRef = useRef(null);
-    const canvasRef = useRef(null);
     const recognitionRef = useRef(null);
+
+    // 长按语音状态
+    const longPressTimer = useRef(null);
+    const touchStartY = useRef(0);
+    const [isLongPressing, setIsLongPressing] = useState(false);
+    const [isCancelling, setIsCancelling] = useState(false);
+
     const messagesEndRef = useRef(null);
     const abortControllerRef = useRef(null);
+    const fileInputRef = useRef(null); // 文件输入框的引用
+    const videoRef = useRef(null); // 视频流的引用
+    const canvasRef = useRef(null); // 拍照的 Canvas 引用
 
     // --- 初始化和保存设置 ---
     useEffect(() => {
         setIsMounted(true); // 标记组件已在客户端挂载
         try {
-            const savedSettings = localStorage.getItem('ai_assistant_settings');
+            const savedSettings = localStorage.getItem('ai_assistant_settings_v3'); // 使用新的 key
             if (savedSettings) {
                 setSettings(prev => ({ ...DEFAULT_SETTINGS, ...JSON.parse(savedSettings) }));
             }
-        } catch (e) {
-            console.error("Failed to load settings from localStorage", e);
-        }
+        } catch (e) { console.error("Failed to load settings", e); }
     }, []);
 
-    const handleSaveSettings = (newSettings) => {
-        setSettings(newSettings);
-        try {
-            localStorage.setItem('ai_assistant_settings', JSON.stringify(newSettings));
-        } catch (e) {
-            console.error("Failed to save settings to localStorage", e);
+    // 当 settings 改变时，写入 localStorage
+    useEffect(() => {
+        if (isMounted) { // 确保只在客户端且挂载后才写入
+            try {
+                localStorage.setItem('ai_assistant_settings_v3', JSON.stringify(settings));
+            } catch (e) { console.error("Failed to save settings to localStorage", e); }
         }
-        setShowSettings(false);
-    };
+    }, [settings, isMounted]);
 
-    // 自动滚动到底部
+    const handleSaveSettings = useCallback((newSettings) => {
+        setSettings(newSettings);
+        setShowSettings(false);
+    }, []);
+
+    // --- 自动滚动到底部 ---
     useEffect(() => {
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
         }
     }, [messages]);
     
-    // --- 交互逻辑 (图片、摄像头、语音、提交) ---
+    // --- 图片处理逻辑 ---
     const handleImageUpload = (e) => {
         const file = e.target.files[0];
         if (file) {
             const reader = new FileReader();
             reader.onloadend = () => {
-                setSelectedImage(reader.result.split(',')[1]);
-                setImagePreviewUrl(reader.result);
-                stopCamera();
+                setSelectedImage(reader.result.split(',')[1]); // 提取 Base64 部分
+                setImagePreviewUrl(reader.result); // 用于显示预览
+                stopCamera(); // 上传图片后关闭摄像头
             };
             reader.readAsDataURL(file);
         }
@@ -116,11 +160,14 @@ const AiChatAssistant = () => {
     const clearImage = () => {
         setSelectedImage(null);
         setImagePreviewUrl(null);
-        if (fileInputRef.current) fileInputRef.current.value = '';
+        if (fileInputRef.current) {
+            fileInputRef.current.value = ''; // 清空文件输入框
+        }
     };
-    
+
+    // --- 摄像头拍照逻辑 ---
     const startCamera = async () => {
-        if (!navigator.mediaDevices?.getUserMedia) {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             setError('您的浏览器不支持摄像头功能！');
             return;
         }
@@ -128,20 +175,27 @@ const AiChatAssistant = () => {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
+                // 为了拍照，需要将视频元素显示出来
+                // videoRef.current.style.display = 'block'; // 或通过 Tailwind 类控制
                 videoRef.current.play();
                 setIsCameraActive(true);
-                clearImage();
+                setSelectedImage(null); // 激活摄像头清空已选图片
+                setImagePreviewUrl(null);
             }
         } catch (err) {
+            console.error('Error accessing camera:', err);
             setError('无法访问摄像头，请检查浏览器权限。');
         }
     };
 
     const stopCamera = () => {
-        if (videoRef.current?.srcObject) {
-            videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+        if (videoRef.current && videoRef.current.srcObject) {
+            const stream = videoRef.current.srcObject;
+            const tracks = stream.getTracks();
+            tracks.forEach(track => track.stop());
             videoRef.current.srcObject = null;
             setIsCameraActive(false);
+            // videoRef.current.style.display = 'none'; // 隐藏视频元素
         }
     };
 
@@ -154,10 +208,11 @@ const AiChatAssistant = () => {
             const imageDataUrl = canvasRef.current.toDataURL('image/jpeg');
             setSelectedImage(imageDataUrl.split(',')[1]);
             setImagePreviewUrl(imageDataUrl);
-            stopCamera();
+            stopCamera(); // 拍照后关闭摄像头
         }
     };
-    
+
+    // --- 语音输入逻辑 ---
     const startListening = () => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
@@ -165,21 +220,94 @@ const AiChatAssistant = () => {
             return;
         }
         recognitionRef.current = new SpeechRecognition();
-        recognitionRef.current.lang = 'zh-CN';
-        recognitionRef.current.onstart = () => { setIsListening(true); setSpeechRecognitionError(''); };
-        recognitionRef.current.onresult = (e) => setUserInput(p => p + e.results[0][0].transcript);
-        recognitionRef.current.onerror = (e) => setSpeechRecognitionError(`语音输入错误: ${e.error}`);
-        recognitionRef.current.onend = () => setIsListening(false);
+        recognitionRef.current.continuous = false; // 只听一次，适合长按发送
+        recognitionRef.current.lang = settings.speechLanguage; // 使用设置中的语言
+        recognitionRef.current.interimResults = false; // 只返回最终结果
+
+        recognitionRef.current.onstart = () => {
+            setIsListening(true);
+            setSpeechRecognitionError('');
+        };
+
+        recognitionRef.current.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            setUserInput(transcript.trim()); // 长按模式直接设置最终结果
+            setIsListening(false);
+        };
+
+        recognitionRef.current.onerror = (event) => {
+            console.error('Speech recognition error:', event.error);
+            setSpeechRecognitionError(`语音输入错误: ${event.error}`);
+            setIsListening(false);
+            setIsLongPressing(false); // 错误时也重置长按状态
+            setIsCancelling(false);
+        };
+
+        recognitionRef.current.onend = () => {
+            setIsListening(false);
+            // 如果是长按模式且没有取消，则自动提交
+            if (isLongPressing && !isCancelling && userInput.trim()) { // 确保有识别内容
+                handleSubmit(null, userInput.trim()); // 触发提交
+            }
+            setIsLongPressing(false);
+            setIsCancelling(false);
+        };
+
         recognitionRef.current.start();
     };
 
     const stopListening = () => {
-        recognitionRef.current?.stop();
+        if (recognitionRef.current) {
+            recognitionRef.current.stop();
+        }
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (!userInput.trim() && !selectedImage || isLoading) return;
+    // --- 长按语音交互逻辑 ---
+    const handleLongPressStart = (e) => {
+        if (e.touches && e.touches.length > 0) { // 仅处理触摸事件，避免鼠标模拟
+            touchStartY.current = e.touches[0].clientY;
+        }
+        // 阻止默认行为，避免页面滚动
+        // e.preventDefault(); 
+        
+        setIsCancelling(false);
+        longPressTimer.current = setTimeout(() => {
+            setIsLongPressing(true);
+            startListening(); // 开始录音
+        }, 300); // 300ms 视为长按
+    };
+
+    const handleLongPressMove = (e) => {
+        if (isLongPressing && e.touches && e.touches.length > 0) {
+            const deltaY = touchStartY.current - e.touches[0].clientY;
+            if (deltaY > 50) { // 上滑超过50px 视为取消
+                setIsCancelling(true);
+            } else {
+                setIsCancelling(false);
+            }
+        }
+    };
+
+    const handleLongPressEnd = () => {
+        clearTimeout(longPressTimer.current);
+        if (isLongPressing) {
+            if (isCancelling) {
+                stopListening(); // 取消，并停止录音
+                setUserInput(''); // 清空录音内容
+            } else {
+                // 停止录音，onend 事件会自动处理提交
+                stopListening();
+            }
+        }
+        setIsLongPressing(false);
+        setIsCancelling(false);
+    };
+
+
+    const handleSubmit = async (e, voiceInput = '') => {
+        if (e) e.preventDefault();
+        const textToProcess = voiceInput || userInput.trim();
+        if (!textToProcess && !selectedImage || isLoading) return;
         if (!settings.apiKey.trim()) {
             setError('请先在设置中输入您的 Google Gemini API 密钥！');
             setShowSettings(true);
@@ -187,10 +315,10 @@ const AiChatAssistant = () => {
         }
 
         const userMessageContent = [];
-        if (userInput.trim()) userMessageContent.push({ text: userInput.trim() });
+        if (textToProcess) userMessageContent.push({ text: textToProcess });
         if (selectedImage) userMessageContent.push({ inlineData: { mimeType: 'image/jpeg', data: selectedImage } });
 
-        setMessages(prev => [...prev, { role: 'user', content: userInput.trim() || '[图片]', image: imagePreviewUrl }]);
+        setMessages(prev => [...prev, { role: 'user', content: textToProcess || '[图片]', image: imagePreviewUrl }]);
         setUserInput('');
         clearImage();
 
@@ -208,16 +336,13 @@ const AiChatAssistant = () => {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        contents: [{ role: 'user', parts: [{ text: currentPrompt }] }, ...history, { role: 'user', parts: userMessageContent }],
+                        contents: [{ role: 'system', parts: [{ text: currentPrompt }] }, ...history, { role: 'user', parts: userMessageContent }],
                         generationConfig: { temperature: 0.5, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } }
                     }),
                     signal: abortControllerRef.current.signal,
                 }
             );
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error?.message || '请求失败');
-            }
+            if (!response.ok) { const data = await response.json(); throw new Error(data.error?.message || '请求失败'); }
             const data = await response.json();
             const aiResponseContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
             if (!aiResponseContent) throw new Error('AI 未能返回有效内容。');
@@ -225,7 +350,15 @@ const AiChatAssistant = () => {
             setMessages(prev => [...prev, { role: 'ai', content: aiResponseContent }]);
 
             if (settings.autoRead && aiResponseContent) {
-                // ... (自动朗读逻辑，可根据需要实现) ...
+                // 自动朗读 AI 回复
+                // 这里需要一个 TextToSpeechButton 的实例来触发播放
+                // 鉴于目前 AiTtsButton 没有外部触发接口，暂时使用 window.speechSynthesis
+                if (window.speechSynthesis) { // 再次检查浏览器TTS支持
+                    const utterance = new SpeechSynthesisUtterance(aiResponseContent);
+                    utterance.lang = 'zh-CN'; // 假设AI回复是中文
+                    // TODO: 可以根据 settings.selectedTtsEngine 和其他 TTS 参数进行更细致的设置
+                    window.speechSynthesis.speak(utterance);
+                }
             }
         } catch (err) {
             if (err.name !== 'AbortError') {
@@ -247,7 +380,7 @@ const AiChatAssistant = () => {
     // 如果组件尚未在客户端挂载，则显示加载状态，防止 Hydration Error
     if (!isMounted) {
         return (
-            <div className="w-full max-w-2xl mx-auto my-8 p-6 flex items-center justify-center h-[500px] bg-gray-100 dark:bg-gray-800 rounded-2xl">
+            <div className="w-full max-w-2xl mx-auto my-8 p-6 flex items-center justify-center h-[700px] bg-gray-100 dark:bg-gray-800 rounded-2xl">
                 <div className="h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>
             </div>
         );
@@ -258,71 +391,192 @@ const AiChatAssistant = () => {
     // 准备传递给朗读按钮的 props
     const ttsProps = {
         apiKey: settings.apiKey,
-        ...settings, // 传递所有 TTS 相关设置
+        ttsSettings: settings, // 直接传递 settings 对象
     };
 
     return (
-        <div className="w-full max-w-2xl mx-auto my-8 p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700">
-            <h2 className="text-3xl font-bold mb-2 text-center text-gray-800 dark:text-white">AI 中文学习助手</h2>
-            <p className="text-center text-gray-500 dark:text-gray-400 mb-6">你的专属中文老师！</p>
+        <div className="w-full max-w-2xl mx-auto my-8 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col bg-white dark:bg-gray-800" style={{ height: '80vh', minHeight: '600px', maxHeight: '900px' }}>
+            <div className="flex items-center justify-between p-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-t-2xl border-b dark:border-gray-700 shrink-0">
+                <div className="flex items-center gap-2">
+                    <img src={settings.aiAvatarUrl} alt="AI Avatar" className="w-8 h-8 rounded-full" />
+                    <h2 className="text-lg font-bold text-gray-800 dark:text-white">AI 中文老师</h2>
+                </div>
+                <button onClick={() => setShowSettings(true)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="设置"><i className="fas fa-cog"></i></button>
+            </div>
 
-            <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg h-96 overflow-y-auto custom-scrollbar mb-4 border border-gray-200 dark:border-gray-600">
-                {messages.length === 0 ? (
-                    <p className="text-center text-gray-500 dark:text-gray-400">输入你的问题或上传图片，AI 老师将为你解答。</p>
-                ) : (
-                    messages.map((msg, index) => (
-                        <div
-                            key={index}
-                            className={`mb-4 p-3 rounded-lg shadow-sm flex flex-col ${
-                                msg.role === 'user'
-                                    ? 'bg-blue-100 dark:bg-blue-800 text-blue-900 dark:text-blue-100 self-end ml-auto max-w-[80%] items-end'
-                                    : 'bg-green-100 dark:bg-green-800 text-green-900 dark:text-green-100 mr-auto max-w-[80%] items-start'
-                            }`}
-                        >
-                            <strong className="block text-sm mb-1">{msg.role === 'user' ? '你' : 'AI 老师'}</strong>
-                            {msg.image && <img src={msg.image} alt="用户上传图片" className="max-w-full h-auto rounded-md mb-2" />}
-                            <SimpleMarkdown text={msg.content} lang="zh-CN" apiKey={settings.apiKey} ttsSettings={settings} />
-                        </div>
-                    ))
-                )}
+            <div 
+                className="flex-grow p-4 overflow-y-auto custom-scrollbar relative"
+                style={{ backgroundImage: `url('${settings.chatBackgroundUrl}')`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+            >
+                <div className="flex flex-col gap-4">
+                    {messages.map((msg, index) => (
+                        <MessageBubble key={index} msg={msg} settings={settings} />
+                    ))}
+                </div>
                 <div ref={messagesEndRef} />
             </div>
 
-            <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+            <div className="p-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-b-2xl border-t dark:border-gray-700 shrink-0">
+                {/* 图片预览和清除按钮 */}
                 {imagePreviewUrl && (
-                    <div className="relative mb-2 self-center">
-                        <img src={imagePreviewUrl} alt="图片预览" className="max-h-24 rounded-lg border" />
-                        <button type="button" onClick={clearImage} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 leading-none" title="移除"><i className="fas fa-times"></i></button>
+                    <div className="relative mb-2 w-24">
+                        <img src={imagePreviewUrl} alt="预览" className="rounded-lg" />
+                        <button
+                            type="button"
+                            onClick={clearImage}
+                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 leading-none"
+                            title="移除图片"
+                        >
+                            <i className="fas fa-times text-xs"></i>
+                        </button>
                     </div>
                 )}
-                <div className="flex gap-2 mb-2 relative">
-                    <button type="button" onClick={() => fileInputRef.current.click()} className="p-2 bg-gray-200 dark:bg-gray-600 rounded-lg hover:bg-gray-300" title="上传" disabled={isCameraActive || isLoading}><i className="fas fa-image"></i></button>
-                    <input type="file" ref={fileInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" />
-                    <button type="button" onClick={isCameraActive ? takePhoto : startCamera} className={`p-2 rounded-lg ${isCameraActive ? 'bg-red-500 text-white' : 'bg-gray-200 dark:bg-gray-600'}`} title={isCameraActive ? "拍照" : "摄像头"} disabled={isLoading}><i className={`fas ${isCameraActive ? 'fa-camera' : 'fa-video'}`}></i></button>
-                    <button type="button" onClick={isListening ? stopListening : startListening} className={`p-2 rounded-lg ${isListening ? 'bg-red-500 text-white' : 'bg-gray-200 dark:bg-gray-600'}`} title={isListening ? "停止" : "语音"} disabled={isLoading}><i className={`fas ${isListening ? 'fa-microphone-alt-slash' : 'fa-microphone'}`}></i></button>
-                    <span className="flex-grow flex items-center justify-center text-sm truncate">{currentPromptName}</span>
-                    <button type="button" onClick={() => setShowSettings(true)} className="p-2 bg-gray-200 dark:bg-gray-600 rounded-lg hover:bg-gray-300" title="设置" disabled={isLoading}><i className="fas fa-cog"></i></button>
-                </div>
+                {/* 摄像头预览区域 */}
                 {isCameraActive && (
                     <div className="relative mb-2">
-                        <video ref={videoRef} className="w-full rounded-lg border"></video>
-                        <canvas ref={canvasRef} className="hidden"></canvas>
-                        <button type="button" onClick={stopCamera} className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1" title="关闭"><i className="fas fa-times"></i></button>
+                        <video ref={videoRef} className="w-full rounded-lg border border-gray-300 dark:border-gray-600"></video>
+                        <canvas ref={canvasRef} className="hidden"></canvas> {/* 用于拍照的隐藏画布 */}
+                        <button 
+                            type="button" 
+                            onClick={stopCamera} 
+                            className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 text-xs leading-none"
+                            title="关闭摄像头"
+                        >
+                            <i className="fas fa-times"></i>
+                        </button>
                     </div>
                 )}
-                {speechRecognitionError && <p className="text-red-500 text-sm text-center">{speechRecognitionError}</p>}
-                <textarea value={userInput} onChange={(e) => setUserInput(e.target.value)} placeholder="输入问题..." className="w-full h-20 px-4 py-3 text-lg rounded-full" disabled={isLoading} />
-                <button type="submit" className="w-full mt-4 px-6 py-3 bg-primary text-white font-bold text-xl rounded-lg" disabled={isLoading || (!userInput.trim() && !selectedImage)}>
-                    {isLoading ? (<div className="flex items-center justify-center"><div className="h-5 w-5 animate-spin rounded-full border-4 border-white border-t-transparent mr-2"></div><span onClick={handleStopGenerating}>停止生成</span></div>) : '发送问题'}
-                </button>
-            </form>
+                {speechRecognitionError && <p className="text-red-500 text-sm mb-2 text-center">{speechRecognitionError}</p>}
 
-            {error && <div className="mt-4 p-3 bg-red-100 text-red-700 rounded-lg">{error}</div>}
+
+                <div className="flex items-end gap-2">
+                    {/* 文件上传按钮 */}
+                    <button
+                        type="button"
+                        onClick={() => fileInputRef.current.click()}
+                        className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"
+                        title="上传图片"
+                        disabled={isCameraActive || isLoading}
+                    >
+                        <i className="fas fa-image text-gray-700 dark:text-gray-200"></i>
+                    </button>
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                        disabled={isCameraActive || isLoading}
+                    />
+                    
+                    {/* 拍照按钮 */}
+                    <button
+                        type="button"
+                        onClick={isCameraActive ? takePhoto : startCamera}
+                        className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"
+                        title={isCameraActive ? "拍照" : "打开摄像头"}
+                        disabled={isLoading}
+                    >
+                        <i className={`fas ${isCameraActive ? 'fa-camera' : 'fa-video'} text-gray-700 dark:text-gray-200`}></i>
+                    </button>
+
+                    {/* 输入模式切换按钮（麦克风/键盘） */}
+                    <button onClick={() => setInputMode(p => p === 'text' ? 'voice' : 'text')} className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
+                        <i className={`fas ${inputMode === 'text' ? 'fa-microphone' : 'fa-keyboard'} text-gray-700 dark:text-gray-200`}></i>
+                    </button>
+
+                    {/* 主输入区：文本输入框 或 按住说话按钮 */}
+                    {inputMode === 'text' ? (
+                        <textarea
+                            value={userInput}
+                            onChange={(e) => setUserInput(e.target.value)}
+                            placeholder="输入消息与 AI 聊天..."
+                            className="flex-grow px-4 py-2 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 resize-none overflow-hidden" // overflow-hidden 防止出现滚动条
+                            rows={1}
+                            style={{minHeight:'44px'}} // 确保单行高度
+                            onInput={(e) => { // 自动调整高度
+                                e.target.style.height = 'auto';
+                                e.target.style.height = (e.target.scrollHeight) + 'px';
+                            }}
+                            disabled={isLoading}
+                        />
+                    ) : (
+                        <button
+                            onTouchStart={handleLongPressStart} onTouchMove={handleLongPressMove} onTouchEnd={handleLongPressEnd}
+                            onMouseDown={handleLongPressStart} onMouseUp={handleLongPressEnd}
+                            className={`flex-grow py-2 rounded-full text-center font-bold text-white transition-colors duration-200 ${
+                                isLongPressing ? (isCancelling ? 'bg-red-500' : 'bg-green-500') : 'bg-gray-500 dark:bg-gray-600'
+                            }`}
+                            disabled={isLoading}
+                        >
+                            {isLongPressing ? (isCancelling ? '松开取消' : '松开发送') : '按住说话'}
+                        </button>
+                    )}
+                    
+                    {/* 发送按钮 */}
+                    <button type="submit" onClick={handleSubmit} className="p-3 bg-primary text-white rounded-full hover:bg-blue-dark disabled:opacity-50" disabled={isLoading || (!userInput.trim() && !selectedImage)}>
+                        <i className="fas fa-arrow-up"></i>
+                    </button>
+                </div>
+            </div>
+
+            {error && <div className="mt-4 p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-lg">{error}</div>}
 
             {showSettings && <SettingsModal settings={settings} onSave={handleSaveSettings} onClose={() => setShowSettings(false)} />}
         </div>
     );
 };
+
+// --- MessageBubble 组件 ---
+const MessageBubble = ({ msg, settings }) => {
+    const isUser = msg.role === 'user';
+    const messageRef = useRef(null); // 用于获取消息内容
+
+    // 自动朗读逻辑
+    const autoReadMessage = useCallback(() => {
+        if (!settings.autoRead || !msg.content || !messageRef.current) return;
+
+        // 尝试通过点击第一个朗读按钮来触发
+        const ttsButton = messageRef.current.querySelector('.tts-button');
+        if (ttsButton && !ttsButton.disabled) {
+             ttsButton.click();
+        } else {
+            // Fallback to system TTS if button not found or disabled
+            if (window.speechSynthesis) {
+                const utterance = new SpeechSynthesisUtterance(msg.content);
+                utterance.lang = 'zh-CN'; 
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+    }, [msg.content, settings.autoRead, settings.ttsEngine, settings.ttsVoice, settings.apiKey]); // 依赖 TTS 设置
+    
+    // AI 消息渲染后自动朗读
+    useEffect(() => {
+        if (!isUser && msg.content && settings.autoRead) {
+            autoReadMessage();
+        }
+    }, [isUser, msg.content, settings.autoRead, autoReadMessage]); // 仅在 AI 消息内容变化且 autoRead 开启时触发
+
+    return (
+        <div className={`flex items-end gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
+            {!isUser && <img src={settings.aiAvatarUrl} alt="AI Avatar" className="w-8 h-8 rounded-full" />}
+            <div ref={messageRef} className={`p-3 rounded-2xl text-left flex flex-col ${isUser ? 'bg-primary text-white rounded-br-lg' : 'bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-800 dark:text-gray-200 rounded-bl-lg'}`} style={{ maxWidth: '80%' }}> {/* max-w-[80%] 限制宽度 */}
+                {msg.image && <img src={msg.image} alt="用户上传" className="rounded-md mb-2 max-w-full h-auto" />} {/* max-w-full 确保图片自适应 */}
+                <div className="prose dark:prose-invert max-w-none prose-p:my-1 prose-strong:text-current">
+                    <SimpleMarkdown text={msg.content} lang="zh-CN" apiKey={settings.apiKey} ttsSettings={settings} />
+                </div>
+                {!isUser && msg.content && (
+                    <div className="flex items-center gap-3 mt-2 text-gray-500 dark:text-gray-400">
+                        <AiTtsButton text={msg.content} apiKey={settings.apiKey} ttsSettings={settings} />
+                        <button onClick={() => navigator.clipboard.writeText(msg.content)} className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10" title="复制"><i className="fas fa-copy"></i></button>
+                    </div>
+                )}
+            </div>
+            {isUser && <img src={settings.userAvatarUrl} alt="User Avatar" className="w-8 h-8 rounded-full" />}
+        </div>
+    );
+};
+
 
 // --- 设置面板组件 ---
 const SettingsModal = ({ settings, onSave, onClose }) => {
@@ -341,12 +595,12 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
 
     const handleAddPrompt = () => {
         const newId = `custom-${Date.now()}`;
-        const newPrompts = [...tempSettings.prompts, { id: newId, name: '新提示词', content: '请输入...' }];
+        const newPrompts = [...tempSettings.prompts, { id: newId, name: '新提示词', content: '请输入提示词内容...' }];
         handleChange('prompts', newPrompts);
     };
 
     const handleDeletePrompt = (idToDelete) => {
-        if (window.confirm('确定删除吗？')) {
+        if (window.confirm('确定删除此提示词吗？')) {
             const newPrompts = tempSettings.prompts.filter(p => p.id !== idToDelete);
             let newCurrentPromptId = tempSettings.currentPromptId;
             if (newCurrentPromptId === idToDelete) {
@@ -357,75 +611,211 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
         }
     };
     
-    const googleVoiceOptions = [
-        { name: '标准男声 A', value: 'cmn-CN-Standard-A' }, { name: '标准女声 B', value: 'cmn-CN-Standard-B' },
-        { name: 'Wavenet 男声 A (推荐)', value: 'cmn-CN-Wavenet-A' }, { name: 'Wavenet 女声 B', value: 'cmn-CN-Wavenet-B' },
-        { name: '缅甸语女声', value: 'my-MM-Standard-A' },
+    // Gemini TTS 提供的发音人列表 (参考自 Google AI Studio 界面)
+    const geminiTtsVoices = [
+        { name: 'Zephyr (Bright)', value: 'Zephyr' }, 
+        { name: 'Puck (Upbeat)', value: 'Puck' },
+        { name: 'Charon (Informative)', value: 'Charon' }, 
+        { name: 'Kore (Firm)', value: 'Kore' },
+        { name: 'Fenrir (Excitable)', value: 'Fenrir' },
+        { name: 'Leda (Youthful)', value: 'Leda' },
+        { name: 'Orus (Firm)', value: 'Orus' },
+        { name: 'Aoede (Breezy)', value: 'Aoede' },
+        { name: 'Callirrhoe (Easy-going)', value: 'Callirrhoe' },
+        { name: 'Autonoe (Bright)', value: 'Autonoe' },
+        { name: 'Enceladus (Breathy)', value: 'Enceladus' },
+        { name: 'Iapetus (Clear)', value: 'Iapetus' },
+        // 注意：Gemini TTS 尚未明确提供中文或缅甸语的特定发音人，这些是通用名称。
+        // 如果需要特定语言的声音，可能需要等待 Gemini TTS 的进一步更新或使用 Google Cloud TTS。
+    ];
+
+    const speechLanguageOptions = [
+        { name: '中文 (普通话)', value: 'zh-CN' },
+        { name: '缅甸语', value: 'my-MM' },
     ];
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg overflow-y-auto max-h-[90vh]" onClick={e => e.stopPropagation()}>
-                <h3 className="text-2xl font-bold mb-4">设置</h3>
-                <div className="mb-4 pb-4 border-b">
-                    <label className="block text-sm font-medium">你的 Google Gemini API 密钥</label>
-                    <input type="password" value={tempSettings.apiKey} onChange={(e) => handleChange('apiKey', e.target.value)} placeholder="粘贴你的 API 密钥" className="w-full p-2 border rounded mt-1" />
+                <h3 className="text-2xl font-bold mb-4 text-gray-800 dark:text-white">设置</h3>
+
+                {/* API 密钥设置 */}
+                <div className="mb-4 pb-4 border-b dark:border-gray-700">
+                    <label htmlFor="modal-api-key-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        你的 Google Gemini API 密钥
+                    </label>
+                    <input
+                        id="modal-api-key-input"
+                        type="password"
+                        value={tempSettings.apiKey}
+                        onChange={(e) => handleChange('apiKey', e.target.value)}
+                        placeholder="在此粘贴你的 API 密钥"
+                        className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        密钥将保存在你的浏览器中，不会上传。
+                        <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-1">
+                            获取免费密钥
+                        </a>
+                    </p>
                 </div>
-                <div className="mb-4 pb-4 border-b">
-                    <label className="block text-sm font-medium">选择 AI 模型</label>
-                    <select value={tempSettings.selectedModel} onChange={(e) => handleChange('selectedModel', e.target.value)} className="w-full p-2 border rounded mt-1">
+
+                {/* AI 模型选择设置 */}
+                <div className="mb-4 pb-4 border-b dark:border-gray-700">
+                    <label htmlFor="modal-model-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">选择 AI 模型:</label>
+                    <select
+                        id="modal-model-select"
+                        value={tempSettings.selectedModel}
+                        onChange={(e) => handleChange('selectedModel', e.target.value)}
+                        className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                    >
                         <option value="gemini-1.5-flash">Gemini 1.5 Flash (推荐)</option>
                         <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                        {/* 暂不提供 2.x 模型，因为其 API 可用性不确定 */}
+                        {/* <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                        <option value="gemini-2.0-flash">Gemini 2.0 Flash</option> */}
                     </select>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Gemini 1.5 Flash 稳定且有免费额度。其他模型可能需要特定权限或付费。
+                    </p>
                 </div>
-                <div className="mb-4 pb-4 border-b">
-                    <label className="block text-sm font-medium">选择 TTS 引擎</label>
-                    <select value={tempSettings.selectedTtsEngine} onChange={(e) => handleChange('selectedTtsEngine', e.target.value)} className="w-full p-2 border rounded mt-1">
-                        <option value="google_genai">Google GenAI TTS (推荐)</option>
+
+                {/* TTS 引擎选择 */}
+                <div className="mb-4 pb-4 border-b dark:border-gray-700">
+                    <label htmlFor="tts-engine-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">选择 TTS 引擎:</label>
+                    <select
+                        id="tts-engine-select"
+                        value={tempSettings.ttsEngine}
+                        onChange={(e) => handleChange('ttsEngine', e.target.value)}
+                        className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                    >
+                        <option value={TTS_ENGINE_GEMINI}>Gemini TTS (推荐)</option>
                         <option value="external_api">第三方 API (晓辰)</option>
-                        <option value="system_tts">浏览器系统 TTS</option>
+                        {/* <option value={TTS_ENGINE.SYSTEM_TTS}>浏览器系统 TTS</option> */} {/* 暂时移除，避免复杂性 */}
                     </select>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Gemini TTS 提供高质量语音，但可能消耗 API 额度。
+                    </p>
                 </div>
-                {tempSettings.selectedTtsEngine === 'google_genai' && (
-                    <div className="mb-4 p-3 bg-gray-50 rounded">
-                        <h5 className="font-bold">Google TTS 配置</h5>
-                        <label className="block text-sm mt-2">发音人</label>
-                        <select value={tempSettings.googleVoiceName} onChange={(e) => handleChange('googleVoiceName', e.target.value)} className="w-full p-2 border rounded">
-                            {googleVoiceOptions.map(v => <option key={v.value} value={v.value}>{v.name}</option>)}
-                        </select>
-                        <label className="block text-sm mt-2">语速: {tempSettings.googleRate.toFixed(2)}</label>
-                        <input type="range" min="0.5" max="2.0" step="0.05" value={tempSettings.googleRate} onChange={(e) => handleChange('googleRate', parseFloat(e.target.value))} className="w-full" />
-                        <label className="block text-sm mt-2">语调: {tempSettings.googlePitch.toFixed(2)}</label>
-                        <input type="range" min="-10" max="10" step="0.5" value={tempSettings.googlePitch} onChange={(e) => handleChange('googlePitch', parseFloat(e.target.value))} className="w-full" />
+
+                {/* Gemini TTS 设置 (仅当选择 Gemini TTS 时显示) */}
+                {tempSettings.ttsEngine === TTS_ENGINE_GEMINI && (
+                    <div className="mb-4 pb-4 border-b dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
+                        <h5 className="text-md font-bold mb-2 text-gray-800 dark:text-white">Gemini TTS 配置</h5>
+                        <div className="mb-3">
+                            <label htmlFor="gemini-voice-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">发音人:</label>
+                            <select
+                                id="gemini-voice-select"
+                                value={tempSettings.ttsVoice}
+                                onChange={(e) => handleChange('ttsVoice', e.target.value)}
+                                className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 border rounded-md"
+                            >
+                                {geminiTtsVoices.map(voice => (
+                                    <option key={voice.value} value={voice.value}>
+                                        {voice.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
                 )}
-                <div className="mb-4 pb-4 border-b flex justify-between">
-                    <label className="font-medium">AI 回复后自动朗读</label>
-                    <input type="checkbox" checked={tempSettings.autoRead} onChange={(e) => handleChange('autoRead', e.target.checked)} className="h-5 w-5" />
+                
+                {/* 语音识别语言 */}
+                <div className="mb-4 pb-4 border-b dark:border-gray-700">
+                    <label htmlFor="speech-language-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">语音识别语言:</label>
+                    <select
+                        id="speech-language-select"
+                        value={tempSettings.speechLanguage}
+                        onChange={(e) => handleChange('speechLanguage', e.target.value)}
+                        className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                    >
+                        {speechLanguageOptions.map(option => (
+                            <option key={option.value} value={option.value}>
+                                {option.name}
+                            </option>
+                        ))}
+                    </select>
                 </div>
+
+                {/* 自动朗读开关 */}
+                <div className="mb-4 pb-4 border-b dark:border-gray-700 flex items-center justify-between">
+                    <label htmlFor="auto-read-toggle" className="block text-sm font-medium text-gray-700 dark:text-gray-300">AI 回复后自动朗读:</label>
+                    <input
+                        type="checkbox"
+                        id="auto-read-toggle"
+                        checked={tempSettings.autoRead}
+                        onChange={(e) => handleChange('autoRead', e.target.checked)}
+                        className="h-5 w-5 text-primary rounded border-gray-300 focus:ring-primary"
+                    />
+                </div>
+
+                {/* 提示词管理 */}
                 <div className="mb-6">
-                    <h4 className="text-lg font-bold mb-3">自定义提示词管理</h4>
+                    <h4 className="text-lg font-bold mb-3 text-gray-800 dark:text-white">自定义提示词管理</h4>
                     <div className="space-y-2 mb-4">
                         {tempSettings.prompts.map(prompt => (
-                            <div key={prompt.id} className="p-2 bg-gray-100 rounded">
-                                <div className="flex items-center">
-                                    <input type="radio" name="currentPrompt" checked={tempSettings.currentPromptId === prompt.id} onChange={() => handleChange('currentPromptId', prompt.id)} className="mr-2" />
-                                    <input type="text" value={prompt.name} onChange={(e) => handlePromptChange(e, prompt.id, 'name')} className="font-medium bg-transparent w-full" />
-                                    <button onClick={() => handleDeletePrompt(prompt.id)} className="p-1 text-sm bg-red-500 text-white rounded">删除</button>
+                            <div key={prompt.id} className="flex flex-col p-2 bg-gray-100 dark:bg-gray-700 rounded-md">
+                                <div className="flex items-center justify-between">
+                                    <label className="flex items-center flex-grow cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="currentPrompt"
+                                            checked={tempSettings.currentPromptId === prompt.id}
+                                            onChange={() => handleChange('currentPromptId', prompt.id)}
+                                            className="mr-2 text-primary focus:ring-primary"
+                                        />
+                                        <input
+                                            type="text"
+                                            value={prompt.name}
+                                            onChange={(e) => handlePromptChange(e, prompt.id, 'name')}
+                                            className="font-medium bg-transparent w-full border-b border-dashed border-gray-300 dark:border-gray-600 focus:outline-none"
+                                            placeholder="提示词名称"
+                                        />
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDeletePrompt(prompt.id)}
+                                        className="p-1 ml-2 text-sm bg-red-500 text-white rounded hover:bg-red-600"
+                                    >
+                                        <i className="fas fa-times"></i>
+                                    </button>
                                 </div>
-                                <textarea value={prompt.content} onChange={(e) => handlePromptChange(e, prompt.id, 'content')} className="w-full mt-2 h-24 p-2 border rounded"></textarea>
+                                <textarea
+                                    value={prompt.content}
+                                    onChange={(e) => handlePromptChange(e, prompt.id, 'content')}
+                                    className="w-full mt-2 h-24 px-2 py-1 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md resize-y text-sm"
+                                    placeholder="在这里输入详细的提示词内容..."
+                                ></textarea>
                             </div>
                         ))}
                     </div>
-                    <button onClick={handleAddPrompt} className="w-full py-2 bg-green-500 text-white rounded"><i className="fas fa-plus mr-2"></i>添加新提示词</button>
+                    <button
+                        type="button"
+                        onClick={handleAddPrompt}
+                        className="w-full px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
+                    >
+                        <i className="fas fa-plus mr-2"></i>添加新提示词
+                    </button>
                 </div>
+
+                {/* 底部保存/取消按钮 */}
                 <div className="flex justify-end gap-3 mt-6">
-                    <button onClick={onClose} className="px-4 py-2 bg-gray-200 rounded">关闭</button>
-                    <button onClick={() => onSave(tempSettings)} className="px-4 py-2 bg-primary text-white rounded">保存并关闭</button>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
+                    >
+                        关闭
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => onSave(tempSettings)}
+                        className="px-4 py-2 bg-primary text-white rounded-md hover:bg-blue-dark transition-colors"
+                    >
+                        保存设置
+                    </button>
                 </div>
             </div>
         </div>
     );
 };
-
-export default AiChatAssistant;
