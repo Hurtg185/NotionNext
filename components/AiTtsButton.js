@@ -1,4 +1,4 @@
-// /components/AiTtsButton.js - v20 最终修复版
+// /components/AiTtsButton.js - v23 最终版
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { TTS_ENGINE } from './AiChatAssistant'; // 从主组件导入引擎类型
 
@@ -22,7 +22,8 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
   const synthesizeSpeech = useCallback(async (textToSpeak) => {
     const {
       ttsEngine = TTS_ENGINE.THIRD_PARTY,
-      thirdPartyTtsVoice = 'zh-CN-Xiaoxiao2:DragonHDFlashLatestNeural',
+      // 修复：更新默认值为非HD版本
+      thirdPartyTtsVoice = 'zh-CN-XiaoxiaoMultilingualNeural', 
       systemTtsVoiceURI = ''
     } = ttsSettings;
     
@@ -49,7 +50,7 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
         utteranceRef.current = utterance;
         window.speechSynthesis.speak(utterance);
       } else {
-        const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(cleanedText)}&v=${thirdPartyTtsVoice}&r=-20%&p=0%&o=audio-24khz-48kbitrate-mono-mp3`;
+        const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(cleanedText)}&v=${thirdPartyTtsVoice}&r=-20%&&p=0%o=audio-24khz-48kbitrate-mono-mp3`;
         const response = await fetch(url);
         if (!response.ok) throw new Error(`API错误 (状态码: ${response.status})`);
         
@@ -78,7 +79,7 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
       title="朗读"
     >
       {isLoading ? (
-        <svg className="animate-spin h-5 w-5" xmlns="http://www.w.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+        <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
       ) : (
         <i className="fas fa-volume-up"></i>
       )}
