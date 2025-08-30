@@ -1,4 +1,4 @@
-// /components/AiChatAssistant.js - v22: 修复所有问题并加入侧边栏收缩等新功能
+// /components/AiChatAssistant.js - v22: 最终完整版，修复所有问题并加入核心新功能
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import AiTtsButton from './AiTtsButton';
 
@@ -25,8 +25,19 @@ const SimpleMarkdown = ({ text }) => {
 
 const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate }) => {
     const isUser = msg.role === 'user';
+    const messageRef = useRef(null);
+
+    useEffect(() => {
+        if (!isUser && msg.content && settings.autoRead && messageRef.current) {
+            const ttsButton = messageRef.current.querySelector('button[title="朗读"]');
+            if (ttsButton) {
+                setTimeout(() => ttsButton.click(), 300);
+            }
+        }
+    }, [isUser, msg.content, settings.autoRead]);
+
     return (
-        <div className={`flex items-end gap-2.5 my-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
+        <div ref={messageRef} className={`flex items-end gap-2.5 my-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
             {!isUser && <img src={settings.aiAvatarUrl} alt="AI Avatar" className="w-8 h-8 rounded-full shrink-0" />}
             <div className={`p-3 rounded-2xl text-left flex flex-col ${isUser ? 'bg-primary text-white rounded-br-lg' : 'bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm'}`} style={{ maxWidth: '85%' }}>
                 {msg.images && msg.images.length > 0 && (
@@ -100,17 +111,24 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
     }, []);
 
     const handleChange = (key, value) => setTempSettings(prev => ({ ...prev, [key]: value }));
-    const handlePromptChange = (e, promptId, field) => { const newPrompts = tempSettings.prompts.map(p => p.id === promptId ? { ...p, [field]: e.target.value } : p); handleChange('prompts', newPrompts); };
-    const handleAddPrompt = () => { const newPrompts = [...tempSettings.prompts, { id: `custom-${Date.now()}`, name: '新提示词', content: '请输入内容...' }]; handleChange('prompts', newPrompts); };
+    const handleAddPrompt = () => {
+        const newPrompt = { id: `custom-${Date.now()}`, name: '新提示词', content: '请输入...', model: settings.selectedModel, ttsVoice: settings.thirdPartyTtsVoice };
+        const newPrompts = [...tempSettings.prompts, newPrompt];
+        handleChange('prompts', newPrompts);
+    };
     const handleDeletePrompt = (idToDelete) => { if (!window.confirm('确定删除吗？')) return; const newPrompts = tempSettings.prompts.filter(p => p.id !== idToDelete); handleChange('prompts', newPrompts); if (tempSettings.currentPromptId === idToDelete) handleChange('currentPromptId', newPrompts[0]?.id || ''); };
+    
+    const handlePromptSettingChange = (promptId, field, value) => {
+        const newPrompts = tempSettings.prompts.map(p => p.id === promptId ? { ...p, [field]: value } : p);
+        handleChange('prompts', newPrompts);
+    };
 
     const chatModels = [
-        { name: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash' }, { name: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro' }, { name: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash' }, { name: 'Gemini 2.5 Flash-Lite (最新)', value: 'gemini-2.5-flash-late' }, { name: 'Gemini 1.5 Pro (最新)', value: 'gemini-1.5-pro-latest' },
+        { name: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash' }, { name: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro' }, { name: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash' }, { name: 'Gemini 1.5 Flash (最新)', value: 'gemini-1.5-flash-latest' }, { name: 'Gemini 1.5 Pro (最新)', value: 'gemini-1.5-pro-latest' },
     ];
     const microsoftTtsVoices = [
         { name: '晓晓 (HD)', value: 'zh-CN-Xiaoxiao2:DragonHDFlashLatestNeural' }, { name: '晓辰 (HD)', value: 'zh-CN-Xiaochen:DragonHDFlashLatestNeural' }, { name: '晓晓 (女, 多语言)', value: 'zh-CN-XiaoxiaoMultilingualNeural' }, { name: '晓辰 (女, 多语言)', value: 'zh-CN-XiaochenMultilingualNeural' }, { name: '云希 (男, 温和)', value: 'zh-CN-YunxiNeural' }, { name: '云泽 (男, 叙事)', value: 'zh-CN-YunzeNeural' }, { name: '晓晓 (女, 亲切)', value: 'zh-CN-XiaoxiaoNeural' }, { name: '晓颜 (女)', value: 'zh-CN-XiaoyanNeural'}, { name: '晓伊 (女, 动漫)', value: 'zh-CN-XiaoyiNeural' }, { name: '云健 (男, 沉稳)', value: 'zh-CN-YunjianNeural' }, { name: '云扬 (男, 阳光)', value: 'zh-CN-YunyangNeural' }, { name: '晓臻 (女, 台湾)', value: 'zh-TW-HsiaoChenNeural' }, { name: '允喆 (男, 台湾)', value: 'zh-TW-YunJheNeural' }, { name: 'Ava (女, 美国, 多语言)', value: 'en-US-AvaMultilingualNeural' }, { name: 'Steffan (男, 美国, 多语言)', value: 'en-US-SteffanMultilingualNeural' }, { name: 'Vivienne (女, 法国, 多语言)', value: 'fr-FR-VivienneMultilingualNeural' }, { name: 'Remy (男, 法国, 多语言)', value: 'fr-FR-RemyMultilingualNeural' }, { name: '妮拉 (女, 缅甸)', value: 'my-MM-NilarNeural' }, { name: '蒂哈 (男, 缅甸)', value: 'my-MM-ThihaNeural' }, { name: '怀眉 (女, 越南)', value: 'vi-VN-HoaiMyNeural' }, { name: '南明 (男, 越南)', value: 'vi-VN-NamMinhNeural' },
     ];
-    // 新增：更多语音识别语言
     const speechLanguageOptions = [
         { name: '中文 (普通话)', value: 'zh-CN' }, { name: '缅甸语 (မြန်မာ)', value: 'my-MM' }, { name: 'English (US)', value: 'en-US' }, { name: 'Español (España)', value: 'es-ES' }, { name: 'Français (France)', value: 'fr-FR' }, { name: '日本語', value: 'ja-JP' }, { name: '한국어', value: 'ko-KR' }, { name: 'Tiếng Việt', value: 'vi-VN' },
     ];
@@ -123,12 +141,6 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                      <div>
                         <label className="block text-sm font-medium mb-1">Google Gemini API 密钥</label>
                         <input type="password" value={tempSettings.apiKey} onChange={(e) => handleChange('apiKey', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border rounded-md" />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1">AI 聊天模型</label>
-                        <select value={tempSettings.selectedModel} onChange={(e) => handleChange('selectedModel', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border rounded-md">
-                            {chatModels.map(m => <option key={m.value} value={m.value}>{m.name}</option>)}
-                        </select>
                     </div>
                      <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md space-y-2">
                          <label className="block text-sm font-medium">高级参数</label>
@@ -176,16 +188,34 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                            {speechLanguageOptions.map(o => <option key={o.value} value={o.value}>{o.name}</option>)}
                         </select>
                     </div>
+                     <div className="flex items-center justify-between">
+                        <label className="block text-sm font-medium">AI 回复后自动朗读</label>
+                        <input type="checkbox" checked={tempSettings.autoRead} onChange={(e) => handleChange('autoRead', e.target.checked)} className="h-5 w-5 text-primary rounded" />
+                    </div>
                      <div className="mb-6">
                         <h4 className="text-lg font-bold mb-3">自定义提示词管理</h4>
                         <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
                             {tempSettings.prompts.map(p => (
-                                <div key={p.id} className="p-2 bg-gray-100 dark:bg-gray-700 rounded-md">
+                                <div key={p.id} className="p-3 bg-gray-100 dark:bg-gray-700 rounded-md">
                                     <div className="flex items-center justify-between">
-                                        <label className="flex items-center flex-grow cursor-pointer"><input type="radio" name="currentPrompt" checked={tempSettings.currentPromptId === p.id} onChange={() => handleChange('currentPromptId', p.id)} className="mr-2 text-primary" /><input type="text" value={p.name} onChange={(e) => handlePromptChange(e, p.id, 'name')} className="font-medium bg-transparent w-full" /></label>
+                                        <label className="flex items-center flex-grow cursor-pointer"><input type="radio" name="currentPrompt" checked={tempSettings.currentPromptId === p.id} onChange={() => handleChange('currentPromptId', p.id)} className="mr-2 text-primary" /><input type="text" value={p.name} onChange={(e) => handlePromptSettingChange(p.id, 'name', e.target.value)} className="font-medium bg-transparent w-full" /></label>
                                         <button onClick={() => handleDeletePrompt(p.id)} className="p-1 ml-2 text-sm text-red-500 rounded"><i className="fas fa-trash"></i></button>
                                     </div>
-                                    <textarea value={p.content} onChange={(e) => handlePromptChange(e, p.id, 'content')} className="w-full mt-2 h-20 p-2 bg-white dark:bg-gray-800 border rounded-md text-sm" />
+                                    <textarea value={p.content} onChange={(e) => handlePromptSettingChange(p.id, 'content', e.target.value)} className="w-full mt-2 h-20 p-2 bg-white dark:bg-gray-800 border rounded-md text-sm" />
+                                    <div className="mt-2 space-y-2 text-sm">
+                                        <div className="flex items-center gap-2">
+                                            <label className="shrink-0">模型:</label>
+                                            <select value={p.model || settings.selectedModel} onChange={(e) => handlePromptSettingChange(p.id, 'model', e.target.value)} className="w-full px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs">
+                                                {chatModels.map(m => <option key={m.value} value={m.value}>{m.name}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <label className="shrink-0">声音:</label>
+                                            <select value={p.ttsVoice || settings.thirdPartyTtsVoice} onChange={(e) => handlePromptSettingChange(p.id, 'ttsVoice', e.target.value)} className="w-full px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs">
+                                                {microsoftTtsVoices.map(v => <option key={v.value} value={v.value}>{v.name}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -201,7 +231,7 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
     );
 };
 
-const DEFAULT_PROMPTS = [ { id: 'default-grammar-correction', name: '纠正中文语法', content: '你是一位专业的、耐心的中文老师...' }, { id: 'explain-word', name: '解释中文词语', content: '你是一位专业的中文老师...' }, { id: 'translate-myanmar', name: '中缅互译', content: '你是一位专业的翻译助手...' } ];
+const DEFAULT_PROMPTS = [ { id: 'default-grammar-correction', name: '纠正中文语法', content: '你是一位专业的、耐心的中文老师，请纠正我发送的中文句子中的语法和用词错误，并给出修改建议和说明。', model: 'gemini-2.5-flash', ttsVoice: 'zh-CN-Xiaoxiao2:DragonHDFlashLatestNeural' }, { id: 'explain-word', name: '解释中文词语', content: '你是一位专业的中文老师，请用简单易懂的方式解释我发送的中文词语，并提供几个例子。', model: 'gemini-1.5-pro-latest', ttsVoice: 'zh-CN-YunxiNeural' }, { id: 'translate-myanmar', name: '中缅互译', content: '你是一位专业的翻译助手，请将我发送的内容在中文和缅甸语之间进行互译。', model: 'gemini-2.5-flash', ttsVoice: 'my-MM-NilarNeural' } ];
 const DEFAULT_SETTINGS = {
     apiKey: '',
     selectedModel: 'gemini-2.5-flash',
@@ -239,15 +269,21 @@ const AiChatAssistant = () => {
     const abortControllerRef = useRef(null);
     const promptSelectorRef = useRef(null);
     const fileInputRef = useRef(null);
+    const cameraInputRef = useRef(null);
     const timeoutRef = useRef(null);
     const recognitionRef = useRef(null);
 
     useEffect(() => {
         setIsMounted(true);
         try {
-            const savedSettings = localStorage.getItem('ai_assistant_settings_v21_final');
-            if (savedSettings) setSettings(prev => ({ ...DEFAULT_SETTINGS, ...JSON.parse(savedSettings) }));
-            const savedConversations = localStorage.getItem('ai_assistant_conversations_v21_final');
+            const savedSettings = localStorage.getItem('ai_assistant_settings_v22_final');
+            if (savedSettings) {
+                const parsed = JSON.parse(savedSettings);
+                // Ensure prompts have new fields
+                parsed.prompts = parsed.prompts.map(p => ({ ...p, model: p.model || DEFAULT_SETTINGS.selectedModel, ttsVoice: p.ttsVoice || DEFAULT_SETTINGS.thirdPartyTtsVoice }));
+                setSettings(prev => ({ ...DEFAULT_SETTINGS, ...parsed }));
+            }
+            const savedConversations = localStorage.getItem('ai_assistant_conversations_v22_final');
             const parsedConvs = savedConversations ? JSON.parse(savedConversations) : [];
             setConversations(parsedConvs);
             if (parsedConvs.length > 0) {
@@ -260,8 +296,8 @@ const AiChatAssistant = () => {
 
     useEffect(() => {
         if (isMounted) {
-            localStorage.setItem('ai_assistant_settings_v21_final', JSON.stringify(settings));
-            localStorage.setItem('ai_assistant_conversations_v21_final', JSON.stringify(conversations));
+            localStorage.setItem('ai_assistant_settings_v22_final', JSON.stringify(settings));
+            localStorage.setItem('ai_assistant_conversations_v22_final', JSON.stringify(conversations));
         }
     }, [settings, conversations, isMounted]);
 
@@ -294,6 +330,7 @@ const AiChatAssistant = () => {
         });
         Promise.all(imagePromises).then(newImages => setSelectedImages(prev => [...prev, ...newImages]));
         if (fileInputRef.current) fileInputRef.current.value = '';
+        if (cameraInputRef.current) cameraInputRef.current.value = '';
     };
 
     const handleRemoveImage = (indexToRemove) => {
@@ -321,17 +358,16 @@ const AiChatAssistant = () => {
         if (!currentConv) return;
 
         let messagesForApi = [...currentConv.messages];
-        let userMessageToPush = null;
         const textToProcess = userInput.trim();
 
         if (isRegenerate) {
             if (messagesForApi[messagesForApi.length - 1]?.role === 'ai') messagesForApi.pop();
         } else {
             if (!textToProcess && selectedImages.length === 0) return;
-            userMessageToPush = { role: 'user', content: textToProcess, images: selectedImages };
-            const newMessages = [...currentConv.messages, userMessageToPush];
+            const userMessage = { role: 'user', content: textToProcess, images: selectedImages };
+            const newMessages = [...currentConv.messages, userMessage];
             setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: newMessages } : c));
-            messagesForApi.push(userMessageToPush);
+            messagesForApi.push(userMessage);
             setUserInput('');
             setSelectedImages([]);
         }
@@ -345,7 +381,9 @@ const AiChatAssistant = () => {
         timeoutRef.current = setTimeout(() => { abortControllerRef.current?.abort(); }, settings.apiTimeout);
 
         try {
-            const currentPrompt = settings.prompts.find(p => p.id === settings.currentPromptId)?.content || '';
+            const currentPrompt = settings.prompts.find(p => p.id === settings.currentPromptId) || settings.prompts[0];
+            const modelToUse = currentPrompt.model || settings.selectedModel;
+            
             const history = messagesForApi.map(msg => {
                 const parts = [];
                 if (msg.content) parts.push({ text: msg.content });
@@ -353,9 +391,9 @@ const AiChatAssistant = () => {
                 return { role: msg.role === 'user' ? 'user' : 'model', parts };
             });
 
-            const contents = [ { role: 'user', parts: [{ text: currentPrompt }] }, { role: 'model', parts: [{ text: "好的，我明白了。" }] }, ...history ];
+            const contents = [ { role: 'user', parts: [{ text: currentPrompt.content }] }, { role: 'model', parts: [{ text: "好的，我明白了。" }] }, ...history ];
             
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${settings.selectedModel}:generateContent?key=${settings.apiKey}`, {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${settings.apiKey}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ contents, generationConfig: { temperature: settings.temperature, maxOutputTokens: settings.maxOutputTokens } }),
@@ -437,6 +475,8 @@ const AiChatAssistant = () => {
                             </div>
                             <button type="button" onClick={() => fileInputRef.current.click()} className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0" title="上传图片"><i className="fas fa-image"></i></button>
                             <input type="file" ref={fileInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" multiple />
+                             <button type="button" onClick={() => cameraInputRef.current.click()} className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0" title="拍照"><i className="fas fa-camera"></i></button>
+                            <input type="file" ref={cameraInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" capture="environment" />
                             <div className="flex-grow relative">
                                 <textarea value={userInput} onChange={(e) => setUserInput(e.target.value)} placeholder="与 AI 聊天..." className="w-full px-4 py-2 pr-12 rounded-2xl bg-gray-100 dark:bg-gray-700 resize-none overflow-hidden" rows="1" style={{minHeight:'44px'}} onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight) + 'px'; }} />
                                 <button type="button" onClick={isListening ? stopListening : startListening} className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-500 hover:text-primary'}`} title="语音输入">
