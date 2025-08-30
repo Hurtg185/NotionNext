@@ -1,84 +1,124 @@
-// /components/TextToSpeechButton.js - 使用外部 API 的语音朗读组件 (晓辰版)
-
+// /components/TextToSpeechButton.js - 支持 Google GenAI TTS 和外部 API TTS
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 /**
- * 使用外部 TTS API (https://t.leftsite.cn) 进行文本朗读的按钮组件。
- * 提供比系统 TTS 更一致的发音人（晓辰）和音质。
+ * TTS 引擎枚举
+ */
+const TTS_ENGINE = {
+  GOOGLE_GENAI: 'google_genai',
+  EXTERNAL_API: 'external_api',
+  SYSTEM_TTS: 'system_tts' // 备用系统TTS，以防万一
+};
+
+/**
+ * 文本朗读按钮组件。
+ * 支持多种 TTS 引擎，可通过设置面板选择。
  * @param {string} text - 要朗读的文本。
  * @param {string} [lang='zh-CN'] - 朗读的语言，默认为中文。
- * @param {string} [voice='zh-CN-XiaochenMultilingualNeural'] - 指定发音人。
- * @param {string} [rate='-20%'] - 语速，默认为-20% (比正常慢一点)。
- * @param {string} [pitch='0%'] - 语调，默认为0%。
+ * @param {string} [apiKey=''] - Google GenAI API Key (如果选择 Google GenAI 引擎)。
+ * @param {string} [selectedTtsEngine=TTS_ENGINE.GOOGLE_GENAI] - 当前选中的 TTS 引擎。
+ * @param {string} [googleVoiceName='cmn-CN-Wavenet-A'] - Google TTS 的发音人名称 (仅限 Google GenAI 引擎)。
+ * @param {string} [googlePitch=0] - Google TTS 语调 (-20 ~ 20)。
+ * @param {string} [googleRate=1] - Google TTS 语速 (0.25 ~ 4.0)。
+ * @param {string} [externalVoice='zh-CN-XiaochenMultilingualNeural'] - 外部 API 的发音人名称 (仅限外部 API 引擎)。
+ * @param {string} [externalRate='-20%'] - 外部 API 的语速。
+ * @param {string} [externalPitch='0%'] - 外部 API 的语调。
  * @param {string} [className=''] - 附加到按钮的 CSS 类名。
  */
-const TextToSpeechButton = ({ // 注意：这里改回 TextToSpeechButton
+const TextToSpeechButton = ({
   text,
   lang = 'zh-CN',
-  voice = 'zh-CN-XiaochenMultilingualNeural', // 默认晓辰
-  rate = '-20%', // 默认语速
-  pitch = '0%',
+  apiKey = '', // 从 AiChatAssistant 传递下来
+  selectedTtsEngine = TTS_ENGINE.GOOGLE_GENAI, // 从 AiChatAssistant 传递下来
+  googleVoiceName = 'cmn-CN-Wavenet-A', // 默认 Google 中文女声
+  googlePitch = 0,
+  googleRate = 1,
+  externalVoice = 'zh-CN-XiaochenMultilingualNeural', // 默认晓辰
+  externalRate = '-20%',
+  externalPitch = '0%',
   className = ''
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const audioRef = useRef(null); // 用于播放音频
-
-  // API 配置 (直接来自你提供的脚本)
-  const apiConfig = useRef({
-    apiBaseUrl: 'https://t.leftsite.cn',
-    voice: voice,
-    rate: rate,
-    pitch: pitch,
-    outputFormat: 'audio-24khz-48kbitrate-mono-mp3',
-  });
-
-  // 更新发音人、语速等配置
-  useEffect(() => {
-      apiConfig.current.voice = voice;
-      apiConfig.current.rate = rate;
-      apiConfig.current.pitch = pitch;
-  }, [voice, rate, pitch]);
-
+  const audioRef = useRef(null);
 
   const synthesizeSpeech = useCallback(async (textToSpeak) => {
     if (!textToSpeak || textToSpeak.trim() === '') {
       setError('没有可朗读的文本。');
       return;
     }
-    if (!apiConfig.current.apiBaseUrl) {
-      setError('TTS API 地址未配置。');
+    if (selectedTtsEngine === TTS_ENGINE.GOOGLE_GENAI && !apiKey.trim()) {
+      setError('请在设置中提供 Google Gemini API 密钥以使用 Google TTS。');
       return;
     }
 
     setIsLoading(true);
     setError(null);
 
-    const encodedText = encodeURIComponent(textToSpeak);
-    // 构建 API URL
-    let url = `${apiConfig.current.apiBaseUrl}/tts?t=${encodedText}&v=${apiConfig.current.voice}&r=${apiConfig.current.rate}&p=${apiConfig.current.pitch}&o=${apiConfig.current.outputFormat}`;
-    
     try {
-      // 使用 fetch 请求音频 Blob
-      const response = await fetch(url);
+      let audioBlob;
 
-      if (!response.ok) {
-        throw new Error(`API 错误 (状态码: ${response.status})`);
+      if (selectedTtsEngine === TTS_ENGINE.GOOGLE_GENAI) {
+        // --- Google GenAI TTS API 调用 ---
+        const googleTtsUrl = `https://texttospeech.googleapis.com/v1beta1/text:synthesize?key=${apiKey}`;
+        const response = await fetch(googleTtsUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            input: { text: textToSpeak },
+            voice: { languageCode: lang, name: googleVoiceName },
+            audioConfig: { audioEncoding: 'MP3', speakingRate: googleRate, pitch: googlePitch }
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(`Google TTS API 错误: ${errorData.error?.message || response.statusText}`);
+        }
+        const data = await response.json();
+        if (!data.audioContent) throw new Error('Google TTS 未返回音频内容。');
+        
+        // Base64 解码并创建 Blob
+        const base64 = data.audioContent;
+        const binaryString = window.atob(base64);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        audioBlob = new Blob([bytes.buffer], { type: 'audio/mpeg' });
+
+      } else if (selectedTtsEngine === TTS_ENGINE.EXTERNAL_API) {
+        // --- 外部 API TTS 调用 (t.leftsite.cn) ---
+        const externalApiUrl = `https://t.leftsite.cn/tts?t=${encodeURIComponent(textToSpeak)}&v=${externalVoice}&r=${externalRate}&p=${externalPitch}&o=audio-24khz-48kbitrate-mono-mp3`;
+        const response = await fetch(externalApiUrl);
+        if (!response.ok) {
+          throw new Error(`外部 TTS API 错误 (状态码: ${response.status})`);
+        }
+        audioBlob = await response.blob();
+      } else { // Fallback to System TTS if no valid engine selected or config missing
+          if ('speechSynthesis' in window) {
+              const utterance = new SpeechSynthesisUtterance(textToSpeak);
+              utterance.lang = lang;
+              window.speechSynthesis.speak(utterance);
+              setIsLoading(false); // 系统TTS不显示加载状态
+              return;
+          } else {
+              throw new Error('浏览器不支持系统 TTS 语音合成。');
+          }
       }
-
-      const audioBlob = await response.blob();
       
-      // 如果正在播放，先暂停并释放旧的URL
-      if (audioRef.current && audioRef.current.src) {
-        URL.revokeObjectURL(audioRef.current.src);
-        audioRef.current.pause();
+      // 播放音频
+      if (audioBlob) {
+          if (audioRef.current && audioRef.current.src) {
+              URL.revokeObjectURL(audioRef.current.src);
+              audioRef.current.pause();
+          }
+          const audioUrl = URL.createObjectURL(audioBlob);
+          const audio = new Audio(audioUrl);
+          audioRef.current = audio;
+          await audio.play();
       }
-      
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-      audioRef.current = audio; // 保存当前音频对象
-
-      await audio.play();
 
     } catch (err) {
       console.error('朗读失败:', err);
@@ -86,7 +126,7 @@ const TextToSpeechButton = ({ // 注意：这里改回 TextToSpeechButton
     } finally {
       setIsLoading(false);
     }
-  }, []); // 依赖列表为空，因为apiConfig.current 在 useEffect 内部更新
+  }, [text, lang, apiKey, selectedTtsEngine, googleVoiceName, googlePitch, googleRate, externalVoice, externalRate, externalPitch]);
 
 
   return (
@@ -108,4 +148,4 @@ const TextToSpeechButton = ({ // 注意：这里改回 TextToSpeechButton
   );
 };
 
-export default TextToSpeechButton; // 导出为 TextToSpeechButton
+export default TextToSpeechButton;
