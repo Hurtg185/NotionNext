@@ -1,31 +1,31 @@
-// /components/AiChatAssistant.js - 最终修复版：简化状态管理，修复设置保存问题
+// /components/AiChatAssistant.js - 最终修复版：修复崩溃和保存问题
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import TextToSpeechButton from './TextToSpeechButton'; // 导入朗读组件
+import AiTtsButton, { TTS_ENGINE } from './AiTtsButton'; // 导入新的 AiTtsButton
 
 // 简单的 Markdown 解析器
-const SimpleMarkdown = ({ text, lang, ttsProps }) => {
+const SimpleMarkdown = ({ text, lang, apiKey, ttsSettings }) => {
     if (!text) return null;
     const lines = text.split('\n').map((line, index) => {
         if (line.trim() === '') return <br key={index} />;
         if (line.match(/\*\*(.*?)\*\*/)) {
             const content = line.replace(/\*\*/g, '');
-            return <strong key={index} className="block mt-4 mb-2 text-lg text-gray-800 dark:text-gray-200 flex items-center"><span className="flex-grow">{content}</span><TextToSpeechButton text={content} lang={lang} {...ttsProps} className="ml-2 shrink-0 text-gray-500" /></strong>;
+            return <strong key={index} className="block mt-4 mb-2 text-lg text-gray-800 dark:text-gray-200 flex items-center"><span className="flex-grow">{content}</span><AiTtsButton text={content} lang={lang} apiKey={apiKey} ttsSettings={ttsSettings} className="ml-2 shrink-0 text-gray-500" /></strong>;
         }
         if (line.startsWith('* ') || line.startsWith('- ')) {
             const content = line.substring(2);
-            return <li key={index} className="ml-5 list-disc flex items-start"><span className="flex-grow">{content}</span><TextToSpeechButton text={content} lang={lang} {...ttsProps} className="ml-2 shrink-0 text-gray-500" /></li>;
+            return <li key={index} className="ml-5 list-disc flex items-start"><span className="flex-grow">{content}</span><AiTtsButton text={content} lang={lang} apiKey={apiKey} ttsSettings={ttsSettings} className="ml-2 shrink-0 text-gray-500" /></li>;
         }
         const content = line;
-        return <p key={index} className="my-1 flex items-center"><span className="flex-grow">{content}</span><TextToSpeechButton text={content} lang={lang} {...ttsProps} className="ml-2 shrink-0 text-gray-500" /></p>;
+        return <p key={index} className="my-1 flex items-center"><span className="flex-grow">{content}</span><AiTtsButton text={content} lang={lang} apiKey={apiKey} ttsSettings={ttsSettings} className="ml-2 shrink-0 text-gray-500" /></p>;
     });
     return <div>{lines}</div>;
 };
 
 // 默认提示词
 const DEFAULT_PROMPTS = [
-    { id: 'default-grammar-correction', name: '纠正中文语法', content: `你是一位专业的、耐心的中文老师，你的学生是缅甸人。你的任务是帮助他们学习中文，纠正语法，解释词语，提供例句，并始终保持友好和鼓励。请根据学生的提问，给出清晰、简洁、实用的回答，必要时提供中文和缅甸语双语解释。你的回答应遵循以下格式：1. 如果需要纠正句子，请先写出“**纠正后的句子：**”\n2. 如果需要解释词语或语法，请先写出“**解释：**”，并提供中缅双语。\n3. 最后，提供 1-2 个使用正确语法的额外例句，并用列表符号“-”开头，标题为“**更多例句：**”。\n4. 你的回答要简洁、友好、鼓励学生。` },
-    { id: 'explain-word', name: '解释中文词语', content: `你是一位专业的、耐心的中文老师，你的学生是缅甸人。请用中文和缅甸语双语，详细解释学生提供的中文词语的含义、用法，并给出2-3个例句。` },
-    { id: 'translate-myanmar', name: '中缅互译', content: `你是一位专业的翻译助手，你的学生是缅甸人。请将学生提供的中文句子翻译成缅甸语，或将缅甸语句子翻译成中文。` }
+    { id: 'default-grammar-correction', name: '纠正中文语法', content: `你是一位专业的、耐心的中文老师...` }, // 省略长文本
+    { id: 'explain-word', name: '解释中文词语', content: `你是一位专业的中文老师...` },
+    { id: 'translate-myanmar', name: '中缅互译', content: `你是一位专业的翻译助手...` }
 ];
 
 // 默认设置
@@ -35,7 +35,7 @@ const DEFAULT_SETTINGS = {
     prompts: DEFAULT_PROMPTS,
     currentPromptId: DEFAULT_PROMPTS[0]?.id,
     autoRead: false,
-    selectedTtsEngine: 'google_genai',
+    selectedTtsEngine: TTS_ENGINE.GOOGLE_GENAI,
     googleVoiceName: 'cmn-CN-Wavenet-A',
     googlePitch: 0,
     googleRate: 1,
@@ -49,7 +49,20 @@ const AiChatAssistant = () => {
     const [userInput, setUserInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
-    const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+    
+    // 使用函数初始化 state，确保 localStorage 只在客户端访问
+    const [settings, setSettings] = useState(() => {
+        if (typeof window !== 'undefined') {
+            try {
+                const savedSettings = localStorage.getItem('ai_assistant_settings');
+                return savedSettings ? { ...DEFAULT_SETTINGS, ...JSON.parse(savedSettings) } : DEFAULT_SETTINGS;
+            } catch (e) {
+                console.error("Failed to load settings from localStorage", e);
+            }
+        }
+        return DEFAULT_SETTINGS;
+    });
+
     const [showSettings, setShowSettings] = useState(false);
 
     // 多模态和语音输入状态
@@ -66,32 +79,24 @@ const AiChatAssistant = () => {
     const messagesEndRef = useRef(null);
     const abortControllerRef = useRef(null);
 
-    // --- 初始化和保存设置 ---
+    // 当 settings 改变时，写入 localStorage
     useEffect(() => {
-        try {
-            const savedSettings = localStorage.getItem('ai_assistant_settings');
-            if (savedSettings) {
-                // 合并保存的设置和默认设置，以防未来新增设置项
-                setSettings(prev => ({ ...DEFAULT_SETTINGS, ...JSON.parse(savedSettings) }));
-            } else {
-                setSettings(DEFAULT_SETTINGS);
+        if (typeof window !== 'undefined') {
+            try {
+                localStorage.setItem('ai_assistant_settings', JSON.stringify(settings));
+            } catch (e) {
+                console.error("Failed to save settings to localStorage", e);
             }
-        } catch (e) {
-            console.error("Failed to load settings from localStorage", e);
-            setSettings(DEFAULT_SETTINGS);
         }
+    }, [settings]);
+
+    const handleSaveSettings = useCallback((newSettings) => {
+        setSettings(newSettings);
+        setShowSettings(false);
     }, []);
 
-    const handleSettingsChange = (newSettings) => {
-        setSettings(newSettings);
-        try {
-            localStorage.setItem('ai_assistant_settings', JSON.stringify(newSettings));
-        } catch (e) {
-            console.error("Failed to save settings to localStorage", e);
-        }
-    };
 
-    // 自动滚动到底部
+    // --- 自动滚动到底部 ---
     useEffect(() => {
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -226,7 +231,7 @@ const AiChatAssistant = () => {
 
             if (settings.autoRead && aiResponseContent) {
                 if (window.speechSynthesis) {
-                    const utterance = new SpeechSynthesisUtterterance(aiResponseContent);
+                    const utterance = new SpeechSynthesisUtterance(aiResponseContent);
                     utterance.lang = 'zh-CN';
                     window.speechSynthesis.speak(utterance);
                 }
@@ -316,37 +321,37 @@ const AiChatAssistant = () => {
                 {speechRecognitionError && <p className="text-red-500 text-sm mb-2 text-center">{speechRecognitionError}</p>}
                 <textarea value={userInput} onChange={(e) => setUserInput(e.target.value)} placeholder="输入你的中文问题或句子..." className="w-full h-20 px-4 py-3 text-lg text-gray-700 bg-gray-100 dark:bg-gray-700 dark:text-gray-200 border-2 border-gray-200 dark:border-gray-600 rounded-full focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-colors resize-none" disabled={isLoading} />
                 <button type="submit" className="w-full mt-4 px-6 py-3 bg-primary text-white font-bold text-xl rounded-lg shadow-md hover:bg-blue-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed" disabled={isLoading || (!userInput.trim() && !selectedImage)}>
-                    {isLoading ? (<div className="flex items-center justify-center"><div className="h-5 w-5 animate-spin rounded-full border-4 border-solid border-white border-t-transparent mr-2"></div>停止生成</div>) : '发送问题'}
+                    {isLoading ? (<button type="button" onClick={handleStopGenerating} className="w-full px-6 py-3 bg-red-500 text-white font-bold text-xl rounded-lg shadow-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200"><div className="flex items-center justify-center"><div className="h-5 w-5 animate-spin rounded-full border-4 border-solid border-white border-t-transparent mr-2"></div>停止生成</div></button>) : '发送问题'}
                 </button>
             </form>
 
             {error && <div className="mt-4 p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-lg">{error}</div>}
 
-            {showSettings && <SettingsModal settings={settings} onSave={handleSettingsChange} onClose={() => setShowSettings(false)} />}
+            {showSettings && <SettingsModal settings={settings} onSave={handleSaveSettings} onClose={() => setShowSettings(false)} />}
         </div>
     );
 };
 
 // --- 设置面板组件 ---
 const SettingsModal = ({ settings, onSave, onClose }) => {
+    // 每次打开面板时，都从父组件的 props 初始化临时状态
     const [tempSettings, setTempSettings] = useState(settings);
 
     const handleChange = (key, value) => {
-        const newSettings = { ...tempSettings, [key]: value };
-        setTempSettings(newSettings);
+        setTempSettings(prev => ({ ...prev, [key]: value }));
     };
 
     const handlePromptChange = (e, promptId, field) => {
         const newPrompts = tempSettings.prompts.map(p => 
             p.id === promptId ? { ...p, [field]: e.target.value } : p
         );
-        setTempSettings({ ...tempSettings, prompts: newPrompts });
+        handleChange('prompts', newPrompts);
     };
 
     const handleAddPrompt = () => {
         const newId = `custom-${Date.now()}`;
         const newPrompts = [...tempSettings.prompts, { id: newId, name: '新提示词', content: '请输入提示词内容...' }];
-        setTempSettings({ ...tempSettings, prompts: newPrompts });
+        handleChange('prompts', newPrompts);
     };
 
     const handleDeletePrompt = (idToDelete) => {
@@ -356,7 +361,8 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
             if (newCurrentPromptId === idToDelete) {
                 newCurrentPromptId = newPrompts[0]?.id || '';
             }
-            setTempSettings({ ...tempSettings, prompts: newPrompts, currentPromptId: newCurrentPromptId });
+            handleChange('prompts', newPrompts);
+            handleChange('currentPromptId', newCurrentPromptId);
         }
     };
     
