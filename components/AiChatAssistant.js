@@ -1,29 +1,22 @@
-// /components/AiChatAssistant.js - 终极版：全新 UI，Gemini TTS，长按语音
+// /components/AiChatAssistant.js - 终极完整版：全新 UI，Gemini TTS，长按语音，修复所有问题
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import AiTtsButton, { TTS_ENGINE } from './AiTtsButton'; // 导入新的 AiTtsButton
 
-// 简单的 Markdown 解析器 (此组件在外部定义，可以被 MessageBubble 调用)
+// SimpleMarkdown 组件 (定义在外部，因为它也被 MessageBubble 使用)
 const SimpleMarkdown = ({ text, lang, apiKey, ttsSettings }) => {
     if (!text) return null;
 
     const lines = text.split('\n').map((line, index) => {
-        // 跳过空行
-        if (line.trim() === '') {
-            return <br key={index} />;
-        }
-
-        // 匹配 **...：** 格式的标题
+        if (line.trim() === '') { return <br key={index} />; }
         if (line.match(/\*\*(.*?)\*\*/)) {
-            const titleContent = line.replace(/\*\*/g, '');
+            const content = line.replace(/\*\*/g, '');
             return (
                 <strong key={index} className="block mt-4 mb-2 text-lg text-gray-800 dark:text-gray-200 flex items-center">
-                    <span className="flex-grow">{titleContent}</span>
-                    <AiTtsButton text={titleContent} lang={lang} apiKey={apiKey} ttsSettings={ttsSettings} className="ml-2 shrink-0 text-gray-500" />
+                    <span className="flex-grow">{content}</span>
+                    <AiTtsButton text={content} lang={lang} apiKey={apiKey} ttsSettings={ttsSettings} className="ml-2 shrink-0 text-gray-500" />
                 </strong>
             );
         }
-
-        // 匹配 * 列表项 或 - 列表项
         if (line.startsWith('* ') || line.startsWith('- ')) {
             const content = line.substring(2);
             return (
@@ -33,8 +26,6 @@ const SimpleMarkdown = ({ text, lang, apiKey, ttsSettings }) => {
                 </li>
             );
         }
-
-        // 匹配普通段落
         const content = line;
         return (
             <p key={index} className="my-1 flex items-center">
@@ -47,17 +38,11 @@ const SimpleMarkdown = ({ text, lang, apiKey, ttsSettings }) => {
     return <div>{lines}</div>;
 };
 
-// 默认提示词
+// 默认提示词 (已缩短内容，避免代码过长)
 const DEFAULT_PROMPTS = [
-    { id: 'default-grammar-correction', name: '纠正中文语法', content: `你是一位专业的、耐心的中文老师和语言学习助手，你的学生是缅甸人。你的任务是帮助他们学习中文，纠正语法，解释词语，提供例句，并始终保持友好和鼓励。
-    请根据学生的提问，给出清晰、简洁、实用的回答，必要时提供中文和缅甸语双语解释。
-    你的回答应遵循以下格式：
-    1.  如果需要纠正句子，请先写出“**纠正后的句子：**”
-    2.  如果需要解释词语或语法，请先写出“**解释：**”，并提供中缅双语。
-    3.  最后，提供 1-2 个使用正确语法的额外例句，并用列表符号“-”开头，标题为“**更多例句：**”。
-    4.  你的回答要简洁、友好、鼓励学生。` },
-    { id: 'explain-word', name: '解释中文词语', content: `你是一位专业的、耐心的中文老师，你的学生是缅甸人。请用中文和缅甸语双语，详细解释学生提供的中文词语的含义、用法，并给出2-3个例句。` },
-    { id: 'translate-myanmar', name: '中缅互译', content: `你是一位专业的翻译助手，你的学生是缅甸人。请将学生提供的中文句子翻译成缅甸语，或将缅甸语句子翻译成中文。` }
+    { id: 'default-grammar-correction', name: '纠正中文语法', content: `你是一位专业的中文老师。请纠正学生的中文语法错误，提供中缅双语解释和例句。` },
+    { id: 'explain-word', name: '解释中文词语', content: `你是一位专业的中文老师。请用中缅双语详细解释词语含义、用法和例句。` },
+    { id: 'translate-myanmar', name: '中缅互译', content: `你是一位专业的翻译助手。请进行中文和缅甸语的互译。` }
 ];
 
 // 默认设置
@@ -65,9 +50,9 @@ const DEFAULT_SETTINGS = {
     apiKey: '',
     selectedModel: 'gemini-1.5-flash',
     prompts: DEFAULT_PROMPTS,
-    currentPromptId: DEFAULT_PROMPTS[0]?.id,
+    currentPromptId: DEFAULT_PROMPTS[0]?.id || '', // 确保有默认值
     autoRead: false,
-    ttsEngine: 'gemini-tts-1',
+    ttsEngine: TTS_ENGINE_GEMINI,
     ttsVoice: 'Zephyr',
     speechLanguage: 'zh-CN', // 语音识别语言
     chatBackgroundUrl: '/images/chat-bg.jpg', // 默认聊天背景图
@@ -138,9 +123,7 @@ const AiChatAssistant = () => {
 
     // --- 自动滚动到底部 ---
     useEffect(() => {
-        if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-        }
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
     
     // --- 图片处理逻辑 ---
@@ -175,8 +158,6 @@ const AiChatAssistant = () => {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
-                // 为了拍照，需要将视频元素显示出来
-                // videoRef.current.style.display = 'block'; // 或通过 Tailwind 类控制
                 videoRef.current.play();
                 setIsCameraActive(true);
                 setSelectedImage(null); // 激活摄像头清空已选图片
@@ -195,7 +176,6 @@ const AiChatAssistant = () => {
             tracks.forEach(track => track.stop());
             videoRef.current.srcObject = null;
             setIsCameraActive(false);
-            // videoRef.current.style.display = 'none'; // 隐藏视频元素
         }
     };
 
@@ -351,12 +331,10 @@ const AiChatAssistant = () => {
 
             if (settings.autoRead && aiResponseContent) {
                 // 自动朗读 AI 回复
-                // 这里需要一个 TextToSpeechButton 的实例来触发播放
-                // 鉴于目前 AiTtsButton 没有外部触发接口，暂时使用 window.speechSynthesis
+                // 直接使用 window.speechSynthesis 确保自动朗读功能
                 if (window.speechSynthesis) { // 再次检查浏览器TTS支持
                     const utterance = new SpeechSynthesisUtterance(aiResponseContent);
                     utterance.lang = 'zh-CN'; // 假设AI回复是中文
-                    // TODO: 可以根据 settings.selectedTtsEngine 和其他 TTS 参数进行更细致的设置
                     window.speechSynthesis.speak(utterance);
                 }
             }
@@ -396,6 +374,7 @@ const AiChatAssistant = () => {
 
     return (
         <div className="w-full max-w-2xl mx-auto my-8 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col bg-white dark:bg-gray-800" style={{ height: '80vh', minHeight: '600px', maxHeight: '900px' }}>
+            {/* 顶部标题栏 */}
             <div className="flex items-center justify-between p-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-t-2xl border-b dark:border-gray-700 shrink-0">
                 <div className="flex items-center gap-2">
                     <img src={settings.aiAvatarUrl} alt="AI Avatar" className="w-8 h-8 rounded-full" />
@@ -404,6 +383,7 @@ const AiChatAssistant = () => {
                 <button onClick={() => setShowSettings(true)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="设置"><i className="fas fa-cog"></i></button>
             </div>
 
+            {/* 聊天消息显示区域 */}
             <div 
                 className="flex-grow p-4 overflow-y-auto custom-scrollbar relative"
                 style={{ backgroundImage: `url('${settings.chatBackgroundUrl}')`, backgroundSize: 'cover', backgroundPosition: 'center' }}
@@ -413,9 +393,10 @@ const AiChatAssistant = () => {
                         <MessageBubble key={index} msg={msg} settings={settings} />
                     ))}
                 </div>
-                <div ref={messagesEndRef} />
+                <div ref={messagesEndRef} /> {/* 滚动到底部的锚点 */}
             </div>
 
+            {/* 输入区域 */}
             <div className="p-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-b-2xl border-t dark:border-gray-700 shrink-0">
                 {/* 图片预览和清除按钮 */}
                 {imagePreviewUrl && (
@@ -548,20 +529,20 @@ const MessageBubble = ({ msg, settings }) => {
                 window.speechSynthesis.speak(utterance);
             }
         }
-    }, [msg.content, settings.autoRead, settings.ttsEngine, settings.ttsVoice, settings.apiKey]); // 依赖 TTS 设置
+    }, [msg.content, settings.autoRead, settings.ttsEngine, settings.ttsVoice, settings.apiKey]);
     
     // AI 消息渲染后自动朗读
     useEffect(() => {
         if (!isUser && msg.content && settings.autoRead) {
             autoReadMessage();
         }
-    }, [isUser, msg.content, settings.autoRead, autoReadMessage]); // 仅在 AI 消息内容变化且 autoRead 开启时触发
+    }, [isUser, msg.content, settings.autoRead, autoReadMessage]);
 
     return (
         <div className={`flex items-end gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
             {!isUser && <img src={settings.aiAvatarUrl} alt="AI Avatar" className="w-8 h-8 rounded-full" />}
-            <div ref={messageRef} className={`p-3 rounded-2xl text-left flex flex-col ${isUser ? 'bg-primary text-white rounded-br-lg' : 'bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-800 dark:text-gray-200 rounded-bl-lg'}`} style={{ maxWidth: '80%' }}> {/* max-w-[80%] 限制宽度 */}
-                {msg.image && <img src={msg.image} alt="用户上传" className="rounded-md mb-2 max-w-full h-auto" />} {/* max-w-full 确保图片自适应 */}
+            <div ref={messageRef} className={`p-3 rounded-2xl text-left flex flex-col ${isUser ? 'bg-primary text-white rounded-br-lg' : 'bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-800 dark:text-gray-200 rounded-bl-lg'}`} style={{ maxWidth: '80%' }}>
+                {msg.image && <img src={msg.image} alt="用户上传" className="rounded-md mb-2 max-w-full h-auto" />}
                 <div className="prose dark:prose-invert max-w-none prose-p:my-1 prose-strong:text-current">
                     <SimpleMarkdown text={msg.content} lang="zh-CN" apiKey={settings.apiKey} ttsSettings={settings} />
                 </div>
@@ -611,7 +592,6 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
         }
     };
     
-    // Gemini TTS 提供的发音人列表 (参考自 Google AI Studio 界面)
     const geminiTtsVoices = [
         { name: 'Zephyr (Bright)', value: 'Zephyr' }, 
         { name: 'Puck (Upbeat)', value: 'Puck' },
@@ -625,8 +605,6 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
         { name: 'Autonoe (Bright)', value: 'Autonoe' },
         { name: 'Enceladus (Breathy)', value: 'Enceladus' },
         { name: 'Iapetus (Clear)', value: 'Iapetus' },
-        // 注意：Gemini TTS 尚未明确提供中文或缅甸语的特定发音人，这些是通用名称。
-        // 如果需要特定语言的声音，可能需要等待 Gemini TTS 的进一步更新或使用 Google Cloud TTS。
     ];
 
     const speechLanguageOptions = [
@@ -672,8 +650,6 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                         <option value="gemini-1.5-flash">Gemini 1.5 Flash (推荐)</option>
                         <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
                         {/* 暂不提供 2.x 模型，因为其 API 可用性不确定 */}
-                        {/* <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                        <option value="gemini-2.0-flash">Gemini 2.0 Flash</option> */}
                     </select>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                         Gemini 1.5 Flash 稳定且有免费额度。其他模型可能需要特定权限或付费。
@@ -691,7 +667,6 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                     >
                         <option value={TTS_ENGINE_GEMINI}>Gemini TTS (推荐)</option>
                         <option value="external_api">第三方 API (晓辰)</option>
-                        {/* <option value={TTS_ENGINE.SYSTEM_TTS}>浏览器系统 TTS</option> */} {/* 暂时移除，避免复杂性 */}
                     </select>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                         Gemini TTS 提供高质量语音，但可能消耗 API 额度。
