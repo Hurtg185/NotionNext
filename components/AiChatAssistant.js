@@ -1,4 +1,4 @@
-// /components/AiChatAssistant.js - 调试 v12：恢复 API 调用功能
+// /components/AiChatAssistant.js - 调试 v12 (修正版)：恢复 API 调用功能
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import AiTtsButton, { TTS_ENGINE } from './AiTtsButton'; // 重新导入 AiTtsButton
 
@@ -72,20 +72,17 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
     );
 };
 
-// --- 默认设置和提示词 ---
-const DEFAULT_PROMPTS = [ { id: 'default-grammar-correction', name: '纠正中文语法', content: `你是一位专业的中文老师...` } ];
+// --- 默认设置和提示词 (简化) ---
+const DEFAULT_PROMPTS = [ { id: 'default-grammar-correction', name: '纠正中文语法', content: `你是一位专业的中文老师...` } ]; // 简化以避免过长
 const DEFAULT_SETTINGS = {
     apiKey: '',
     selectedModel: 'gemini-1.5-flash',
     prompts: DEFAULT_PROMPTS,
     currentPromptId: DEFAULT_PROMPTS[0]?.id || '',
-    autoRead: false,
-    ttsEngine: 'gemini-tts-1',
-    ttsVoice: 'Zephyr',
-    speechLanguage: 'zh-CN',
     chatBackgroundUrl: '/images/chat-bg.jpg',
     userAvatarUrl: '/images/user-avatar.png',
     aiAvatarUrl: '/images/ai-avatar.png',
+    // ... 其他 TTS 设置
 };
 
 // --- 主组件：AiChatAssistant ---
@@ -99,10 +96,8 @@ const AiChatAssistant = () => {
     const [showSettings, setShowSettings] = useState(false);
     
     const [inputMode, setInputMode] = useState('text');
-    const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
 
     const messagesEndRef = useRef(null);
-    const fileInputRef = useRef(null);
     const abortControllerRef = useRef(null);
 
     // --- 初始化和保存设置 ---
@@ -134,7 +129,7 @@ const AiChatAssistant = () => {
     const handleSubmit = async (e) => {
         if (e) e.preventDefault();
         const textToProcess = userInput.trim();
-        if (!textToProcess || isLoading) return;
+        if (!textToProcess || isLoading) return; // 暂时只处理文本
         if (!settings.apiKey.trim()) {
             setError('请先在设置中输入您的 Google Gemini API 密钥！');
             setShowSettings(true);
@@ -149,7 +144,7 @@ const AiChatAssistant = () => {
         setError('');
         abortControllerRef.current = new AbortController();
 
-        const currentPrompt = settings.prompts.find(p => p.id === settings.currentPromptId)?.content || DEFAULT_PROMPTS[0].content;
+        const currentPrompt = settings.prompts?.find(p => p.id === settings.currentPromptId)?.content || DEFAULT_PROMPTS[0].content;
         const history = messages.map(msg => ({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.content }] }));
 
         try {
@@ -191,11 +186,7 @@ const AiChatAssistant = () => {
     const handleStopGenerating = () => {
         abortControllerRef.current?.abort();
     };
-
-    // --- 简化的交互逻辑 ---
-    const handleImageUpload = (e) => { alert('图片功能正在调试中'); };
-    const clearImage = () => { setImagePreviewUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; };
-
+    
     if (!isMounted) {
         return <div style={{ height: '700px', border: '5px solid red' }}><p>加载中...</p></div>;
     }
@@ -203,7 +194,10 @@ const AiChatAssistant = () => {
     return (
         <div 
             className="w-full max-w-2xl mx-auto my-8 rounded-2xl shadow-xl border flex flex-col bg-white dark:bg-gray-800"
-            style={{ height: '80vh', minHeight: '600px', maxHeight: '900px', display: 'flex !important' }}
+            style={{ 
+                height: '80vh', minHeight: '600px', maxHeight: '900px',
+                display: 'flex !important',
+            }}
         >
             <div className="flex items-center justify-between p-4 rounded-t-2xl border-b shrink-0">
                 <div className="flex items-center gap-2">
@@ -226,26 +220,22 @@ const AiChatAssistant = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="p-4 border-t shrink-0">
-                {imagePreviewUrl && (
-                    <div className="relative mb-2 w-24">
-                        <img src={imagePreviewUrl} alt="预览" className="rounded-lg" />
-                        <button type="button" onClick={clearImage} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1" title="移除"><i className="fas fa-times text-xs"></i></button>
-                    </div>
-                )}
                 <div className="flex items-end gap-2">
-                    <button type="button" onClick={handleImageUpload} className="p-3 rounded-full hover:bg-gray-200"><i className="fas fa-image"></i></button>
-                    <input type="file" ref={fileInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" />
-                    
-                    <textarea value={userInput} onChange={(e) => setUserInput(e.target.value)} placeholder="输入消息..." className="flex-grow px-4 py-2 rounded-2xl bg-gray-100" rows="1" />
-
-                    <button type="submit" className="p-3 bg-primary text-white rounded-full" disabled={isLoading || !userInput.trim()}>
-                        {isLoading ? <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div> : <i className="fas fa-arrow-up"></i>}
-                    </button>
+                    {/* 占位的多媒体按钮 */}
+                    <div className="flex gap-1">
+                        <button type="button" onClick={() => alert('图片功能开发中')} className="p-3 rounded-full hover:bg-gray-200"><i className="fas fa-image"></i></button>
+                    </div>
+                    {/* 文本输入框 */}
+                    <textarea value={userInput} onChange={(e) => setUserInput(e.target.value)} placeholder="与 AI 聊天..." className="flex-grow px-4 py-2 rounded-2xl bg-gray-100 dark:bg-gray-700 resize-none max-h-32" rows="1" />
+                    {/* 发送/停止按钮 */}
+                    {isLoading ? (
+                         <button type="button" onClick={handleStopGenerating} className="p-3 bg-red-500 text-white rounded-full"><i className="fas fa-stop"></i></button>
+                    ) : (
+                         <button type="submit" className="p-3 bg-primary text-white rounded-full" disabled={!userInput.trim()}><i className="fas fa-arrow-up"></i></button>
+                    )}
                 </div>
-                 {isLoading && <button type="button" onClick={handleStopGenerating} className="w-full mt-2 text-sm text-red-500">停止生成</button>}
+                 {error && <p className="text-red-500 text-sm text-center mt-2">{error}</p>}
             </form>
-
-            {error && <div className="p-2 m-4 bg-red-100 text-red-700 rounded-lg text-center">{error}</div>}
 
             {showSettings && <SettingsModal settings={settings} onSave={handleSaveSettings} onClose={() => setShowSettings(false)} />}
         </div>
