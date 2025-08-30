@@ -1,4 +1,4 @@
-// /components/AiChatAssistant.js - v19: 修复所有回归问题并增强功能的最终完整版
+// /components/AiChatAssistant.js - v20: 修复所有问题并加入侧边栏收缩等新功能
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import AiTtsButton from './AiTtsButton';
 
@@ -35,6 +35,7 @@ const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate }) => {
                 <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1">
                     <SimpleMarkdown text={msg.content || ''} />
                 </div>
+                {/* 修复：确保朗读按钮在这里 */}
                 {!isUser && msg.content && (
                     <div className="flex items-center gap-2 mt-2 -mb-1 text-gray-500 dark:text-gray-400">
                         <AiTtsButton text={msg.content} ttsSettings={settings} />
@@ -50,15 +51,15 @@ const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate }) => {
     );
 };
 
-const ChatSidebar = ({ conversations, currentId, onSelect, onNew, onDelete, onRename }) => {
+const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDelete, onRename }) => {
     const [editingId, setEditingId] = useState(null);
     const [newName, setNewName] = useState('');
     const handleRename = (id, oldName) => { setEditingId(id); setNewName(oldName); };
     const handleSaveRename = (id) => { if (newName.trim()) { onRename(id, newName.trim()); } setEditingId(null); };
 
     return (
-        <div className={`h-full bg-gray-50 dark:bg-gray-800/50 p-2 flex flex-col border-r dark:border-gray-700 transition-all duration-300 w-64`}>
-            <button onClick={onNew} className="w-full flex items-center justify-between p-2 mb-2 rounded-md border border-dashed hover:bg-gray-200 dark:hover:bg-gray-700">
+        <div className={`h-full bg-gray-50 dark:bg-gray-800/50 flex flex-col border-r dark:border-gray-700 transition-all duration-300 ${isOpen ? 'w-64 p-2' : 'w-0 p-0'} overflow-hidden`}>
+            <button onClick={onNew} className="w-full flex items-center justify-between p-2 mb-2 rounded-md border border-dashed hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0">
                 <span>发起新对话</span><i className="fas fa-plus"></i>
             </button>
             <div className="flex-grow overflow-y-auto">
@@ -69,7 +70,7 @@ const ChatSidebar = ({ conversations, currentId, onSelect, onNew, onDelete, onRe
                                 <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} onBlur={() => handleSaveRename(conv.id)} onKeyDown={(e) => e.key === 'Enter' && handleSaveRename(conv.id)} className="w-full bg-transparent p-0 border-b" autoFocus />
                             ) : ( <span className="text-sm">{conv.title}</span> )}
                         </div>
-                        <div className="hidden group-hover:flex items-center">
+                        <div className="hidden group-hover:flex items-center shrink-0">
                            <button onClick={(e) => { e.stopPropagation(); handleRename(conv.id, conv.title); }} className="p-1 hover:text-primary"><i className="fas fa-pen text-xs"></i></button>
                            <button onClick={(e) => { e.stopPropagation(); if(window.confirm('确定删除此对话吗？')) onDelete(conv.id); }} className="p-1 hover:text-red-500"><i className="fas fa-trash text-xs"></i></button>
                         </div>
@@ -103,7 +104,7 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
     const handleDeletePrompt = (idToDelete) => { if (!window.confirm('确定删除吗？')) return; const newPrompts = tempSettings.prompts.filter(p => p.id !== idToDelete); handleChange('prompts', newPrompts); if (tempSettings.currentPromptId === idToDelete) handleChange('currentPromptId', newPrompts[0]?.id || ''); };
 
     const chatModels = [
-        { name: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash' }, { name: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro' }, { name: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash' }, { name: 'Gemini 1.5 Flash (最新)', value: 'gemini-1.5-flash-latest' }, { name: 'Gemini 1.5 Pro (最新)', value: 'gemini-1.5-pro-latest' },
+        { name: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash' }, { name: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro' }, { name: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash' }, { name: 'Gemini 2.5 Flash-Lite (最快)', value: 'gemini-2.5-flash-late' }, { name: 'Gemini 1.5 Pro (最新)', value: 'gemini-1.5-pro-latest' },
     ];
     const microsoftTtsVoices = [
         { name: '晓晓 (HD)', value: 'zh-CN-Xiaoxiao2:DragonHDFlashLatestNeural' }, { name: '晓辰 (HD)', value: 'zh-CN-Xiaochen:DragonHDFlashLatestNeural' }, { name: '晓晓 (女, 多语言)', value: 'zh-CN-XiaoxiaoMultilingualNeural' }, { name: '晓辰 (女, 多语言)', value: 'zh-CN-XiaochenMultilingualNeural' }, { name: '云希 (男, 温和)', value: 'zh-CN-YunxiNeural' }, { name: '云泽 (男, 叙事)', value: 'zh-CN-YunzeNeural' }, { name: '晓晓 (女, 亲切)', value: 'zh-CN-XiaoxiaoNeural' }, { name: '晓颜 (女)', value: 'zh-CN-XiaoyanNeural'}, { name: '晓伊 (女, 动漫)', value: 'zh-CN-XiaoyiNeural' }, { name: '云健 (男, 沉稳)', value: 'zh-CN-YunjianNeural' }, { name: '云扬 (男, 阳光)', value: 'zh-CN-YunyangNeural' }, { name: '晓臻 (女, 台湾)', value: 'zh-TW-HsiaoChenNeural' }, { name: '允喆 (男, 台湾)', value: 'zh-TW-YunJheNeural' }, { name: 'Ava (女, 美国, 多语言)', value: 'en-US-AvaMultilingualNeural' }, { name: 'Steffan (男, 美国, 多语言)', value: 'en-US-SteffanMultilingualNeural' }, { name: 'Vivienne (女, 法国, 多语言)', value: 'fr-FR-VivienneMultilingualNeural' }, { name: 'Remy (男, 法国, 多语言)', value: 'fr-FR-RemyMultilingualNeural' }, { name: '妮拉 (女, 缅甸)', value: 'my-MM-NilarNeural' }, { name: '蒂哈 (男, 缅甸)', value: 'my-MM-ThihaNeural' }, { name: '怀眉 (女, 越南)', value: 'vi-VN-HoaiMyNeural' }, { name: '南明 (男, 越南)', value: 'vi-VN-NamMinhNeural' },
@@ -130,6 +131,7 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                              <label className="text-sm shrink-0">温度: {tempSettings.temperature}</label>
                              <input type="range" min="0" max="1" step="0.1" value={tempSettings.temperature} onChange={(e) => handleChange('temperature', parseFloat(e.target.value))} className="w-full"/>
                          </div>
+                         {/* 修复：添加 API 超时（推理预算）滑块 */}
                           <div className="flex items-center gap-4">
                              <label className="text-sm shrink-0">API超时: {tempSettings.apiTimeout / 1000}s</label>
                              <input type="range" min="10" max="120" step="5" value={tempSettings.apiTimeout / 1000} onChange={(e) => handleChange('apiTimeout', parseInt(e.target.value, 10) * 1000)} className="w-full"/>
@@ -218,7 +220,7 @@ const AiChatAssistant = () => {
     const [showSettings, setShowSettings] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
     const [isFullScreen, setIsFullScreen] = useState(false);
-    const [showSidebar, setShowSidebar] = useState(true);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [showPromptSelector, setShowPromptSelector] = useState(false);
     const [selectedImage, setSelectedImage] = useState(null);
     const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
@@ -234,9 +236,9 @@ const AiChatAssistant = () => {
     useEffect(() => {
         setIsMounted(true);
         try {
-            const savedSettings = localStorage.getItem('ai_assistant_settings_v18_final');
+            const savedSettings = localStorage.getItem('ai_assistant_settings_v19_final');
             if (savedSettings) setSettings(prev => ({ ...DEFAULT_SETTINGS, ...JSON.parse(savedSettings) }));
-            const savedConversations = localStorage.getItem('ai_assistant_conversations_v18_final');
+            const savedConversations = localStorage.getItem('ai_assistant_conversations_v19_final');
             const parsedConvs = savedConversations ? JSON.parse(savedConversations) : [];
             setConversations(parsedConvs);
             if (parsedConvs.length > 0) {
@@ -249,8 +251,8 @@ const AiChatAssistant = () => {
 
     useEffect(() => {
         if (isMounted) {
-            localStorage.setItem('ai_assistant_settings_v18_final', JSON.stringify(settings));
-            localStorage.setItem('ai_assistant_conversations_v18_final', JSON.stringify(conversations));
+            localStorage.setItem('ai_assistant_settings_v19_final', JSON.stringify(settings));
+            localStorage.setItem('ai_assistant_conversations_v19_final', JSON.stringify(conversations));
         }
     }, [settings, conversations, isMounted]);
 
@@ -272,8 +274,20 @@ const AiChatAssistant = () => {
     const handleImageUpload = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onloadend = () => { setSelectedImage(reader.result.split(',')[1]); setImagePreviewUrl(reader.result); }; reader.readAsDataURL(file); };
     const clearImage = () => { setSelectedImage(null); setImagePreviewUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; };
 
-    const startListening = useCallback(() => { /* ... (与v12完全相同) ... */ }, [settings.speechLanguage]);
-    const stopListening = useCallback(() => { /* ... (与v12完全相同) ... */ }, []);
+    const startListening = useCallback(() => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) { alert('您的浏览器不支持语音输入。'); return; }
+        if (recognitionRef.current) recognitionRef.current.abort();
+        const recognition = new SpeechRecognition();
+        recognition.lang = settings.speechLanguage;
+        recognition.onstart = () => setIsListening(true);
+        recognition.onresult = (e) => setUserInput(e.results[0][0].transcript.trim());
+        recognition.onerror = () => setIsListening(false);
+        recognition.onend = () => setIsListening(false);
+        recognition.start();
+        recognitionRef.current = recognition;
+    }, [settings.speechLanguage]);
+    const stopListening = useCallback(() => { if (recognitionRef.current) recognitionRef.current.stop(); }, []);
 
     const handleSubmit = async (isRegenerate = false) => {
         if (!currentConversationId || isLoading) return;
@@ -327,14 +341,19 @@ const AiChatAssistant = () => {
             if (!aiResponseContent) throw new Error('AI未能返回有效内容。');
 
             const aiMessage = { role: 'ai', content: aiResponseContent };
-            setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: [...messagesForApi, aiMessage] } : c));
+            const finalMessages = [...messagesForApi, aiMessage];
+            setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: finalMessages } : c));
 
         } catch (err) {
+            const finalMessages = [...messagesForApi]; // Restore messages before AI response
             if (err.name === 'AbortError') {
                 setError('API 请求超时，请检查网络或在设置中延长“思考预算”。');
+                finalMessages.push({role: 'ai', content: '抱歉，思考超时了。'});
             } else {
                 setError(`请求错误: ${err.message}`);
+                finalMessages.push({role: 'ai', content: `抱歉，出错了: ${err.message}`});
             }
+            setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: finalMessages } : c));
         } finally {
             setIsLoading(false);
         }
@@ -346,22 +365,25 @@ const AiChatAssistant = () => {
 
     return (
         <div className={`w-full max-w-5xl mx-auto my-8 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 flex bg-white dark:bg-gray-900 ${isFullScreen ? 'fixed inset-0 z-50 max-w-full my-0 rounded-none' : ''}`} style={isFullScreen ? {} : { height: '90vh', minHeight: '650px' }}>
-            <ChatSidebar conversations={conversations} currentId={currentConversationId} onSelect={handleSelectConversation} onNew={createNewConversation} onDelete={handleDeleteConversation} onRename={handleRenameConversation}/>
-            <div className="flex-1 flex flex-col h-full">
+            <ChatSidebar isOpen={isSidebarOpen} conversations={conversations} currentId={currentConversationId} onSelect={handleSelectConversation} onNew={createNewConversation} onDelete={handleDeleteConversation} onRename={handleRenameConversation}/>
+            <div className="flex-1 flex flex-col h-full min-w-0">
                 <div className="flex items-center justify-between p-2 border-b dark:border-gray-700 shrink-0">
-                    <h2 className="text-lg font-semibold truncate px-2">{currentConversation?.title || '聊天'}</h2>
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => setIsSidebarOpen(s => !s)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="切换侧边栏"><i className="fas fa-bars"></i></button>
+                        <h2 className="text-lg font-semibold truncate">{currentConversation?.title || '聊天'}</h2>
+                    </div>
                     <button onClick={() => setShowSettings(true)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="设置"><i className="fas fa-cog"></i></button>
                 </div>
                 <div className="flex-grow p-4 overflow-y-auto" style={{ backgroundImage: `url('${settings.chatBackgroundUrl}')`}}>
                     <div className="space-y-1">
                         {currentConversation?.messages.map((msg, index) => (
-                            <MessageBubble key={index} msg={msg} settings={settings} isLastAiMessage={index === currentConversation.messages.length - 1 && msg.role === 'ai'} onRegenerate={() => handleSubmit(true)} />
+                            <MessageBubble key={`${currentConversationId}-${index}`} msg={msg} settings={settings} isLastAiMessage={index === currentConversation.messages.length - 1 && msg.role === 'ai'} onRegenerate={() => handleSubmit(true)} />
                         ))}
                     </div>
                     <div ref={messagesEndRef} />
                 </div>
                 <div className="p-3 border-t dark:border-gray-700 shrink-0">
-                    {error && <div className="mb-2 p-2 bg-red-100 text-red-700 rounded-lg text-center text-sm">{error}</div>}
+                    {error && <div className="mb-2 p-2 bg-red-100 text-red-700 rounded-lg text-center text-sm" onClick={()=>setError('')}>{error} <span className='text-xs'>(点击关闭)</span></div>}
                     {imagePreviewUrl && (
                         <div className="relative mb-2 w-24">
                             <img src={imagePreviewUrl} alt="预览" className="rounded-lg" />
@@ -374,7 +396,7 @@ const AiChatAssistant = () => {
                                 <button type="button" onClick={() => setShowPromptSelector(s => !s)} className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0" title="切换提示词"><i className="fas fa-magic"></i></button>
                                 {showPromptSelector && (
                                     <div className="absolute bottom-full mb-2 w-48 bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 overflow-hidden z-20">
-                                        {settings.prompts.map(p => ( <button key={p.id} onClick={()=>{setSettings(s=>({...s, currentPromptId: p.id}));setShowPromptSelector(false);}} className={`w-full text-left px-4 py-2 text-sm hover:bg-primary/10 ${settings.currentPromptId === p.id ? 'text-primary font-bold' : ''}`}>{p.name}</button>))}
+                                        {settings.prompts.map(p => ( <button key={p.id} type="button" onClick={()=>{setSettings(s=>({...s, currentPromptId: p.id}));setShowPromptSelector(false);}} className={`w-full text-left px-4 py-2 text-sm hover:bg-primary/10 ${settings.currentPromptId === p.id ? 'text-primary font-bold' : ''}`}>{p.name}</button>))}
                                     </div>
                                 )}
                             </div>
