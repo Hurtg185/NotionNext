@@ -1,24 +1,23 @@
-// /components/AiChatAssistant.js - 终极完整版：修复 API 格式，恢复所有功能
+// /components/AiChatAssistant.js - 终极完整版：修复所有已知问题
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import AiTtsButton, { TTS_ENGINE } from './AiTtsButton'; // 导入 AI 专用的 TTS 按钮
+import TtsButton, { TTS_ENGINE } from './TtsButton'; // 导入统一的 TTS 按钮
 
 // --- 子组件定义区域 (在主组件外部) ---
 
-// 简单的 Markdown 解析器
-const SimpleMarkdown = ({ text, lang, apiKey, ttsSettings }) => {
+// 简单的 Markdown 解析器 (不再包含 TTS 按钮)
+const SimpleMarkdown = ({ text }) => {
     if (!text) return null;
     const lines = text.split('\n').map((line, index) => {
         if (line.trim() === '') return <br key={index} />;
         if (line.match(/\*\*(.*?)\*\*/)) {
             const content = line.replace(/\*\*/g, '');
-            return <strong key={index} className="block mt-4 mb-2 text-lg text-gray-800 dark:text-gray-200 flex items-center"><span className="flex-grow">{content}</span><AiTtsButton text={content} lang={lang} apiKey={apiKey} ttsSettings={ttsSettings} className="ml-2 shrink-0 text-gray-500" /></strong>;
+            return <strong key={index} className="block mt-2 mb-1">{content}</strong>;
         }
         if (line.startsWith('* ') || line.startsWith('- ')) {
             const content = line.substring(2);
-            return <li key={index} className="ml-5 list-disc flex items-start"><span className="flex-grow">{content}</span><AiTtsButton text={content} lang={lang} apiKey={apiKey} ttsSettings={ttsSettings} className="ml-2 shrink-0 text-gray-500" /></li>;
+            return <li key={index} className="ml-5 list-disc">{content}</li>;
         }
-        const content = line;
-        return <p key={index} className="my-1 flex items-center"><span className="flex-grow">{content}</span><AiTtsButton text={content} lang={lang} apiKey={apiKey} ttsSettings={ttsSettings} className="ml-2 shrink-0 text-gray-500" /></p>;
+        return <p key={index} className="my-1">{line}</p>;
     });
     return <div>{lines}</div>;
 };
@@ -29,25 +28,14 @@ const MessageBubble = ({ msg, settings }) => {
     const messageRef = useRef(null);
 
     // 自动朗读逻辑
-    const autoReadMessage = useCallback(() => {
-        if (!settings.autoRead || !msg.content || !messageRef.current) return;
-        const ttsButton = messageRef.current.querySelector('.tts-button');
-        if (ttsButton && !ttsButton.disabled) {
-             ttsButton.click();
-        } else {
-            if (window.speechSynthesis) {
-                const utterance = new SpeechSynthesisUtterance(msg.content);
-                utterance.lang = 'zh-CN'; 
-                window.speechSynthesis.speak(utterance);
+    useEffect(() => {
+        if (!isUser && msg.content && settings.autoRead && messageRef.current) {
+            const ttsButton = messageRef.current.querySelector('.tts-button');
+            if (ttsButton) {
+                setTimeout(() => ttsButton.click(), 300); // 延迟一点播放，体验更好
             }
         }
-    }, [msg.content, settings]);
-    
-    useEffect(() => {
-        if (!isUser && msg.content && settings.autoRead) {
-            autoReadMessage();
-        }
-    }, [isUser, msg.content, settings.autoRead, autoReadMessage]);
+    }, [isUser, msg.content, settings.autoRead]);
 
     return (
         <div className={`flex items-end gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -55,11 +43,11 @@ const MessageBubble = ({ msg, settings }) => {
             <div ref={messageRef} className={`p-3 rounded-2xl text-left flex flex-col ${isUser ? 'bg-primary text-white rounded-br-lg' : 'bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-800 dark:text-gray-200 rounded-bl-lg'}`} style={{ maxWidth: '85%' }}>
                 {msg.image && <img src={msg.image} alt="用户上传" className="rounded-md mb-2 max-w-full h-auto" />}
                 <div className="prose dark:prose-invert max-w-none prose-p:my-1 prose-strong:text-current">
-                    <SimpleMarkdown text={msg.content} lang="zh-CN" apiKey={settings.apiKey} ttsSettings={settings} />
+                    <SimpleMarkdown text={msg.content} />
                 </div>
                 {!isUser && msg.content && (
                     <div className="flex items-center gap-3 mt-2 text-gray-500 dark:text-gray-400">
-                        <AiTtsButton text={msg.content} apiKey={settings.apiKey} ttsSettings={settings} />
+                        <TtsButton text={msg.content} apiKey={settings.apiKey} ttsSettings={settings} />
                         <button onClick={() => navigator.clipboard.writeText(msg.content)} className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10" title="复制"><i className="fas fa-copy"></i></button>
                     </div>
                 )}
@@ -105,10 +93,7 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
     const geminiTtsVoices = [
         { name: 'Zephyr (Bright)', value: 'Zephyr' }, { name: 'Puck (Upbeat)', value: 'Puck' },
         { name: 'Charon (Informative)', value: 'Charon' }, { name: 'Kore (Firm)', value: 'Kore' },
-        { name: 'Fenrir (Excitable)', value: 'Fenrir' }, { name: 'Leda (Youthful)', value: 'Leda' },
-        { name: 'Orus (Firm)', value: 'Orus' }, { name: 'Aoede (Breezy)', value: 'Aoede' },
-        { name: 'Callirrhoe (Easy-going)', value: 'Callirrhoe' }, { name: 'Autonoe (Bright)', value: 'Autonoe' },
-        { name: 'Enceladus (Breathy)', value: 'Enceladus' }, { name: 'Iapetus (Clear)', value: 'Iapetus' },
+        { name: 'Fenrir (Excitable)', value: 'Fenrir' }, { name: 'Leda (Youthful)', value: 'Leda' }
     ];
 
     const speechLanguageOptions = [
@@ -134,11 +119,11 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                 <div className="mb-4 pb-4 border-b dark:border-gray-700">
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">选择 TTS 引擎</label>
                     <select value={tempSettings.ttsEngine} onChange={(e) => handleChange('ttsEngine', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md">
-                        <option value={TTS_ENGINE_GEMINI}>Gemini TTS (推荐)</option>
-                        <option value="external_api">第三方 API (晓辰)</option>
+                        <option value={TTS_ENGINE.GEMINI_TTS}>Gemini TTS (推荐)</option>
+                        <option value={TTS_ENGINE.EXTERNAL_API}>第三方 API (晓辰)</option>
                     </select>
                 </div>
-                {tempSettings.ttsEngine === TTS_ENGINE_GEMINI && (
+                {tempSettings.ttsEngine === TTS_ENGINE.GEMINI_TTS && (
                     <div className="mb-4 pb-4 border-b dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
                         <h5 className="text-md font-bold mb-2 text-gray-800 dark:text-white">Gemini TTS 配置</h5>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">发音人</label>
@@ -184,20 +169,21 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
     );
 };
 
-// --- 默认提示词和设置 ---
+// 默认提示词
 const DEFAULT_PROMPTS = [
     { id: 'default-grammar-correction', name: '纠正中文语法', content: `你是一位专业的、耐心的中文老师和语言学习助手，你的学生是缅甸人。你的任务是帮助他们学习中文，纠正语法，解释词语，提供例句，并始终保持友好和鼓励。请根据学生的提问，给出清晰、简洁、实用的回答，必要时提供中文和缅甸语双语解释。你的回答应遵循以下格式：1. 如果需要纠正句子，请先写出“**纠正后的句子：**”\n2. 如果需要解释词语或语法，请先写出“**解释：**”，并提供中缅双语。\n3. 最后，提供 1-2 个使用正确语法的额外例句，并用列表符号“-”开头，标题为“**更多例句：**”。\n4. 你的回答要简洁、友好、鼓励学生。` },
     { id: 'explain-word', name: '解释中文词语', content: `你是一位专业的、耐心的中文老师，你的学生是缅甸人。请用中文和缅甸语双语，详细解释学生提供的中文词语的含义、用法，并给出2-3个例句。` },
     { id: 'translate-myanmar', name: '中缅互译', content: `你是一位专业的翻译助手，你的学生是缅甸人。请将学生提供的中文句子翻译成缅甸语，或将缅甸语句子翻译成中文。` }
 ];
 
+// 默认设置
 const DEFAULT_SETTINGS = {
     apiKey: '',
     selectedModel: 'gemini-1.5-flash',
     prompts: DEFAULT_PROMPTS,
     currentPromptId: DEFAULT_PROMPTS[0]?.id || '',
     autoRead: false,
-    ttsEngine: 'gemini-tts-1',
+    ttsEngine: TTS_ENGINE.GEMINI_TTS,
     ttsVoice: 'Zephyr',
     speechLanguage: 'zh-CN',
     chatBackgroundUrl: '/images/chat-bg.jpg',
@@ -213,9 +199,7 @@ const AiChatAssistant = () => {
     const [error, setError] = useState('');
     const [settings, setSettings] = useState(DEFAULT_SETTINGS);
     const [showSettings, setShowSettings] = useState(false);
-    
     const [isMounted, setIsMounted] = useState(false);
-
     const [inputMode, setInputMode] = useState('text');
     const [selectedImage, setSelectedImage] = useState(null);
     const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
@@ -249,7 +233,7 @@ const AiChatAssistant = () => {
         if (isMounted) {
             try {
                 localStorage.setItem('ai_assistant_settings_v3', JSON.stringify(settings));
-            } catch (e) { console.error("Failed to save settings to localStorage", e); }
+            } catch (e) { console.error("Failed to save settings", e); }
         }
     }, [settings, isMounted]);
 
@@ -262,8 +246,15 @@ const AiChatAssistant = () => {
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
+
+    // 组件挂载时添加初始欢迎消息
+    useEffect(() => {
+        if (isMounted) {
+            setMessages([{ role: 'ai', content: '你好！有什么可以帮助你的吗？' }]);
+        }
+    }, [isMounted]);
     
-    // --- 图片/摄像头/语音/提交 逻辑 ---
+    // --- 交互逻辑 ---
     const handleImageUpload = (e) => {
         const file = e.target.files[0];
         if (file) {
@@ -322,23 +313,21 @@ const AiChatAssistant = () => {
         }
     };
     
-    const startListening = () => {
+    const startListening = useCallback(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
             setSpeechRecognitionError('您的浏览器不支持语音输入功能！');
             return;
+        }
+        if (recognitionRef.current) {
+            recognitionRef.current.abort();
         }
         recognitionRef.current = new SpeechRecognition();
         recognitionRef.current.lang = settings.speechLanguage;
         recognitionRef.current.onstart = () => { setIsListening(true); setSpeechRecognitionError(''); };
         recognitionRef.current.onresult = (e) => {
             const transcript = e.results[0][0].transcript;
-            if (isLongPressing) {
-                stopListening();
-                handleSubmit(null, transcript);
-            } else {
-                setUserInput(p => p + transcript);
-            }
+            setUserInput(transcript.trim());
         };
         recognitionRef.current.onerror = (e) => {
             setSpeechRecognitionError(`语音输入错误: ${e.error}`);
@@ -347,26 +336,27 @@ const AiChatAssistant = () => {
         };
         recognitionRef.current.onend = () => {
             setIsListening(false);
-            if (isLongPressing && !isCancelling && userInput.trim()) {
-                handleSubmit(null, userInput.trim());
+            if (isLongPressing && !isCancelling && userInput) {
+                handleSubmit(null, userInput);
             }
             setIsLongPressing(false);
             setIsCancelling(false);
         };
         recognitionRef.current.start();
-    };
+    }, [settings.speechLanguage, isLongPressing, isCancelling, userInput]);
 
     const stopListening = () => {
         recognitionRef.current?.stop();
     };
     
     const handleLongPressStart = (e) => {
+        e.preventDefault();
         if (e.touches?.[0]) touchStartY.current = e.touches[0].clientY;
         setIsCancelling(false);
         longPressTimer.current = setTimeout(() => {
             setIsLongPressing(true);
             startListening();
-        }, 300);
+        }, 200);
     };
 
     const handleLongPressMove = (e) => {
@@ -413,12 +403,10 @@ const AiChatAssistant = () => {
         abortControllerRef.current = new AbortController();
 
         const currentPrompt = settings.prompts.find(p => p.id === settings.currentPromptId)?.content || DEFAULT_PROMPTS[0].content;
-        
-        // ** 关键修复：Gemini API 不支持 role: 'system' **
         const history = messages.map(msg => ({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.content }] }));
         const contents = [
           { role: 'user', parts: [{ text: currentPrompt }] },
-          { role: 'model', parts: [{ text: "好的，我明白了。我将扮演一名专业的中文老师。请开始提问吧。" }] }, // 让 AI 确认角色
+          { role: 'model', parts: [{ text: "好的，我明白了。我将扮演一名专业的中文老师。请开始提问吧。" }] },
           ...history,
           { role: 'user', parts: userMessageContent }
         ];
@@ -430,8 +418,8 @@ const AiChatAssistant = () => {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        contents: contents, // 使用修正后的 contents
-                        generationConfig: { temperature: 0.5, maxOutputTokens: 1024 }
+                        contents: contents,
+                        generationConfig: { temperature: 0.5, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } }
                     }),
                     signal: abortControllerRef.current.signal,
                 }
@@ -462,8 +450,8 @@ const AiChatAssistant = () => {
 
     if (!isMounted) {
         return (
-            <div className="w-full h-[700px] flex items-center justify-center">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+            <div className="w-full max-w-2xl mx-auto my-8 p-6 flex items-center justify-center h-[700px] bg-gray-100 dark:bg-gray-800 rounded-2xl">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>
             </div>
         );
     }
@@ -472,7 +460,6 @@ const AiChatAssistant = () => {
 
     return (
         <div className="w-full max-w-2xl mx-auto my-8 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col bg-white dark:bg-gray-800" style={{ height: '80vh', minHeight: '600px', maxHeight: '900px' }}>
-            {/* 顶部标题栏 */}
             <div className="flex items-center justify-between p-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-t-2xl border-b dark:border-gray-700 shrink-0">
                 <div className="flex items-center gap-2">
                     <img src={settings.aiAvatarUrl} alt="AI Avatar" className="w-8 h-8 rounded-full" />
@@ -481,7 +468,6 @@ const AiChatAssistant = () => {
                 <button onClick={() => setShowSettings(true)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="设置"><i className="fas fa-cog"></i></button>
             </div>
 
-            {/* 聊天消息显示区域 */}
             <div 
                 className="flex-grow p-4 overflow-y-auto custom-scrollbar relative"
                 style={{ backgroundImage: `url('${settings.chatBackgroundUrl}')`, backgroundSize: 'cover', backgroundPosition: 'center' }}
@@ -494,7 +480,6 @@ const AiChatAssistant = () => {
                 <div ref={messagesEndRef} />
             </div>
 
-            {/* 输入区域 */}
             <div className="p-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-b-2xl border-t dark:border-gray-700 shrink-0">
                 {imagePreviewUrl && (
                     <div className="relative mb-2 w-24">
@@ -513,11 +498,9 @@ const AiChatAssistant = () => {
                 
                 {isLoading ? (
                     <div className="flex justify-center">
-                        <button type="button" onClick={handleStopGenerating} className="w-full px-6 py-3 bg-red-500 text-white font-bold text-xl rounded-lg shadow-md hover:bg-red-600">
-                            <div className="flex items-center justify-center">
-                                <div className="h-5 w-5 animate-spin rounded-full border-4 border-white border-t-transparent mr-2"></div>
-                                停止生成
-                            </div>
+                        <button type="button" onClick={handleStopGenerating} className="w-full px-6 py-3 bg-red-500 text-white font-bold text-xl rounded-lg shadow-md hover:bg-red-600 flex items-center justify-center">
+                            <div className="h-5 w-5 animate-spin rounded-full border-4 border-white border-t-transparent mr-2"></div>
+                            停止生成
                         </button>
                     </div>
                 ) : (
@@ -555,5 +538,4 @@ const AiChatAssistant = () => {
     );
 };
 
-// ... (SettingsModal 组件的完整代码，请从上一个回复中复制)
 export default AiChatAssistant;
