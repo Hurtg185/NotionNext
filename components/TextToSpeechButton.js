@@ -1,109 +1,111 @@
-// /components/TextToSpeechButton.js
-import React, { useState, useEffect, useRef } from 'react';
+// /components/TextToSpeechButton.js - 使用外部 API 的语音朗读组件 (晓辰版)
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 /**
- * 文本朗读按钮组件
- * 利用浏览器 SpeechSynthesis API 朗读指定文本。
- * 点击时，只会触发朗读，不会触发父元素的点击事件（通过 e.stopPropagation()）。
- *
- * @param {object} props - 组件属性
- * @param {string} props.text - 要朗读的文本。
- * @param {string} [props.lang='zh-CN'] - 朗读语言，例如 'zh-CN' (中文), 'en-US' (英文)。
- * @param {number} [props.rate=1] - 朗读语速 (0.1 - 10, 默认 1)。
- * @param {number} [props.pitch=1] - 朗读音高 (0 - 2, 默认 1)。
- * @param {string} [props.voiceName] - 指定朗读声音的名称 (可选)。
+ * 使用外部 TTS API (https://t.leftsite.cn) 进行文本朗读的按钮组件。
+ * 提供比系统 TTS 更一致的发音人（晓辰）和音质。
+ * @param {string} text - 要朗读的文本。
+ * @param {string} [lang='zh-CN'] - 朗读的语言，默认为中文。
+ * @param {string} [voice='zh-CN-XiaochenMultilingualNeural'] - 指定发音人。
+ * @param {string} [rate='-20%'] - 语速，默认为-20% (比正常慢一点)。
+ * @param {string} [pitch='0%'] - 语调，默认为0%。
+ * @param {string} [className=''] - 附加到按钮的 CSS 类名。
  */
-const TextToSpeechButton = ({ text, lang = 'zh-CN', rate = 1, pitch = 1, voiceName }) => {
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const synthRef = useRef(null); // SpeechSynthesis 实例
-  const utteranceRef = useRef(null); // SpeechSynthesisUtterance 实例
+const TextToSpeechButton = ({ // 注意：这里改回 TextToSpeechButton
+  text,
+  lang = 'zh-CN',
+  voice = 'zh-CN-XiaochenMultilingualNeural', // 默认晓辰
+  rate = '-20%', // 默认语速
+  pitch = '0%',
+  className = ''
+}) => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const audioRef = useRef(null); // 用于播放音频
 
+  // API 配置 (直接来自你提供的脚本)
+  const apiConfig = useRef({
+    apiBaseUrl: 'https://t.leftsite.cn',
+    voice: voice,
+    rate: rate,
+    pitch: pitch,
+    outputFormat: 'audio-24khz-48kbitrate-mono-mp3',
+  });
+
+  // 更新发音人、语速等配置
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      synthRef.current = window.speechSynthesis;
+      apiConfig.current.voice = voice;
+      apiConfig.current.rate = rate;
+      apiConfig.current.pitch = pitch;
+  }, [voice, rate, pitch]);
 
-      // 清理函数，在组件卸载或依赖变化时停止朗读
-      return () => {
-        if (synthRef.current && synthRef.current.speaking) {
-          synthRef.current.cancel();
-        }
-      };
+
+  const synthesizeSpeech = useCallback(async (textToSpeak) => {
+    if (!textToSpeak || textToSpeak.trim() === '') {
+      setError('没有可朗读的文本。');
+      return;
     }
-  }, []);
-
-  const speak = () => {
-    if (!synthRef.current || !text) {
-      console.warn("SpeechSynthesis not available or text is empty.");
+    if (!apiConfig.current.apiBaseUrl) {
+      setError('TTS API 地址未配置。');
       return;
     }
 
-    // 如果正在说话，先停止
-    if (synthRef.current.speaking) {
-      synthRef.current.cancel();
-    }
+    setIsLoading(true);
+    setError(null);
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lang;
-    utterance.rate = rate;
-    utterance.pitch = pitch;
+    const encodedText = encodeURIComponent(textToSpeak);
+    // 构建 API URL
+    let url = `${apiConfig.current.apiBaseUrl}/tts?t=${encodedText}&v=${apiConfig.current.voice}&r=${apiConfig.current.rate}&p=${apiConfig.current.pitch}&o=${apiConfig.current.outputFormat}`;
+    
+    try {
+      // 使用 fetch 请求音频 Blob
+      const response = await fetch(url);
 
-    // 尝试设置指定的声音
-    if (voiceName) {
-      const voices = synthRef.current.getVoices();
-      const selectedVoice = voices.find(voice => voice.name === voiceName && voice.lang === lang);
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
-      } else {
-        console.warn(`Voice "${voiceName}" not found for language "${lang}". Using default.`);
+      if (!response.ok) {
+        throw new Error(`API 错误 (状态码: ${response.status})`);
       }
+
+      const audioBlob = await response.blob();
+      
+      // 如果正在播放，先暂停并释放旧的URL
+      if (audioRef.current && audioRef.current.src) {
+        URL.revokeObjectURL(audioRef.current.src);
+        audioRef.current.pause();
+      }
+      
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio; // 保存当前音频对象
+
+      await audio.play();
+
+    } catch (err) {
+      console.error('朗读失败:', err);
+      setError(`朗读失败: ${err.message}`);
+    } finally {
+      setIsLoading(false);
     }
+  }, []); // 依赖列表为空，因为apiConfig.current 在 useEffect 内部更新
 
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = (event) => {
-      console.error('SpeechSynthesisUtterance.onerror', event);
-      setIsSpeaking(false);
-    };
-
-    utteranceRef.current = utterance; // 保存 utterance 引用以便停止
-    synthRef.current.speak(utterance);
-  };
-
-  const stop = () => {
-    if (synthRef.current && synthRef.current.speaking) {
-      synthRef.current.cancel();
-      setIsSpeaking(false);
-    }
-  };
-
-  // === 关键修改：在 handleClick 中阻止事件冒泡 ===
-  const handleClick = (e) => {
-    e.stopPropagation(); // <--- 阻止事件冒泡到父元素！
-    if (isSpeaking) {
-      stop();
-    } else {
-      speak();
-    }
-  };
-  // ===============================================
-
-  const isDisabled = typeof window === 'undefined' || !window.speechSynthesis || !text;
 
   return (
     <button
-      onClick={handleClick}
-      disabled={isDisabled}
-      className={`ml-2 p-1 rounded-full text-primary dark:text-secondary hover:bg-primary/[0.1] dark:hover:bg-secondary/[0.1] transition-colors duration-200 flex-shrink-0 // flex-shrink-0 防止按钮被挤压
-                  ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-      title={isSpeaking ? '停止朗读' : '朗读'}
+      onClick={() => synthesizeSpeech(text)}
+      disabled={isLoading}
+      className={`tts-button inline-flex items-center justify-center rounded-full w-8 h-8 sm:w-10 sm:h-10 text-white shadow-sm transition-all duration-200 ${
+        isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'
+      } ${className}`}
+      aria-label={`朗读: ${text}`}
     >
-      {isSpeaking ? (
-        <i className="fas fa-stop text-base"></i>
+      {isLoading ? (
+        <svg className="animate-spin h-4 w-4 sm:h-5 sm:w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
       ) : (
-        <i className="fas fa-volume-up text-base"></i>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
       )}
+      {error && <span className="sr-only">错误: {error}</span>}
     </button>
   );
 };
 
-export default TextToSpeechButton;
+export default TextToSpeechButton; // 导出为 TextToSpeechButton
