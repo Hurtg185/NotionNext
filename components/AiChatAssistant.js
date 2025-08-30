@@ -1,4 +1,4 @@
-// /components/AiChatAssistant.js - 终极版 v10：增加全屏模式，解决滚动冲突
+// /components/AiChatAssistant.js - 终极版 v11：增加全屏模式，分离TTS模型，优化UI
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import AiTtsButton, { TTS_ENGINE } from './AiTtsButton'; // 导入 AI 专用的 TTS 按钮
 
@@ -47,6 +47,7 @@ const MessageBubble = ({ msg, settings }) => {
                 </div>
                 {!isUser && msg.content && (
                     <div className="flex items-center gap-3 mt-2 text-gray-500 dark:text-gray-400">
+                        {/* 将完整的 ttsSettings 传递给按钮 */}
                         <AiTtsButton text={msg.content} apiKey={settings.apiKey} ttsSettings={settings} />
                         <button onClick={() => navigator.clipboard.writeText(msg.content)} className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10" title="复制"><i className="fas fa-copy"></i></button>
                     </div>
@@ -66,7 +67,7 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
     };
 
     const handlePromptChange = (e, promptId, field) => {
-        const newPrompts = tempSettings.prompts.map(p => 
+        const newPrompts = tempSettings.prompts.map(p =>
             p.id === promptId ? { ...p, [field]: e.target.value } : p
         );
         handleChange('prompts', newPrompts);
@@ -89,11 +90,24 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
             handleChange('currentPromptId', newCurrentPromptId);
         }
     };
+
+    const chatModels = [
+        { name: 'Gemini 2.5 Flash (最快)', value: 'gemini-2.5-flash' },
+        { name: 'Gemini 2.5 Pro (最强)', value: 'gemini-2.5-pro' },
+        { name: 'Gemini 2.5 Flash Lite', value: 'gemini-2.5-flash-lite' },
+        { name: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash' },
+    ];
     
+    const ttsModels = [
+        { name: 'Flash TTS (推荐)', value: 'gemini-2.5-flash-preview-tts' },
+        { name: 'Pro TTS', value: 'gemini-2.5-pro-preview-tts' },
+        { name: 'Flash 001 TTS', value: 'gemini-2.0-flash-001' },
+    ];
+
     const geminiTtsVoices = [
-        { name: 'Zephyr (Bright)', value: 'Zephyr' }, { name: 'Puck (Upbeat)', value: 'Puck' },
-        { name: 'Charon (Informative)', value: 'Charon' }, { name: 'Kore (Firm)', value: 'Kore' },
-        { name: 'Fenrir (Excitable)', value: 'Fenrir' }, { name: 'Leda (Youthful)', value: 'Leda' }
+        { name: 'Zephyr (明亮)', value: 'Zephyr' }, { name: 'Puck (欢快)', value: 'Puck' },
+        { name: 'Charon (信息丰富)', value: 'Charon' }, { name: 'Kore (坚定)', value: 'Kore' },
+        { name: 'Fenrir (兴奋)', value: 'Fenrir' }, { name: 'Leda (年轻)', value: 'Leda' }
     ];
 
     const speechLanguageOptions = [
@@ -110,26 +124,35 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                     <input type="password" value={tempSettings.apiKey} onChange={(e) => handleChange('apiKey', e.target.value)} placeholder="在此粘贴你的 API 密钥" className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md" />
                 </div>
                 <div className="mb-4 pb-4 border-b dark:border-gray-700">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">选择 AI 模型</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">选择 AI 聊天模型</label>
                     <select value={tempSettings.selectedModel} onChange={(e) => handleChange('selectedModel', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md">
-                        <option value="gemini-2.5-flash">Gemini 2.5 Flash (推荐)</option>
-                        <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                        {chatModels.map(model => <option key={model.value} value={model.value}>{model.name}</option>)}
                     </select>
                 </div>
                 <div className="mb-4 pb-4 border-b dark:border-gray-700">
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">选择 TTS 引擎</label>
                     <select value={tempSettings.ttsEngine} onChange={(e) => handleChange('ttsEngine', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md">
-                        <option value={TTS_ENGINE.GEMINI_TTS}>Gemini TTS (推荐)</option>
-                        <option value="external_api">第三方 API (晓辰)</option>
+                        <option value={TTS_ENGINE.GEMINI_TTS}>Gemini TTS (推荐, 需API Key)</option>
+                        <option value="external_api">第三方 API (无需API Key)</option>
                     </select>
                 </div>
                 {tempSettings.ttsEngine === TTS_ENGINE.GEMINI_TTS && (
                     <div className="mb-4 pb-4 border-b dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
                         <h5 className="text-md font-bold mb-2 text-gray-800 dark:text-white">Gemini TTS 配置</h5>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">发音人</label>
-                        <select value={tempSettings.ttsVoice} onChange={(e) => handleChange('ttsVoice', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 border rounded-md">
-                            {geminiTtsVoices.map(voice => <option key={voice.value} value={voice.value}>{voice.name}</option>)}
-                        </select>
+                         <div className="space-y-3">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">TTS 模型</label>
+                                <select value={tempSettings.ttsModel} onChange={(e) => handleChange('ttsModel', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 border rounded-md">
+                                    {ttsModels.map(model => <option key={model.value} value={model.value}>{model.name}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">发音人</label>
+                                <select value={tempSettings.ttsVoice} onChange={(e) => handleChange('ttsVoice', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 border rounded-md">
+                                    {geminiTtsVoices.map(voice => <option key={voice.value} value={voice.value}>{voice.name}</option>)}
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 )}
                 <div className="mb-4 pb-4 border-b dark:border-gray-700">
@@ -182,7 +205,8 @@ const DEFAULT_SETTINGS = {
     prompts: DEFAULT_PROMPTS,
     currentPromptId: DEFAULT_PROMPTS[0]?.id || '',
     autoRead: false,
-    ttsEngine: 'gemini-tts-1',
+    ttsEngine: TTS_ENGINE.GEMINI_TTS,
+    ttsModel: 'gemini-2.5-flash-preview-tts', // 新增：默认TTS模型
     ttsVoice: 'Zephyr',
     speechLanguage: 'zh-CN',
     chatBackgroundUrl: '/images/chat-bg.jpg',
@@ -199,28 +223,22 @@ const AiChatAssistant = () => {
     const [settings, setSettings] = useState(DEFAULT_SETTINGS);
     const [showSettings, setShowSettings] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
-    const [inputMode, setInputMode] = useState('text');
     const [selectedImage, setSelectedImage] = useState(null);
     const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
     const [isListening, setIsListening] = useState(false);
     const [speechRecognitionError, setSpeechRecognitionError] = useState('');
-    const recognitionRef = useRef(null);
-    const [isLongPressing, setIsLongPressing] = useState(false);
-    const [isCancelling, setIsCancelling] = useState(false);
-    const longPressTimer = useRef(null);
-    const touchStartY = useRef(0);
+    const [isFullScreen, setIsFullScreen] = useState(false); // 新增：全屏状态
 
+    const recognitionRef = useRef(null);
     const messagesEndRef = useRef(null);
     const abortControllerRef = useRef(null);
     const fileInputRef = useRef(null);
-    const videoRef = useRef(null); // 虽然不用，但为保持完整性保留
-    const canvasRef = useRef(null); // 同上
-
+    
     // --- 初始化和保存设置 ---
     useEffect(() => {
         setIsMounted(true);
         try {
-            const savedSettings = localStorage.getItem('ai_assistant_settings_v4_final');
+            const savedSettings = localStorage.getItem('ai_assistant_settings_v5_fullscreen'); // 使用新Key避免冲突
             if (savedSettings) {
                 setSettings(prev => ({ ...DEFAULT_SETTINGS, ...JSON.parse(savedSettings) }));
             }
@@ -230,10 +248,23 @@ const AiChatAssistant = () => {
     useEffect(() => {
         if (isMounted) {
             try {
-                localStorage.setItem('ai_assistant_settings_v4_final', JSON.stringify(settings));
+                localStorage.setItem('ai_assistant_settings_v5_fullscreen', JSON.stringify(settings));
             } catch (e) { console.error("Failed to save settings", e); }
         }
     }, [settings, isMounted]);
+
+    // --- 全屏模式副作用 ---
+    useEffect(() => {
+        if (isFullScreen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        // 组件卸载时恢复滚动
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [isFullScreen]);
 
     const handleSaveSettings = useCallback((newSettings) => {
         setSettings(newSettings);
@@ -343,7 +374,11 @@ const AiChatAssistant = () => {
                     signal: abortControllerRef.current.signal,
                 }
             );
-            if (!response.ok) { const data = await response.json(); throw new Error(data.error?.message || '请求失败'); }
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.error('API Error Response:', errorData); // 增加详细日志
+                throw new Error(errorData.error?.message || `请求失败, 状态码: ${response.status}`);
+            }
             const data = await response.json();
             const aiResponseContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
             if (!aiResponseContent) throw new Error('AI 未能返回有效内容。');
@@ -351,7 +386,8 @@ const AiChatAssistant = () => {
             setMessages(prev => [...prev, { role: 'ai', content: aiResponseContent }]);
         } catch (err) {
             if (err.name !== 'AbortError') {
-                setError(err.message);
+                const errorMessage = `API 请求失败: ${err.message}`;
+                setError(errorMessage);
                 setMessages(prev => [...prev, { role: 'ai', content: `很抱歉，出错了：${err.message}` }]);
             } else {
                 setError('AI 生成已停止。');
@@ -374,15 +410,29 @@ const AiChatAssistant = () => {
         );
     }
     
+    // 动态计算全屏和非全屏的样式
+    const containerClasses = isFullScreen
+        ? 'fixed inset-0 z-50 w-screen h-screen rounded-none'
+        : 'relative w-full max-w-2xl mx-auto my-8 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700';
+
+    const containerStyle = isFullScreen
+        ? { height: '100vh', minHeight: '100vh', maxHeight: '100vh' }
+        : { height: '90vh', minHeight: '650px', maxHeight: '900px' };
+
     return (
-        <div className="w-full max-w-2xl mx-auto my-8 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col bg-white dark:bg-gray-800" style={{ height: '85vh', minHeight: '650px', maxHeight: '900px' }}>
+        <div className={`flex flex-col bg-white dark:bg-gray-800 ${containerClasses}`} style={containerStyle}>
             {/* 顶部标题栏 */}
-            <div className="flex items-center justify-between p-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-t-2xl border-b dark:border-gray-700 shrink-0">
+            <div className="flex items-center justify-between py-1 px-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-t-2xl border-b dark:border-gray-700 shrink-0">
                 <div className="flex items-center gap-2">
                     <img src={settings.aiAvatarUrl} alt="AI Avatar" className="w-8 h-8 rounded-full" />
                     <h2 className="text-lg font-bold text-gray-800 dark:text-white">AI 中文老师</h2>
                 </div>
-                <button onClick={() => setShowSettings(true)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="设置"><i className="fas fa-cog"></i></button>
+                <div className="flex items-center gap-1">
+                    <button onClick={() => setIsFullScreen(!isFullScreen)} className="p-2 w-10 h-10 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title={isFullScreen ? "退出全屏" : "全屏模式"}>
+                        <i className={`fas ${isFullScreen ? 'fa-compress-arrows-alt' : 'fa-expand-arrows-alt'}`}></i>
+                    </button>
+                    <button onClick={() => setShowSettings(true)} className="p-2 w-10 h-10 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="设置"><i className="fas fa-cog"></i></button>
+                </div>
             </div>
 
             {/* 聊天消息显示区域 */}
@@ -390,7 +440,7 @@ const AiChatAssistant = () => {
                 className="flex-grow p-4 overflow-y-auto custom-scrollbar relative"
                 style={{ backgroundImage: `url('${settings.chatBackgroundUrl}')`, backgroundSize: 'cover', backgroundPosition: 'center' }}
             >
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-4 pb-4">
                     {messages.map((msg, index) => (
                         <MessageBubble key={index} msg={msg} settings={settings} />
                     ))}
@@ -437,7 +487,7 @@ const AiChatAssistant = () => {
                 )}
             </div>
 
-            {error && <div className="p-2 m-4 bg-red-100 text-red-700 rounded-lg text-center">{error}</div>}
+            {error && <div className="absolute bottom-24 left-1/2 -translate-x-1/2 w-11/12 p-2 bg-red-100 text-red-700 rounded-lg text-center shadow-lg z-10">{error}</div>}
 
             {showSettings && <SettingsModal settings={settings} onSave={handleSaveSettings} onClose={() => setShowSettings(false)} />}
         </div>
