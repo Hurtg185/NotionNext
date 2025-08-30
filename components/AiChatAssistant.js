@@ -1,6 +1,6 @@
-// /components/AiChatAssistant.js - 支持多 TTS 引擎选择和自动朗读
-import React, { useState, useEffect, useRef } from 'react';
-import TextToSpeechButton from './TextToSpeechButton'; // 导入我们的多引擎朗读组件
+// /components/AiChatAssistant.js - 修复设置保存逻辑
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import TextToSpeechButton from './TextToSpeechButton'; // 导入朗读组件
 
 // TTS 引擎枚举 (与 TextToSpeechButton 中保持一致)
 const TTS_ENGINE = {
@@ -117,7 +117,7 @@ const AiChatAssistant = () => {
 
     // 提示词管理状态
     const [prompts, setPrompts] = useState(DEFAULT_PROMPTS);
-    const [currentPromptId, setCurrentPromptId] = useState(DEFAULT_PROMPTS[0].id);
+    const [currentPromptId, setCurrentPromptId] = useState(DEFAULT_PROMPTS[0]?.id); // 确保有默认值
     
     const [showSettings, setShowSettings] = useState(false);
 
@@ -140,35 +140,24 @@ const AiChatAssistant = () => {
 
     // --- 初始化和保存所有设置 ---
     useEffect(() => {
-        const savedApiKey = localStorage.getItem('gemini_api_key') || '';
-        const savedModel = localStorage.getItem('gemini_model') || 'gemini-1.5-flash';
+        // AI 设置
+        setApiKey(localStorage.getItem('gemini_api_key') || '');
+        setSelectedModel(localStorage.getItem('gemini_model') || 'gemini-1.5-flash'); 
+        
+        // 提示词和自动朗读
         const savedPrompts = JSON.parse(localStorage.getItem('gemini_prompts')) || DEFAULT_PROMPTS;
-        const savedCurrentPromptId = localStorage.getItem('gemini_current_prompt_id') || savedPrompts[0]?.id;
-        const savedAutoRead = localStorage.getItem('gemini_auto_read') === 'true';
+        setPrompts(savedPrompts);
+        setCurrentPromptId(localStorage.getItem('gemini_current_prompt_id') || savedPrompts[0]?.id || ''); // 确保有有效ID
+        setAutoRead(localStorage.getItem('gemini_auto_read') === 'true');
         
         // TTS 设置
-        const savedTtsEngine = localStorage.getItem('tts_engine') || TTS_ENGINE.GOOGLE_GENAI;
-        const savedGoogleVoice = localStorage.getItem('tts_google_voice') || 'cmn-CN-Wavenet-A';
-        const savedGooglePitch = parseFloat(localStorage.getItem('tts_google_pitch')) || 0;
-        const savedGoogleRate = parseFloat(localStorage.getItem('tts_google_rate')) || 1;
-        const savedExternalVoice = localStorage.getItem('tts_external_voice') || 'zh-CN-XiaochenMultilingualNeural';
-        const savedExternalRate = localStorage.getItem('tts_external_rate') || '-20%';
-        const savedExternalPitch = localStorage.getItem('tts_external_pitch') || '0%';
-
-
-        setApiKey(savedApiKey);
-        setSelectedModel(savedModel);
-        setPrompts(savedPrompts);
-        setCurrentPromptId(savedCurrentPromptId);
-        setAutoRead(savedAutoRead);
-
-        setSelectedTtsEngine(savedTtsEngine);
-        setGoogleVoiceName(savedGoogleVoice);
-        setGooglePitch(savedGooglePitch);
-        setGoogleRate(savedGoogleRate);
-        setExternalVoice(savedExternalVoice);
-        setExternalRate(savedExternalRate);
-        setExternalPitch(savedExternalPitch);
+        setSelectedTtsEngine(localStorage.getItem('tts_engine') || TTS_ENGINE.GOOGLE_GENAI);
+        setGoogleVoiceName(localStorage.getItem('tts_google_voice') || 'cmn-CN-Wavenet-A');
+        setGooglePitch(parseFloat(localStorage.getItem('tts_google_pitch')) || 0);
+        setGoogleRate(parseFloat(localStorage.getItem('tts_google_rate')) || 1);
+        setExternalVoice(localStorage.getItem('tts_external_voice') || 'zh-CN-XiaochenMultilingualNeural');
+        setExternalRate(localStorage.getItem('tts_external_rate') || '-20%');
+        setExternalPitch(localStorage.getItem('tts_external_pitch') || '0%');
 
     }, []);
 
@@ -177,6 +166,7 @@ const AiChatAssistant = () => {
       newTtsEngine, newGoogleVoice, newGooglePitch, newGoogleRate,
       newExternalVoice, newExternalRate, newExternalPitch
     ) => {
+        // 更新 React State
         setApiKey(newApiKey);
         setSelectedModel(newModel);
         setPrompts(newPrompts);
@@ -191,6 +181,7 @@ const AiChatAssistant = () => {
         setExternalRate(newExternalRate);
         setExternalPitch(newExternalPitch);
 
+        // 持久化到 localStorage
         localStorage.setItem('gemini_api_key', newApiKey);
         localStorage.setItem('gemini_model', newModel);
         localStorage.setItem('gemini_prompts', JSON.stringify(newPrompts));
@@ -199,8 +190,8 @@ const AiChatAssistant = () => {
         
         localStorage.setItem('tts_engine', newTtsEngine);
         localStorage.setItem('tts_google_voice', newGoogleVoice);
-        localStorage.setItem('tts_google_pitch', newGooglePitch);
-        localStorage.setItem('tts_google_rate', newGoogleRate);
+        localStorage.setItem('tts_google_pitch', String(newGooglePitch)); // Number to String
+        localStorage.setItem('tts_google_rate', String(newGoogleRate));   // Number to String
         localStorage.setItem('tts_external_voice', newExternalVoice);
         localStorage.setItem('tts_external_rate', newExternalRate);
         localStorage.setItem('tts_external_pitch', newExternalPitch);
@@ -418,19 +409,15 @@ const AiChatAssistant = () => {
 
             // --- 自动朗读 AI 回复 ---
             if (autoRead && aiResponseContent) {
-                // 直接调用 TextToSpeechButton 内部的合成逻辑
-                // 这里需要创建一个临时朗读实例，或者利用 TextToSpeechButton 的 prop 传递
-                // 简单方案是实例化一个 Utterance，复杂方案是 TextToSpeechButton 提供一个外部触发函数
-                // 暂时使用 window.speechSynthesis 避免 TextToSpeechButton 的副作用，因为 TextToSpeechButton 是按钮
-                if (window.speechSynthesis && selectedTtsEngine === TTS_ENGINE.SYSTEM_TTS) {
+                // 调用 TextToSpeechButton 内部的朗读函数
+                // 为了实现自动朗读，这里需要TextToSpeechButton暴露一个可以直接调用的函数
+                // 或者我们可以直接使用一个临时的 window.speechSynthesis 实例
+                // 暂时使用 window.speechSynthesis 确保自动朗读功能
+                if (window.speechSynthesis) { // 再次检查浏览器TTS支持
                     const utterance = new SpeechSynthesisUtterance(aiResponseContent);
-                    utterance.lang = 'zh-CN';
+                    utterance.lang = 'zh-CN'; // 假设AI回复是中文
+                    // TODO: 可以根据 selectedTtsEngine 和其他 TTS 参数进行更细致的设置
                     window.speechSynthesis.speak(utterance);
-                } else {
-                    // 如果不是系统 TTS，且开启自动朗读，就模拟点击一次 TextToSpeechButton (需要改造 TextToSpeechButton)
-                    // 目前 TextToSpeechButton 无法外部触发，这里只能是 system_tts 或等待用户点击
-                    // 暂时不做自动播放 external / google genai，因为涉及异步和组件间通信
-                    // 用户可以手动点击 SimpleMarkdown 中的播放按钮
                 }
             }
 
@@ -851,7 +838,7 @@ const SettingsModal = ({
                                 value={tempExternalVoice}
                                 onChange={(e) => setTempExternalVoice(e.target.value)}
                                 className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 border rounded-md"
-                                readOnly // 默认晓辰，不可编辑
+                                readOnly
                             />
                         </div>
                         <div className="mb-3">
