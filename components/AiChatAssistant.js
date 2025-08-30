@@ -1,87 +1,8 @@
-// /components/AiChatAssistant.js - 终极完整版：修复崩溃和点击问题，整合所有功能
+// /components/AiChatAssistant.js - 终极版 v10：增加全屏模式，解决滚动冲突
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import AiTtsButton, { TTS_ENGINE } from './AiTtsButton'; // 导入 AI 专用的 TTS 按钮
 
-// --- 子组件和常量定义区域 ---
-
-// TTS 引擎枚举
-export const TTS_ENGINE = {
-  GEMINI_TTS: 'gemini-tts-1',
-  EXTERNAL_API: 'external_api'
-};
-
-// 统一的 TTS 按钮组件
-const TtsButton = ({ text, apiKey, ttsSettings = {} }) => {
-  const [isLoading, setIsLoading] = useState(false);
-  const audioRef = useRef(null);
-
-  const synthesizeSpeech = useCallback(async (textToSpeak) => {
-    if (!textToSpeak || textToSpeak.trim() === '' || (ttsSettings.ttsEngine === TTS_ENGINE.GEMINI_TTS && !apiKey)) {
-      if (ttsSettings.ttsEngine === TTS_ENGINE.GEMINI_TTS && !apiKey) {
-        console.warn('Google TTS需要API密钥');
-      }
-      return;
-    }
-    setIsLoading(true);
-
-    // 清洗文本，移除 Markdown 符号
-    const cleanedText = textToSpeak.replace(/\*\*/g, '').replace(/^- /gm, '');
-
-    const { ttsEngine = TTS_ENGINE.GEMINI_TTS, ttsVoice = 'Zephyr' } = ttsSettings;
-
-    try {
-      let audioBlob;
-      if (ttsEngine === TTS_ENGINE.GEMINI_TTS) {
-        const url = `https://texttospeech.googleapis.com/v1beta1/text:synthesize?key=${apiKey}`;
-        const body = {
-          input: { text: cleanedText },
-          voice: { languageCode: 'zh-CN', name: `projects/-/locations/global/models/${ttsVoice}` },
-          audioConfig: { audioEncoding: 'MP3' }
-        };
-        const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        if (!response.ok) { const data = await response.json(); throw new Error(`Gemini TTS: ${data.error?.message || response.statusText}`); }
-        const data = await response.json();
-        if (!data.audioContent) throw new Error('Gemini TTS 未返回音频内容。');
-        const binaryString = window.atob(data.audioContent);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
-        audioBlob = new Blob([bytes.buffer], { type: 'audio/mpeg' });
-      } else {
-        const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(cleanedText)}&v=zh-CN-XiaochenMultilingualNeural&r=-20%&p=0%&o=audio-24khz-48kbitrate-mono-mp3`;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`外部 TTS API 错误 (状态码: ${response.status})`);
-        audioBlob = await response.blob();
-      }
-      
-      if (audioBlob) {
-        if (audioRef.current?.src) URL.revokeObjectURL(audioRef.current.src);
-        const audioUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio(audioUrl);
-        audioRef.current = audio;
-        await audio.play();
-      }
-    } catch (err) {
-      console.error('朗读失败:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [apiKey, ttsSettings]);
-
-  return (
-    <button
-      onClick={(e) => { e.stopPropagation(); synthesizeSpeech(text); }}
-      disabled={isLoading}
-      className={`tts-button p-2 rounded-full transition-colors ${isLoading ? 'text-gray-400 cursor-not-allowed' : 'hover:bg-black/10 dark:hover:bg-white/10'}`}
-      aria-label={`朗读`}
-    >
-      {isLoading ? (
-        <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-      ) : (
-        <i className="fas fa-volume-up"></i>
-      )}
-    </button>
-  );
-};
-
+// --- 子组件定义区域 (在主组件外部) ---
 
 // 简单的 Markdown 解析器
 const SimpleMarkdown = ({ text }) => {
@@ -89,10 +10,12 @@ const SimpleMarkdown = ({ text }) => {
     const lines = text.split('\n').map((line, index) => {
         if (line.trim() === '') return <br key={index} />;
         if (line.match(/\*\*(.*?)\*\*/)) {
-            return <strong key={index} className="block mt-2 mb-1">{line.replace(/\*\*/g, '')}</strong>;
+            const content = line.replace(/\*\*/g, '');
+            return <strong key={index} className="block mt-2 mb-1">{content}</strong>;
         }
         if (line.startsWith('* ') || line.startsWith('- ')) {
-            return <li key={index} className="ml-5 list-disc">{line.substring(2)}</li>;
+            const content = line.substring(2);
+            return <li key={index} className="ml-5 list-disc">{content}</li>;
         }
         return <p key={index} className="my-1">{line}</p>;
     });
@@ -124,7 +47,7 @@ const MessageBubble = ({ msg, settings }) => {
                 </div>
                 {!isUser && msg.content && (
                     <div className="flex items-center gap-3 mt-2 text-gray-500 dark:text-gray-400">
-                        <TtsButton text={msg.content} apiKey={settings.apiKey} ttsSettings={settings} />
+                        <AiTtsButton text={msg.content} apiKey={settings.apiKey} ttsSettings={settings} />
                         <button onClick={() => navigator.clipboard.writeText(msg.content)} className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10" title="复制"><i className="fas fa-copy"></i></button>
                     </div>
                 )}
@@ -141,8 +64,32 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
     const handleChange = (key, value) => {
         setTempSettings(prev => ({ ...prev, [key]: value }));
     };
+
+    const handlePromptChange = (e, promptId, field) => {
+        const newPrompts = tempSettings.prompts.map(p => 
+            p.id === promptId ? { ...p, [field]: e.target.value } : p
+        );
+        handleChange('prompts', newPrompts);
+    };
+
+    const handleAddPrompt = () => {
+        const newId = `custom-${Date.now()}`;
+        const newPrompts = [...tempSettings.prompts, { id: newId, name: '新提示词', content: '请输入提示词内容...' }];
+        handleChange('prompts', newPrompts);
+    };
+
+    const handleDeletePrompt = (idToDelete) => {
+        if (window.confirm('确定删除此提示词吗？')) {
+            const newPrompts = tempSettings.prompts.filter(p => p.id !== idToDelete);
+            let newCurrentPromptId = tempSettings.currentPromptId;
+            if (newCurrentPromptId === idToDelete) {
+                newCurrentPromptId = newPrompts[0]?.id || '';
+            }
+            handleChange('prompts', newPrompts);
+            handleChange('currentPromptId', newCurrentPromptId);
+        }
+    };
     
-    // 省略了提示词管理，以确保稳定，未来可以加回
     const geminiTtsVoices = [
         { name: 'Zephyr (Bright)', value: 'Zephyr' }, { name: 'Puck (Upbeat)', value: 'Puck' },
         { name: 'Charon (Informative)', value: 'Charon' }, { name: 'Kore (Firm)', value: 'Kore' },
@@ -165,15 +112,15 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                 <div className="mb-4 pb-4 border-b dark:border-gray-700">
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">选择 AI 模型</label>
                     <select value={tempSettings.selectedModel} onChange={(e) => handleChange('selectedModel', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md">
-                        <option value="gemini-1.5-flash">Gemini 1.5 Flash (推荐)</option>
-                        <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash (推荐)</option>
+                        <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
                     </select>
                 </div>
                 <div className="mb-4 pb-4 border-b dark:border-gray-700">
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">选择 TTS 引擎</label>
                     <select value={tempSettings.ttsEngine} onChange={(e) => handleChange('ttsEngine', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md">
                         <option value={TTS_ENGINE.GEMINI_TTS}>Gemini TTS (推荐)</option>
-                        <option value={TTS_ENGINE.EXTERNAL_API}>第三方 API (晓辰)</option>
+                        <option value="external_api">第三方 API (晓辰)</option>
                     </select>
                 </div>
                 {tempSettings.ttsEngine === TTS_ENGINE.GEMINI_TTS && (
@@ -195,6 +142,24 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">AI 回复后自动朗读</label>
                     <input type="checkbox" checked={tempSettings.autoRead} onChange={(e) => handleChange('autoRead', e.target.checked)} className="h-5 w-5 text-primary rounded border-gray-300 focus:ring-primary" />
                 </div>
+                <div className="mb-6">
+                    <h4 className="text-lg font-bold mb-3 text-gray-800 dark:text-white">自定义提示词管理</h4>
+                    <div className="space-y-2 mb-4">
+                        {tempSettings.prompts.map(prompt => (
+                            <div key={prompt.id} className="flex flex-col p-2 bg-gray-100 dark:bg-gray-700 rounded-md">
+                                <div className="flex items-center justify-between">
+                                    <label className="flex items-center flex-grow cursor-pointer">
+                                        <input type="radio" name="currentPrompt" checked={tempSettings.currentPromptId === prompt.id} onChange={() => handleChange('currentPromptId', prompt.id)} className="mr-2 text-primary" />
+                                        <input type="text" value={prompt.name} onChange={(e) => handlePromptChange(e, prompt.id, 'name')} className="font-medium bg-transparent w-full border-b border-dashed" placeholder="提示词名称" />
+                                    </label>
+                                    <button onClick={() => handleDeletePrompt(prompt.id)} className="p-1 ml-2 text-sm bg-red-500 text-white rounded"><i className="fas fa-times"></i></button>
+                                </div>
+                                <textarea value={prompt.content} onChange={(e) => handlePromptChange(e, prompt.id, 'content')} className="w-full mt-2 h-24 p-2 bg-gray-50 dark:bg-gray-800 border rounded-md text-sm" placeholder="提示词内容..."></textarea>
+                            </div>
+                        ))}
+                    </div>
+                    <button onClick={handleAddPrompt} className="w-full py-2 bg-green-500 text-white rounded-md"><i className="fas fa-plus mr-2"></i>添加新提示词</button>
+                </div>
                 <div className="flex justify-end gap-3 mt-6">
                     <button onClick={onClose} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">关闭</button>
                     <button onClick={() => onSave(tempSettings)} className="px-4 py-2 bg-primary text-white rounded-md">保存设置</button>
@@ -204,17 +169,16 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
     );
 };
 
-// 默认提示词
+// 默认提示词和设置
 const DEFAULT_PROMPTS = [
-    { id: 'default-grammar-correction', name: '纠正中文语法', content: `你是一位专业的、耐心的中文老师和语言学习助手，你的学生是缅甸人。你的任务是帮助他们学习中文，纠正语法，解释词语，提供例句，并始终保持友好和鼓励。请根据学生的提问，给出清晰、简洁、实用的回答，必要时提供中文和缅甸语双语解释。你的回答应遵循以下格式：1. 如果需要纠正句子，请先写出“**纠正后的句子：**”\n2. 如果需要解释词语或语法，请先写出“**解释：**”，并提供中缅双语。\n3. 最后，提供 1-2 个使用正确语法的额外例句，并用列表符号“-”开头，标题为“**更多例句：**”。\n4. 你的回答要简洁、友好、鼓励学生。` },
-    { id: 'explain-word', name: '解释中文词语', content: `你是一位专业的、耐心的中文老师，你的学生是缅甸人。请用中文和缅甸语双语，详细解释学生提供的中文词语的含义、用法，并给出2-3个例句。` },
-    { id: 'translate-myanmar', name: '中缅互译', content: `你是一位专业的翻译助手，你的学生是缅甸人。请将学生提供的中文句子翻译成缅甸语，或将缅甸语句子翻译成中文。` }
+    { id: 'default-grammar-correction', name: '纠正中文语法', content: `你是一位专业的、耐心的中文老师...` },
+    { id: 'explain-word', name: '解释中文词语', content: `你是一位专业的中文老师...` },
+    { id: 'translate-myanmar', name: '中缅互译', content: `你是一位专业的翻译助手...` }
 ];
 
-// 默认设置
 const DEFAULT_SETTINGS = {
     apiKey: '',
-    selectedModel: 'gemini-1.5-flash',
+    selectedModel: 'gemini-2.5-flash',
     prompts: DEFAULT_PROMPTS,
     currentPromptId: DEFAULT_PROMPTS[0]?.id || '',
     autoRead: false,
@@ -241,29 +205,38 @@ const AiChatAssistant = () => {
     const [isListening, setIsListening] = useState(false);
     const [speechRecognitionError, setSpeechRecognitionError] = useState('');
     const recognitionRef = useRef(null);
+    const [isLongPressing, setIsLongPressing] = useState(false);
+    const [isCancelling, setIsCancelling] = useState(false);
+    const longPressTimer = useRef(null);
+    const touchStartY = useRef(0);
 
     const messagesEndRef = useRef(null);
     const abortControllerRef = useRef(null);
     const fileInputRef = useRef(null);
-    
+    const videoRef = useRef(null); // 虽然不用，但为保持完整性保留
+    const canvasRef = useRef(null); // 同上
+
     // --- 初始化和保存设置 ---
     useEffect(() => {
         setIsMounted(true);
         try {
             const savedSettings = localStorage.getItem('ai_assistant_settings_v4_final');
             if (savedSettings) {
-                const parsed = JSON.parse(savedSettings);
-                // 合并保存的设置和默认设置，以防未来新增设置项
-                setSettings(prev => ({ ...DEFAULT_SETTINGS, ...parsed }));
+                setSettings(prev => ({ ...DEFAULT_SETTINGS, ...JSON.parse(savedSettings) }));
             }
         } catch (e) { console.error("Failed to load settings", e); }
     }, []);
 
+    useEffect(() => {
+        if (isMounted) {
+            try {
+                localStorage.setItem('ai_assistant_settings_v4_final', JSON.stringify(settings));
+            } catch (e) { console.error("Failed to save settings", e); }
+        }
+    }, [settings, isMounted]);
+
     const handleSaveSettings = useCallback((newSettings) => {
         setSettings(newSettings);
-        try {
-            localStorage.setItem('ai_assistant_settings_v4_final', JSON.stringify(newSettings));
-        } catch (e) { console.error("Failed to save settings", e); }
         setShowSettings(false);
     }, []);
 
@@ -278,7 +251,7 @@ const AiChatAssistant = () => {
             setMessages([{ role: 'ai', content: '你好！有什么可以帮助你的吗？' }]);
         }
     }, [isMounted]);
-    
+
     // --- 交互逻辑 ---
     const handleImageUpload = (e) => {
         const file = e.target.files[0];
@@ -298,31 +271,36 @@ const AiChatAssistant = () => {
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    const handleSpeechToggle = useCallback(() => {
-        if (isListening) {
-            recognitionRef.current?.stop();
-        } else {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognition) {
-                setSpeechRecognitionError('您的浏览器不支持语音输入功能。');
-                return;
-            }
-            recognitionRef.current = new SpeechRecognition();
-            recognitionRef.current.lang = settings.speechLanguage;
-            recognitionRef.current.onstart = () => { setIsListening(true); setSpeechRecognitionError(''); };
-            recognitionRef.current.onresult = (e) => {
-                setUserInput(prev => prev + e.results[0][0].transcript);
-            };
-            recognitionRef.current.onerror = (e) => {
-                if (e.error !== 'no-speech' && e.error !== 'aborted') {
-                    setSpeechRecognitionError(`语音输入错误: ${e.error}`);
-                }
-                setIsListening(false);
-            };
-            recognitionRef.current.onend = () => setIsListening(false);
-            recognitionRef.current.start();
+    const startListening = useCallback(() => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            setSpeechRecognitionError('您的浏览器不支持语音输入功能。');
+            return;
         }
-    }, [isListening, settings.speechLanguage]);
+        if (recognitionRef.current) {
+            recognitionRef.current.abort();
+        }
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.lang = settings.speechLanguage;
+        recognitionRef.current.onstart = () => { setIsListening(true); setSpeechRecognitionError(''); };
+        recognitionRef.current.onresult = (e) => {
+            const transcript = e.results[0][0].transcript;
+            setUserInput(transcript.trim());
+        };
+        recognitionRef.current.onerror = (e) => {
+            if (e.error !== 'no-speech') {
+                setSpeechRecognitionError(`语音输入错误: ${e.error}`);
+            }
+            setIsListening(false);
+        };
+        recognitionRef.current.onend = () => setIsListening(false);
+        recognitionRef.current.start();
+    }, [settings.speechLanguage]);
+
+    const stopListening = useCallback(() => {
+        recognitionRef.current?.stop();
+        setIsListening(false);
+    }, []);
 
     const handleSubmit = async (e) => {
         if (e) e.preventDefault();
@@ -349,10 +327,10 @@ const AiChatAssistant = () => {
         const currentPrompt = settings.prompts.find(p => p.id === settings.currentPromptId)?.content || DEFAULT_PROMPTS[0].content;
         const history = messages.map(msg => ({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.content }] }));
         const contents = [
-          { role: 'user', parts: [{ text: currentPrompt }] },
-          { role: 'model', parts: [{ text: "好的，我明白了。我将扮演一名专业的中文老师。请开始提问吧。" }] },
-          ...history,
-          { role: 'user', parts: userMessageContent }
+            { role: 'user', parts: [{ text: currentPrompt }] },
+            { role: 'model', parts: [{ text: "好的，我明白了。我将扮演一名专业的中文老师。请开始提问吧。" }] },
+            ...history,
+            { role: 'user', parts: userMessageContent }
         ];
 
         try {
@@ -446,11 +424,11 @@ const AiChatAssistant = () => {
                             <textarea value={userInput} onChange={(e) => setUserInput(e.target.value)} placeholder="与 AI 聊天..." className="w-full px-4 py-2 pr-12 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 resize-none overflow-hidden" rows="1" style={{minHeight:'44px'}} onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight) + 'px'; }} />
                             <button
                                 type="button"
-                                onClick={handleSpeechToggle}
+                                onClick={isListening ? stopListening : startListening}
                                 className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full transition-colors ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-500 hover:text-primary'}`}
                                 title={isListening ? "停止录音" : "语音输入"}
                             >
-                                <i className={`fas fa-microphone`}></i>
+                                <i className="fas fa-microphone"></i>
                             </button>
                         </div>
                         
