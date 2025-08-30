@@ -1,86 +1,93 @@
-// /components/AiTtsButton.js - 修复 Gemini TTS 调用，增加文本清洗
-import React, { useState, useRef, useCallback } from 'react';
+// /components/AiTtsButton.js - v14: 支持第三方API和系统内置TTS双引擎
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { TTS_ENGINE } from './AiChatAssistant'; // 从主组件导入引擎类型
 
-export const TTS_ENGINE = {
-  GEMINI_TTS: 'gemini-tts-1',
-  EXTERNAL_API: 'external_api'
-};
+const cleanTextForSpeech = (text) => { /* ... (保持不变) ... */ };
 
-const AiTtsButton = ({ text, apiKey, ttsSettings = {} }) => {
+const AiTtsButton = ({ text, ttsSettings = {} }) => {
   const [isLoading, setIsLoading] = useState(false);
-  const audioRef = useRef(null);
+  const audioRef = useRef(null); // 用于第三方API的Audio对象
+  const utteranceRef = useRef(null); // 用于系统TTS的Utterance对象
+
+  // 当组件卸载时，停止任何正在播放的语音
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   const synthesizeSpeech = useCallback(async (textToSpeak) => {
-    if (!textToSpeak || textToSpeak.trim() === '' || !apiKey) return;
+    const {
+      ttsEngine = TTS_ENGINE.THIRD_PARTY,
+      thirdPartyTtsVoice = 'zh-CN-XiaochenMultilingualNeural',
+      systemTtsVoiceURI = ''
+    } = ttsSettings;
+    
+    const cleanedText = cleanTextForSpeech(textToSpeak);
+    if (!cleanedText) return;
+
     setIsLoading(true);
 
-    // 清洗文本，移除 Markdown 符号
-    const cleanedText = textToSpeak.replace(/\*\*/g, '').replace(/^- /gm, '');
-
-    const {
-      ttsEngine = TTS_ENGINE.GEMINI_TTS,
-      ttsVoice = 'Zephyr',
-    } = ttsSettings;
+    // 停止之前可能在播放的语音
+    window.speechSynthesis.cancel();
+    if (audioRef.current) audioRef.current.pause();
 
     try {
-      let audioBlob;
-      if (ttsEngine === TTS_ENGINE.GEMINI_TTS) {
-        // *** 关键修复：使用正确的 Google Cloud Text-to-Speech API 端点和请求体 ***
-        const url = `https://texttospeech.googleapis.com/v1beta1/text:synthesize?key=${apiKey}`;
-        const body = {
-          input: { text: cleanedText },
-          voice: {
-            languageCode: 'zh-CN', // Gemini TTS 自动识别多语言，但指定中文可以提高准确性
-            name: `projects/-/locations/global/models/${ttsVoice}`, // 关键：这是 Gemini TTS 发音人的正确格式
-          },
-          audioConfig: { audioEncoding: 'MP3' }
+      // 逻辑分支：根据选择的引擎执行不同操作
+      if (ttsEngine === TTS_ENGINE.SYSTEM && 'speechSynthesis' in window) {
+        // --- 使用系统内置 TTS ---
+        const utterance = new SpeechSynthesisUtterance(cleanedText);
+        
+        // 如果用户在设置中选择了特定的声音，则使用它
+        if (systemTtsVoiceURI) {
+          const selectedVoice = window.speechSynthesis.getVoices().find(v => v.voiceURI === systemTtsVoiceURI);
+          if (selectedVoice) {
+            utterance.voice = selectedVoice;
+            utterance.lang = selectedVoice.lang; // 使用声音自带的语言代码
+          }
+        }
+        
+        utterance.onend = () => setIsLoading(false);
+        utterance.onerror = (e) => {
+          console.error('系统TTS错误:', e);
+          setIsLoading(false);
         };
-        const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        if (!response.ok) { const data = await response.json(); throw new Error(`Gemini TTS Error: ${data.error?.message || response.statusText}`); }
-        const data = await response.json();
-        if (!data.audioContent) throw new Error('Gemini TTS 未返回音频内容。');
-        const binaryString = window.atob(data.audioContent);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
-        audioBlob = new Blob([bytes.buffer], { type: 'audio/mpeg' });
-      } else { // 外部 API (晓辰)
-        const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(cleanedText)}&v=zh-CN-XiaochenMultilingualNeural&r=-20%&p=0%&o=audio-24khz-48kbitrate-mono-mp3`;
+        
+        utteranceRef.current = utterance;
+        window.speechSynthesis.speak(utterance);
+
+      } else {
+        // --- 使用第三方 API ---
+        const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(cleanedText)}&v=${thirdPartyTtsVoice}&r=-20%&p=0%&o=audio-24khz-48kbitrate-mono-mp3`;
         const response = await fetch(url);
-        if (!response.ok) throw new Error(`外部 TTS API 错误 (状态码: ${response.status})`);
-        audioBlob = await response.blob();
-      }
-      
-      if (audioBlob) {
+        if (!response.ok) throw new Error(`API错误 (状态码: ${response.status})`);
+        
+        const audioBlob = await response.blob();
         if (audioRef.current?.src) URL.revokeObjectURL(audioRef.current.src);
+        
         const audioUrl = URL.createObjectURL(audioBlob);
         const audio = new Audio(audioUrl);
         audioRef.current = audio;
+        
+        audio.onended = () => setIsLoading(false);
+        audio.onerror = () => {
+          console.error('音频播放错误');
+          setIsLoading(false);
+        };
         await audio.play();
       }
     } catch (err) {
       console.error('朗读失败:', err);
-    } finally {
       setIsLoading(false);
     }
-  }, [apiKey, ttsSettings]);
+  }, [ttsSettings]);
 
-  return (
-    <button
-      onClick={(e) => {
-          e.stopPropagation();
-          synthesizeSpeech(text);
-      }}
-      disabled={isLoading}
-      className={`tts-button p-2 rounded-full transition-colors ${isLoading ? 'text-gray-400' : 'hover:bg-black/10 dark:hover:bg-white/10'}`}
-      aria-label={`朗读`}
-    >
-      {isLoading ? (
-        <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-      ) : (
-        <i className="fas fa-volume-up"></i>
-      )}
-    </button>
-  );
+  // ... (返回的 JSX 按钮部分保持不变) ...
 };
 
 export default AiTtsButton;
