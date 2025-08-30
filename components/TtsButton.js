@@ -1,4 +1,4 @@
-// /components/TtsButton.js - 统一的多引擎 TTS 按钮
+// /components/AiTtsButton.js - 修复 Gemini TTS 调用，增加文本清洗
 import React, { useState, useRef, useCallback } from 'react';
 
 export const TTS_ENGINE = {
@@ -6,13 +6,16 @@ export const TTS_ENGINE = {
   EXTERNAL_API: 'external_api'
 };
 
-const TtsButton = ({ text, apiKey, ttsSettings = {} }) => {
+const AiTtsButton = ({ text, apiKey, ttsSettings = {} }) => {
   const [isLoading, setIsLoading] = useState(false);
   const audioRef = useRef(null);
 
   const synthesizeSpeech = useCallback(async (textToSpeak) => {
-    if (!textToSpeak || textToSpeak.trim() === '') return;
+    if (!textToSpeak || textToSpeak.trim() === '' || !apiKey) return;
     setIsLoading(true);
+
+    // 清洗文本，移除 Markdown 符号
+    const cleanedText = textToSpeak.replace(/\*\*/g, '').replace(/^- /gm, '');
 
     const {
       ttsEngine = TTS_ENGINE.GEMINI_TTS,
@@ -22,15 +25,18 @@ const TtsButton = ({ text, apiKey, ttsSettings = {} }) => {
     try {
       let audioBlob;
       if (ttsEngine === TTS_ENGINE.GEMINI_TTS) {
-        if (!apiKey) throw new Error('需要 Google API 密钥');
+        // *** 关键修复：使用正确的 Google Cloud Text-to-Speech API 端点和请求体 ***
         const url = `https://texttospeech.googleapis.com/v1beta1/text:synthesize?key=${apiKey}`;
         const body = {
-          input: { text: textToSpeak },
-          voice: { name: `projects/-/locations/us-central1/models/${ttsVoice}`, languageCode: 'zh-CN' }, // Gemini TTS 需要完整路径
+          input: { text: cleanedText },
+          voice: {
+            languageCode: 'zh-CN', // Gemini TTS 自动识别多语言，但指定中文可以提高准确性
+            name: `projects/-/locations/global/models/${ttsVoice}`, // 关键：这是 Gemini TTS 发音人的正确格式
+          },
           audioConfig: { audioEncoding: 'MP3' }
         };
         const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        if (!response.ok) { const data = await response.json(); throw new Error(`Gemini TTS: ${data.error?.message || response.statusText}`); }
+        if (!response.ok) { const data = await response.json(); throw new Error(`Gemini TTS Error: ${data.error?.message || response.statusText}`); }
         const data = await response.json();
         if (!data.audioContent) throw new Error('Gemini TTS 未返回音频内容。');
         const binaryString = window.atob(data.audioContent);
@@ -38,7 +44,7 @@ const TtsButton = ({ text, apiKey, ttsSettings = {} }) => {
         for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
         audioBlob = new Blob([bytes.buffer], { type: 'audio/mpeg' });
       } else { // 外部 API (晓辰)
-        const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(textToSpeak)}&v=zh-CN-XiaochenMultilingualNeural&r=-20%&p=0%&o=audio-24khz-48kbitrate-mono-mp3`;
+        const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(cleanedText)}&v=zh-CN-XiaochenMultilingualNeural&r=-20%&p=0%&o=audio-24khz-48kbitrate-mono-mp3`;
         const response = await fetch(url);
         if (!response.ok) throw new Error(`外部 TTS API 错误 (状态码: ${response.status})`);
         audioBlob = await response.blob();
@@ -77,4 +83,4 @@ const TtsButton = ({ text, apiKey, ttsSettings = {} }) => {
   );
 };
 
-export default TtsButton;
+export default AiTtsButton;
