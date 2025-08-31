@@ -1,4 +1,4 @@
-// /components/AiChatAssistant.js - v25: (取消自动发送, 优化UI, 修复朗读Bug, 增加模型快速切换)
+// /components/AiChatAssistant.js - v26: (整合左下角按钮至统一菜单，优化移动端体验)
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import AiTtsButton from './AiTtsButton';
 
@@ -29,13 +29,12 @@ const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate }) => {
     const hasBeenReadRef = useRef(false);
 
     useEffect(() => {
-        // 修复：只有当是最后一条AI消息，且设置了自动朗读，并且这条消息之前未被朗读过时，才触发自动朗读
         if (isLastAiMessage && !isUser && msg.content && settings.autoRead && !hasBeenReadRef.current) {
             const ttsButton = messageRef.current?.querySelector('button[title="朗读"]');
             if (ttsButton) {
                 setTimeout(() => {
                     ttsButton.click();
-                    hasBeenReadRef.current = true; // 标记为已朗读
+                    hasBeenReadRef.current = true;
                 }, 300);
             }
         }
@@ -75,7 +74,6 @@ const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDele
     const handleSaveRename = (id) => { if (newName.trim()) { onRename(id, newName.trim()); } setEditingId(null); };
 
     return (
-        // 修改：侧栏变窄
         <div className={`h-full bg-gray-50 dark:bg-gray-800/50 flex flex-col border-r dark:border-gray-700 transition-all duration-300 ${isOpen ? 'w-48 p-2' : 'w-0 p-0'} overflow-hidden`}>
             <button onClick={onNew} className="w-full flex items-center justify-between p-2 mb-2 rounded-md border border-dashed hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0">
                 <span>新对话</span><i className="fas fa-plus"></i>
@@ -269,14 +267,14 @@ const AiChatAssistant = () => {
     const [isFullScreen, setIsFullScreen] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [showPromptSelector, setShowPromptSelector] = useState(false);
-    const [showModelSelector, setShowModelSelector] = useState(false); // 新增：模型选择器状态
+    const [showModelSelector, setShowModelSelector] = useState(false);
+    const [showMoreMenu, setShowMoreMenu] = useState(false); // 新增：控制整合菜单的显示
     const [selectedImages, setSelectedImages] = useState([]);
     const [isListening, setIsListening] = useState(false);
 
     const messagesEndRef = useRef(null);
     const abortControllerRef = useRef(null);
-    const promptSelectorRef = useRef(null);
-    const modelSelectorRef = useRef(null); // 新增：模型选择器Ref
+    const optionsContainerRef = useRef(null); // 修改：用于整个选项区域的Ref
     const fileInputRef = useRef(null);
     const cameraInputRef = useRef(null);
     const timeoutRef = useRef(null);
@@ -300,6 +298,19 @@ const AiChatAssistant = () => {
                 createNewConversation();
             }
         } catch (e) { createNewConversation(); }
+    }, []);
+
+    // 新增：点击外部关闭所有弹出菜单
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (optionsContainerRef.current && !optionsContainerRef.current.contains(event.target)) {
+                setShowMoreMenu(false);
+                setShowModelSelector(false);
+                setShowPromptSelector(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
     useEffect(() => {
@@ -358,7 +369,7 @@ const AiChatAssistant = () => {
         recognition.onstart = () => setIsListening(true);
         recognition.onresult = (e) => {
             const transcript = e.results[0][0].transcript.trim();
-            setUserInput(transcript); // 修改：只填充输入框，不自动发送
+            setUserInput(transcript);
         };
         recognition.onerror = (event) => {
             console.error("Speech recognition error:", event.error);
@@ -462,7 +473,6 @@ const AiChatAssistant = () => {
         <div className={`w-full max-w-5xl mx-auto my-8 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 flex bg-white dark:bg-gray-900 ${isFullScreen ? 'fixed inset-0 z-50 max-w-full my-0 rounded-none' : ''}`} style={isFullScreen ? {} : { height: '90vh', minHeight: '650px' }}>
             <ChatSidebar isOpen={isSidebarOpen} conversations={conversations} currentId={currentConversationId} onSelect={handleSelectConversation} onNew={createNewConversation} onDelete={handleDeleteConversation} onRename={handleRenameConversation}/>
             <div className="flex-1 flex flex-col h-full min-w-0">
-                {/* 修改：顶部栏变窄 */}
                 <div className="flex items-center justify-between py-1 px-2 border-b dark:border-gray-700 shrink-0">
                     <div className="flex items-center gap-2">
                         <button onClick={() => setIsSidebarOpen(s => !s)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="切换侧边栏"><i className="fas fa-bars"></i></button>
@@ -494,33 +504,43 @@ const AiChatAssistant = () => {
 
                     {isLoading ? ( <div className="flex justify-center items-center gap-2 text-gray-500"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div> 正在思考中...</div> ) : (
                         <form onSubmit={(e)=>{e.preventDefault();handleSubmit(false)}} className="flex items-end gap-2">
-                             {showLeftButtons ? (
-                                <>
-                                    {/* 新增：模型选择器 */}
-                                    <div ref={modelSelectorRef} className="relative">
-                                        <button type="button" onClick={() => setShowModelSelector(s => !s)} className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0" title="切换模型"><i className="fas fa-robot"></i></button>
-                                        {showModelSelector && (
-                                            <div className="absolute bottom-full mb-2 w-48 bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 overflow-hidden z-20">
-                                                {CHAT_MODELS.map(m => ( <button key={m.value} type="button" onClick={()=>{setSettings(s=>({...s, selectedModel: m.value})); setShowModelSelector(false);}} className={`w-full text-left px-4 py-2 text-sm hover:bg-primary/10 ${settings.selectedModel === m.value ? 'text-primary font-bold' : ''}`}>{m.name}</button>))}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div ref={promptSelectorRef} className="relative">
-                                        <button type="button" onClick={() => setShowPromptSelector(s => !s)} className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0" title="切换提示词"><i className="fas fa-magic"></i></button>
-                                        {showPromptSelector && (
-                                            <div className="absolute bottom-full mb-2 w-48 bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 overflow-hidden z-20">
-                                                {settings.prompts.map(p => ( <button key={p.id} type="button" onClick={()=>{setSettings(s=>({...s, currentPromptId: p.id}));setShowPromptSelector(false);}} className={`w-full text-left px-4 py-2 text-sm hover:bg-primary/10 ${settings.currentPromptId === p.id ? 'text-primary font-bold' : ''}`}>{p.name}</button>))}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <button type="button" onClick={() => fileInputRef.current.click()} className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0" title="上传图片"><i className="fas fa-image"></i></button>
-                                    <input type="file" ref={fileInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" multiple />
-                                     <button type="button" onClick={() => cameraInputRef.current.click()} className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0" title="拍照"><i className="fas fa-camera"></i></button>
-                                    <input type="file" ref={cameraInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" capture="environment" />
-                                </>
-                            ) : (
-                                <button type="button" className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0" title="更多选项"><i className="fas fa-ellipsis-h"></i></button>
+                             {/* 修改：整合后的按钮和菜单 */}
+                             {showLeftButtons && (
+                                <div ref={optionsContainerRef} className="relative">
+                                    <button type="button" onClick={() => setShowMoreMenu(s => !s)} className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0" title="更多选项">
+                                        <i className="fas fa-plus-circle text-lg text-primary"></i>
+                                    </button>
+                                    {showMoreMenu && (
+                                        <div className="absolute bottom-full mb-2 w-56 bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 overflow-hidden z-20">
+                                            <button type="button" onClick={() => { setShowModelSelector(true); setShowMoreMenu(false); }} className="w-full flex justify-between items-center text-left px-4 py-3 text-sm hover:bg-primary/10">
+                                                <span className="flex items-center"><i className="fas fa-robot w-6 mr-2"></i>切换模型</span>
+                                                <span className="text-xs text-gray-500 truncate max-w-[100px]">{CHAT_MODELS.find(m => m.value === settings.selectedModel)?.name}</span>
+                                            </button>
+                                            <button type="button" onClick={() => { setShowPromptSelector(true); setShowMoreMenu(false); }} className="w-full flex justify-between items-center text-left px-4 py-3 text-sm hover:bg-primary/10">
+                                                <span className="flex items-center"><i className="fas fa-magic w-6 mr-2"></i>切换提示词</span>
+                                                <span className="text-xs text-gray-500 truncate max-w-[100px]">{settings.prompts.find(p => p.id === settings.currentPromptId)?.name}</span>
+                                            </button>
+                                            <div className="border-t my-1 dark:border-gray-700"></div>
+                                            <button type="button" onClick={() => { fileInputRef.current.click(); setShowMoreMenu(false); }} className="w-full flex items-center text-left px-4 py-3 text-sm hover:bg-primary/10"><i className="fas fa-image w-6 mr-2"></i>上传图片</button>
+                                            <button type="button" onClick={() => { cameraInputRef.current.click(); setShowMoreMenu(false); }} className="w-full flex items-center text-left px-4 py-3 text-sm hover:bg-primary/10"><i className="fas fa-camera w-6 mr-2"></i>拍照上传</button>
+                                        </div>
+                                    )}
+                                    {showModelSelector && (
+                                        <div className="absolute bottom-full mb-2 w-48 bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 overflow-hidden z-20">
+                                            {CHAT_MODELS.map(m => ( <button key={m.value} type="button" onClick={()=>{setSettings(s=>({...s, selectedModel: m.value})); setShowModelSelector(false);}} className={`w-full text-left px-4 py-2 text-sm hover:bg-primary/10 ${settings.selectedModel === m.value ? 'text-primary font-bold' : ''}`}>{m.name}</button>))}
+                                        </div>
+                                    )}
+                                    {showPromptSelector && (
+                                        <div className="absolute bottom-full mb-2 w-48 bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 overflow-hidden z-20">
+                                            {settings.prompts.map(p => ( <button key={p.id} type="button" onClick={()=>{setSettings(s=>({...s, currentPromptId: p.id}));setShowPromptSelector(false);}} className={`w-full text-left px-4 py-2 text-sm hover:bg-primary/10 ${settings.currentPromptId === p.id ? 'text-primary font-bold' : ''}`}>{p.name}</button>))}
+                                        </div>
+                                    )}
+                                </div>
                             )}
+                            
+                            {/* 文件上传输入框（保持在DOM中） */}
+                            <input type="file" ref={fileInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" multiple />
+                            <input type="file" ref={cameraInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" capture="environment" />
 
                             <div className="flex-grow relative">
                                 <textarea value={userInput} onChange={(e) => setUserInput(e.target.value)} placeholder="与 AI 聊天..." className="w-full px-4 py-2 pr-12 rounded-2xl bg-gray-100 dark:bg-gray-700 resize-none overflow-hidden" rows="1" style={{minHeight:'44px'}} onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight) + 'px'; }} />
