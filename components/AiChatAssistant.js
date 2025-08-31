@@ -1,12 +1,100 @@
-// /components/AiChatAssistant.js - v26: 修复所有编译错误，恢复设置中模型选择，新增快捷切换模型
+// /components/AiChatAssistant.js - v26: 修复所有编译错误，恢复设置中模型选择，新增快捷切换模型，所有功能整合
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import AiTtsButton from './AiTtsButton';
-import { SpeechRecognitionProvider, useSpeechRecognition } from '../contexts/SpeechRecognitionContext';
+import AiTtsButton from './AiTtsButton'; // 假设 AiTtsButton.js 在同级目录
 
 export const TTS_ENGINE = {
     SYSTEM: 'system',
     THIRD_PARTY: 'third_party'
 };
+
+// --- 内部 Hook：封装语音识别逻辑 ---
+// 为了避免 Module not found 错误，将 SpeechRecognitionContext 逻辑合并到主文件
+const useInternalSpeechRecognition = ({ language, onFinalResult, autoSendDelay = 3000, selectedImagesRef, userInputRef, handleSubmitRef }) => {
+    const [isListening, setIsListening] = useState(false);
+    const [recognizedText, setRecognizedText] = useState('');
+    const [recognitionError, setRecognitionError] = useState('');
+    const recognitionRef = useRef(null);
+    const autoSendTimeoutRef = useRef(null);
+
+    const startListening = useCallback(() => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            setRecognitionError('您的浏览器不支持语音输入功能。');
+            return;
+        }
+        if (recognitionRef.current) recognitionRef.current.abort();
+        if (autoSendTimeoutRef.current) clearTimeout(autoSendTimeoutRef.current);
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = language;
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 1;
+
+        recognition.onstart = () => { setIsListening(true); setRecognitionError(''); setRecognizedText(''); };
+        recognition.onresult = (event) => {
+            let finalTranscript = '';
+            let interimTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
+            }
+            setRecognizedText(finalTranscript || interimTranscript);
+        };
+        recognition.onerror = (event) => {
+            console.error('语音识别错误:', event.error);
+            setRecognitionError(`语音识别失败: ${event.error}`);
+            setIsListening(false);
+            if (autoSendTimeoutRef.current) clearTimeout(autoSendTimeoutRef.current);
+        };
+        recognition.onend = () => {
+            setIsListening(false);
+            const finalRecognizedText = recognizedText.trim(); 
+            // 只有当没有图片，且有识别文本时，才开始自动发送倒计时
+            if (selectedImagesRef.current.length === 0 && finalRecognizedText) {
+                 if (autoSendTimeoutRef.current) clearTimeout(autoSendTimeoutRef.current);
+                 autoSendTimeoutRef.current = setTimeout(() => {
+                    // 再次检查，避免用户在倒计时内修改了输入
+                    if (finalRecognizedText === userInputRef.current && selectedImagesRef.current.length === 0) {
+                         handleSubmitRef.current(false, finalRecognizedText); // 调用外部的 handleSubmit
+                    }
+                    autoSendTimeoutRef.current = null;
+                }, autoSendDelay);
+            } else if (onFinalResult && finalRecognizedText) {
+                 // 如果有图片或没有自动发送，但有最终结果，仍然传递出去
+                 onFinalResult(finalRecognizedText);
+            }
+        };
+
+        recognition.start();
+        recognitionRef.current = recognition;
+    }, [language, onFinalResult, recognizedText, autoSendDelay, selectedImagesRef, userInputRef, handleSubmitRef]);
+
+    const stopListening = useCallback(() => {
+        if (recognitionRef.current) recognitionRef.current.stop();
+        setIsListening(false);
+        if (autoSendTimeoutRef.current) clearTimeout(autoSendTimeoutRef.current);
+    }, []);
+
+    const clearRecognition = useCallback(() => {
+        setRecognizedText('');
+        setRecognitionError('');
+        if (autoSendTimeoutRef.current) clearTimeout(autoSendTimeoutRef.current);
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            if (autoSendTimeoutRef.current) clearTimeout(autoSendTimeoutRef.current);
+        };
+    }, []);
+
+    return { isListening, recognizedText, startListening, stopListening, recognitionError, clearRecognition, setRecognitionError };
+};
+
+
+// --- 子组件定义区域 ---
 
 const SimpleMarkdown = ({ text }) => {
     if (!text) return null;
@@ -343,7 +431,21 @@ const AiChatAssistant = () => {
     const [showPromptSelector, setShowPromptSelector] = useState(false);
     const [selectedImages, setSelectedImages] = useState([]);
     
-    const { isListening, recognizedText, startListening, stopListening, recognitionError, clearRecognition, setRecognitionError } = useSpeechRecognition();
+    const userInputRef = useRef(userInput);
+    const handleSubmitRef = useRef(null);
+    const selectedImagesRef = useRef(selectedImages);
+    
+    const { isListening, recognizedText, startListening, stopListening, recognitionError, clearRecognition, setRecognitionError } = useInternalSpeechRecognition({
+        language: settings.speechLanguage,
+        onFinalResult: (finalText) => {
+            setUserInput(finalText);
+        },
+        autoSendDelay: 3000,
+        selectedImagesRef: selectedImagesRef,
+        userInputRef: userInputRef,
+        handleSubmitRef: handleSubmitRef,
+    });
+    
     const { callGeminiApi, stopGenerating, isChatLoading, chatError, setChatError } = useGeminiChat();
 
 
@@ -351,19 +453,18 @@ const AiChatAssistant = () => {
     const promptSelectorRef = useRef(null);
     const fileInputRef = useRef(null);
     const cameraInputRef = useRef(null);
-    const autoSendTimeoutRef = useRef(null); // 已移动到 SpeechRecognitionContext
-
+    const autoSendTimeoutRef = useRef(null);
 
     useEffect(() => {
         setIsMounted(true);
         try {
-            const savedSettings = localStorage.getItem('ai_assistant_settings_v23_final');
+            const savedSettings = localStorage.getItem('ai_assistant_settings_v26_final'); // 更新 localStorage key
             if (savedSettings) {
                 const parsed = JSON.parse(savedSettings);
                 parsed.prompts = parsed.prompts.map(p => ({ ...p, model: p.model || DEFAULT_SETTINGS.selectedModel, ttsVoice: p.ttsVoice || 'zh-CN-XiaoxiaoMultilingualNeural' }));
                 setSettings(prev => ({ ...DEFAULT_SETTINGS, ...parsed }));
             }
-            const savedConversations = localStorage.getItem('ai_assistant_conversations_v23_final');
+            const savedConversations = localStorage.getItem('ai_assistant_conversations_v26_final'); // 更新 localStorage key
             const parsedConvs = savedConversations ? JSON.parse(savedConversations) : [];
             setConversations(parsedConvs);
             if (parsedConvs.length > 0) {
@@ -376,8 +477,8 @@ const AiChatAssistant = () => {
 
     useEffect(() => {
         if (isMounted) {
-            localStorage.setItem('ai_assistant_settings_v23_final', JSON.stringify(settings));
-            localStorage.setItem('ai_assistant_conversations_v23_final', JSON.stringify(conversations));
+            localStorage.setItem('ai_assistant_settings_v26_final', JSON.stringify(settings)); // 更新 localStorage key
+            localStorage.setItem('ai_assistant_conversations_v26_final', JSON.stringify(conversations)); // 更新 localStorage key
         }
     }, [settings, conversations, isMounted]);
 
@@ -385,14 +486,9 @@ const AiChatAssistant = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [conversations, currentConversationId]);
 
-    // 清理自动发送定时器
-    useEffect(() => {
-        return () => {
-            if (autoSendTimeoutRef.current) {
-                clearTimeout(autoSendTimeoutRef.current);
-            }
-        };
-    }, []);
+    useEffect(() => { userInputRef.current = userInput; }, [userInput]);
+    useEffect(() => { selectedImagesRef.current = selectedImages; }, [selectedImages]);
+    useEffect(() => { handleSubmitRef.current = handleSubmit; }, [handleSubmit]);
 
 
     const createNewConversation = () => {
@@ -421,7 +517,6 @@ const AiChatAssistant = () => {
         Promise.all(imagePromises).then(newImages => setSelectedImages(prev => [...prev, ...newImages]));
         if (fileInputRef.current) fileInputRef.current.value = '';
         if (cameraInputRef.current) cameraInputRef.current.value = '';
-        // 如果有图片，取消自动发送
         if (autoSendTimeoutRef.current) {
             clearTimeout(autoSendTimeoutRef.current);
             autoSendTimeoutRef.current = null;
@@ -431,34 +526,9 @@ const AiChatAssistant = () => {
     const handleRemoveImage = (indexToRemove) => {
         setSelectedImages(prev => prev.filter((_, index) => index !== indexToRemove));
     };
-
-    // NEW: 语音识别最终结果回调 (当 SpeechRecognitionContext 识别到最终文本时调用)
-    const handleSpeechFinalResult = useCallback((finalText) => {
-        setUserInput(finalText); // 填充输入框
-        // 只有当没有选择图片时才自动发送 (3秒延时)
-        if (selectedImages.length === 0 && finalText) {
-            // 设置一个延时定时器，确保用户有时间在发送前取消或修改
-            if (autoSendTimeoutRef.current) clearTimeout(autoSendTimeoutRef.current);
-            autoSendTimeoutRef.current = setTimeout(() => {
-                // 再次检查 currentConvId 和 userInput 是否仍然是识别到的文本，避免用户中途修改
-                if (finalText === userInput && selectedImages.length === 0) {
-                    handleSubmit(false, finalText);
-                }
-                autoSendTimeoutRef.current = null;
-            }, 3000); // 3秒后自动发送
-        }
-    }, [selectedImages, userInput]); // 依赖 userInput 和 selectedImages
-
-    // startListening 和 stopListening 现在直接从 useSpeechRecognition 获取
-    // 所以这里的 useCallback 包装可以移除，直接使用 hook 返回的函数
-
+    
     const handleSubmit = useCallback(async (isRegenerate = false, textOverride = '') => {
-        // 如果有自动发送定时器在运行，先取消
-        if (autoSendTimeoutRef.current) {
-            clearTimeout(autoSendTimeoutRef.current);
-            autoSendTimeoutRef.current = null;
-        }
-        stopListening(); // 停止语音识别
+        stopListening();
 
         if (!currentConversationId || isChatLoading) return;
         const currentConv = conversations.find(c => c.id === currentConversationId);
@@ -471,7 +541,7 @@ const AiChatAssistant = () => {
             if (messagesForApi[messagesForApi.length - 1]?.role === 'ai') messagesForApi.pop();
         } else {
             if (!textToProcess && selectedImages.length === 0) {
-                setChatError('请输入文字或选择图片再发送！'); // 修复错误消息
+                setChatError('请输入文字或选择图片再发送！');
                 return;
             }
             const userMessage = { role: 'user', content: textToProcess, images: selectedImages };
@@ -480,19 +550,19 @@ const AiChatAssistant = () => {
             messagesForApi.push(userMessage);
             setUserInput('');
             setSelectedImages([]);
-            clearRecognition(); // 发送后清除语音识别结果
+            clearRecognition();
         }
 
         if (messagesForApi.length === 0) return;
 
-        const currentPrompt = settings.prompts.find(p => p.id === settings.currentPromptId) || DEFAULT_PROMPTS[0]; // 确保有默认提示词
+        const currentPrompt = settings.prompts.find(p => p.id === settings.currentPromptId) || DEFAULT_PROMPTS[0];
         const modelToUse = currentPrompt.model || settings.selectedModel;
+        const ttsVoiceToUse = currentPrompt.ttsVoice || settings.thirdPartyTtsVoice;
         
-        // 确保传递给 MessageBubble 的 settings 包含最新的 per-prompt voice
         setSettings(prev => ({
             ...prev,
-            selectedModel: modelToUse, // 更新主模型显示
-            thirdPartyTtsVoice: currentPrompt.ttsVoice || prev.thirdPartyTtsVoice // 更新主 TTS 声音
+            selectedModel: modelToUse,
+            thirdPartyTtsVoice: ttsVoiceToUse
         }));
 
         const result = await callGeminiApi({
@@ -509,20 +579,18 @@ const AiChatAssistant = () => {
             const aiMessage = { role: 'ai', content: `抱歉，出错了: ${result.error}` };
             setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: [...messagesForApi, aiMessage] } : c));
         }
-    }, [currentConversationId, conversations, userInput, selectedImages, settings, callGeminiApi, clearRecognition, stopListening]);
-
+    }, [currentConversationId, conversations, userInput, selectedImages, settings, callGeminiApi, clearRecognition, stopListening, setChatError]);
+    
+    const handleQuickModelChange = (modelValue) => {
+        setSettings(prev => ({ ...prev, selectedModel: modelValue }));
+        setShowModelSelector(false);
+    };
 
     const currentConversation = conversations.find(c => c.id === currentConversationId);
 
     if (!isMounted) return <div className="w-full h-full flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>;
 
     const showLeftButtons = !userInput.trim() && selectedImages.length === 0;
-    
-    // NEW: 快捷切换模型函数和模型列表
-    const handleQuickModelChange = (modelValue) => {
-        setSettings(prev => ({ ...prev, selectedModel: modelValue }));
-        setShowModelSelector(false); // 关闭快捷选择器
-    };
     const quickChatModels = [ 
         { name: 'G2.5 Flash', value: 'gemini-2.5-flash' }, 
         { name: 'G2.5 Pro', value: 'gemini-2.5-pro' },
@@ -531,42 +599,41 @@ const AiChatAssistant = () => {
     const [showModelSelector, setShowModelSelector] = useState(false);
 
     return (
-        <SpeechRecognitionProvider language={settings.speechLanguage} onFinalResult={handleSpeechFinalResult}>
-            <div className={`w-full max-w-5xl mx-auto my-8 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 flex bg-white dark:bg-gray-900 ${isFullScreen ? 'fixed inset-0 z-50 max-w-full my-0 rounded-none' : ''}`} style={isFullScreen ? {} : { height: '90vh', minHeight: '650px' }}>
-                <ChatSidebar isOpen={isSidebarOpen} conversations={conversations} currentId={currentConversationId} onSelect={handleSelectConversation} onNew={createNewConversation} onDelete={handleDeleteConversation} onRename={handleRenameConversation}/>
-                <div className="flex-1 flex flex-col h-full min-w-0">
-                    <div className="flex items-center justify-between py-0.5 px-2 border-b dark:border-gray-700 shrink-0">
-                        <div className="flex items-center gap-2">
-                            <button onClick={() => setIsSidebarOpen(s => !s)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="切换侧边栏"><i className="fas fa-bars"></i></button>
-                            <h2 className="text-lg font-semibold truncate">{currentConversation?.title || '聊天'}</h2>
-                        </div>
-                        <button onClick={() => setShowSettings(true)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="设置"><i className="fas fa-cog"></i></button>
+        <div className={`w-full max-w-5xl mx-auto my-8 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 flex bg-white dark:bg-gray-900 ${isFullScreen ? 'fixed inset-0 z-50 max-w-full my-0 rounded-none' : ''}`} style={isFullScreen ? {} : { height: '90vh', minHeight: '650px' }}>
+            <ChatSidebar isOpen={isSidebarOpen} conversations={conversations} currentId={currentConversationId} onSelect={handleSelectConversation} onNew={createNewConversation} onDelete={handleDeleteConversation} onRename={handleRenameConversation}/>
+            <div className="flex-1 flex flex-col h-full min-w-0">
+                <div className="flex items-center justify-between py-0.5 px-2 border-b dark:border-gray-700 shrink-0">
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => setIsSidebarOpen(s => !s)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="切换侧边栏"><i className="fas fa-bars"></i></button>
+                        <h2 className="text-lg font-semibold truncate">{currentConversation?.title || '聊天'}</h2>
                     </div>
-                    <div className="flex-grow p-4 overflow-y-auto" style={{ backgroundImage: `url('${settings.chatBackgroundUrl}')`}}>
-                        <div className="space-y-1">
-                            {currentConversation?.messages.map((msg, index) => (
-                                <MessageBubble key={`${currentConversationId}-${index}`} msg={msg} settings={settings} isLastAiMessage={index === currentConversation.messages.length - 1 && msg.role === 'ai'} onRegenerate={() => handleSubmit(true)} />
+                    <button onClick={() => setShowSettings(true)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="设置"><i className="fas fa-cog"></i></button>
+                </div>
+                <div className="flex-grow p-4 overflow-y-auto" style={{ backgroundImage: `url('${settings.chatBackgroundUrl}')`}}>
+                    <div className="space-y-1">
+                        {currentConversation?.messages.map((msg, index) => (
+                            <MessageBubble key={`${currentConversationId}-${index}`} msg={msg} settings={settings} isLastAiMessage={index === currentConversation.messages.length - 1 && msg.role === 'ai'} onRegenerate={() => handleSubmit(true)} />
+                        ))}
+                    </div>
+                    <div ref={messagesEndRef} />
+                </div>
+                <div className="p-3 border-t dark:border-gray-700 shrink-0">
+                    {(chatError || recognitionError) && <div className="mb-2 p-2 bg-red-100 text-red-700 rounded-lg text-center text-sm" onClick={() => {setChatError(''); clearRecognition();}}>{chatError || recognitionError} <span className='text-xs'>(点击关闭)</span></div>}
+                    
+                    {selectedImages.length > 0 && (
+                        <div className="mb-2 flex gap-2 overflow-x-auto p-1">
+                            {selectedImages.map((image, index) => (
+                                <div key={index} className="relative w-24 h-24 object-cover rounded-lg shrink-0">
+                                    <img src={image.previewUrl} alt={`预览 ${index + 1}`} className="w-full h-full object-cover rounded-lg" />
+                                    <button type="button" onClick={() => handleRemoveImage(index)} className="absolute -top-2 -right-2 bg-red-500 text-white w-5 h-5 flex items-center justify-center rounded-full text-xs" title="移除"><i className="fas fa-times"></i></button>
+                                </div>
                             ))}
                         </div>
-                        <div ref={messagesEndRef} />
-                    </div>
-                    <div className="p-3 border-t dark:border-gray-700 shrink-0">
-                        {(chatError || recognitionError) && <div className="mb-2 p-2 bg-red-100 text-red-700 rounded-lg text-center text-sm" onClick={() => {setChatError(''); clearRecognition();}}>{chatError || recognitionError} <span className='text-xs'>(点击关闭)</span></div>}
-                        
-                        {selectedImages.length > 0 && (
-                            <div className="mb-2 flex gap-2 overflow-x-auto p-1">
-                                {selectedImages.map((image, index) => (
-                                    <div key={index} className="relative w-24 h-24 object-cover rounded-lg shrink-0">
-                                        <img src={image.previewUrl} alt={`预览 ${index + 1}`} className="w-full h-full object-cover rounded-lg" />
-                                        <button type="button" onClick={() => handleRemoveImage(index)} className="absolute -top-2 -right-2 bg-red-500 text-white w-5 h-5 flex items-center justify-center rounded-full text-xs" title="移除"><i className="fas fa-times"></i></button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                    )}
 
-                        {isChatLoading ? ( <div className="flex justify-center items-center gap-2 text-gray-500"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div> 正在思考中...</div> ) : (
-                            <form onSubmit={(e)=>{e.preventDefault();handleSubmit(false)}} className="flex items-end gap-2">
-                                 {showLeftButtons ? (
+                    {isChatLoading ? ( <div className="flex justify-center items-center gap-2 text-gray-500"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div> 正在思考中...</div> ) : (
+                        <form onSubmit={(e)=>{e.preventDefault();handleSubmit(false)}} className="flex items-end gap-2">
+                             {showLeftButtons ? (
                                     <>
                                         <div ref={promptSelectorRef} className="relative">
                                             <button type="button" onClick={() => setShowPromptSelector(s => !s)} className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0" title="切换提示词"><i className="fas fa-magic"></i></button>
@@ -598,7 +665,7 @@ const AiChatAssistant = () => {
                                     <textarea value={userInput} onChange={(e) => {
                                         setUserInput(e.target.value);
                                         // 用户手动输入时，取消自动发送定时器
-                                        if (autoSendTimeoutRef.current) {
+                                        if (autoSendTimeoutRef.current) { // Ensure this ref is still accessible if needed
                                             clearTimeout(autoSendTimeoutRef.current);
                                             autoSendTimeoutRef.current = null;
                                         }
@@ -615,7 +682,7 @@ const AiChatAssistant = () => {
                 </div>
                  {showSettings && <SettingsModal settings={settings} onSave={handleSaveSettings} onClose={() => setShowSettings(false)} />}
             </div>
-        </SpeechRecognitionProvider>
+        </div>
     );
 };
 
