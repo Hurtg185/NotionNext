@@ -1,6 +1,15 @@
-// /components/AiChatAssistant.js - v29: (修复致命编译错误和多个运行时逻辑Bugs)
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+// /components/AiChatAssistant.js - v32: (优化设置弹窗，提示词管理可折叠)
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import AiTtsButton from './AiTtsButton';
+
+// 辅助函数，自动将GitHub的网页链接转换为原始图片链接
+const convertGitHubUrl = (url) => {
+    if (typeof url === 'string' && url.includes('github.com') && url.includes('/blob/')) {
+        return url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
+    }
+    return url;
+};
+
 
 export const TTS_ENGINE = {
     SYSTEM: 'system',
@@ -42,7 +51,7 @@ const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate }) => {
 
     return (
         <div ref={messageRef} className={`flex items-end gap-2.5 my-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
-            {!isUser && <img src={settings.aiAvatarUrl} alt="AI Avatar" className="w-8 h-8 rounded-full shrink-0" />}
+            {!isUser && <img src={convertGitHubUrl(settings.aiAvatarUrl)} alt="AI Avatar" className="w-8 h-8 rounded-full shrink-0" />}
             <div className={`p-3 rounded-2xl text-left flex flex-col ${isUser ? 'bg-primary text-white rounded-br-lg' : 'bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm'}`} style={{ maxWidth: '85%' }}>
                 {msg.images && msg.images.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-2">
@@ -62,36 +71,85 @@ const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate }) => {
                     </div>
                 )}
             </div>
-            {isUser && <img src={settings.userAvatarUrl} alt="User Avatar" className="w-8 h-8 rounded-full shrink-0" />}
+            {isUser && <img src={convertGitHubUrl(settings.userAvatarUrl)} alt="User Avatar" className="w-8 h-8 rounded-full shrink-0" />}
         </div>
     );
 };
 
-const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDelete, onRename }) => {
+const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDelete, onRename, prompts, settings }) => {
     const [editingId, setEditingId] = useState(null);
     const [newName, setNewName] = useState('');
     const handleRename = (id, oldName) => { setEditingId(id); setNewName(oldName); };
     const handleSaveRename = (id) => { if (newName.trim()) { onRename(id, newName.trim()); } setEditingId(null); };
 
+    const groupedConversations = useMemo(() => {
+        const groups = new Map();
+        const uncategorized = [];
+
+        conversations.forEach(conv => {
+            const promptId = conv.promptId;
+            if (promptId && prompts.some(p => p.id === promptId)) {
+                if (!groups.has(promptId)) {
+                    groups.set(promptId, []);
+                }
+                groups.get(promptId).push(conv);
+            } else {
+                uncategorized.push(conv);
+            }
+        });
+        
+        const sortedGroups = Array.from(groups.entries()).map(([promptId, convs]) => ({
+            prompt: prompts.find(p => p.id === promptId),
+            conversations: convs,
+        }));
+
+        return { sortedGroups, uncategorized };
+    }, [conversations, prompts]);
+
+    const renderConversationItem = (conv) => (
+        <div key={conv.id} className={`group flex items-center p-2 rounded-md cursor-pointer ${currentId === conv.id ? 'bg-primary/20' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`} onClick={() => onSelect(conv.id)}>
+            <div className="flex-grow truncate" onDoubleClick={() => handleRename(conv.id, conv.title)}>
+                {editingId === conv.id ? (
+                    <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} onBlur={() => handleSaveRename(conv.id)} onKeyDown={(e) => e.key === 'Enter' && handleSaveRename(conv.id)} className="w-full bg-transparent p-0 border-b" autoFocus />
+                ) : ( <span className="text-sm">{conv.title}</span> )}
+            </div>
+            <div className="hidden group-hover:flex items-center shrink-0">
+               <button onClick={(e) => { e.stopPropagation(); handleRename(conv.id, conv.title); }} className="p-1 hover:text-primary"><i className="fas fa-pen text-xs"></i></button>
+               <button onClick={(e) => { e.stopPropagation(); if(window.confirm('确定删除此对话吗？')) onDelete(conv.id); }} className="p-1 hover:text-red-500"><i className="fas fa-trash text-xs"></i></button>
+            </div>
+        </div>
+    );
+
     return (
-        <div className={`h-full bg-gray-50 dark:bg-gray-800/50 flex flex-col border-r dark:border-gray-700 transition-all duration-300 ${isOpen ? 'w-48 p-2' : 'w-0 p-0'} overflow-hidden`}>
+        <div className={`h-full bg-gray-50 dark:bg-gray-800/50 flex flex-col border-r dark:border-gray-700 transition-all duration-300 ${isOpen ? 'w-44 p-2' : 'w-0 p-0'} overflow-hidden`}>
             <button onClick={onNew} className="w-full flex items-center justify-between p-2 mb-2 rounded-md border border-dashed hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0">
                 <span>新对话</span><i className="fas fa-plus"></i>
             </button>
-            <div className="flex-grow overflow-y-auto">
-                {conversations.map(conv => (
-                    <div key={conv.id} className={`group flex items-center p-2 rounded-md cursor-pointer ${currentId === conv.id ? 'bg-primary/20' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`} onClick={() => onSelect(conv.id)}>
-                        <div className="flex-grow truncate" onDoubleClick={() => handleRename(conv.id, conv.title)}>
-                            {editingId === conv.id ? (
-                                <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} onBlur={() => handleSaveRename(conv.id)} onKeyDown={(e) => e.key === 'Enter' && handleSaveRename(conv.id)} className="w-full bg-transparent p-0 border-b" autoFocus />
-                            ) : ( <span className="text-sm">{conv.title}</span> )}
+            <div className="flex-grow overflow-y-auto space-y-2">
+                {groupedConversations.sortedGroups.map(({ prompt, conversations }) => (
+                    <details key={prompt.id} className="group" open>
+                        <summary className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 list-none">
+                            <img src={convertGitHubUrl(prompt.avatarUrl) || convertGitHubUrl(settings.aiAvatarUrl)} alt={prompt.name} className="w-5 h-5 rounded-full object-cover"/>
+                            <span className="text-xs font-semibold flex-grow">{prompt.name}</span>
+                            <i className="fas fa-chevron-down text-xs text-gray-500 transition-transform group-open:rotate-180"></i>
+                        </summary>
+                        <div className="pl-3 mt-1 space-y-1">
+                            {conversations.map(renderConversationItem)}
                         </div>
-                        <div className="hidden group-hover:flex items-center shrink-0">
-                           <button onClick={(e) => { e.stopPropagation(); handleRename(conv.id, conv.title); }} className="p-1 hover:text-primary"><i className="fas fa-pen text-xs"></i></button>
-                           <button onClick={(e) => { e.stopPropagation(); if(window.confirm('确定删除此对话吗？')) onDelete(conv.id); }} className="p-1 hover:text-red-500"><i className="fas fa-trash text-xs"></i></button>
-                        </div>
-                    </div>
+                    </details>
                 ))}
+                {groupedConversations.uncategorized.length > 0 && (
+                    <details className="group" open>
+                        <summary className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 list-none">
+                            <i className="fas fa-folder w-5 h-5 text-gray-500"></i>
+                            <span className="text-xs font-semibold flex-grow">未分类对话</span>
+                            <i className="fas fa-chevron-down text-xs text-gray-500 transition-transform group-open:rotate-180"></i>
+                        </summary>
+                        <div className="pl-3 mt-1 space-y-1">
+                            {groupedConversations.uncategorized.map(renderConversationItem)}
+                        </div>
+                    </details>
+                )}
             </div>
         </div>
     );
@@ -104,6 +162,7 @@ const CHAT_MODELS = [
 const SettingsModal = ({ settings, onSave, onClose }) => {
     const [tempSettings, setTempSettings] = useState(settings);
     const [systemVoices, setSystemVoices] = useState([]);
+    const [isPromptManagerExpanded, setIsPromptManagerExpanded] = useState(false); // 新增状态
 
     useEffect(() => {
         const fetchSystemVoices = () => {
@@ -203,38 +262,50 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                         <label className="block text-sm font-medium">AI 回复后自动朗读</label>
                         <input type="checkbox" checked={tempSettings.autoRead} onChange={(e) => handleChange('autoRead', e.target.checked)} className="h-5 w-5 text-primary rounded" />
                     </div>
-                     <div className="mb-6">
-                        <h4 className="text-lg font-bold mb-3">自定义提示词管理</h4>
-                        <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
-                            {tempSettings.prompts.map(p => (
-                                <div key={p.id} className="p-3 bg-gray-100 dark:bg-gray-700 rounded-md">
-                                    <div className="flex items-center justify-between">
-                                        <label className="flex items-center flex-grow cursor-pointer"><input type="radio" name="currentPrompt" checked={tempSettings.currentPromptId === p.id} onChange={() => handleChange('currentPromptId', p.id)} className="mr-2 text-primary" /><input type="text" value={p.name} onChange={(e) => handlePromptSettingChange(p.id, 'name', e.target.value)} className="font-medium bg-transparent w-full" /></label>
-                                        <button onClick={() => handleDeletePrompt(p.id)} className="p-1 ml-2 text-sm text-red-500 rounded"><i className="fas fa-trash"></i></button>
-                                    </div>
-                                    <textarea value={p.content} onChange={(e) => handlePromptSettingChange(p.id, 'content', e.target.value)} className="w-full mt-2 h-20 p-2 bg-white dark:bg-gray-800 border rounded-md text-sm" />
-                                    <div className="mt-2 space-y-2 text-sm">
-                                        <div className="flex items-center gap-2">
-                                            <label className="shrink-0">模型:</label>
-                                            <select value={p.model || settings.selectedModel} onChange={(e) => handlePromptSettingChange(p.id, 'model', e.target.value)} className="w-full px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs">
-                                                {CHAT_MODELS.map(m => <option key={m.value} value={m.value}>{m.name}</option>)}
-                                            </select>
+                    {/* 修改: 将提示词管理区域改为可折叠 */}
+                    <div>
+                        <button
+                            type="button"
+                            onClick={() => setIsPromptManagerExpanded(prev => !prev)}
+                            className="w-full flex justify-between items-center p-3 rounded-md bg-gray-100 dark:bg-gray-700/50 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                        >
+                            <h4 className="text-lg font-bold">自定义提示词管理</h4>
+                            <i className={`fas fa-chevron-down transition-transform ${isPromptManagerExpanded ? 'rotate-180' : ''}`}></i>
+                        </button>
+                        {isPromptManagerExpanded && (
+                            <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-b-md border-x border-b border-gray-200 dark:border-gray-700">
+                                <div className="space-y-3 mb-4 max-h-64 overflow-y-auto pr-2">
+                                    {tempSettings.prompts.map(p => (
+                                        <div key={p.id} className="p-3 bg-white dark:bg-gray-700 rounded-md border dark:border-gray-600">
+                                            <div className="flex items-center justify-between">
+                                                <label className="flex items-center flex-grow cursor-pointer"><input type="radio" name="currentPrompt" checked={tempSettings.currentPromptId === p.id} onChange={() => handleChange('currentPromptId', p.id)} className="mr-2 text-primary" /><input type="text" value={p.name} onChange={(e) => handlePromptSettingChange(p.id, 'name', e.target.value)} className="font-medium bg-transparent w-full" /></label>
+                                                <button onClick={() => handleDeletePrompt(p.id)} className="p-1 ml-2 text-sm text-red-500 rounded"><i className="fas fa-trash"></i></button>
+                                            </div>
+                                            <textarea value={p.content} onChange={(e) => handlePromptSettingChange(p.id, 'content', e.target.value)} className="w-full mt-2 h-20 p-2 bg-gray-100 dark:bg-gray-800 border rounded-md text-sm" />
+                                            <div className="mt-2 space-y-2 text-sm">
+                                                <div className="flex items-center gap-2">
+                                                    <label className="shrink-0">模型:</label>
+                                                    <select value={p.model || settings.selectedModel} onChange={(e) => handlePromptSettingChange(p.id, 'model', e.target.value)} className="w-full px-2 py-1 bg-gray-100 dark:bg-gray-800 border rounded-md text-xs">
+                                                        {CHAT_MODELS.map(m => <option key={m.value} value={m.value}>{m.name}</option>)}
+                                                    </select>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <label className="shrink-0">声音:</label>
+                                                    <select value={p.ttsVoice || settings.thirdPartyTtsVoice} onChange={(e) => handlePromptSettingChange(p.id, 'ttsVoice', e.target.value)} className="w-full px-2 py-1 bg-gray-100 dark:bg-gray-800 border rounded-md text-xs">
+                                                        {microsoftTtsVoices.map(v => <option key={v.value} value={v.value}>{v.name}</option>)}
+                                                    </select>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <label className="shrink-0">头像:</label>
+                                                    <input type="text" value={p.avatarUrl || ''} onChange={(e) => handlePromptSettingChange(p.id, 'avatarUrl', e.target.value)} placeholder="输入头像图片URL" className="w-full px-2 py-1 bg-gray-100 dark:bg-gray-800 border rounded-md text-xs" />
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <label className="shrink-0">声音:</label>
-                                            <select value={p.ttsVoice || settings.thirdPartyTtsVoice} onChange={(e) => handlePromptSettingChange(p.id, 'ttsVoice', e.target.value)} className="w-full px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs">
-                                                {microsoftTtsVoices.map(v => <option key={v.value} value={v.value}>{v.name}</option>)}
-                                            </select>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <label className="shrink-0">头像:</label>
-                                            <input type="text" value={p.avatarUrl || ''} onChange={(e) => handlePromptSettingChange(p.id, 'avatarUrl', e.target.value)} placeholder="输入头像图片URL" className="w-full px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs" />
-                                        </div>
-                                    </div>
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
-                        <button onClick={handleAddPrompt} className="w-full py-2 bg-green-500 text-white rounded-md"><i className="fas fa-plus mr-2"></i>添加新提示词</button>
+                                <button onClick={handleAddPrompt} className="w-full py-2 bg-green-500 text-white rounded-md"><i className="fas fa-plus mr-2"></i>添加新提示词</button>
+                            </div>
+                        )}
                     </div>
                 </div>
                 <div className="flex justify-end gap-3 mt-6">
@@ -245,6 +316,7 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
         </div>
     );
 };
+
 
 const DEFAULT_PROMPTS = [ { id: 'default-grammar-correction', name: '纠正中文语法', content: '你是一位专业的、耐心的中文老师，请纠正我发送的中文句子中的语法和用词错误，并给出修改建议和说明。', model: 'gemini-2.5-flash', ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural', avatarUrl: '' }, { id: 'explain-word', name: '解释中文词语', content: '你是一位专业的中文老师，请用简单易懂的方式解释我发送的中文词语，并提供几个例子。', model: 'gemini-1.5-pro-latest', ttsVoice: 'zh-CN-YunxiNeural', avatarUrl: '' }, { id: 'translate-myanmar', content: '你是一位专业的翻译助手，请将我发送的内容在中文和缅甸语之间进行互译。', model: 'gemini-2.5-flash', ttsVoice: 'my-MM-NilarNeural', avatarUrl: '' } ];
 const DEFAULT_SETTINGS = {
@@ -329,12 +401,15 @@ const AiChatAssistant = () => {
     }, [settings, conversations, isMounted]);
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [conversations, currentConversationId]);
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [conversations.find(c => c.id === currentConversationId)?.messages]);
+
 
     const createNewConversation = () => {
         const newId = `conv-${Date.now()}`;
-        const newConv = { id: newId, title: '新的对话', messages: [{ role: 'ai', content: '你好！有什么可以帮助你的吗？' }] };
+        const newConv = { id: newId, title: '新的对话', messages: [{ role: 'ai', content: '你好！有什么可以帮助你的吗？' }], promptId: settings.currentPromptId };
         setConversations(prev => [newConv, ...prev]);
         setCurrentConversationId(newId);
     };
@@ -402,25 +477,24 @@ const AiChatAssistant = () => {
         if (!currentConv) return;
 
         let messagesForApi = [...currentConv.messages];
-        const textToProcess = userInput.trim();
-
+        
         if (isRegenerate) {
             if (messagesForApi.length > 0 && messagesForApi[messagesForApi.length - 1].role === 'ai') {
-                messagesForApi.pop(); // 移除最后一条AI消息
+                messagesForApi.pop();
             }
         } else {
-            if (!textToProcess && selectedImages.length === 0) {
+            if (userInput.trim() === '' && selectedImages.length === 0) {
                 setError('请输入文字或选择图片再发送！');
                 return;
             }
-            const userMessage = { role: 'user', content: textToProcess, images: selectedImages };
+            const userMessage = { role: 'user', content: userInput.trim(), images: selectedImages };
             const updatedMessages = [...currentConv.messages, userMessage];
             setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: updatedMessages } : c));
-            messagesForApi = updatedMessages; // 更新用于API调用的消息列表
+            messagesForApi = updatedMessages;
             setUserInput('');
             setSelectedImages([]);
         }
-
+        
         if (messagesForApi.length === 0) return;
 
         setIsLoading(true);
@@ -429,7 +503,7 @@ const AiChatAssistant = () => {
         const signal = abortControllerRef.current.signal;
 
         try {
-            const currentPrompt = settings.prompts.find(p => p.id === settings.currentPromptId) || DEFAULT_PROMPTS[0];
+            const currentPrompt = settings.prompts.find(p => p.id === currentConv.promptId) || settings.prompts.find(p => p.id === settings.currentPromptId) || DEFAULT_PROMPTS[0];
             const modelToUse = currentPrompt.model || settings.selectedModel;
             
             const history = messagesForApi.map(msg => {
@@ -490,15 +564,23 @@ const AiChatAssistant = () => {
 
     return (
         <div className={`w-full max-w-5xl mx-auto my-8 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 flex bg-white dark:bg-gray-900 ${isFullScreen ? 'fixed inset-0 z-50 max-w-full my-0 rounded-none' : ''}`} style={isFullScreen ? {} : { height: '90vh', minHeight: '650px' }}>
-            <ChatSidebar isOpen={isSidebarOpen} conversations={conversations} currentId={currentConversationId} onSelect={handleSelectConversation} onNew={createNewConversation} onDelete={handleDeleteConversation} onRename={handleRenameConversation}/>
-            <div className="flex-1 flex flex-col h-full min-w-0">
+            <ChatSidebar isOpen={isSidebarOpen} conversations={conversations} currentId={currentConversationId} onSelect={handleSelectConversation} onNew={createNewConversation} onDelete={handleDeleteConversation} onRename={handleRenameConversation} prompts={settings.prompts} settings={settings} />
+            
+            {isSidebarOpen && (
+                <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/20 z-10 md:hidden"></div>
+            )}
+
+            <div className="flex-1 flex flex-col h-full min-w-0 relative">
                 <div className="flex items-center justify-between py-1 px-2 border-b dark:border-gray-700 shrink-0">
-                    <div className="flex items-center gap-2">
+                    <div className="w-10">
                         <button onClick={() => setIsSidebarOpen(s => !s)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="切换侧边栏"><i className="fas fa-bars"></i></button>
-                        <h2 className="text-lg font-semibold truncate">{currentConversation?.title || '聊天'}</h2>
                     </div>
-                    <button onClick={() => setShowSettings(true)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="设置"><i className="fas fa-cog"></i></button>
+                    <h2 className="text-lg font-semibold truncate text-center flex-grow">{currentConversation?.title || '聊天'}</h2>
+                    <div className="w-10 flex justify-end">
+                        <button onClick={() => setShowSettings(true)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="设置"><i className="fas fa-cog"></i></button>
+                    </div>
                 </div>
+
                 <div className="flex-grow p-4 overflow-y-auto" style={{ backgroundImage: `url('${settings.chatBackgroundUrl}')`}}>
                     <div className="space-y-1">
                         {currentConversation?.messages.map((msg, index) => (
@@ -507,7 +589,8 @@ const AiChatAssistant = () => {
                     </div>
                     <div ref={messagesEndRef} />
                 </div>
-                <div className="p-3 border-t dark:border-gray-700 shrink-0">
+                
+                <div className="p-2 border-t dark:border-gray-700 shrink-0">
                     {error && <div className="mb-2 p-2 bg-red-100 text-red-700 rounded-lg text-center text-sm" onClick={()=>setError('')}>{error} <span className='text-xs'>(点击关闭)</span></div>}
                     
                     {selectedImages.length > 0 && (
@@ -520,13 +603,15 @@ const AiChatAssistant = () => {
                             ))}
                         </div>
                     )}
-                    {isLoading ? ( <div className="flex justify-center items-center gap-2 text-gray-500"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div> 正在思考中...</div> ) : (
+                    {isLoading ? ( <div className="flex justify-center items-center gap-2 text-gray-500 h-[44px]"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div> 正在思考中...</div> ) : (
                         <form onSubmit={(e)=>{e.preventDefault();handleSubmit(false)}} className="flex items-end gap-2">
                             {showLeftButtons && (
                                 <div ref={optionsContainerRef} className="relative">
-                                    <button type="button" onClick={() => setShowMoreMenu(s => !s)} className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0" title="切换助理或上传文件">
-                                        <img src={currentPrompt?.avatarUrl || settings.aiAvatarUrl} alt="AI助理头像" className="w-6 h-6 rounded-full object-cover" />
-                                        <span className="font-bold text-sm">Ai助理</span>
+                                    <button type="button" onClick={() => setShowMoreMenu(s => !s)} className="flex items-center gap-2 p-1 pr-3 bg-gray-100 dark:bg-gray-800 rounded-full hover:shadow-md transition-all duration-300" title="切换助理或上传文件">
+                                        <div className="relative">
+                                            <img src={convertGitHubUrl(currentPrompt?.avatarUrl) || convertGitHubUrl(settings.aiAvatarUrl)} alt="AI助理头像" className="w-7 h-7 rounded-full object-cover border-2 border-white dark:border-gray-600" />
+                                        </div>
+                                        <span className="font-semibold text-sm">Ai助理</span>
                                     </button>
                                     {showMoreMenu && (
                                         <div className="absolute bottom-full mb-2 w-56 bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 overflow-hidden z-20">
