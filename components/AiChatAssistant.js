@@ -346,4 +346,4 @@ const AiChatAssistant = ({ onClose, isFullScreenMode = false }) => {
     );
 };
 
-export default AiChatAssistant;```
+export default AiChatAssistant;
