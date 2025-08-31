@@ -1,4 +1,4 @@
-// /components/AiTtsButton.js - v23 最终版
+// /components/AiTtsButton.js - v27: 引入新的 Gemini TTS 调用方式
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { TTS_ENGINE } from './AiChatAssistant'; // 从主组件导入引擎类型
 
@@ -22,9 +22,11 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
   const synthesizeSpeech = useCallback(async (textToSpeak) => {
     const {
       ttsEngine = TTS_ENGINE.THIRD_PARTY,
-      // 修复：更新默认值为非HD版本
-      thirdPartyTtsVoice = 'zh-CN-XiaoxiaoMultilingualNeural', 
-      systemTtsVoiceURI = ''
+      geminiTtsModel = 'models/gemini-2.5-flash-preview-tts', // 新增：Gemini TTS 模型
+      geminiTtsVoice = 'Zephyr', // 新增：Gemini TTS 发音人
+      thirdPartyTtsVoice = 'zh-CN-XiaoxiaoMultilingualNeural',
+      systemTtsVoiceURI = '',
+      apiKey = '' // 确保能从 settings 获取 API Key
     } = ttsSettings;
     
     const cleanedText = cleanTextForSpeech(textToSpeak);
@@ -36,7 +38,52 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
     if (audioRef.current) audioRef.current.pause();
 
     try {
-      if (ttsEngine === TTS_ENGINE.SYSTEM && 'speechSynthesis' in window) {
+      if (ttsEngine === TTS_ENGINE.GEMINI_TTS && apiKey) {
+        // --- 新的 Gemini TTS 调用逻辑 ---
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiTtsModel}:generateContent?key=${apiKey}`;
+        const body = {
+          contents: [{
+            parts: [{ text: cleanedText }]
+          }],
+          generationConfig: {
+            ttsVoice: geminiTtsVoice,
+            responseMimeType: 'audio/mpeg'
+          }
+        };
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error?.message || `Gemini TTS API 错误`);
+        }
+
+        const data = await response.json();
+        const audioContent = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+        if (!audioContent) throw new Error('Gemini TTS 未能返回音频内容。');
+        
+        const binaryString = window.atob(audioContent);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        const audioBlob = new Blob([bytes.buffer], { type: 'audio/mpeg' });
+        
+        if (audioRef.current?.src) URL.revokeObjectURL(audioRef.current.src);
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        audioRef.current = audio;
+        
+        audio.onended = () => setIsLoading(false);
+        audio.onerror = () => { console.error('音频播放错误'); setIsLoading(false); };
+        await audio.play();
+
+      } else if (ttsEngine === TTS_ENGINE.SYSTEM && 'speechSynthesis' in window) {
+        // --- 系统内置 TTS ---
         const utterance = new SpeechSynthesisUtterance(cleanedText);
         if (systemTtsVoiceURI) {
           const selectedVoice = window.speechSynthesis.getVoices().find(v => v.voiceURI === systemTtsVoiceURI);
@@ -50,6 +97,7 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
         utteranceRef.current = utterance;
         window.speechSynthesis.speak(utterance);
       } else {
+        // --- 第三方 API ---
         const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(cleanedText)}&v=${thirdPartyTtsVoice}&r=-20%&&p=0%o=audio-24khz-48kbitrate-mono-mp3`;
         const response = await fetch(url);
         if (!response.ok) throw new Error(`API错误 (状态码: ${response.status})`);
