@@ -22,29 +22,22 @@ export default async function handler(req, res) {
 
       // 核心修复点：如果此设备已经绑定过任何激活码，就不能再自动试用
       if (existingKeyForDevice) {
-        // 检查这个已绑定的激活码的详细信息
         const boundKeyData = await kv.get(`key:${existingKeyForDevice}`);
         if (boundKeyData) {
             if (boundKeyData.type === 'permanent') {
-                // 如果已绑定永久码，直接返回成功，不需试用
                 return res.status(200).json({ success: true, message: '已永久激活。', key: existingKeyForDevice, keyType: 'permanent' });
             } else if (boundKeyData.type === 'trial') {
-                // 如果已绑定试用码，检查是否过期
                 const trialExpiryTime = boundKeyData.activatedAt + (boundKeyData.durationSeconds || TRIAL_DURATION_SECONDS) * 1000;
                 if (Date.now() < trialExpiryTime) {
-                    // 试用期仍在有效期内，返回成功
                     return res.status(200).json({ success: true, message: '试用期仍在有效期内。', key: existingKeyForDevice, keyType: 'trial', activatedAt: boundKeyData.activatedAt, durationSeconds: boundKeyData.durationSeconds });
                 } else {
-                    // 试用期已过期，明确告知不能再次试用
                     return res.status(403).json({ success: false, message: '您的试用期已结束，每个设备只能试用一次。请手动输入激活码。' });
                 }
             }
         }
-        // 理论上不会走到这里，除非 device:${deviceId} 存在但 key:${existingKeyForDevice} 不存在（数据异常）
         return res.status(403).json({ success: false, message: '设备状态异常，无法自动试用。' });
       }
 
-      // 如果设备从未绑定过激活码，则生成新的试用码
       const trialKey = `TRIAL-${uuidv4()}`;
       const now = Date.now();
       const trialData = { type: 'trial', durationSeconds: TRIAL_DURATION_SECONDS, deviceId: deviceId, activatedAt: now };
@@ -60,16 +53,12 @@ export default async function handler(req, res) {
         activatedAt: now, durationSeconds: TRIAL_DURATION_SECONDS
       });
     }
-    // --- 自动试用逻辑结束 ---
 
-
-    // --- 手动激活逻辑（用于永久码或用户输入试用码） ---
     if (!key) { return res.status(400).json({ success: false, message: '激活码是必需的。' }); }
 
     const keyData = await kv.get(`key:${key}`);
     if (!keyData) { return res.status(404).json({ success: false, message: '激活码无效或不存在。' }); }
 
-    // 检查激活码是否已被其他设备绑定
     if (keyData.deviceId && keyData.deviceId !== deviceId) {
       return res.status(403).json({ success: false, message: '此激活码已被其他设备绑定。' });
     }
@@ -77,19 +66,17 @@ export default async function handler(req, res) {
     const now = Date.now();
     let message = '激活成功！';
 
-    // 如果是首次激活此码，则绑定设备
     if (!keyData.deviceId) {
       keyData.deviceId = deviceId;
       keyData.activatedAt = now;
       const pipeline = kv.pipeline();
       pipeline.set(`key:${key}`, keyData);
-      pipeline.set(`device:${deviceId}`, key); // 记录设备绑定了哪个激活码
+      pipeline.set(`device:${deviceId}`, key);
       await pipeline.exec();
     }
     
-    // 处理试用码过期逻辑
     if (keyData.type === 'trial' && keyData.activatedAt) {
-        const trialDurationMillis = (keyData.durationSeconds || TRIAL_DURATION_SECONDS) * 1000; // 使用默认或自定义时长
+        const trialDurationMillis = (keyData.durationSeconds || 7 * 24 * 60 * 60) * 1000;
         if (now > keyData.activatedAt + trialDurationMillis) {
             return res.status(403).json({ success: false, message: '您的试用期已结束。' });
         }
