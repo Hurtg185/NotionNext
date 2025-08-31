@@ -1,8 +1,8 @@
-// /components/AiChatAssistant.js - v36.1 (修复编译错误，确保代码完整性)
+// /components/AiChatAssistant.js - v26: (整合左下角按钮至统一菜单，优化移动端体验)
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import AiTtsButton from './AiTtsButton'; // <-- 从独立文件导入
+import AiTtsButton from './AiTtsButton';
 
-export const TTS_ENGINE = { // TTS_ENGINE 仍然在这里定义并导出
+export const TTS_ENGINE = {
     SYSTEM: 'system',
     THIRD_PARTY: 'third_party'
 };
@@ -54,8 +54,7 @@ const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate }) => {
                 </div>
                 {!isUser && msg.content && (
                     <div className="flex items-center gap-2 mt-2 -mb-1 text-gray-500 dark:text-gray-400">
-                        {/* 关键修改：向 AiTtsButton 传递 TTS_ENGINE */}
-                        <AiTtsButton text={msg.content} ttsSettings={settings} TTS_ENGINE={TTS_ENGINE} />
+                        <AiTtsButton text={msg.content} ttsSettings={settings} />
                         <button onClick={() => navigator.clipboard.writeText(msg.content)} className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10" title="复制"><i className="fas fa-copy"></i></button>
                         {isLastAiMessage && (
                            <button onClick={onRegenerate} className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10" title="重新生成"><i className="fas fa-sync-alt"></i></button>
@@ -99,11 +98,7 @@ const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDele
 };
 
 const CHAT_MODELS = [
-    { name: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash' }, { name: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro' }, { name: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash' }, { name: 'Gemini 1.5 Flash (最新)', value: 'gemini-1.5-flash-latest' }, { name: 'Gemini 1.5 Pro (最新)', value: 'gemini-1.5-pro-latest' },
-];
-
-const MICROSOFT_TTS_VOICES = [
-    { name: '晓晓 (女, 多语言)', value: 'zh-CN-XiaoxiaoMultilingualNeural' }, { name: '晓辰 (女, 多语言)', value: 'zh-CN-XiaochenMultilingualNeural' }, { name: '云希 (男, 温和)', value: 'zh-CN-YunxiNeural' }, { name: '云泽 (男, 叙事)', value: 'zh-CN-YunzeNeural' }, { name: '晓晓 (女, 亲切)', value: 'zh-CN-XiaoxiaoNeural' }, { name: '晓颜 (女)', value: 'zh-CN-XiaoyanNeural'}, { name: '晓伊 (女, 动漫)', value: 'zh-CN-XiaoyiNeural' }, { name: '云健 (男, 沉稳)', value: 'zh-CN-YunjianNeural' }, { name: '云扬 (男, 阳光)', value: 'zh-CN-YunyangNeural' }, { name: '晓臻 (女, 台湾)', value: 'zh-TW-HsiaoChenNeural' }, { name: '允喆 (男, 台湾)', value: 'zh-TW-YunJheNeural' }, { name: 'Ava (女, 美国, 多语言)', value: 'en-US-AvaMultilingualNeural' }, { name: 'Steffan (男, 美国, 多语言)', value: 'en-US-SteffanMultilingualNeural' }, { name: 'Vivienne (女, 法国, 多语言)', value: 'fr-FR-VivienneMultilingualNeural' }, { name: 'Remy (男, 法国, 多语言)', value: 'fr-FR-RemyMultilingualNeural' }, { name: '妮拉 (女, 缅甸)', value: 'my-MM-NilarNeural' }, { name: '蒂哈 (男, 缅甸)', value: 'my-MM-ThihaNeural' }, { name: '怀眉 (女, 越南)', value: 'vi-VN-HoaiMyNeural' }, { name: '南明 (男, 越南)', value: 'vi-VN-NamMinhNeural' },
+    { name: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash' }, { name: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro' }, { name: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash' }, { name: 'Gemini 2.5 Flash-late (最快)', value: 'gemini-2.5-flash-late' }, { name: 'Gemini 1.5 Pro (最新)', value: 'gemini-1.5-pro-latest' },
 ];
 
 const SettingsModal = ({ settings, onSave, onClose }) => {
@@ -125,17 +120,20 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
 
     const handleChange = (key, value) => setTempSettings(prev => ({ ...prev, [key]: value }));
     const handleAddPrompt = () => {
-        const newPrompt = { id: `custom-${Date.now()}`, name: '新提示词', content: '请输入...', model: settings.selectedModel, ttsVoice: tempSettings.thirdPartyTtsVoice };
+        const newPrompt = { id: `custom-${Date.now()}`, name: '新提示词', content: '请输入...', model: settings.selectedModel, ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural' };
         const newPrompts = [...tempSettings.prompts, newPrompt];
         handleChange('prompts', newPrompts);
     };
-    const handleDeletePrompt = (idToDelete) => { if (!window.confirm('确定删除此对话吗？')) return; const newPrompts = tempSettings.prompts.filter(p => p.id !== idToDelete); handleChange('prompts', newPrompts); if (tempSettings.currentPromptId === idToDelete) handleChange('currentPromptId', newPrompts[0]?.id || ''); };
+    const handleDeletePrompt = (idToDelete) => { if (!window.confirm('确定删除吗？')) return; const newPrompts = tempSettings.prompts.filter(p => p.id !== idToDelete); handleChange('prompts', newPrompts); if (tempSettings.currentPromptId === idToDelete) handleChange('currentPromptId', newPrompts[0]?.id || ''); };
     
     const handlePromptSettingChange = (promptId, field, value) => {
         const newPrompts = tempSettings.prompts.map(p => p.id === promptId ? { ...p, [field]: value } : p);
         handleChange('prompts', newPrompts);
     };
 
+    const microsoftTtsVoices = [
+        { name: '晓晓 (女, 多语言)', value: 'zh-CN-XiaoxiaoMultilingualNeural' }, { name: '晓辰 (女, 多语言)', value: 'zh-CN-XiaochenMultilingualNeural' }, { name: '云希 (男, 温和)', value: 'zh-CN-YunxiNeural' }, { name: '云泽 (男, 叙事)', value: 'zh-CN-YunzeNeural' }, { name: '晓晓 (女, 亲切)', value: 'zh-CN-XiaoxiaoNeural' }, { name: '晓颜 (女)', value: 'zh-CN-XiaoyanNeural'}, { name: '晓伊 (女, 动漫)', value: 'zh-CN-XiaoyiNeural' }, { name: '云健 (男, 沉稳)', value: 'zh-CN-YunjianNeural' }, { name: '云扬 (男, 阳光)', value: 'zh-CN-YunyangNeural' }, { name: '晓臻 (女, 台湾)', value: 'zh-TW-HsiaoChenNeural' }, { name: '允喆 (男, 台湾)', value: 'zh-TW-YunJheNeural' }, { name: 'Ava (女, 美国, 多语言)', value: 'en-US-AvaMultilingualNeural' }, { name: 'Steffan (男, 美国, 多语言)', value: 'en-US-SteffanMultilingualNeural' }, { name: 'Vivienne (女, 法国, 多语言)', value: 'fr-FR-VivienneMultilingualNeural' }, { name: 'Remy (男, 法国, 多语言)', value: 'fr-FR-RemyMultilingualNeural' }, { name: '妮拉 (女, 缅甸)', value: 'my-MM-NilarNeural' }, { name: '蒂哈 (男, 缅甸)', value: 'my-MM-ThihaNeural' }, { name: '怀眉 (女, 越南)', value: 'vi-VN-HoaiMyNeural' }, { name: '南明 (男, 越南)', value: 'vi-VN-NamMinhNeural' },
+    ];
     const speechLanguageOptions = [
         { name: '中文 (普通话)', value: 'zh-CN' }, { name: '缅甸语 (မြန်မာ)', value: 'my-MM' }, { name: 'English (US)', value: 'en-US' }, { name: 'Español (España)', value: 'es-ES' }, { name: 'Français (France)', value: 'fr-FR' }, { name: '日本語', value: 'ja-JP' }, { name: '한국어', value: 'ko-KR' }, { name: 'Tiếng Việt', value: 'vi-VN' },
     ];
@@ -160,7 +158,6 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                              <input type="range" min="10" max="120" step="5" value={tempSettings.apiTimeout / 1000} onChange={(e) => handleChange('apiTimeout', parseInt(e.target.value, 10) * 1000)} className="w-full"/>
                          </div>
                      </div>
-                    {/* --- 关键修改 4：朗读设置UI (移除Gemini TTS相关部分) --- */}
                     <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md space-y-4">
                         <h4 className="text-md font-semibold">朗读设置</h4>
                         <div>
@@ -219,10 +216,8 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <label className="shrink-0">声音:</label>
-                                            <select value={p.ttsVoice || tempSettings.thirdPartyTtsVoice} onChange={(e) => handlePromptSettingChange(p.id, 'ttsVoice', e.target.value)} className="w-full px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs">
-                                                {(tempSettings.ttsEngine === TTS_ENGINE.THIRD_PARTY ? microsoftTtsVoices : systemVoices).map(v => 
-                                                    <option key={v.value || v.voiceURI} value={v.value || v.voiceURI}>{v.name} {v.lang ? `(${v.lang})` : ''}</option>
-                                                )}
+                                            <select value={p.ttsVoice || settings.thirdPartyTtsVoice} onChange={(e) => handlePromptSettingChange(p.id, 'ttsVoice', e.target.value)} className="w-full px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs">
+                                                {microsoftTtsVoices.map(v => <option key={v.value} value={v.value}>{v.name}</option>)}
                                             </select>
                                         </div>
                                     </div>
@@ -241,7 +236,6 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
     );
 };
 
-// --- 关键修改 5：更新默认设置 ---
 const DEFAULT_PROMPTS = [ { id: 'default-grammar-correction', name: '纠正中文语法', content: '你是一位专业的、耐心的中文老师，请纠正我发送的中文句子中的语法和用词错误，并给出修改建议和说明。', model: 'gemini-2.5-flash', ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural' }, { id: 'explain-word', name: '解释中文词语', content: '你是一位专业的中文老师，请用简单易懂的方式解释我发送的中文词语，并提供几个例子。', model: 'gemini-1.5-pro-latest', ttsVoice: 'zh-CN-YunxiNeural' }, { id: 'translate-myanmar', content: '你是一位专业的翻译助手，请将我发送的内容在中文和缅甸语之间进行互译。', model: 'gemini-2.5-flash', ttsVoice: 'my-MM-NilarNeural' } ];
 const DEFAULT_SETTINGS = {
     apiKey: '',
@@ -251,10 +245,10 @@ const DEFAULT_SETTINGS = {
     apiTimeout: 60000,
     prompts: DEFAULT_PROMPTS,
     currentPromptId: DEFAULT_PROMPTS[0]?.id || '',
-    autoRead: false,
-    ttsEngine: TTS_ENGINE.THIRD_PARTY, // 默认使用第三方API
-    thirdPartyTtsVoice: 'zh-CN-XiaoxiaoMultilingualNeural', // 默认第三方语音
-    systemTtsVoiceURI: '', // 默认系统语音
+    autoRead: true,
+    ttsEngine: TTS_ENGINE.THIRD_PARTY,
+    thirdPartyTtsVoice: 'zh-CN-XiaoxiaoMultilingualNeural',
+    systemTtsVoiceURI: '',
     speechLanguage: 'zh-CN',
     chatBackgroundUrl: '/images/chat-bg.jpg',
     userAvatarUrl: '/images/user-avatar.png',
@@ -274,13 +268,13 @@ const AiChatAssistant = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [showPromptSelector, setShowPromptSelector] = useState(false);
     const [showModelSelector, setShowModelSelector] = useState(false);
-    const [showMoreMenu, setShowMoreMenu] = useState(false);
+    const [showMoreMenu, setShowMoreMenu] = useState(false); // 新增：控制整合菜单的显示
     const [selectedImages, setSelectedImages] = useState([]);
     const [isListening, setIsListening] = useState(false);
 
     const messagesEndRef = useRef(null);
     const abortControllerRef = useRef(null);
-    const optionsContainerRef = useRef(null);
+    const optionsContainerRef = useRef(null); // 修改：用于整个选项区域的Ref
     const fileInputRef = useRef(null);
     const cameraInputRef = useRef(null);
     const timeoutRef = useRef(null);
@@ -289,24 +283,24 @@ const AiChatAssistant = () => {
     useEffect(() => {
         setIsMounted(true);
         try {
-            const savedSettings = localStorage.getItem('ai_assistant_settings_v36'); // 使用新键
+            const savedSettings = localStorage.getItem('ai_assistant_settings_v22_final');
             if (savedSettings) {
                 const parsed = JSON.parse(savedSettings);
-                // 确保旧的自定义提示词也能获得正确的 ttsVoice 字段
-                parsed.prompts = parsed.prompts?.map(p => ({ ...p, ttsVoice: p.ttsVoice || DEFAULT_SETTINGS.thirdPartyTtsVoice })) || DEFAULT_PROMPTS;
+                parsed.prompts = parsed.prompts.map(p => ({ ...p, model: p.model || DEFAULT_SETTINGS.selectedModel, ttsVoice: p.ttsVoice || 'zh-CN-XiaoxiaoMultilingualNeural' }));
                 setSettings(prev => ({ ...DEFAULT_SETTINGS, ...parsed }));
             }
             const savedConversations = localStorage.getItem('ai_assistant_conversations_v22_final');
             const parsedConvs = savedConversations ? JSON.parse(savedConversations) : [];
             setConversations(parsedConvs);
             if (parsedConvs.length > 0) {
-                setCurrentConversationId(parsedConvs[0]?.id); // 确保取id时有数据
+                setCurrentConversationId(parsedConvs[0].id);
             } else {
                 createNewConversation();
             }
         } catch (e) { createNewConversation(); }
     }, []);
 
+    // 新增：点击外部关闭所有弹出菜单
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (optionsContainerRef.current && !optionsContainerRef.current.contains(event.target)) {
@@ -321,7 +315,7 @@ const AiChatAssistant = () => {
 
     useEffect(() => {
         if (isMounted) {
-            localStorage.setItem('ai_assistant_settings_v36', JSON.stringify(settings)); // 使用新键
+            localStorage.setItem('ai_assistant_settings_v22_final', JSON.stringify(settings));
             localStorage.setItem('ai_assistant_conversations_v22_final', JSON.stringify(conversations));
         }
     }, [settings, conversations, isMounted]);
@@ -338,7 +332,7 @@ const AiChatAssistant = () => {
     };
     
     const handleSelectConversation = (id) => setCurrentConversationId(id);
-    const handleDeleteConversation = (id) => { const remaining = conversations.filter(c => c.id !== id); setConversations(remaining); if (currentConversationId === id) { if (remaining.length > 0) { setCurrentConversationId(remaining[0]?.id); } else { createNewConversation(); } } };
+    const handleDeleteConversation = (id) => { const remaining = conversations.filter(c => c.id !== id); setConversations(remaining); if (currentConversationId === id) { if (remaining.length > 0) { setCurrentConversationId(remaining[0].id); } else { createNewConversation(); } } };
     const handleRenameConversation = (id, newTitle) => { setConversations(prev => prev.map(c => c.id === id ? { ...c, title: newTitle } : c)); };
     const handleSaveSettings = (newSettings) => { setSettings(newSettings); setShowSettings(false); };
 
@@ -362,58 +356,35 @@ const AiChatAssistant = () => {
         setSelectedImages(prev => prev.filter((_, index) => index !== indexToRemove));
     };
 
-    // --- 关键修改 6：更新语音识别逻辑，确保持续监听和调试日志 ---
     const startListening = useCallback(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) { alert('您的浏览器不支持语音输入。'); return; }
-
-        if (recognitionRef.current) { recognitionRef.current.stop(); }
+        if (recognitionRef.current) recognitionRef.current.abort();
 
         const recognition = new SpeechRecognition();
         recognition.lang = settings.speechLanguage;
-        recognition.continuous = true; // 开启持续识别
-        recognition.interimResults = true; // 开启实时结果
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
 
-        recognition.onstart = () => {
-            setIsListening(true);
-            setUserInput(''); // 开始新的识别时清空输入框
-            console.log("[STT] 语音识别已启动。");
+        recognition.onstart = () => setIsListening(true);
+        recognition.onresult = (e) => {
+            const transcript = e.results[0][0].transcript.trim();
+            setUserInput(transcript);
         };
-        
-        let finalTranscript = '';
-        recognition.onresult = (event) => {
-            let interimTranscript = '';
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-                if (event.results[i].isFinal) {
-                    finalTranscript += event.results[i][0].transcript;
-                } else {
-                    interimTranscript += event.results[i][0].transcript;
-                }
-            }
-            setUserInput(finalTranscript + interimTranscript);
-            console.log(`[STT] 实时识别: ${finalTranscript + interimTranscript}`);
-        };
-
         recognition.onerror = (event) => {
-            console.error("[STT] 语音识别错误:", event.error);
+            console.error("Speech recognition error:", event.error);
+            setError(`语音识别失败: ${event.error}`);
             setIsListening(false);
-            setError(`语音识别失败: ${event.error}`); // 显示错误信息
         };
-        recognition.onend = () => {
-            setIsListening(false);
-            recognitionRef.current = null;
-            console.log("[STT] 语音识别已结束。");
-        };
-
+        recognition.onend = () => setIsListening(false);
         recognition.start();
         recognitionRef.current = recognition;
-    }, [settings.speechLanguage, setError]);
+    }, [settings.speechLanguage]);
     
     const stopListening = useCallback(() => {
         if (recognitionRef.current) {
             recognitionRef.current.stop();
             setIsListening(false);
-            console.log("[STT] 语音识别已手动停止。");
         }
     }, []);
 
@@ -473,7 +444,6 @@ const AiChatAssistant = () => {
             if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error?.message || `请求失败`); }
             
             const data = await response.json();
-            // --- 修复编译错误：移除重复的可选链操作符 ---
             const aiResponseContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
             if (!aiResponseContent) throw new Error('AI未能返回有效内容。');
 
@@ -534,6 +504,7 @@ const AiChatAssistant = () => {
 
                     {isLoading ? ( <div className="flex justify-center items-center gap-2 text-gray-500"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div> 正在思考中...</div> ) : (
                         <form onSubmit={(e)=>{e.preventDefault();handleSubmit(false)}} className="flex items-end gap-2">
+                             {/* 修改：整合后的按钮和菜单 */}
                              {showLeftButtons && (
                                 <div ref={optionsContainerRef} className="relative">
                                     <button type="button" onClick={() => setShowMoreMenu(s => !s)} className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0" title="更多选项">
@@ -567,12 +538,13 @@ const AiChatAssistant = () => {
                                 </div>
                             )}
                             
+                            {/* 文件上传输入框（保持在DOM中） */}
                             <input type="file" ref={fileInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" multiple />
                             <input type="file" ref={cameraInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" capture="environment" />
 
                             <div className="flex-grow relative">
                                 <textarea value={userInput} onChange={(e) => setUserInput(e.target.value)} placeholder="与 AI 聊天..." className="w-full px-4 py-2 pr-12 rounded-2xl bg-gray-100 dark:bg-gray-700 resize-none overflow-hidden" rows="1" style={{minHeight:'44px'}} onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight) + 'px'; }} />
-                                <button type="button" onClick={isListening ? stopListening : startListening} className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-500 hover:text-primary'}`} title={isListening ? '停止录音' : '开始录音'}>
+                                <button type="button" onClick={isListening ? stopListening : startListening} className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-500 hover:text-primary'}`} title="语音输入">
                                     <i className="fas fa-microphone"></i>
                                 </button>
                             </div>
