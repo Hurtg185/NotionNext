@@ -1,10 +1,9 @@
-// /components/AiChatAssistant.js - v31 (在 v26 基础上新增 Gemini TTS 和 持续语音识别)
+// /components/AiChatAssistant.js - v32.1 (在 v26 基础上进行精确修改的最终完整版)
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-// import AiTtsButton from './AiTtsButton'; // 我们将在本文件内重新定义它
 
 // --- 关键修改 1：新增 Gemini TTS 引擎类型 ---
 export const TTS_ENGINE = {
-    GEMINI_TTS: 'gemini_tts', // 新增
+    GEMINI_TTS: 'gemini_tts',
     SYSTEM: 'system',
     THIRD_PARTY: 'third_party'
 };
@@ -13,36 +12,27 @@ export const TTS_ENGINE = {
 const AiTtsButton = ({ text, ttsSettings = {} }) => {
     const [isLoading, setIsLoading] = useState(false);
     const audioRef = useRef(null);
+    const utteranceRef = useRef(null);
 
-    // 组件卸载时停止播放
     useEffect(() => {
         return () => {
-            if (audioRef.current) {
-                audioRef.current.pause();
-                audioRef.current = null;
-            }
-            if (window.speechSynthesis) {
-                window.speechSynthesis.cancel();
-            }
+            if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+            if (window.speechSynthesis) { window.speechSynthesis.cancel(); }
         };
     }, []);
 
     const synthesizeSpeech = useCallback(async (textToSpeak) => {
-        const cleanedText = textToSpeak.replace(/\*\*/g, ''); // 简单清理
+        const cleanedText = textToSpeak.replace(/\*\*/g, '');
         if (!cleanedText) return;
 
         setIsLoading(true);
-
-        // 确保停止之前的任何播放
         if (audioRef.current) audioRef.current.pause();
         if (window.speechSynthesis) window.speechSynthesis.cancel();
 
         try {
             switch (ttsSettings.ttsEngine) {
-                // --- 新增 Gemini TTS 的逻辑 ---
                 case TTS_ENGINE.GEMINI_TTS:
                     if (!ttsSettings.apiKey) throw new Error("API Key 为空！");
-                    
                     const url = `https://generativelanguage.googleapis.com/v1beta/models/${ttsSettings.geminiTtsModel}:generateContent?key=${ttsSettings.apiKey}`;
                     const body = {
                         contents: [{ parts: [{ text: cleanedText }] }],
@@ -51,30 +41,22 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
                             responseMimeType: 'audio/mpeg'
                         }
                     };
-                    
                     const response = await fetch(url, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(body)
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
                     });
-
                     if (!response.ok) {
                         const errorData = await response.json();
                         throw new Error(errorData.error?.message || `Gemini TTS API 错误`);
                     }
-
                     const data = await response.json();
                     const audioContent = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
                     if (!audioContent) throw new Error('Gemini TTS 未能返回音频内容。');
-                    
                     const audio = new Audio("data:audio/mp3;base64," + audioContent);
                     audioRef.current = audio;
                     audio.onended = () => setIsLoading(false);
                     audio.onerror = () => { console.error('音频播放错误'); setIsLoading(false); };
                     await audio.play();
                     break;
-
-                // --- 保留原有的 SYSTEM 逻辑 ---
                 case TTS_ENGINE.SYSTEM:
                     if ('speechSynthesis' in window) {
                         const utterance = new SpeechSynthesisUtterance(cleanedText);
@@ -84,20 +66,16 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
                         }
                         utterance.onend = () => setIsLoading(false);
                         utterance.onerror = (e) => { console.error('系统TTS错误:', e); setIsLoading(false); };
+                        utteranceRef.current = utterance;
                         window.speechSynthesis.speak(utterance);
-                    } else {
-                        throw new Error("浏览器不支持系统TTS。");
-                    }
+                    } else { throw new Error("浏览器不支持系统TTS。"); }
                     break;
-
-                // --- 保留原有的 THIRD_PARTY 逻辑 ---
                 case TTS_ENGINE.THIRD_PARTY:
                 default:
                     // 这是一个示例URL，请根据您的实际情况修改
-                    const thirdPartyUrl = `https://your-third-party-tts-api.com?text=${encodeURIComponent(cleanedText)}&voice=${ttsSettings.thirdPartyTtsVoice}`;
+                    const thirdPartyUrl = `https://t.leftsite.cn/tts?t=${encodeURIComponent(cleanedText)}&v=${ttsSettings.thirdPartyTtsVoice}`;
                     const thirdPartyResponse = await fetch(thirdPartyUrl);
                     if (!thirdPartyResponse.ok) throw new Error(`第三方API错误`);
-                    
                     const audioBlob = await thirdPartyResponse.blob();
                     const audioUrl = URL.createObjectURL(audioBlob);
                     const thirdPartyAudio = new Audio(audioUrl);
@@ -124,7 +102,6 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
         </button>
     );
 };
-
 
 const SimpleMarkdown = ({ text }) => {
     if (!text) return null;
@@ -186,7 +163,35 @@ const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate }) => {
     );
 };
 
-const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDelete, onRename }) => { /* ... 此组件无变化 ... */ };
+const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDelete, onRename }) => {
+    const [editingId, setEditingId] = useState(null);
+    const [newName, setNewName] = useState('');
+    const handleRename = (id, oldName) => { setEditingId(id); setNewName(oldName); };
+    const handleSaveRename = (id) => { if (newName.trim()) { onRename(id, newName.trim()); } setEditingId(null); };
+
+    return (
+        <div className={`h-full bg-gray-50 dark:bg-gray-800/50 flex flex-col border-r dark:border-gray-700 transition-all duration-300 ${isOpen ? 'w-48 p-2' : 'w-0 p-0'} overflow-hidden`}>
+            <button onClick={onNew} className="w-full flex items-center justify-between p-2 mb-2 rounded-md border border-dashed hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0">
+                <span>新对话</span><i className="fas fa-plus"></i>
+            </button>
+            <div className="flex-grow overflow-y-auto">
+                {conversations.map(conv => (
+                    <div key={conv.id} className={`group flex items-center p-2 rounded-md cursor-pointer ${currentId === conv.id ? 'bg-primary/20' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`} onClick={() => onSelect(conv.id)}>
+                        <div className="flex-grow truncate" onDoubleClick={() => handleRename(conv.id, conv.title)}>
+                            {editingId === conv.id ? (
+                                <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} onBlur={() => handleSaveRename(conv.id)} onKeyDown={(e) => e.key === 'Enter' && handleSaveRename(conv.id)} className="w-full bg-transparent p-0 border-b" autoFocus />
+                            ) : ( <span className="text-sm">{conv.title}</span> )}
+                        </div>
+                        <div className="hidden group-hover:flex items-center shrink-0">
+                           <button onClick={(e) => { e.stopPropagation(); handleRename(conv.id, conv.title); }} className="p-1 hover:text-primary"><i className="fas fa-pen text-xs"></i></button>
+                           <button onClick={(e) => { e.stopPropagation(); if(window.confirm('确定删除此对话吗？')) onDelete(conv.id); }} className="p-1 hover:text-red-500"><i className="fas fa-trash text-xs"></i></button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
 
 const CHAT_MODELS = [
     { name: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash' }, { name: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro' }, { name: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash' }, { name: 'Gemini 1.5 Flash (最新)', value: 'gemini-1.5-flash-latest' }, { name: 'Gemini 1.5 Pro (最新)', value: 'gemini-1.5-pro-latest' },
@@ -204,7 +209,7 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
         const fetchSystemVoices = () => {
             const voices = window.speechSynthesis.getVoices();
             if (voices.length > 0) {
-                setSystemVoices(voices.filter(v => v.lang.startsWith('zh') || v.lang.startsWith('en')));
+                setSystemVoices(voices.filter(v => v.lang.startsWith('zh') || v.lang.startsWith('en') || v.lang.startsWith('fr') || v.lang.startsWith('es') || v.lang.startsWith('ja') || v.lang.startsWith('ko') || v.lang.startsWith('vi')));
             }
         };
         if (window.speechSynthesis.onvoiceschanged !== undefined) {
@@ -214,12 +219,24 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
     }, []);
 
     const handleChange = (key, value) => setTempSettings(prev => ({ ...prev, [key]: value }));
-    const handleAddPrompt = () => { /* ... 此函数无变化 ... */ };
-    const handleDeletePrompt = (idToDelete) => { /* ... 此函数无变化 ... */ };
-    const handlePromptSettingChange = (promptId, field, value) => { /* ... 此函数无变化 ... */ };
+    const handleAddPrompt = () => {
+        const newPrompt = { id: `custom-${Date.now()}`, name: '新提示词', content: '请输入...', model: settings.selectedModel, ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural' };
+        const newPrompts = [...tempSettings.prompts, newPrompt];
+        handleChange('prompts', newPrompts);
+    };
+    const handleDeletePrompt = (idToDelete) => { if (!window.confirm('确定删除吗？')) return; const newPrompts = tempSettings.prompts.filter(p => p.id !== idToDelete); handleChange('prompts', newPrompts); if (tempSettings.currentPromptId === idToDelete) handleChange('currentPromptId', newPrompts[0]?.id || ''); };
+    
+    const handlePromptSettingChange = (promptId, field, value) => {
+        const newPrompts = tempSettings.prompts.map(p => p.id === promptId ? { ...p, [field]: value } : p);
+        handleChange('prompts', newPrompts);
+    };
 
-    const microsoftTtsVoices = [ /* ... 此数组无变化 ... */ ];
-    const speechLanguageOptions = [ /* ... 此数组无变化 ... */ ];
+    const microsoftTtsVoices = [
+        { name: '晓晓 (女, 多语言)', value: 'zh-CN-XiaoxiaoMultilingualNeural' }, { name: '晓辰 (女, 多语言)', value: 'zh-CN-XiaochenMultilingualNeural' }, { name: '云希 (男, 温和)', value: 'zh-CN-YunxiNeural' }, { name: '云泽 (男, 叙事)', value: 'zh-CN-YunzeNeural' }, { name: '晓晓 (女, 亲切)', value: 'zh-CN-XiaoxiaoNeural' }, { name: '晓颜 (女)', value: 'zh-CN-XiaoyanNeural'}, { name: '晓伊 (女, 动漫)', value: 'zh-CN-XiaoyiNeural' }, { name: '云健 (男, 沉稳)', value: 'zh-CN-YunjianNeural' }, { name: '云扬 (男, 阳光)', value: 'zh-CN-YunyangNeural' }, { name: '晓臻 (女, 台湾)', value: 'zh-TW-HsiaoChenNeural' }, { name: '允喆 (男, 台湾)', value: 'zh-TW-YunJheNeural' }, { name: 'Ava (女, 美国, 多语言)', value: 'en-US-AvaMultilingualNeural' }, { name: 'Steffan (男, 美国, 多语言)', value: 'en-US-SteffanMultilingualNeural' }, { name: 'Vivienne (女, 法国, 多语言)', value: 'fr-FR-VivienneMultilingualNeural' }, { name: 'Remy (男, 法国, 多语言)', value: 'fr-FR-RemyMultilingualNeural' }, { name: '妮拉 (女, 缅甸)', value: 'my-MM-NilarNeural' }, { name: '蒂哈 (男, 缅甸)', value: 'my-MM-ThihaNeural' }, { name: '怀眉 (女, 越南)', value: 'vi-VN-HoaiMyNeural' }, { name: '南明 (男, 越南)', value: 'vi-VN-NamMinhNeural' },
+    ];
+    const speechLanguageOptions = [
+        { name: '中文 (普通话)', value: 'zh-CN' }, { name: '缅甸语 (မြန်မာ)', value: 'my-MM' }, { name: 'English (US)', value: 'en-US' }, { name: 'Español (España)', value: 'es-ES' }, { name: 'Français (France)', value: 'fr-FR' }, { name: '日本語', value: 'ja-JP' }, { name: '한국어', value: 'ko-KR' }, { name: 'Tiếng Việt', value: 'vi-VN' },
+    ];
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -230,8 +247,17 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                         <label className="block text-sm font-medium mb-1">Google Gemini API 密钥</label>
                         <input type="password" value={tempSettings.apiKey} onChange={(e) => handleChange('apiKey', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border rounded-md" />
                     </div>
-                     <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md space-y-2"> {/* ... 高级参数部分无变化 ... */} </div>
-                    
+                     <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md space-y-2">
+                         <label className="block text-sm font-medium">高级参数</label>
+                         <div className="flex items-center gap-4">
+                             <label className="text-sm shrink-0">温度: {tempSettings.temperature}</label>
+                             <input type="range" min="0" max="1" step="0.1" value={tempSettings.temperature} onChange={(e) => handleChange('temperature', parseFloat(e.target.value))} className="w-full"/>
+                         </div>
+                          <div className="flex items-center gap-4">
+                             <label className="text-sm shrink-0">API超时: {tempSettings.apiTimeout / 1000}s</label>
+                             <input type="range" min="10" max="120" step="5" value={tempSettings.apiTimeout / 1000} onChange={(e) => handleChange('apiTimeout', parseInt(e.target.value, 10) * 1000)} className="w-full"/>
+                         </div>
+                     </div>
                     {/* --- 关键修改 3：更新朗读设置UI --- */}
                     <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md space-y-4">
                         <h4 className="text-md font-semibold">朗读设置</h4>
@@ -243,7 +269,6 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                                 <option value={TTS_ENGINE.SYSTEM}>系统内置</option>
                             </select>
                         </div>
-
                         {tempSettings.ttsEngine === TTS_ENGINE.GEMINI_TTS && (
                             <>
                                 <div>
@@ -258,21 +283,71 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                                 </div>
                             </>
                         )}
-                        {tempSettings.ttsEngine === TTS_ENGINE.THIRD_PARTY && ( /* ... 此部分无变化 ... */ )}
-                        {tempSettings.ttsEngine === TTS_ENGINE.SYSTEM && ( /* ... 此部分无变化 ... */ )}
+                        {tempSettings.ttsEngine === TTS_ENGINE.THIRD_PARTY && (
+                            <div>
+                                <label className="block text-sm font-medium mb-1">发音人 (第三方)</label>
+                                <select value={tempSettings.thirdPartyTtsVoice} onChange={(e) => handleChange('thirdPartyTtsVoice', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 border rounded-md">
+                                    {microsoftTtsVoices.map(voice => <option key={voice.value} value={voice.value}>{voice.name}</option>)}
+                                </select>
+                            </div>
+                        )}
+                        {tempSettings.ttsEngine === TTS_ENGINE.SYSTEM && (
+                             <div>
+                                <label className="block text-sm font-medium mb-1">发音人 (系统)</label>
+                                {systemVoices.length > 0 ? (
+                                    <select value={tempSettings.systemTtsVoiceURI} onChange={(e) => handleChange('systemTtsVoiceURI', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 border rounded-md">
+                                        <option value="">浏览器默认</option>
+                                        {systemVoices.map(voice => <option key={voice.voiceURI} value={voice.voiceURI}>{`${voice.name} (${voice.lang})`}</option>)}
+                                    </select>
+                                ) : <p className="text-sm text-gray-500 mt-1">无可用内置声音。</p>}
+                            </div>
+                        )}
                     </div>
-                     <div> {/* ... 语音识别语言部分无变化 ... */} </div>
-                     <div className="flex items-center justify-between"> {/* ... 自动朗读部分无变化 ... */} </div>
-                     <div className="mb-6"> {/* ... 自定义提示词部分无变化 ... */} </div>
+                     <div>
+                        <label className="block text-sm font-medium mb-1">语音识别语言</label>
+                        <select value={tempSettings.speechLanguage} onChange={(e) => handleChange('speechLanguage', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border rounded-md">
+                           {speechLanguageOptions.map(o => <option key={o.value} value={o.value}>{o.name}</option>)}
+                        </select>
+                    </div>
+                     <div className="flex items-center justify-between">
+                        <label className="block text-sm font-medium">AI 回复后自动朗读</label>
+                        <input type="checkbox" checked={tempSettings.autoRead} onChange={(e) => handleChange('autoRead', e.target.checked)} className="h-5 w-5 text-primary rounded" />
+                    </div>
+                     <div className="mb-6">
+                        <h4 className="text-lg font-bold mb-3">自定义提示词管理</h4>
+                        <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
+                            {tempSettings.prompts.map(p => (
+                                <div key={p.id} className="p-3 bg-gray-100 dark:bg-gray-700 rounded-md">
+                                    <div className="flex items-center justify-between">
+                                        <label className="flex items-center flex-grow cursor-pointer"><input type="radio" name="currentPrompt" checked={tempSettings.currentPromptId === p.id} onChange={() => handleChange('currentPromptId', p.id)} className="mr-2 text-primary" /><input type="text" value={p.name} onChange={(e) => handlePromptSettingChange(p.id, 'name', e.target.value)} className="font-medium bg-transparent w-full" /></label>
+                                        <button onClick={() => handleDeletePrompt(p.id)} className="p-1 ml-2 text-sm text-red-500 rounded"><i className="fas fa-trash"></i></button>
+                                    </div>
+                                    <textarea value={p.content} onChange={(e) => handlePromptSettingChange(p.id, 'content', e.target.value)} className="w-full mt-2 h-20 p-2 bg-white dark:bg-gray-800 border rounded-md text-sm" />
+                                    <div className="mt-2 space-y-2 text-sm">
+                                        <div className="flex items-center gap-2">
+                                            <label className="shrink-0">模型:</label>
+                                            <select value={p.model || settings.selectedModel} onChange={(e) => handlePromptSettingChange(p.id, 'model', e.target.value)} className="w-full px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs">
+                                                {CHAT_MODELS.map(m => <option key={m.value} value={m.value}>{m.name}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <button onClick={handleAddPrompt} className="w-full py-2 bg-green-500 text-white rounded-md"><i className="fas fa-plus mr-2"></i>添加新提示词</button>
+                    </div>
                 </div>
-                <div className="flex justify-end gap-3 mt-6"> {/* ... 按钮部分无变化 ... */} </div>
+                <div className="flex justify-end gap-3 mt-6">
+                    <button onClick={onClose} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">关闭</button>
+                    <button onClick={() => onSave(tempSettings)} className="px-4 py-2 bg-primary text-white rounded-md">保存</button>
+                </div>
             </div>
         </div>
     );
 };
 
 // --- 关键修改 4：更新默认设置 ---
-const DEFAULT_PROMPTS = [ { id: 'default-1', name: '通用助理', content: '你是一个乐于助人的AI。', model: 'gemini-2.5-flash' } ];
+const DEFAULT_PROMPTS = [ { id: 'default-grammar-correction', name: '纠正中文语法', content: '你是一位专业的、耐心的中文老师，请纠正我发送的中文句子中的语法和用词错误，并给出修改建议和说明。', model: 'gemini-2.5-flash' }];
 const DEFAULT_SETTINGS = {
     apiKey: '',
     selectedModel: 'gemini-2.5-flash',
@@ -282,14 +357,11 @@ const DEFAULT_SETTINGS = {
     prompts: DEFAULT_PROMPTS,
     currentPromptId: DEFAULT_PROMPTS[0]?.id || '',
     autoRead: false,
-    
-    // TTS 设置
-    ttsEngine: TTS_ENGINE.GEMINI_TTS, // 默认使用 Gemini
-    geminiTtsModel: 'gemini-2.5-flash-preview-tts', // Gemini TTS 模型
-    geminiTtsVoice: 'Kore', // Gemini TTS 语音
-    thirdPartyTtsVoice: 'zh-CN-XiaoxiaoMultilingualNeural', // 保留旧的设置
-    systemTtsVoiceURI: '', // 保留旧的设置
-
+    ttsEngine: TTS_ENGINE.GEMINI_TTS,
+    geminiTtsModel: 'gemini-2.5-flash-preview-tts',
+    geminiTtsVoice: 'Kore',
+    thirdPartyTtsVoice: 'zh-CN-XiaoxiaoMultilingualNeural',
+    systemTtsVoiceURI: '',
     speechLanguage: 'zh-CN',
     chatBackgroundUrl: '/images/chat-bg.jpg',
     userAvatarUrl: '/images/user-avatar.png',
@@ -325,7 +397,7 @@ const AiChatAssistant = () => {
     useEffect(() => {
         setIsMounted(true);
         try {
-            const savedSettings = localStorage.getItem('ai_assistant_settings_v31'); // 使用新键
+            const savedSettings = localStorage.getItem('ai_assistant_settings_v32');
             if (savedSettings) {
                 const parsed = JSON.parse(savedSettings);
                 setSettings(prev => ({ ...DEFAULT_SETTINGS, ...parsed }));
@@ -341,24 +413,60 @@ const AiChatAssistant = () => {
         } catch (e) { createNewConversation(); }
     }, []);
 
-    useEffect(() => { /* ... 点击外部关闭菜单的 useEffect 无变化 ... */ }, []);
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (optionsContainerRef.current && !optionsContainerRef.current.contains(event.target)) {
+                setShowMoreMenu(false);
+                setShowModelSelector(false);
+                setShowPromptSelector(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     useEffect(() => {
         if (isMounted) {
-            localStorage.setItem('ai_assistant_settings_v31', JSON.stringify(settings));
+            localStorage.setItem('ai_assistant_settings_v32', JSON.stringify(settings));
             localStorage.setItem('ai_assistant_conversations_v22_final', JSON.stringify(conversations));
         }
     }, [settings, conversations, isMounted]);
 
-    useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [conversations, currentConversationId]);
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [conversations, currentConversationId]);
 
-    const createNewConversation = () => { /* ... 此函数无变化 ... */ };
+    const createNewConversation = () => {
+        const newId = `conv-${Date.now()}`;
+        const newConv = { id: newId, title: '新的对话', messages: [{ role: 'ai', content: '你好！有什么可以帮助你的吗？' }] };
+        setConversations(prev => [newConv, ...prev]);
+        setCurrentConversationId(newId);
+    };
+    
     const handleSelectConversation = (id) => setCurrentConversationId(id);
-    const handleDeleteConversation = (id) => { /* ... 此函数无变化 ... */ };
-    const handleRenameConversation = (id, newTitle) => { /* ... 此函数无变化 ... */ };
+    const handleDeleteConversation = (id) => { const remaining = conversations.filter(c => c.id !== id); setConversations(remaining); if (currentConversationId === id) { if (remaining.length > 0) { setCurrentConversationId(remaining[0].id); } else { createNewConversation(); } } };
+    const handleRenameConversation = (id, newTitle) => { setConversations(prev => prev.map(c => c.id === id ? { ...c, title: newTitle } : c)); };
     const handleSaveSettings = (newSettings) => { setSettings(newSettings); setShowSettings(false); };
-    const handleImageUpload = (e) => { /* ... 此函数无变化 ... */ };
-    const handleRemoveImage = (indexToRemove) => { /* ... 此函数无变化 ... */ };
+
+    const handleImageUpload = (e) => {
+        const files = Array.from(e.target.files);
+        if (!files.length) return;
+        const imagePromises = files.map(file => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve({ data: reader.result.split(',')[1], previewUrl: reader.result, type: file.type });
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        });
+        Promise.all(imagePromises).then(newImages => setSelectedImages(prev => [...prev, ...newImages]));
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        if (cameraInputRef.current) cameraInputRef.current.value = '';
+    };
+
+    const handleRemoveImage = (indexToRemove) => {
+        setSelectedImages(prev => prev.filter((_, index) => index !== indexToRemove));
+    };
 
     // --- 关键修改 5：更新语音识别逻辑 ---
     const startListening = useCallback(() => {
@@ -369,8 +477,8 @@ const AiChatAssistant = () => {
 
         const recognition = new SpeechRecognition();
         recognition.lang = settings.speechLanguage;
-        recognition.continuous = true; // 开启持续识别
-        recognition.interimResults = true; // 开启实时结果
+        recognition.continuous = true;
+        recognition.interimResults = true;
 
         recognition.onstart = () => {
             setIsListening(true);
@@ -410,7 +518,82 @@ const AiChatAssistant = () => {
         }
     }, []);
 
-    const handleSubmit = async (isRegenerate = false) => { /* ... 此函数无变化 ... */ };
+    const handleSubmit = async (isRegenerate = false) => {
+        if (!currentConversationId || isLoading) return;
+        const currentConv = conversations.find(c => c.id === currentConversationId);
+        if (!currentConv) return;
+
+        let messagesForApi = [...currentConv.messages];
+        const textToProcess = userInput.trim();
+
+        if (isRegenerate) {
+            if (messagesForApi[messagesForApi.length - 1]?.role === 'ai') messagesForApi.pop();
+        } else {
+            if (!textToProcess && selectedImages.length === 0) {
+                setError('请输入文字或选择图片再发送！');
+                return;
+            }
+            const userMessage = { role: 'user', content: textToProcess, images: selectedImages };
+            const newMessages = [...currentConv.messages, userMessage];
+            setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: newMessages } : c));
+            messagesForApi.push(userMessage);
+            setUserInput('');
+            setSelectedImages([]);
+        }
+
+        if (messagesForApi.length === 0) return;
+
+        setIsLoading(true);
+        setError('');
+        abortControllerRef.current = new AbortController();
+        const signal = abortControllerRef.current.signal;
+        timeoutRef.current = setTimeout(() => { abortControllerRef.current?.abort(); }, settings.apiTimeout);
+
+        try {
+            const currentPrompt = settings.prompts.find(p => p.id === settings.currentPromptId) || DEFAULT_PROMPTS[0];
+            const modelToUse = currentPrompt.model || settings.selectedModel;
+            
+            const history = messagesForApi.map(msg => {
+                const parts = [];
+                if (msg.content) parts.push({ text: msg.content });
+                if (msg.images) msg.images.forEach(img => parts.push({ inlineData: { mimeType: img.type, data: img.data } }));
+                return { role: msg.role === 'user' ? 'user' : 'model', parts };
+            });
+
+            const contents = [ { role: 'user', parts: [{ text: currentPrompt.content }] }, { role: 'model', parts: [{ text: "好的，我明白了。" }] }, ...history ];
+            
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${settings.apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents, generationConfig: { temperature: settings.temperature, maxOutputTokens: settings.maxOutputTokens } }),
+                signal,
+            });
+
+            clearTimeout(timeoutRef.current);
+
+            if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error?.message || `请求失败`); }
+            
+            const data = await response.json();
+            const aiResponseContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!aiResponseContent) throw new Error('AI未能返回有效内容。');
+
+            const aiMessage = { role: 'ai', content: aiResponseContent };
+            const finalMessages = [...messagesForApi, aiMessage];
+            setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: finalMessages } : c));
+
+        } catch (err) {
+            const finalMessages = [...messagesForApi];
+            let errorMessage = `请求错误: ${err.message}`;
+            if (err.name === 'AbortError') {
+                errorMessage = 'API 请求超时，请检查网络或在设置中延长“思考预算”。';
+            }
+            setError(errorMessage);
+            finalMessages.push({role: 'ai', content: `抱歉，出错了: ${errorMessage}`});
+            setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: finalMessages } : c));
+        } finally {
+            setIsLoading(false);
+        }
+    };
     
     const currentConversation = conversations.find(c => c.id === currentConversationId);
     if (!isMounted) return <div className="w-full h-full flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>;
@@ -438,11 +621,51 @@ const AiChatAssistant = () => {
                 <div className="p-3 border-t dark:border-gray-700 shrink-0">
                     {error && <div className="mb-2 p-2 bg-red-100 text-red-700 rounded-lg text-center text-sm" onClick={()=>setError('')}>{error} <span className='text-xs'>(点击关闭)</span></div>}
                     
-                    {selectedImages.length > 0 && ( /* ... 图片预览JSX无变化 ... */ )}
+                    {selectedImages.length > 0 && (
+                        <div className="mb-2 flex gap-2 overflow-x-auto p-1">
+                            {selectedImages.map((image, index) => (
+                                <div key={index} className="relative w-24 h-24 object-cover rounded-lg shrink-0">
+                                    <img src={image.previewUrl} alt={`预览 ${index + 1}`} className="w-full h-full object-cover rounded-lg" />
+                                    <button type="button" onClick={() => handleRemoveImage(index)} className="absolute -top-2 -right-2 bg-red-500 text-white w-5 h-5 flex items-center justify-center rounded-full text-xs" title="移除"><i className="fas fa-times"></i></button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
 
-                    {isLoading ? ( <div className="flex justify-center items-center gap-2 text-gray-500">...</div> ) : (
+                    {isLoading ? ( <div className="flex justify-center items-center gap-2 text-gray-500"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div> 正在思考中...</div> ) : (
                         <form onSubmit={(e)=>{e.preventDefault();handleSubmit(false)}} className="flex items-end gap-2">
-                             {showLeftButtons && ( /* ... 左侧菜单JSX无变化 ... */ )}
+                             {showLeftButtons && (
+                                <div ref={optionsContainerRef} className="relative">
+                                    <button type="button" onClick={() => setShowMoreMenu(s => !s)} className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0" title="更多选项">
+                                        <i className="fas fa-plus-circle text-lg text-primary"></i>
+                                    </button>
+                                    {showMoreMenu && (
+                                        <div className="absolute bottom-full mb-2 w-56 bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 overflow-hidden z-20">
+                                            <button type="button" onClick={() => { setShowModelSelector(true); setShowMoreMenu(false); }} className="w-full flex justify-between items-center text-left px-4 py-3 text-sm hover:bg-primary/10">
+                                                <span className="flex items-center"><i className="fas fa-robot w-6 mr-2"></i>切换模型</span>
+                                                <span className="text-xs text-gray-500 truncate max-w-[100px]">{CHAT_MODELS.find(m => m.value === settings.selectedModel)?.name}</span>
+                                            </button>
+                                            <button type="button" onClick={() => { setShowPromptSelector(true); setShowMoreMenu(false); }} className="w-full flex justify-between items-center text-left px-4 py-3 text-sm hover:bg-primary/10">
+                                                <span className="flex items-center"><i className="fas fa-magic w-6 mr-2"></i>切换提示词</span>
+                                                <span className="text-xs text-gray-500 truncate max-w-[100px]">{settings.prompts.find(p => p.id === settings.currentPromptId)?.name}</span>
+                                            </button>
+                                            <div className="border-t my-1 dark:border-gray-700"></div>
+                                            <button type="button" onClick={() => { fileInputRef.current.click(); setShowMoreMenu(false); }} className="w-full flex items-center text-left px-4 py-3 text-sm hover:bg-primary/10"><i className="fas fa-image w-6 mr-2"></i>上传图片</button>
+                                            <button type="button" onClick={() => { cameraInputRef.current.click(); setShowMoreMenu(false); }} className="w-full flex items-center text-left px-4 py-3 text-sm hover:bg-primary/10"><i className="fas fa-camera w-6 mr-2"></i>拍照上传</button>
+                                        </div>
+                                    )}
+                                    {showModelSelector && (
+                                        <div className="absolute bottom-full mb-2 w-48 bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 overflow-hidden z-20">
+                                            {CHAT_MODELS.map(m => ( <button key={m.value} type="button" onClick={()=>{setSettings(s=>({...s, selectedModel: m.value})); setShowModelSelector(false);}} className={`w-full text-left px-4 py-2 text-sm hover:bg-primary/10 ${settings.selectedModel === m.value ? 'text-primary font-bold' : ''}`}>{m.name}</button>))}
+                                        </div>
+                                    )}
+                                    {showPromptSelector && (
+                                        <div className="absolute bottom-full mb-2 w-48 bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 overflow-hidden z-20">
+                                            {settings.prompts.map(p => ( <button key={p.id} type="button" onClick={()=>{setSettings(s=>({...s, currentPromptId: p.id}));setShowPromptSelector(false);}} className={`w-full text-left px-4 py-2 text-sm hover:bg-primary/10 ${settings.currentPromptId === p.id ? 'text-primary font-bold' : ''}`}>{p.name}</button>))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                             
                             <input type="file" ref={fileInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" multiple />
                             <input type="file" ref={cameraInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" capture="environment" />
