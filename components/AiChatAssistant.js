@@ -1,4 +1,4 @@
-// /components/AiChatAssistant.js - v33: (美学重塑 & 交互体验终极优化)
+// /components/AiChatAssistant.js - v35: (修复核心崩溃Bugs, 新增启动/背景设置, UI优化)
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import AiTtsButton from './AiTtsButton';
 
@@ -32,7 +32,6 @@ const SimpleMarkdown = ({ text }) => {
     return <div>{lines}</div>;
 };
 
-// 新增：为消息气泡增加动画效果
 const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate }) => {
     const isUser = msg.role === 'user';
     const messageRef = useRef(null);
@@ -50,7 +49,6 @@ const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate }) => {
         }
     }, [isUser, msg.content, settings.autoRead, isLastAiMessage]);
     
-    // 新增：美化用户消息气泡的样式
     const userBubbleClass = 'bg-gradient-to-br from-primary to-blue-600 text-white rounded-br-lg';
     const aiBubbleClass = 'bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm';
 
@@ -81,45 +79,39 @@ const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate }) => {
     );
 };
 
-// 新增：聊天记录管理菜单
 const ConversationMenu = ({ onRename, onDelete }) => (
     <div className="absolute right-0 top-full mt-1 w-28 bg-white dark:bg-gray-800 rounded-md shadow-lg border dark:border-gray-700 z-10">
-        <button onClick={onRename} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"><i className="fas fa-pen w-4"></i>重命名</button>
-        <button onClick={onDelete} className="w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"><i className="fas fa-trash w-4"></i>删除</button>
+        <button onClick={(e) => { e.stopPropagation(); onRename(); }} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"><i className="fas fa-pen w-4"></i>重命名</button>
+        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"><i className="fas fa-trash w-4"></i>删除</button>
     </div>
 );
 
 const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDelete, onRename, prompts, settings }) => {
     const [editingId, setEditingId] = useState(null);
     const [newName, setNewName] = useState('');
-    const [activeMenu, setActiveMenu] = useState(null); // 控制哪个菜单是打开的
+    const [activeMenu, setActiveMenu] = useState(null);
 
     const handleRename = (id, oldName) => { setEditingId(id); setNewName(oldName); setActiveMenu(null); };
     const handleSaveRename = (id) => { if (newName.trim()) { onRename(id, newName.trim()); } setEditingId(null); };
 
     const groupedConversations = useMemo(() => {
-        // ... (grouping logic remains the same)
         const groups = new Map();
         const uncategorized = [];
 
         conversations.forEach(conv => {
             const promptId = conv.promptId;
-            if (promptId && prompts.some(p => p.id === promptId)) {
+            const prompt = prompts.find(p => p.id === promptId);
+            if (prompt) {
                 if (!groups.has(promptId)) {
-                    groups.set(promptId, []);
+                    groups.set(promptId, { prompt, conversations: [] });
                 }
-                groups.get(promptId).push(conv);
+                groups.get(promptId).conversations.push(conv);
             } else {
                 uncategorized.push(conv);
             }
         });
         
-        const sortedGroups = Array.from(groups.entries()).map(([promptId, convs]) => ({
-            prompt: prompts.find(p => p.id === promptId),
-            conversations: convs,
-        }));
-
-        return { sortedGroups, uncategorized };
+        return { sortedGroups: Array.from(groups.values()), uncategorized };
     }, [conversations, prompts]);
 
     const renderConversationItem = (conv) => (
@@ -129,7 +121,6 @@ const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDele
                     <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} onBlur={() => handleSaveRename(conv.id)} onKeyDown={(e) => e.key === 'Enter' && handleSaveRename(conv.id)} className="w-full bg-transparent p-0 border-b" autoFocus />
                 ) : ( <span className="text-sm">{conv.title}</span> )}
             </div>
-            {/* 修改：使用更明显的“...”菜单按钮 */}
             <div className="relative shrink-0">
                 <button onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === conv.id ? null : conv.id); }} className={`p-1 rounded-full ${currentId === conv.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                     <i className="fas fa-ellipsis-h text-xs"></i>
@@ -151,10 +142,10 @@ const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDele
             </button>
             <div className="flex-grow overflow-y-auto space-y-2">
                 {groupedConversations.sortedGroups.map(({ prompt, conversations }) => (
-                    <details key={prompt?.id} className="group" open>
+                    <details key={prompt.id} className="group" open>
                         <summary className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 list-none">
-                            <img src={convertGitHubUrl(prompt?.avatarUrl) || convertGitHubUrl(settings.aiAvatarUrl)} alt={prompt?.name} className="w-5 h-5 rounded-full object-cover"/>
-                            <span className="text-xs font-semibold flex-grow">{prompt?.name}</span>
+                            <img src={convertGitHubUrl(prompt.avatarUrl) || convertGitHubUrl(settings.aiAvatarUrl)} alt={prompt.name} className="w-5 h-5 rounded-full object-cover"/>
+                            <span className="text-xs font-semibold flex-grow">{prompt.name}</span>
                             <i className="fas fa-chevron-down text-xs text-gray-500 transition-transform group-open:rotate-180"></i>
                         </summary>
                         <div className="pl-3 mt-1 space-y-1">
@@ -179,8 +170,7 @@ const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDele
     );
 };
 
-// 新增：提示词管理的专用界面
-const PromptManager = ({ prompts, onBack, onChange, onAdd, onDelete, settings }) => (
+const PromptManager = ({ prompts, onBack, onChange, onAdd, onDelete, settings, microsoftTtsVoices }) => (
     <div className="absolute inset-0 bg-white dark:bg-gray-800 p-6 flex flex-col animate-fade-in">
         <div className="flex items-center justify-between mb-4 shrink-0">
             <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"><i className="fas fa-arrow-left"></i></button>
@@ -208,7 +198,7 @@ const PromptManager = ({ prompts, onBack, onChange, onAdd, onDelete, settings })
                          <div>
                             <label className="text-xs font-medium">声音:</label>
                             <select value={p.ttsVoice || settings.thirdPartyTtsVoice} onChange={(e) => onChange(p.id, 'ttsVoice', e.target.value)} className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs">
-                                {/* Assuming microsoftTtsVoices is available in this scope */}
+                                {microsoftTtsVoices.map(voice => <option key={voice.value} value={voice.value}>{voice.name}</option>)}
                             </select>
                         </div>
                          <div>
@@ -227,9 +217,8 @@ const PromptManager = ({ prompts, onBack, onChange, onAdd, onDelete, settings })
 const SettingsModal = ({ settings, onSave, onClose }) => {
     const [tempSettings, setTempSettings] = useState(settings);
     const [systemVoices, setSystemVoices] = useState([]);
-    const [view, setView] = useState('main'); // 'main' or 'prompts'
+    const [view, setView] = useState('main');
 
-    // ... (useEffect for voices remains the same)
     useEffect(() => {
         const fetchSystemVoices = () => {
             if (!window.speechSynthesis) return;
@@ -259,12 +248,8 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
         handleChange('prompts', newPrompts);
     };
     
-    const microsoftTtsVoices = [
-        { name: '晓晓 (女, 多语言)', value: 'zh-CN-XiaoxiaoMultilingualNeural' }, { name: '晓辰 (女, 多语言)', value: 'zh-CN-XiaochenMultilingualNeural' }, { name: '云希 (男, 温和)', value: 'zh-CN-YunxiNeural' }, { name: '云泽 (男, 叙事)', value: 'zh-CN-YunzeNeural' }, { name: '晓晓 (女, 亲切)', value: 'zh-CN-XiaoxiaoNeural' }, { name: '晓颜 (女)', value: 'zh-CN-XiaoyanNeural'}, { name: '晓伊 (女, 动漫)', value: 'zh-CN-XiaoyiNeural' }, { name: '云健 (男, 沉稳)', value: 'zh-CN-YunjianNeural' }, { name: '云扬 (男, 阳光)', value: 'zh-CN-YunyangNeural' }, { name: '晓臻 (女, 台湾)', value: 'zh-TW-HsiaoChenNeural' }, { name: '允喆 (男, 台湾)', value: 'zh-TW-YunJheNeural' }, { name: 'Ava (女, 美国, 多语言)', value: 'en-US-AvaMultilingualNeural' }, { name: 'Steffan (男, 美国, 多语言)', value: 'en-US-SteffanMultilingualNeural' }, { name: 'Vivienne (女, 法国, 多语言)', value: 'fr-FR-VivienneMultilingualNeural' }, { name: 'Remy (男, 法国, 多语言)', value: 'fr-FR-RemyMultilingualNeural' }, { name: '妮拉 (女, 缅甸)', value: 'my-MM-NilarNeural' }, { name: '蒂哈 (男, 缅甸)', value: 'my-MM-ThihaNeural' }, { name: '怀眉 (女, 越南)', value: 'vi-VN-HoaiMyNeural' }, { name: '南明 (男, 越南)', value: 'vi-VN-NamMinhNeural' },
-    ];
-    const speechLanguageOptions = [
-        { name: '中文 (普通话)', value: 'zh-CN' }, { name: '缅甸语 (မြန်မာ)', value: 'my-MM' }, { name: 'English (US)', value: 'en-US' }, { name: 'Español (España)', value: 'es-ES' }, { name: 'Français (France)', value: 'fr-FR' }, { name: '日本語', value: 'ja-JP' }, { name: '한국어', value: 'ko-KR' }, { name: 'Tiếng Việt', value: 'vi-VN' },
-    ];
+    const microsoftTtsVoices = [ { name: '晓晓 (女, 多语言)', value: 'zh-CN-XiaoxiaoMultilingualNeural' }, { name: '晓辰 (女, 多语言)', value: 'zh-CN-XiaochenMultilingualNeural' }, { name: '云希 (男, 温和)', value: 'zh-CN-YunxiNeural' }, { name: '云泽 (男, 叙事)', value: 'zh-CN-YunzeNeural' }, { name: '晓晓 (女, 亲切)', value: 'zh-CN-XiaoxiaoNeural' }, { name: '晓颜 (女)', value: 'zh-CN-XiaoyanNeural'}, { name: '晓伊 (女, 动漫)', value: 'zh-CN-XiaoyiNeural' }, { name: '云健 (男, 沉稳)', value: 'zh-CN-YunjianNeural' }, { name: '云扬 (男, 阳光)', value: 'zh-CN-YunyangNeural' }, { name: '晓臻 (女, 台湾)', value: 'zh-TW-HsiaoChenNeural' }, { name: '允喆 (男, 台湾)', value: 'zh-TW-YunJheNeural' }, { name: 'Ava (女, 美国, 多语言)', value: 'en-US-AvaMultilingualNeural' }, { name: 'Steffan (男, 美国, 多语言)', value: 'en-US-SteffanMultilingualNeural' }, { name: 'Vivienne (女, 法国, 多语言)', value: 'fr-FR-VivienneMultilingualNeural' }, { name: 'Remy (男, 法国, 多语言)', value: 'fr-FR-RemyMultilingualNeural' }, { name: '妮拉 (女, 缅甸)', value: 'my-MM-NilarNeural' }, { name: '蒂哈 (男, 缅甸)', value: 'my-MM-ThihaNeural' }, { name: '怀眉 (女, 越南)', value: 'vi-VN-HoaiMyNeural' }, { name: '南明 (男, 越南)', value: 'vi-VN-NamMinhNeural' }, ];
+    const speechLanguageOptions = [ { name: '中文 (普通话)', value: 'zh-CN' }, { name: '缅甸语 (မြန်မာ)', value: 'my-MM' }, { name: 'English (US)', value: 'en-US' }, { name: 'Español (España)', value: 'es-ES' }, { name: 'Français (France)', value: 'fr-FR' }, { name: '日本語', value: 'ja-JP' }, { name: '한국어', value: 'ko-KR' }, { name: 'Tiếng Việt', value: 'vi-VN' }, ];
 
 
     return (
@@ -277,6 +262,24 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                              <div>
                                 <label className="block text-sm font-medium mb-1">Google Gemini API 密钥</label>
                                 <input type="password" value={tempSettings.apiKey} onChange={(e) => handleChange('apiKey', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border rounded-md" />
+                            </div>
+                            <div>
+                                <button
+                                    type="button"
+                                    onClick={() => setView('prompts')}
+                                    className="w-full flex justify-between items-center p-3 rounded-md bg-gray-100 dark:bg-gray-700/50 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                                >
+                                    <h4 className="text-lg font-bold">提示词工作室</h4>
+                                    <i className={`fas fa-arrow-right`}></i>
+                                </button>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">聊天背景图片 URL</label>
+                                <input type="text" value={tempSettings.chatBackgroundUrl} onChange={(e) => handleChange('chatBackgroundUrl', e.target.value)} placeholder="https://..." className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border rounded-md" />
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <label className="block text-sm font-medium">始终开启新对话</label>
+                                <input type="checkbox" checked={tempSettings.startWithNewChat} onChange={(e) => handleChange('startWithNewChat', e.target.checked)} className="h-5 w-5 text-primary rounded" />
                             </div>
                              <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md space-y-3">
                                  <label className="block text-sm font-medium">高级参数</label>
@@ -331,16 +334,6 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                                 <label className="block text-sm font-medium">AI 回复后自动朗读</label>
                                 <input type="checkbox" checked={tempSettings.autoRead} onChange={(e) => handleChange('autoRead', e.target.checked)} className="h-5 w-5 text-primary rounded" />
                             </div>
-                            <div>
-                                <button
-                                    type="button"
-                                    onClick={() => setView('prompts')}
-                                    className="w-full flex justify-between items-center p-3 rounded-md bg-gray-100 dark:bg-gray-700/50 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                                >
-                                    <h4 className="text-lg font-bold">自定义提示词管理</h4>
-                                    <i className={`fas fa-arrow-right`}></i>
-                                </button>
-                            </div>
                         </div>
                         <div className="flex justify-end gap-3 mt-6 shrink-0">
                             <button onClick={onClose} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">关闭</button>
@@ -357,6 +350,7 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                         onChange={handlePromptSettingChange}
                         onAdd={handleAddPrompt}
                         onDelete={handleDeletePrompt}
+                        microsoftTtsVoices={microsoftTtsVoices}
                     />
                 )}
             </div>
@@ -372,6 +366,7 @@ const DEFAULT_SETTINGS = {
     temperature: 0.8,
     maxOutputTokens: 2048,
     disableThinkingMode: true,
+    startWithNewChat: false, // 新增
     prompts: DEFAULT_PROMPTS,
     currentPromptId: DEFAULT_PROMPTS[0]?.id || '',
     autoRead: false,
@@ -385,7 +380,6 @@ const DEFAULT_SETTINGS = {
 };
 
 const AiChatAssistant = () => {
-    // ... (All main component state remains the same)
     const [conversations, setConversations] = useState([]);
     const [currentConversationId, setCurrentConversationId] = useState(null);
     const [userInput, setUserInput] = useState('');
@@ -410,20 +404,25 @@ const AiChatAssistant = () => {
     const recognitionRef = useRef(null);
     
 
-    // ... (All main component useEffects and handlers remain the same)
     useEffect(() => {
         setIsMounted(true);
         try {
+            let finalSettings = DEFAULT_SETTINGS;
             const savedSettings = localStorage.getItem('ai_assistant_settings_v22_final');
             if (savedSettings) {
                 const parsed = JSON.parse(savedSettings);
                 parsed.prompts = parsed.prompts.map(p => ({ ...p, model: p.model || DEFAULT_SETTINGS.selectedModel, ttsVoice: p.ttsVoice || 'zh-CN-XiaoxiaoMultilingualNeural', avatarUrl: p.avatarUrl || '' }));
-                setSettings(prev => ({ ...DEFAULT_SETTINGS, ...parsed }));
+                finalSettings = { ...DEFAULT_SETTINGS, ...parsed };
+                setSettings(finalSettings);
             }
+
             const savedConversations = localStorage.getItem('ai_assistant_conversations_v22_final');
             const parsedConvs = savedConversations ? JSON.parse(savedConversations) : [];
             setConversations(parsedConvs);
-            if (parsedConvs.length > 0) {
+
+            if (finalSettings.startWithNewChat) {
+                createNewConversation();
+            } else if (parsedConvs.length > 0) {
                 setCurrentConversationId(parsedConvs[0].id);
             } else {
                 createNewConversation();
@@ -608,7 +607,7 @@ const AiChatAssistant = () => {
     };
     
     const currentConversation = conversations.find(c => c.id === currentConversationId);
-    const currentPrompt = settings.prompts.find(p => p.id === settings.currentPromptId);
+    const currentPrompt = settings.prompts.find(p => p.id === settings.currentPromptId) || (settings.prompts.length > 0 ? settings.prompts[0] : null);
     if (!isMounted) return <div className="w-full h-full flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>;
     const showLeftButtons = !userInput.trim() && selectedImages.length === 0;
 
@@ -631,7 +630,7 @@ const AiChatAssistant = () => {
                     </div>
                 </div>
 
-                <div className="flex-grow p-6 overflow-y-auto bg-cover bg-center animate-bg-pan" style={{ backgroundImage: `url('${settings.chatBackgroundUrl}')`}}>
+                <div className="flex-grow p-6 overflow-y-auto bg-cover bg-center animate-bg-pan" style={{ backgroundImage: `url('${convertGitHubUrl(settings.chatBackgroundUrl)}')`}}>
                     <div className="space-y-1">
                         {currentConversation?.messages.map((msg, index) => (
                             <MessageBubble key={`${currentConversationId}-${index}`} msg={msg} settings={settings} isLastAiMessage={index === currentConversation.messages.length - 1 && msg.role === 'ai'} onRegenerate={() => handleSubmit(true)} />
