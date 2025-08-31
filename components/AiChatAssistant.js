@@ -34,26 +34,12 @@ const SimpleMarkdown = ({ text }) => {
 
 const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate }) => {
     const isUser = msg.role === 'user';
-    const messageRef = useRef(null);
-    const hasBeenReadRef = useRef(false);
-
-    useEffect(() => {
-        if (isLastAiMessage && !isUser && msg.content && settings.autoRead && !hasBeenReadRef.current) {
-            const ttsButton = messageRef.current?.querySelector('button[title="朗读"]');
-            if (ttsButton) {
-                setTimeout(() => {
-                    ttsButton.click();
-                    hasBeenReadRef.current = true;
-                }, 300);
-            }
-        }
-    }, [isUser, msg.content, settings.autoRead, isLastAiMessage]);
     
     const userBubbleClass = 'bg-gradient-to-br from-primary to-blue-600 text-white rounded-br-lg';
     const aiBubbleClass = 'bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm';
 
     return (
-        <div ref={messageRef} className={`flex items-end gap-2.5 my-2 animate-fade-in-up ${isUser ? 'justify-end' : 'justify-start'}`}>
+        <div className={`flex items-end gap-2.5 my-2 animate-fade-in-up ${isUser ? 'justify-end' : 'justify-start'}`}>
             {!isUser && <img src={convertGitHubUrl(settings.aiAvatarUrl)} alt="AI Avatar" className="w-8 h-8 rounded-full shrink-0" />}
             <div className={`p-3 rounded-2xl text-left flex flex-col ${isUser ? userBubbleClass : aiBubbleClass}`} style={{ maxWidth: '85%' }}>
                 {msg.images && msg.images.length > 0 && (
@@ -81,8 +67,8 @@ const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate }) => {
 
 const ConversationMenu = ({ onRename, onDelete }) => (
     <div className="absolute right-0 top-full mt-1 w-28 bg-white dark:bg-gray-800 rounded-md shadow-lg border dark:border-gray-700 z-10">
-        <button onClick={(e) => { e.stopPropagation(); onRename(); }} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"><i className="fas fa-pen w-4"></i>重命名</button>
-        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"><i className="fas fa-trash w-4"></i>删除</button>
+        <button onClick={onRename} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"><i className="fas fa-pen w-4"></i>重命名</button>
+        <button onClick={onDelete} className="w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"><i className="fas fa-trash w-4"></i>删除</button>
     </div>
 );
 
@@ -115,7 +101,7 @@ const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDele
     }, [conversations, prompts]);
 
     const renderConversationItem = (conv) => (
-        <div key={conv.id} className={`group flex items-center p-2 rounded-md cursor-pointer ${currentId === conv.id ? 'bg-primary/20' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`} onClick={() => onSelect(conv.id)}>
+        <div key={conv.id} className={`group flex items-center p-2 rounded-md cursor-pointer ${currentId === conv.id ? 'bg-primary/20' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`} onClick={() => { onSelect(conv.id); setActiveMenu(null); }}>
             <div className="flex-grow truncate" onDoubleClick={() => handleRename(conv.id, conv.title)}>
                 {editingId === conv.id ? (
                     <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} onBlur={() => handleSaveRename(conv.id)} onKeyDown={(e) => e.key === 'Enter' && handleSaveRename(conv.id)} className="w-full bg-transparent p-0 border-b" autoFocus />
@@ -170,49 +156,8 @@ const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDele
     );
 };
 
-const PromptManager = ({ prompts, onBack, onChange, onAdd, onDelete, settings, microsoftTtsVoices }) => (
-    <div className="absolute inset-0 bg-white dark:bg-gray-800 p-6 flex flex-col animate-fade-in">
-        <div className="flex items-center justify-between mb-4 shrink-0">
-            <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"><i className="fas fa-arrow-left"></i></button>
-            <h3 className="text-2xl font-bold">提示词工作室</h3>
-            <div className="w-8"></div>
-        </div>
-        <div className="flex-grow overflow-y-auto pr-2 space-y-3">
-            {prompts.map(p => (
-                <div key={p.id} className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-md border dark:border-gray-700">
-                     <div className="flex items-center justify-between">
-                        <label className="flex items-center flex-grow cursor-pointer gap-2">
-                           <img src={convertGitHubUrl(p.avatarUrl) || convertGitHubUrl(settings.aiAvatarUrl)} alt={p.name} className="w-6 h-6 rounded-full object-cover"/>
-                           <input type="text" value={p.name} onChange={(e) => onChange(p.id, 'name', e.target.value)} className="font-semibold bg-transparent w-full text-lg" />
-                        </label>
-                        <button onClick={() => onDelete(p.id)} className="p-2 ml-2 text-sm text-red-500 rounded-full hover:bg-red-500/10"><i className="fas fa-trash"></i></button>
-                    </div>
-                    <textarea value={p.content} onChange={(e) => onChange(p.id, 'content', e.target.value)} placeholder="请输入提示词内容..." className="w-full mt-2 h-24 p-2 bg-white dark:bg-gray-800 border rounded-md text-sm" />
-                    <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
-                        <div>
-                            <label className="text-xs font-medium">模型:</label>
-                            <select value={p.model || settings.selectedModel} onChange={(e) => onChange(p.id, 'model', e.target.value)} className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs">
-                                {CHAT_MODELS.map(m => <option key={m.value} value={m.value}>{m.name}</option>)}
-                            </select>
-                        </div>
-                         <div>
-                            <label className="text-xs font-medium">声音:</label>
-                            <select value={p.ttsVoice || settings.thirdPartyTtsVoice} onChange={(e) => onChange(p.id, 'ttsVoice', e.target.value)} className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs">
-                                {microsoftTtsVoices.map(voice => <option key={voice.value} value={voice.value}>{voice.name}</option>)}
-                            </select>
-                        </div>
-                         <div>
-                            <label className="text-xs font-medium">头像 URL:</label>
-                            <input type="text" value={p.avatarUrl || ''} onChange={(e) => onChange(p.id, 'avatarUrl', e.target.value)} placeholder="输入头像图片URL" className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs" />
-                        </div>
-                    </div>
-                </div>
-            ))}
-        </div>
-        <button onClick={onAdd} className="w-full mt-4 py-2 bg-green-500 text-white rounded-md shrink-0"><i className="fas fa-plus mr-2"></i>添加新提示词</button>
-    </div>
-);
-
+const CHAT_MODELS = [ { name: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash' }, { name: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro' }, { name: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash' }, { name: 'Gemini 1.5 Flash (最新)', value: 'gemini-1.5-flash-latest' }, { name: 'Gemini 1.5 Pro (最新)', value: 'gemini-1.5-pro-latest' }, ];
+const PromptManager = ({ prompts, onBack, onChange, onAdd, onDelete, settings, microsoftTtsVoices }) => ( <div className="absolute inset-0 bg-white dark:bg-gray-800 p-6 flex flex-col animate-fade-in"> <div className="flex items-center justify-between mb-4 shrink-0"> <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"><i className="fas fa-arrow-left"></i></button> <h3 className="text-2xl font-bold">提示词工作室</h3> <div className="w-8"></div> </div> <div className="flex-grow overflow-y-auto pr-2 space-y-3"> {prompts.map(p => ( <div key={p.id} className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-md border dark:border-gray-700"> <div className="flex items-center justify-between"> <label className="flex items-center flex-grow cursor-pointer gap-2"> <img src={convertGitHubUrl(p.avatarUrl) || convertGitHubUrl(settings.aiAvatarUrl)} alt={p.name} className="w-6 h-6 rounded-full object-cover"/> <input type="text" value={p.name} onChange={(e) => onChange(p.id, 'name', e.target.value)} className="font-semibold bg-transparent w-full text-lg" /> </label> <button onClick={() => onDelete(p.id)} className="p-2 ml-2 text-sm text-red-500 rounded-full hover:bg-red-500/10"><i className="fas fa-trash"></i></button> </div> <textarea value={p.content} onChange={(e) => onChange(p.id, 'content', e.target.value)} placeholder="请输入提示词内容..." className="w-full mt-2 h-24 p-2 bg-white dark:bg-gray-800 border rounded-md text-sm" /> <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2 text-sm"> <div> <label className="text-xs font-medium">模型:</label> <select value={p.model || settings.selectedModel} onChange={(e) => onChange(p.id, 'model', e.target.value)} className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs"> {CHAT_MODELS.map(m => <option key={m.value} value={m.value}>{m.name}</option>)} </select> </div> <div> <label className="text-xs font-medium">声音:</label> <select value={p.ttsVoice || settings.thirdPartyTtsVoice} onChange={(e) => onChange(p.id, 'ttsVoice', e.target.value)} className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs"> {microsoftTtsVoices.map(voice => <option key={voice.value} value={voice.value}>{voice.name}</option>)} </select> </div> <div> <label className="text-xs font-medium">头像 URL:</label> <input type="text" value={p.avatarUrl || ''} onChange={(e) => onChange(p.id, 'avatarUrl', e.target.value)} placeholder="输入头像图片URL" className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs" /> </div> </div> </div> ))} </div> <button onClick={onAdd} className="w-full mt-4 py-2 bg-green-500 text-white rounded-md shrink-0"><i className="fas fa-plus mr-2"></i>添加新提示词</button> </div> );
 
 const SettingsModal = ({ settings, onSave, onClose }) => {
     const [tempSettings, setTempSettings] = useState(settings);
@@ -366,7 +311,7 @@ const DEFAULT_SETTINGS = {
     temperature: 0.8,
     maxOutputTokens: 2048,
     disableThinkingMode: true,
-    startWithNewChat: false, // 新增
+    startWithNewChat: false,
     prompts: DEFAULT_PROMPTS,
     currentPromptId: DEFAULT_PROMPTS[0]?.id || '',
     autoRead: false,
@@ -390,8 +335,7 @@ const AiChatAssistant = () => {
     const [isMounted, setIsMounted] = useState(false);
     const [isFullScreen, setIsFullScreen] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [showPromptSelector, setShowPromptSelector] = useState(false);
-    const [showModelSelector, setShowModelSelector] = useState(false);
+    const [showAssistantSelector, setShowAssistantSelector] = useState(false);
     const [showMoreMenu, setShowMoreMenu] = useState(false);
     const [selectedImages, setSelectedImages] = useState([]);
     const [isListening, setIsListening] = useState(false);
@@ -402,12 +346,13 @@ const AiChatAssistant = () => {
     const fileInputRef = useRef(null);
     const cameraInputRef = useRef(null);
     const recognitionRef = useRef(null);
+    const lastMessageCount = useRef(0);
     
 
     useEffect(() => {
         setIsMounted(true);
         try {
-            let finalSettings = DEFAULT_SETTINGS;
+            let finalSettings = { ...DEFAULT_SETTINGS };
             const savedSettings = localStorage.getItem('ai_assistant_settings_v22_final');
             if (savedSettings) {
                 const parsed = JSON.parse(savedSettings);
@@ -420,22 +365,21 @@ const AiChatAssistant = () => {
             const parsedConvs = savedConversations ? JSON.parse(savedConversations) : [];
             setConversations(parsedConvs);
 
-            if (finalSettings.startWithNewChat) {
-                createNewConversation();
-            } else if (parsedConvs.length > 0) {
-                setCurrentConversationId(parsedConvs[0].id);
+            if (finalSettings.startWithNewChat || parsedConvs.length === 0) {
+                createNewConversation(finalSettings.currentPromptId);
             } else {
-                createNewConversation();
+                setCurrentConversationId(parsedConvs[0].id);
             }
-        } catch (e) { createNewConversation(); }
+        } catch (e) { createNewConversation(DEFAULT_SETTINGS.currentPromptId); }
     }, []);
+
+    const currentConversation = useMemo(() => conversations.find(c => c.id === currentConversationId), [conversations, currentConversationId]);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (optionsContainerRef.current && !optionsContainerRef.current.contains(event.target)) {
                 setShowMoreMenu(false);
-                setShowModelSelector(false);
-                setShowPromptSelector(false);
+                setShowAssistantSelector(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -453,12 +397,33 @@ const AiChatAssistant = () => {
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
         }
-    }, [conversations.find(c => c.id === currentConversationId)?.messages]);
+    }, [currentConversation?.messages]);
+
+    // 修复：自动朗读的 useEffect
+    useEffect(() => {
+        if (!currentConversation || !settings.autoRead) return;
+
+        const messages = currentConversation.messages;
+        const currentMessageCount = messages.length;
+        const lastMessage = messages[currentMessageCount - 1];
+
+        // 只有当消息数量增加，并且最后一条是AI的消息时，才触发
+        if (currentMessageCount > lastMessageCount.current && lastMessage && lastMessage.role === 'ai' && lastMessage.content) {
+            // 使用一个微小的延迟确保DOM已经更新
+            setTimeout(() => {
+                const ttsButton = document.querySelector(`[data-conv-id="${currentConversation.id}"] button[title="朗读"]`);
+                ttsButton?.click();
+            }, 100);
+        }
+
+        lastMessageCount.current = currentMessageCount;
+
+    }, [currentConversation, settings.autoRead]);
 
 
-    const createNewConversation = () => {
+    const createNewConversation = (promptId) => {
         const newId = `conv-${Date.now()}`;
-        const newConv = { id: newId, title: '新的对话', messages: [{ role: 'ai', content: '你好！有什么可以帮助你的吗？' }], promptId: settings.currentPromptId };
+        const newConv = { id: newId, title: '新的对话', messages: [{ role: 'ai', content: '你好！有什么可以帮助你的吗？' }], promptId: promptId || settings.currentPromptId };
         setConversations(prev => [newConv, ...prev]);
         setCurrentConversationId(newId);
     };
@@ -521,11 +486,9 @@ const AiChatAssistant = () => {
     }, []);
 
     const handleSubmit = async (isRegenerate = false) => {
-        if (!currentConversationId || isLoading) return;
-        const currentConv = conversations.find(c => c.id === currentConversationId);
-        if (!currentConv) return;
-
-        let messagesForApi = [...currentConv.messages];
+        if (!currentConversation || isLoading) return;
+        
+        let messagesForApi = [...currentConversation.messages];
         
         if (isRegenerate) {
             if (messagesForApi.length > 0 && messagesForApi[messagesForApi.length - 1].role === 'ai') {
@@ -537,8 +500,8 @@ const AiChatAssistant = () => {
                 return;
             }
             const userMessage = { role: 'user', content: userInput.trim(), images: selectedImages };
-            const updatedMessages = [...currentConv.messages, userMessage];
-            setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: updatedMessages } : c));
+            const updatedMessages = [...currentConversation.messages, userMessage];
+            setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: updatedMessages, promptId: c.promptId || settings.currentPromptId } : c));
             messagesForApi = updatedMessages;
             setUserInput('');
             setSelectedImages([]);
@@ -552,7 +515,7 @@ const AiChatAssistant = () => {
         const signal = abortControllerRef.current.signal;
 
         try {
-            const currentPrompt = settings.prompts.find(p => p.id === currentConv.promptId) || settings.prompts.find(p => p.id === settings.currentPromptId) || DEFAULT_PROMPTS[0];
+            const currentPrompt = settings.prompts.find(p => p.id === currentConversation.promptId) || settings.prompts.find(p => p.id === settings.currentPromptId) || DEFAULT_PROMPTS[0];
             const modelToUse = currentPrompt.model || settings.selectedModel;
             
             const history = messagesForApi.map(msg => {
@@ -606,20 +569,22 @@ const AiChatAssistant = () => {
         }
     };
     
-    const currentConversation = conversations.find(c => c.id === currentConversationId);
-    const currentPrompt = settings.prompts.find(p => p.id === settings.currentPromptId) || (settings.prompts.length > 0 ? settings.prompts[0] : null);
+    const safeGetCurrentPrompt = useMemo(() => {
+        return settings.prompts.find(p => p.id === settings.currentPromptId) || settings.prompts[0] || { name: 'AI助理', avatarUrl: settings.aiAvatarUrl };
+    }, [settings.currentPromptId, settings.prompts, settings.aiAvatarUrl]);
+
     if (!isMounted) return <div className="w-full h-full flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>;
     const showLeftButtons = !userInput.trim() && selectedImages.length === 0;
 
     return (
         <div className={`w-full max-w-5xl mx-auto my-8 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 flex bg-white dark:bg-gray-900 overflow-hidden ${isFullScreen ? 'fixed inset-0 z-50 max-w-full my-0 rounded-none' : ''}`} style={isFullScreen ? {} : { height: '90vh', minHeight: '650px' }}>
-            <ChatSidebar isOpen={isSidebarOpen} conversations={conversations} currentId={currentConversationId} onSelect={handleSelectConversation} onNew={createNewConversation} onDelete={handleDeleteConversation} onRename={handleRenameConversation} prompts={settings.prompts} settings={settings} />
+            <ChatSidebar isOpen={isSidebarOpen} conversations={conversations} currentId={currentConversationId} onSelect={handleSelectConversation} onNew={() => createNewConversation()} onDelete={handleDeleteConversation} onRename={handleRenameConversation} prompts={settings.prompts} settings={settings} />
             
             {isSidebarOpen && (
                 <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/20 z-10 md:hidden"></div>
             )}
 
-            <div className="flex-1 flex flex-col h-full min-w-0 relative">
+            <div className="flex-1 flex flex-col h-full min-w-0 relative" data-conv-id={currentConversation?.id}>
                 <div className="flex items-center justify-between py-1 px-2 border-b dark:border-gray-700 shrink-0">
                     <div className="w-10">
                         <button onClick={() => setIsSidebarOpen(s => !s)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="切换侧边栏"><i className="fas fa-bars"></i></button>
@@ -656,33 +621,26 @@ const AiChatAssistant = () => {
                         <form onSubmit={(e)=>{e.preventDefault();handleSubmit(false)}} className="flex items-end gap-2">
                             {showLeftButtons && (
                                 <div ref={optionsContainerRef} className="relative">
-                                    <button type="button" onClick={() => setShowMoreMenu(s => !s)} className="flex items-center gap-2 group" title="切换助理或上传文件">
-                                        <img src={convertGitHubUrl(currentPrompt?.avatarUrl) || convertGitHubUrl(settings.aiAvatarUrl)} alt="AI助理头像" className="w-9 h-9 rounded-full object-cover shadow-md group-hover:shadow-lg ring-2 ring-white/50 dark:ring-gray-900/50 transition-all" />
-                                        <span className="font-semibold text-sm text-primary">{currentPrompt?.name || "Ai助理"}</span>
+                                    <button type="button" onClick={() => setShowMoreMenu(s => !s)} className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0" title="更多选项">
+                                        <i className="fas fa-plus-circle text-lg text-primary"></i>
                                     </button>
                                     {showMoreMenu && (
                                         <div className="absolute bottom-full mb-2 w-56 bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 overflow-hidden z-20">
-                                            <button type="button" onClick={() => { setShowModelSelector(true); setShowMoreMenu(false); }} className="w-full flex justify-between items-center text-left px-4 py-3 text-sm hover:bg-primary/10">
-                                                <span className="flex items-center"><i className="fas fa-robot w-6 mr-2"></i>切换模型</span>
-                                                <span className="text-xs text-gray-500 truncate max-w-[100px]">{CHAT_MODELS.find(m => m.value === (currentPrompt?.model || settings.selectedModel))?.name}</span>
-                                            </button>
-                                            <button type="button" onClick={() => { setShowPromptSelector(true); setShowMoreMenu(false); }} className="w-full flex justify-between items-center text-left px-4 py-3 text-sm hover:bg-primary/10">
-                                                <span className="flex items-center"><i className="fas fa-magic w-6 mr-2"></i>切换提示词</span>
-                                                <span className="text-xs text-gray-500 truncate max-w-[100px]">{currentPrompt?.name}</span>
+                                            <button type="button" onClick={() => { setShowAssistantSelector(true); setShowMoreMenu(false); }} className="w-full flex justify-between items-center text-left px-4 py-3 text-sm hover:bg-primary/10">
+                                                <span className="flex items-center"><img src={convertGitHubUrl(safeGetCurrentPrompt.avatarUrl)} className="w-5 h-5 rounded-full mr-2"/>更换助理</span>
+                                                <span className="text-xs text-gray-500 truncate max-w-[100px]">{safeGetCurrentPrompt.name}</span>
                                             </button>
                                             <div className="border-t my-1 dark:border-gray-700"></div>
                                             <button type="button" onClick={() => { fileInputRef.current.click(); setShowMoreMenu(false); }} className="w-full flex items-center text-left px-4 py-3 text-sm hover:bg-primary/10"><i className="fas fa-image w-6 mr-2"></i>上传图片</button>
                                             <button type="button" onClick={() => { cameraInputRef.current.click(); setShowMoreMenu(false); }} className="w-full flex items-center text-left px-4 py-3 text-sm hover:bg-primary/10"><i className="fas fa-camera w-6 mr-2"></i>拍照上传</button>
                                         </div>
                                     )}
-                                    {showModelSelector && (
-                                        <div className="absolute bottom-full mb-2 w-48 bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 overflow-hidden z-20">
-                                            {CHAT_MODELS.map(m => ( <button key={m.value} type="button" onClick={()=>{setSettings(s=>({...s, selectedModel: m.value})); setShowModelSelector(false);}} className={`w-full text-left px-4 py-2 text-sm hover:bg-primary/10 ${settings.selectedModel === m.value ? 'text-primary font-bold' : ''}`}>{m.name}</button>))}
-                                        </div>
-                                    )}
-                                    {showPromptSelector && (
-                                        <div className="absolute bottom-full mb-2 w-48 bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 overflow-hidden z-20">
-                                            {settings.prompts.map(p => ( <button key={p.id} type="button" onClick={()=>{setSettings(s=>({...s, currentPromptId: p.id}));setShowPromptSelector(false);}} className={`w-full text-left px-4 py-2 text-sm hover:bg-primary/10 ${settings.currentPromptId === p.id ? 'text-primary font-bold' : ''}`}>{p.name}</button>))}
+                                    {showAssistantSelector && (
+                                        <div className="absolute bottom-full mb-2 w-56 bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 overflow-hidden z-20 max-h-60 overflow-y-auto">
+                                            {settings.prompts.map(p => ( <button key={p.id} type="button" onClick={()=>{setSettings(s=>({...s, currentPromptId: p.id}));setShowAssistantSelector(false);}} className={`w-full text-left px-4 py-2 text-sm hover:bg-primary/10 flex items-center gap-2 ${settings.currentPromptId === p.id ? 'text-primary font-bold' : ''}`}>
+                                                <img src={convertGitHubUrl(p.avatarUrl)} className="w-5 h-5 rounded-full"/>
+                                                <span className="truncate">{p.name}</span>
+                                            </button>))}
                                         </div>
                                     )}
                                 </div>
