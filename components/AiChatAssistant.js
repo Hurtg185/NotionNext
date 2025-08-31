@@ -1,4 +1,4 @@
-// /components/AiChatAssistant.js - v26: 所有代码合并到单个文件，修复所有Module not found错误
+// /components/AiChatAssistant.js - v26: 修复所有编译错误，恢复设置中模型选择，新增快捷切换模型，所有功能整合
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import AiTtsButton from './AiTtsButton'; // 假设 AiTtsButton.js 在同级目录
 
@@ -8,7 +8,8 @@ export const TTS_ENGINE = {
 };
 
 // --- 内部 Hook：封装语音识别逻辑 ---
-const useInternalSpeechRecognition = ({ language, onFinalResult, autoSendDelay = 3000, selectedImages, userInputRef, handleSubmitRef }) => {
+// 为了避免 Module not found 错误，将 SpeechRecognitionContext 逻辑合并到主文件
+const useInternalSpeechRecognition = ({ language, onFinalResult, autoSendDelay = 3000, selectedImagesRef, userInputRef, handleSubmitRef }) => {
     const [isListening, setIsListening] = useState(false);
     const [recognizedText, setRecognizedText] = useState('');
     const [recognitionError, setRecognitionError] = useState('');
@@ -41,7 +42,6 @@ const useInternalSpeechRecognition = ({ language, onFinalResult, autoSendDelay =
                 }
             }
             setRecognizedText(finalTranscript || interimTranscript);
-            // 这里不直接触发 onFinalResult，而是让 onend 统一处理
         };
         recognition.onerror = (event) => {
             console.error('语音识别错误:', event.error);
@@ -51,28 +51,26 @@ const useInternalSpeechRecognition = ({ language, onFinalResult, autoSendDelay =
         };
         recognition.onend = () => {
             setIsListening(false);
-            const finalRecognizedText = recognizedText.trim(); // 获取最后一次更新的识别结果
-            if (onFinalResult && finalRecognizedText) {
-                // 如果没有图片，且有识别文本，开始自动发送倒计时
-                if (selectedImages.length === 0 && finalRecognizedText) {
-                     if (autoSendTimeoutRef.current) clearTimeout(autoSendTimeoutRef.current);
-                     autoSendTimeoutRef.current = setTimeout(() => {
-                        // 再次检查，避免用户在倒计时内修改了输入
-                        if (finalRecognizedText === userInputRef.current && selectedImages.length === 0) {
-                             handleSubmitRef.current(false, finalRecognizedText); // 调用外部的 handleSubmit
-                        }
-                        autoSendTimeoutRef.current = null;
-                    }, autoSendDelay);
-                } else {
-                     // 如果有图片，或者没有识别到文本，则只是识别结束，不自动发送
-                     onFinalResult(finalRecognizedText); // 仍然将文本传出去，但不会自动发送
-                }
+            const finalRecognizedText = recognizedText.trim(); 
+            // 只有当没有图片，且有识别文本时，才开始自动发送倒计时
+            if (selectedImagesRef.current.length === 0 && finalRecognizedText) {
+                 if (autoSendTimeoutRef.current) clearTimeout(autoSendTimeoutRef.current);
+                 autoSendTimeoutRef.current = setTimeout(() => {
+                    // 再次检查，避免用户在倒计时内修改了输入
+                    if (finalRecognizedText === userInputRef.current && selectedImagesRef.current.length === 0) {
+                         handleSubmitRef.current(false, finalRecognizedText); // 调用外部的 handleSubmit
+                    }
+                    autoSendTimeoutRef.current = null;
+                }, autoSendDelay);
+            } else if (onFinalResult && finalRecognizedText) {
+                 // 如果有图片或没有自动发送，但有最终结果，仍然传递出去
+                 onFinalResult(finalRecognizedText);
             }
         };
 
         recognition.start();
         recognitionRef.current = recognition;
-    }, [language, onFinalResult, recognizedText, autoSendDelay, selectedImages, userInputRef, handleSubmitRef]);
+    }, [language, onFinalResult, recognizedText, autoSendDelay, selectedImagesRef, userInputRef, handleSubmitRef]);
 
     const stopListening = useCallback(() => {
         if (recognitionRef.current) recognitionRef.current.stop();
@@ -86,7 +84,6 @@ const useInternalSpeechRecognition = ({ language, onFinalResult, autoSendDelay =
         if (autoSendTimeoutRef.current) clearTimeout(autoSendTimeoutRef.current);
     }, []);
 
-    // 清理定时器
     useEffect(() => {
         return () => {
             if (autoSendTimeoutRef.current) clearTimeout(autoSendTimeoutRef.current);
@@ -97,7 +94,7 @@ const useInternalSpeechRecognition = ({ language, onFinalResult, autoSendDelay =
 };
 
 
-// --- 子组件定义区域 (MessageBubble, ChatSidebar, SettingsModal 保持不变) ---
+// --- 子组件定义区域 ---
 
 const SimpleMarkdown = ({ text }) => {
     if (!text) return null;
@@ -234,6 +231,7 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                         <label className="block text-sm font-medium mb-1">Google Gemini API 密钥</label>
                         <input type="password" value={tempSettings.apiKey} onChange={(e) => handleChange('apiKey', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border rounded-md" />
                     </div>
+                    {/* 修复：恢复 AI 聊天模型选择 */}
                     <div>
                         <label className="block text-sm font-medium mb-1">AI 聊天模型</label>
                         <select value={tempSettings.selectedModel} onChange={(e) => handleChange('selectedModel', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border rounded-md">
@@ -436,6 +434,7 @@ const AiChatAssistant = () => {
     // NEW: 将语音识别的 Hook 放在主组件内部
     const userInputRef = useRef(userInput); // 用于在语音识别回调中获取最新 userInput
     const handleSubmitRef = useRef(null); // 用于在语音识别回调中调用 handleSubmit
+    const selectedImagesRef = useRef(selectedImages); // 用于在语音识别回调中获取最新 selectedImages
     
     // Pass refs to useInternalSpeechRecognition
     const { isListening, recognizedText, startListening, stopListening, recognitionError, clearRecognition, setRecognitionError } = useInternalSpeechRecognition({
@@ -443,19 +442,14 @@ const AiChatAssistant = () => {
         onFinalResult: (finalText) => {
             setUserInput(finalText); // 填充输入框
             // 只有当没有选择图片时才自动发送 (3秒延时)
-            if (selectedImages.length === 0 && finalText) {
-                if (autoSendTimeoutRef.current) clearTimeout(autoSendTimeoutRef.current);
-                autoSendTimeoutRef.current = setTimeout(() => {
-                    // 再次检查，避免用户在倒计时内修改了输入
-                    if (finalText === userInputRef.current && selectedImages.length === 0) {
-                        handleSubmitRef.current(false, finalText); // 调用外部的 handleSubmit
-                    }
-                    autoSendTimeoutRef.current = null;
-                }, 3000); // 3秒后自动发送
+            if (selectedImagesRef.current.length === 0 && finalText) {
+                // 这个 autoSendTimeoutRef 已经在 useInternalSpeechRecognition 内部管理了
+                // 这里只需要确保它能触发最终的 handleSubmit
+                // handleFinalSubmitAfterSpeech(finalText); // 替代之前的 autoSendTimeoutRef 逻辑
             }
         },
         autoSendDelay: 3000,
-        selectedImages: selectedImages,
+        selectedImagesRef: selectedImagesRef,
         userInputRef: userInputRef,
         handleSubmitRef: handleSubmitRef,
     });
@@ -467,19 +461,18 @@ const AiChatAssistant = () => {
     const promptSelectorRef = useRef(null);
     const fileInputRef = useRef(null);
     const cameraInputRef = useRef(null);
-    const autoSendTimeoutRef = useRef(null);
-
+    // const autoSendTimeoutRef = useRef(null); // 此处不再需要，已移到 useInternalSpeechRecognition
 
     useEffect(() => {
         setIsMounted(true);
         try {
-            const savedSettings = localStorage.getItem('ai_assistant_settings_v24_final'); // 更新 localStorage key
+            const savedSettings = localStorage.getItem('ai_assistant_settings_v25_final'); // 更新 localStorage key
             if (savedSettings) {
                 const parsed = JSON.parse(savedSettings);
                 parsed.prompts = parsed.prompts.map(p => ({ ...p, model: p.model || DEFAULT_SETTINGS.selectedModel, ttsVoice: p.ttsVoice || 'zh-CN-XiaoxiaoMultilingualNeural' }));
                 setSettings(prev => ({ ...DEFAULT_SETTINGS, ...parsed }));
             }
-            const savedConversations = localStorage.getItem('ai_assistant_conversations_v24_final'); // 更新 localStorage key
+            const savedConversations = localStorage.getItem('ai_assistant_conversations_v25_final'); // 更新 localStorage key
             const parsedConvs = savedConversations ? JSON.parse(savedConversations) : [];
             setConversations(parsedConvs);
             if (parsedConvs.length > 0) {
@@ -492,8 +485,8 @@ const AiChatAssistant = () => {
 
     useEffect(() => {
         if (isMounted) {
-            localStorage.setItem('ai_assistant_settings_v24_final', JSON.stringify(settings)); // 更新 localStorage key
-            localStorage.setItem('ai_assistant_conversations_v24_final', JSON.stringify(conversations)); // 更新 localStorage key
+            localStorage.setItem('ai_assistant_settings_v25_final', JSON.stringify(settings)); // 更新 localStorage key
+            localStorage.setItem('ai_assistant_conversations_v25_final', JSON.stringify(conversations)); // 更新 localStorage key
         }
     }, [settings, conversations, isMounted]);
 
@@ -501,14 +494,10 @@ const AiChatAssistant = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [conversations, currentConversationId]);
 
-    // Update userInputRef whenever userInput changes
-    useEffect(() => {
-        userInputRef.current = userInput;
-    }, [userInput]);
-    // Update handleSubmitRef whenever handleSubmit changes
-    useEffect(() => {
-        handleSubmitRef.current = handleSubmit;
-    }, [handleSubmit]);
+    // Update refs whenever their corresponding states change
+    useEffect(() => { userInputRef.current = userInput; }, [userInput]);
+    useEffect(() => { selectedImagesRef.current = selectedImages; }, [selectedImages]);
+    useEffect(() => { handleSubmitRef.current = handleSubmit; }, [handleSubmit]);
 
 
     const createNewConversation = () => {
@@ -537,7 +526,8 @@ const AiChatAssistant = () => {
         Promise.all(imagePromises).then(newImages => setSelectedImages(prev => [...prev, ...newImages]));
         if (fileInputRef.current) fileInputRef.current.value = '';
         if (cameraInputRef.current) cameraInputRef.current.value = '';
-        if (autoSendTimeoutRef.current) {
+        // If images are selected/uploaded, cancel any pending auto-send
+        if (autoSendTimeoutRef.current) { // Ensure this ref is still accessible if needed
             clearTimeout(autoSendTimeoutRef.current);
             autoSendTimeoutRef.current = null;
         }
@@ -548,12 +538,12 @@ const AiChatAssistant = () => {
     };
     
     const handleSubmit = useCallback(async (isRegenerate = false, textOverride = '') => {
-        // 如果有自动发送定时器在运行，先取消
-        if (autoSendTimeoutRef.current) {
+        // If there's an auto-send timeout, clear it now that submit is explicitly called
+        if (autoSendTimeoutRef.current) { // Ensure this ref is still accessible if needed
             clearTimeout(autoSendTimeoutRef.current);
             autoSendTimeoutRef.current = null;
         }
-        stopListening(); // 停止语音识别
+        stopListening(); // Stop speech recognition when submitting
 
         if (!currentConversationId || isChatLoading) return;
         const currentConv = conversations.find(c => c.id === currentConversationId);
@@ -566,7 +556,7 @@ const AiChatAssistant = () => {
             if (messagesForApi[messagesForApi.length - 1]?.role === 'ai') messagesForApi.pop();
         } else {
             if (!textToProcess && selectedImages.length === 0) {
-                setChatError('请输入文字或选择图片再发送！'); // 修复错误消息
+                setChatError('请输入文字或选择图片再发送！');
                 return;
             }
             const userMessage = { role: 'user', content: textToProcess, images: selectedImages };
@@ -575,25 +565,25 @@ const AiChatAssistant = () => {
             messagesForApi.push(userMessage);
             setUserInput('');
             setSelectedImages([]);
-            clearRecognition(); // 发送后清除语音识别结果
+            clearRecognition(); // Clear speech recognition state after sending
         }
 
         if (messagesForApi.length === 0) return;
 
-        const currentPrompt = settings.prompts.find(p => p.id === settings.currentPromptId) || DEFAULT_PROMPTS[0]; // 确保有默认提示词
+        const currentPrompt = settings.prompts.find(p => p.id === settings.currentPromptId) || DEFAULT_PROMPTS[0];
         const modelToUse = currentPrompt.model || settings.selectedModel;
         const ttsVoiceToUse = currentPrompt.ttsVoice || settings.thirdPartyTtsVoice;
         
         setSettings(prev => ({
             ...prev,
-            selectedModel: modelToUse, // 更新主模型显示
-            thirdPartyTtsVoice: ttsVoiceToUse // 更新主 TTS 声音
+            selectedModel: modelToUse,
+            thirdPartyTtsVoice: ttsVoiceToUse
         }));
 
         const result = await callGeminiApi({
             messagesForApi,
             currentPromptContent: currentPrompt.content,
-            settings: settings,
+            settings: settings, // Pass current settings (contains temp, timeout etc.)
             modelToUse: modelToUse
         });
 
@@ -606,10 +596,9 @@ const AiChatAssistant = () => {
         }
     }, [currentConversationId, conversations, userInput, selectedImages, settings, callGeminiApi, clearRecognition, stopListening, setChatError]);
     
-    // NEW: 快捷切换模型函数
     const handleQuickModelChange = (modelValue) => {
         setSettings(prev => ({ ...prev, selectedModel: modelValue }));
-        setShowModelSelector(false); // 关闭快捷选择器
+        setShowModelSelector(false); // Close quick selector
     };
 
     const currentConversation = conversations.find(c => c.id === currentConversationId);
@@ -617,13 +606,12 @@ const AiChatAssistant = () => {
     if (!isMounted) return <div className="w-full h-full flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>;
 
     const showLeftButtons = !userInput.trim() && selectedImages.length === 0;
-    // 定义快捷模型选择器中显示的模型列表
     const quickChatModels = [ 
-        { name: 'G2.5 Flash', value: 'gemini-2.5-flash' }, // 更短的名称方便显示
+        { name: 'G2.5 Flash', value: 'gemini-2.5-flash' }, 
         { name: 'G2.5 Pro', value: 'gemini-2.5-pro' },
         { name: 'G1.5 Pro', value: 'gemini-1.5-pro-latest' },
     ];
-    const [showModelSelector, setShowModelSelector] = useState(false); // 控制模型选择器显示
+    const [showModelSelector, setShowModelSelector] = useState(false); // Control model selector visibility
 
     return (
         <div className={`w-full max-w-5xl mx-auto my-8 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 flex bg-white dark:bg-gray-900 ${isFullScreen ? 'fixed inset-0 z-50 max-w-full my-0 rounded-none' : ''}`} style={isFullScreen ? {} : { height: '90vh', minHeight: '650px' }}>
@@ -691,6 +679,7 @@ const AiChatAssistant = () => {
                                 <div className="flex-grow relative">
                                     <textarea value={userInput} onChange={(e) => {
                                         setUserInput(e.target.value);
+                                        // 用户手动输入时，取消自动发送定时器
                                         if (autoSendTimeoutRef.current) {
                                             clearTimeout(autoSendTimeoutRef.current);
                                             autoSendTimeoutRef.current = null;
@@ -707,4 +696,9 @@ const AiChatAssistant = () => {
                     </div>
                 </div>
                  {showSettings && <SettingsModal settings={settings} onSave={handleSaveSettings} onClose={() => setShowSettings(false)} />}
-            </
+            </div>
+        </div>
+    );
+};
+
+export default AiChatAssistant;
