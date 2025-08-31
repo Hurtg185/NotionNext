@@ -1,8 +1,7 @@
-// /components/AiTtsButton.js - v29 (最终版 - 遵循 generateContent API 规范)
+// /components/AiTtsButton.js - v30 (最终正确版 - 遵循 generateContent API)
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { TTS_ENGINE } from './AiChatAssistant';
 
-// 清理文本中的Markdown标记，让朗读更自然
 const cleanTextForSpeech = (text) => {
   if (!text) return '';
   return text.replace(/\*\*/g, '').replace(/#{1,6}\s/g, '').replace(/[-*]\s/g, '');
@@ -12,7 +11,6 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
   const [isLoading, setIsLoading] = useState(false);
   const audioRef = useRef(null);
 
-  // 组件卸载时停止播放
   useEffect(() => {
     return () => {
       if (audioRef.current) {
@@ -27,8 +25,8 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
 
     const {
       ttsEngine = TTS_ENGINE.GEMINI_TTS,
-      geminiTtsModel = 'gemini-2.5-flash-preview-tts', // 从设置中获取模型
-      geminiTtsVoice = 'Kore', // 从设置中获取声音
+      geminiTtsModel = 'gemini-2.5-flash-preview-tts', // <-- 关键点1: 使用您指定的模型
+      geminiTtsVoice = 'Kore',
       apiKey = ''
     } = ttsSettings;
 
@@ -42,10 +40,10 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
         if (!apiKey) throw new Error("API Key 为空！");
 
         // --- 核心逻辑：完全按照截图的方式构建请求 ---
-        // 1. 构建 URL
+        // 关键点2: 使用 generateContent 端点
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiTtsModel}:generateContent?key=${apiKey}`;
 
-        // 2. 构建请求体 (Body)
+        // 关键点3: 构建正确的请求体
         const body = {
           contents: [{
             parts: [{ text: cleanedText }]
@@ -70,13 +68,10 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
         }
 
         const data = await response.json();
-        
-        // 3. 解析响应：音频数据在不同的路径下
+        // 关键点4: 从正确的路径解析音频数据
         const audioContent = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
 
         if (!audioContent) throw new Error('Gemini TTS 未能返回有效的音频内容。');
-        
-        console.log("[TTS] 成功获取 Base64 音频内容，准备播放。");
         
         const audio = new Audio("data:audio/mp3;base64," + audioContent);
         audioRef.current = audio;
@@ -90,7 +85,6 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
         await audio.play();
 
       } else {
-        // 其他引擎的逻辑...
         setIsLoading(false);
       }
     } catch (err) {
