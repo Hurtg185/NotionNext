@@ -1,6 +1,6 @@
-// /components/AiChatAssistant.js - v36 (导入 AiTtsButton，优化语音识别)
+// /components/AiChatAssistant.js - v36.1 (修复编译错误，确保代码完整性)
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import AiTtsButton from './AiTtsButton'; // <-- 关键修改：从独立文件导入
+import AiTtsButton from './AiTtsButton'; // <-- 从独立文件导入
 
 export const TTS_ENGINE = { // TTS_ENGINE 仍然在这里定义并导出
     SYSTEM: 'system',
@@ -129,7 +129,7 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
         const newPrompts = [...tempSettings.prompts, newPrompt];
         handleChange('prompts', newPrompts);
     };
-    const handleDeletePrompt = (idToDelete) => { if (!window.confirm('确定删除此对话吗？')) return; const newPrompts = tempSettings.prompts.filter(p => p.id !== idToDelete); handleChange('prompts', newPrompts); if (tempSettings.currentPromptId === idToDelete) handleChange('currentPromptId', newPrompts?.id || ''); };
+    const handleDeletePrompt = (idToDelete) => { if (!window.confirm('确定删除此对话吗？')) return; const newPrompts = tempSettings.prompts.filter(p => p.id !== idToDelete); handleChange('prompts', newPrompts); if (tempSettings.currentPromptId === idToDelete) handleChange('currentPromptId', newPrompts[0]?.id || ''); };
     
     const handlePromptSettingChange = (promptId, field, value) => {
         const newPrompts = tempSettings.prompts.map(p => p.id === promptId ? { ...p, [field]: value } : p);
@@ -250,7 +250,7 @@ const DEFAULT_SETTINGS = {
     maxOutputTokens: 2048,
     apiTimeout: 60000,
     prompts: DEFAULT_PROMPTS,
-    currentPromptId: DEFAULT_PROMPTS?.id || '',
+    currentPromptId: DEFAULT_PROMPTS[0]?.id || '',
     autoRead: false,
     ttsEngine: TTS_ENGINE.THIRD_PARTY, // 默认使用第三方API
     thirdPartyTtsVoice: 'zh-CN-XiaoxiaoMultilingualNeural', // 默认第三方语音
@@ -289,7 +289,7 @@ const AiChatAssistant = () => {
     useEffect(() => {
         setIsMounted(true);
         try {
-            const savedSettings = localStorage.getItem('ai_assistant_settings_v35'); // 使用新键
+            const savedSettings = localStorage.getItem('ai_assistant_settings_v36'); // 使用新键
             if (savedSettings) {
                 const parsed = JSON.parse(savedSettings);
                 // 确保旧的自定义提示词也能获得正确的 ttsVoice 字段
@@ -300,7 +300,7 @@ const AiChatAssistant = () => {
             const parsedConvs = savedConversations ? JSON.parse(savedConversations) : [];
             setConversations(parsedConvs);
             if (parsedConvs.length > 0) {
-                setCurrentConversationId(parsedConvs.id);
+                setCurrentConversationId(parsedConvs[0]?.id); // 确保取id时有数据
             } else {
                 createNewConversation();
             }
@@ -321,7 +321,7 @@ const AiChatAssistant = () => {
 
     useEffect(() => {
         if (isMounted) {
-            localStorage.setItem('ai_assistant_settings_v35', JSON.stringify(settings)); // 使用新键
+            localStorage.setItem('ai_assistant_settings_v36', JSON.stringify(settings)); // 使用新键
             localStorage.setItem('ai_assistant_conversations_v22_final', JSON.stringify(conversations));
         }
     }, [settings, conversations, isMounted]);
@@ -338,7 +338,7 @@ const AiChatAssistant = () => {
     };
     
     const handleSelectConversation = (id) => setCurrentConversationId(id);
-    const handleDeleteConversation = (id) => { const remaining = conversations.filter(c => c.id !== id); setConversations(remaining); if (currentConversationId === id) { if (remaining.length > 0) { setCurrentConversationId(remaining.id); } else { createNewConversation(); } } };
+    const handleDeleteConversation = (id) => { const remaining = conversations.filter(c => c.id !== id); setConversations(remaining); if (currentConversationId === id) { if (remaining.length > 0) { setCurrentConversationId(remaining[0]?.id); } else { createNewConversation(); } } };
     const handleRenameConversation = (id, newTitle) => { setConversations(prev => prev.map(c => c.id === id ? { ...c, title: newTitle } : c)); };
     const handleSaveSettings = (newSettings) => { setSettings(newSettings); setShowSettings(false); };
 
@@ -348,7 +348,7 @@ const AiChatAssistant = () => {
         const imagePromises = files.map(file => {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
-                reader.onloadend = () => resolve({ data: reader.result.split(','), previewUrl: reader.result, type: file.type });
+                reader.onloadend = () => resolve({ data: reader.result.split(',')[1], previewUrl: reader.result, type: file.type });
                 reader.onerror = reject;
                 reader.readAsDataURL(file);
             });
@@ -385,9 +385,9 @@ const AiChatAssistant = () => {
             let interimTranscript = '';
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 if (event.results[i].isFinal) {
-                    finalTranscript += event.results[i].transcript;
+                    finalTranscript += event.results[i][0].transcript;
                 } else {
-                    interimTranscript += event.results[i].transcript;
+                    interimTranscript += event.results[i][0].transcript;
                 }
             }
             setUserInput(finalTranscript + interimTranscript);
@@ -449,7 +449,7 @@ const AiChatAssistant = () => {
         timeoutRef.current = setTimeout(() => { abortControllerRef.current?.abort(); }, settings.apiTimeout);
 
         try {
-            const currentPrompt = settings.prompts.find(p => p.id === settings.currentPromptId) || DEFAULT_PROMPTS;
+            const currentPrompt = settings.prompts.find(p => p.id === settings.currentPromptId) || DEFAULT_PROMPTS[0];
             const modelToUse = currentPrompt.model || settings.selectedModel;
             
             const history = messagesForApi.map(msg => {
@@ -473,7 +473,8 @@ const AiChatAssistant = () => {
             if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error?.message || `请求失败`); }
             
             const data = await response.json();
-            const aiResponseContent = data.candidates?.?.content?.parts?.?.text;
+            // --- 修复编译错误：移除重复的可选链操作符 ---
+            const aiResponseContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
             if (!aiResponseContent) throw new Error('AI未能返回有效内容。');
 
             const aiMessage = { role: 'ai', content: aiResponseContent };
