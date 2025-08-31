@@ -1,4 +1,4 @@
-// /components/AiChatAssistant.js - v27: (新增Gemini 2.5思考模式控制)
+// /components/AiChatAssistant.js - v28: (修复编译错误及多个运行时Bugs)
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import AiTtsButton from './AiTtsButton';
 
@@ -124,7 +124,7 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
         const newPrompts = [...tempSettings.prompts, newPrompt];
         handleChange('prompts', newPrompts);
     };
-    const handleDeletePrompt = (idToDelete) => { if (!window.confirm('确定删除吗？')) return; const newPrompts = tempSettings.prompts.filter(p => p.id !== idToDelete); handleChange('prompts', newPrompts); if (tempSettings.currentPromptId === idToDelete) handleChange('currentPromptId', newPrompts?.id || ''); };
+    const handleDeletePrompt = (idToDelete) => { if (!window.confirm('确定删除吗？')) return; const newPrompts = tempSettings.prompts.filter(p => p.id !== idToDelete); handleChange('prompts', newPrompts); if (tempSettings.currentPromptId === idToDelete) handleChange('currentPromptId', newPrompts[0]?.id || ''); };
     
     const handlePromptSettingChange = (promptId, field, value) => {
         const newPrompts = tempSettings.prompts.map(p => p.id === promptId ? { ...p, [field]: value } : p);
@@ -251,7 +251,7 @@ const DEFAULT_SETTINGS = {
     maxOutputTokens: 2048,
     disableThinkingMode: true,
     prompts: DEFAULT_PROMPTS,
-    currentPromptId: DEFAULT_PROMPTS?.id || '',
+    currentPromptId: DEFAULT_PROMPTS[0]?.id || '',
     autoRead: false,
     ttsEngine: TTS_ENGINE.THIRD_PARTY,
     thirdPartyTtsVoice: 'zh-CN-XiaoxiaoMultilingualNeural',
@@ -299,7 +299,7 @@ const AiChatAssistant = () => {
             const parsedConvs = savedConversations ? JSON.parse(savedConversations) : [];
             setConversations(parsedConvs);
             if (parsedConvs.length > 0) {
-                setCurrentConversationId(parsedConvs.id);
+                setCurrentConversationId(parsedConvs[0].id);
             } else {
                 createNewConversation();
             }
@@ -337,7 +337,7 @@ const AiChatAssistant = () => {
     };
     
     const handleSelectConversation = (id) => setCurrentConversationId(id);
-    const handleDeleteConversation = (id) => { const remaining = conversations.filter(c => c.id !== id); setConversations(remaining); if (currentConversationId === id) { if (remaining.length > 0) { setCurrentConversationId(remaining.id); } else { createNewConversation(); } } };
+    const handleDeleteConversation = (id) => { const remaining = conversations.filter(c => c.id !== id); setConversations(remaining); if (currentConversationId === id) { if (remaining.length > 0) { setCurrentConversationId(remaining[0].id); } else { createNewConversation(); } } };
     const handleRenameConversation = (id, newTitle) => { setConversations(prev => prev.map(c => c.id === id ? { ...c, title: newTitle } : c)); };
     const handleSaveSettings = (newSettings) => { setSettings(newSettings); setShowSettings(false); };
 
@@ -347,7 +347,7 @@ const AiChatAssistant = () => {
         const imagePromises = files.map(file => {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
-                reader.onloadend = () => resolve({ data: reader.result.split(','), previewUrl: reader.result, type: file.type });
+                reader.onloadend = () => resolve({ data: reader.result.split(',')[1], previewUrl: reader.result, type: file.type });
                 reader.onerror = reject;
                 reader.readAsDataURL(file);
             });
@@ -373,7 +373,7 @@ const AiChatAssistant = () => {
 
         recognition.onstart = () => setIsListening(true);
         recognition.onresult = (e) => {
-            const transcript = e.results.transcript.trim();
+            const transcript = e.results[0][0].transcript.trim();
             setUserInput(transcript);
         };
         recognition.onerror = (event) => {
@@ -402,7 +402,9 @@ const AiChatAssistant = () => {
         const textToProcess = userInput.trim();
 
         if (isRegenerate) {
-            if (messagesForApi[messagesForApi.length - 1]?.role === 'ai') messagesForApi.pop();
+            if (messagesForApi.length > 0 && messagesForApi[messagesForApi.length - 1].role === 'ai') {
+                messagesForApi.pop();
+            }
         } else {
             if (!textToProcess && selectedImages.length === 0) {
                 setError('请输入文字或选择图片再发送！');
@@ -424,7 +426,7 @@ const AiChatAssistant = () => {
         const signal = abortControllerRef.current.signal;
 
         try {
-            const currentPrompt = settings.prompts.find(p => p.id === settings.currentPromptId) || DEFAULT_PROMPTS;
+            const currentPrompt = settings.prompts.find(p => p.id === settings.currentPromptId) || DEFAULT_PROMPTS[0];
             const modelToUse = currentPrompt.model || settings.selectedModel;
             
             const history = messagesForApi.map(msg => {
@@ -457,7 +459,7 @@ const AiChatAssistant = () => {
             if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error?.message || `请求失败`); }
             
             const data = await response.json();
-            const aiResponseContent = data.candidates?.?.content?.parts?.?.text;
+            const aiResponseContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
             if (!aiResponseContent) throw new Error('AI未能返回有效内容。');
 
             const aiMessage = { role: 'ai', content: aiResponseContent };
@@ -551,25 +553,4 @@ const AiChatAssistant = () => {
                                     )}
                                 </div>
                             )}
-                            
-                            <input type="file" ref={fileInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" multiple />
-                            <input type="file" ref={cameraInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" capture="environment" />
-
-                            <div className="flex-grow relative">
-                                <textarea value={userInput} onChange={(e) => setUserInput(e.target.value)} placeholder="与 AI 聊天..." className="w-full px-4 py-2 pr-12 rounded-2xl bg-gray-100 dark:bg-gray-700 resize-none overflow-hidden" rows="1" style={{minHeight:'44px'}} onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight) + 'px'; }} />
-                                <button type="button" onClick={isListening ? stopListening : startListening} className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-500 hover:text-primary'}`} title="语音输入">
-                                    <i className="fas fa-microphone"></i>
-                                </button>
-                            </div>
-                            <button type="submit" className="p-3 bg-primary text-white rounded-full hover:bg-blue-700 disabled:opacity-50 shrink-0" disabled={isLoading || (!userInput.trim() && selectedImages.length === 0)}><i className="fas fa-arrow-up"></i></button>
-                            <button type="button" onClick={() => setIsFullScreen(f => !f)} className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0" title={isFullScreen ? '退出全屏' : '全屏模式'}><i className={`fas ${isFullScreen ? 'fa-compress' : 'fa-expand'}`}></i></button>
-                        </form>
-                    )}
-                </div>
-            </div>
-             {showSettings && <SettingsModal settings={settings} onSave={handleSaveSettings} onClose={() => setShowSettings(false)} />}
-        </div>
-    );
-};
-
-export default AiChatAssistant;
+             
