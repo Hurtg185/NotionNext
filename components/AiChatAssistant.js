@@ -1,14 +1,13 @@
-// /components/AiChatAssistant.js - v24: 修复设置中模型选择，新增快捷切换模型，所有功能已整合
+// /components/AiChatAssistant.js - v25: 修复 SpeechRecognitionContext 导入路径
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import AiTtsButton from './AiTtsButton';
-import { SpeechRecognitionProvider, useSpeechRecognition } from '../contexts/SpeechRecognitionContext'; 
+// 核心修复：修正 SpeechRecognitionContext 的导入路径
+import { SpeechRecognitionProvider, useSpeechRecognition } from './contexts/SpeechRecognitionContext'; 
 
 export const TTS_ENGINE = {
     SYSTEM: 'system',
     THIRD_PARTY: 'third_party'
 };
-
-// --- 子组件定义区域 ---
 
 const SimpleMarkdown = ({ text }) => {
     if (!text) return null;
@@ -127,7 +126,7 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
     };
 
     const chatModels = [
-        { name: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash' }, { name: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro' }, { name: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash' }, { name: 'Gemini 2.5 Flash-late (最快)', value: 'gemini-2.5-flash-late' }, { name: 'Gemini 1.5 Pro (最新)', value: 'gemini-1.5-pro' },
+        { name: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash' }, { name: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro' }, { name: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash' }, { name: 'Gemini 2.5 Flash-late (最新)', value: 'gemini-2.5-flash-late' }, { name: 'Gemini 1.5 Pro (最新)', value: 'gemini-1.5-pro' },
     ];
     const microsoftTtsVoices = [
         { name: '晓晓 (女, 多语言)', value: 'zh-CN-XiaoxiaoMultilingualNeural' }, { name: '晓辰 (女, 多语言)', value: 'zh-CN-XiaochenMultilingualNeural' }, { name: '云希 (男, 温和)', value: 'zh-CN-YunxiNeural' }, { name: '云泽 (男, 叙事)', value: 'zh-CN-YunzeNeural' }, { name: '晓晓 (女, 亲切)', value: 'zh-CN-XiaoxiaoNeural' }, { name: '晓颜 (女)', value: 'zh-CN-XiaoyanNeural'}, { name: '晓伊 (女, 动漫)', value: 'zh-CN-XiaoyiNeural' }, { name: '云健 (男, 沉稳)', value: 'zh-CN-YunjianNeural' }, { name: '云扬 (男, 阳光)', value: 'zh-CN-YunyangNeural' }, { name: '晓臻 (女, 台湾)', value: 'zh-TW-HsiaoChenNeural' }, { name: '允喆 (男, 台湾)', value: 'zh-TW-YunJheNeural' }, { name: 'Ava (女, 美国, 多语言)', value: 'en-US-AvaMultilingualNeural' }, { name: 'Steffan (男, 美国, 多语言)', value: 'en-US-SteffanMultilingualNeural' }, { name: 'Vivienne (女, 法国, 多语言)', value: 'fr-FR-VivienneMultilingualNeural' }, { name: 'Remy (男, 法国, 多语言)', value: 'fr-FR-RemyMultilingualNeural' }, { name: '妮拉 (女, 缅甸)', value: 'my-MM-NilarNeural' }, { name: '蒂哈 (男, 缅甸)', value: 'my-MM-ThihaNeural' }, { name: '怀眉 (女, 越南)', value: 'vi-VN-HoaiMyNeural' }, { name: '南明 (男, 越南)', value: 'vi-VN-NamMinhNeural' },
@@ -504,6 +503,7 @@ const AiChatAssistant = () => {
         }
     }, [currentConversationId, conversations, userInput, selectedImages, settings, callGeminiApi, clearRecognition, stopListening, setChatError]);
     
+    // NEW: 快捷切换模型函数
     const handleQuickModelChange = (modelValue) => {
         setSettings(prev => ({ ...prev, selectedModel: modelValue }));
         setShowModelSelector(false); // 关闭快捷选择器
@@ -514,13 +514,14 @@ const AiChatAssistant = () => {
     if (!isMounted) return <div className="w-full h-full flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>;
 
     const showLeftButtons = !userInput.trim() && selectedImages.length === 0;
-    const chatModels = [ // 快捷选择器用的模型列表
-        { name: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash' },
-        { name: 'Gemini 1.5 Pro', value: 'gemini-1.5-pro-latest' },
-        { name: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash' },
+    // 定义快捷模型选择器中显示的模型列表
+    const quickChatModels = [ 
+        { name: 'G2.5 Flash', value: 'gemini-2.5-flash' }, // 更短的名称方便显示
+        { name: 'G2.5 Pro', value: 'gemini-2.5-pro' },
+        { name: 'G2.5 flash-late', value: 'gemini-2.5-flash-late' },
+        { name: 'G1.5 Pro', value: 'gemini-1.5-pro-latest' },
     ];
     const [showModelSelector, setShowModelSelector] = useState(false); // 控制模型选择器显示
-
 
     return (
         <SpeechRecognitionProvider language={settings.speechLanguage} onFinalResult={handleSpeechFinalResult}>
@@ -573,7 +574,7 @@ const AiChatAssistant = () => {
                                             <button type="button" onClick={() => setShowModelSelector(s => !s)} className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0" title="切换模型"><i className="fas fa-robot"></i></button>
                                             {showModelSelector && (
                                                 <div className="absolute bottom-full mb-2 w-48 bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 overflow-hidden z-20">
-                                                    {chatModels.map(m => ( <button key={m.value} type="button" onClick={() => handleQuickModelChange(m.value)} className={`w-full text-left px-4 py-2 text-sm hover:bg-primary/10 ${settings.selectedModel === m.value ? 'text-primary font-bold' : ''}`}>{m.name}</button>))}
+                                                    {quickChatModels.map(m => ( <button key={m.value} type="button" onClick={() => handleQuickModelChange(m.value)} className={`w-full text-left px-4 py-2 text-sm hover:bg-primary/10 ${settings.selectedModel === m.value ? 'text-primary font-bold' : ''}`}>{m.name}</button>))}
                                                 </div>
                                             )}
                                         </div>
