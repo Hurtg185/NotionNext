@@ -1,7 +1,6 @@
-// /components/AiChatAssistant.js - v28: 修复所有编译错误，恢复设置中模型选择，新增快捷切换模型，所有功能整合
+// /components/AiChatAssistant.js - v29: 引入对话分组与移动功能 (无依赖版)
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import AiTtsButton from './AiTtsButton'; // 假设 AiTtsButton.js 在同级目录
-import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd'; // 引入拖拽库
 
 export const TTS_ENGINE = {
     GEMINI_TTS: 'gemini_tts',
@@ -67,47 +66,75 @@ const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate }) => {
     );
 };
 
-const ChatSidebar = ({ isOpen, conversationGroups, currentId, onSelect, onNew, onDelete, onRename, onNewGroup, onDragEnd }) => {
+// NEW: 拖拽功能的 Hook (简化版，无需外部库)
+const useDraggable = ({ onDrop }) => {
+    const [dragItem, setDragItem] = useState(null);
+    const [dragOverItem, setDragOverItem] = useState(null);
+
+    const handleDragStart = (e, item) => {
+        setDragItem(item);
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', JSON.stringify(item));
+    };
+    const handleDragEnter = (e, item) => {
+        setDragOverItem(item);
+    };
+    const handleDragLeave = (e) => {
+        setDragOverItem(null);
+    };
+    const handleDragEnd = (e) => {
+        if (dragItem && dragOverItem) {
+            onDrop(dragItem, dragOverItem);
+        }
+        setDragItem(null);
+        setDragOverItem(null);
+    };
+
+    return {
+        dragItem,
+        dragOverItem,
+        handleDragStart,
+        handleDragEnter,
+        handleDragLeave,
+        handleDragEnd
+    };
+};
+
+const ChatSidebar = ({ isOpen, conversationGroups, currentId, onSelect, onNew, onDelete, onRename, onNewGroup, onMoveConversation }) => {
+    const { dragItem, dragOverItem, handleDragStart, handleDragEnter, handleDragLeave, handleDragEnd } = useDraggable({ onDrop: onMoveConversation });
+
     return (
-        <DragDropContext onDragEnd={onDragEnd}>
-            <div className={`h-full bg-gray-50 dark:bg-gray-800/50 flex flex-col border-r dark:border-gray-700 transition-all duration-300 ${isOpen ? 'w-64 p-2' : 'w-0 p-0'} overflow-hidden`}>
-                <div className="flex gap-2 mb-2">
-                    <button onClick={onNew} className="flex-1 flex items-center justify-center p-2 rounded-md border border-dashed hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0">
-                        <i className="fas fa-plus mr-2"></i> 新对话
-                    </button>
-                    <button onClick={onNewGroup} className="flex-1 flex items-center justify-center p-2 rounded-md border border-dashed hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0">
-                        <i className="fas fa-folder-plus mr-2"></i> 新分组
-                    </button>
-                </div>
-                <div className="flex-grow overflow-y-auto">
-                    {conversationGroups.map((group, groupIndex) => (
-                        <Droppable key={group.id} droppableId={group.id}>
-                            {(provided) => (
-                                <div ref={provided.innerRef} {...provided.droppableProps}>
-                                    <h4 className="text-xs font-bold text-gray-500 uppercase mt-2 px-2">{group.name}</h4>
-                                    {group.conversations.map((conv, convIndex) => (
-                                        <Draggable key={conv.id} draggableId={conv.id} index={convIndex}>
-                                            {(provided) => (
-                                                <div
-                                                    ref={provided.innerRef}
-                                                    {...provided.draggableProps}
-                                                    {...provided.dragHandleProps}
-                                                    className={`group flex items-center p-2 rounded-md cursor-pointer ${currentId === conv.id ? 'bg-primary/20' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
-                                                    onClick={() => onSelect(conv.id)}
-                                                >
-                                                    {/* ... (对话项的UI，与 v27 相同) ... */}
-                                                </div>
-                                            )}
-                                        </Draggable>
-                                    ))}
-                                    {provided.placeholder}
-                                </div>
-                            )}
-                        </Droppable>
-                    ))}
-                </div>
+        <div className={`h-full bg-gray-50 dark:bg-gray-800/50 flex flex-col border-r dark:border-gray-700 transition-all duration-300 ${isOpen ? 'w-64 p-2' : 'w-0 p-0'} overflow-hidden`}>
+            <div className="flex gap-2 mb-2">
+                <button onClick={onNew} className="flex-1 flex items-center justify-center p-2 rounded-md border border-dashed hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0">
+                    <i className="fas fa-plus mr-2"></i> 新对话
+                </button>
+                <button onClick={onNewGroup} className="flex-1 flex items-center justify-center p-2 rounded-md border border-dashed hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0">
+                    <i className="fas fa-folder-plus mr-2"></i> 新分组
+                </button>
             </div>
-        </DragDropContext>
+            <div className="flex-grow overflow-y-auto">
+                {conversationGroups.map((group, groupIndex) => (
+                    <div key={group.id} onDragEnter={(e) => handleDragEnter(e, { type: 'group', id: group.id, index: groupIndex })}>
+                        <h4 className="text-xs font-bold text-gray-500 uppercase mt-2 px-2">{group.name}</h4>
+                        {group.conversations.map((conv, convIndex) => (
+                            <div
+                                key={conv.id}
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, { type: 'conversation', id: conv.id, fromGroupIndex: groupIndex, fromConvIndex: convIndex })}
+                                onDragEnter={(e) => handleDragEnter(e, { type: 'conversation', id: conv.id, toGroupIndex: groupIndex, toConvIndex: convIndex })}
+                                onDragEnd={handleDragEnd}
+                                onDragLeave={handleDragLeave}
+                                className={`group flex items-center p-2 rounded-md cursor-pointer ${currentId === conv.id ? 'bg-primary/20' : 'hover:bg-gray-200 dark:hover:bg-gray-700'} ${dragOverItem?.id === conv.id ? 'border-t-2 border-primary' : ''}`}
+                                onClick={() => onSelect(conv.id)}
+                            >
+                                {/* ... (对话项的UI，与 v27 相同) ... */}
+                            </div>
+                        ))}
+                    </div>
+                ))}
+            </div>
+        </div>
     );
 };
 
