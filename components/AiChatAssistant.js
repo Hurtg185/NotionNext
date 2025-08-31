@@ -1,6 +1,8 @@
-// /components/AiChatAssistant.js - v31: (修复侧边栏Bug)
-// 1. 修复了新创建的对话无法立即修改或删除的问题。
-// 2. 优化：当前选中的对话会始终显示操作按钮，无需悬停。
+// /components/AiChatAssistant.js - v32: (优化设置界面)
+// 1. 设置项中的“自定义提示词管理”移至顶部，并改为可折叠，操作更方便。
+// 2. 在 API 密钥下方增加了关于如何申请密钥的可折叠说明。
+// 3. 修复了新创建的对话无法立即修改或删除的问题 (继承自v31)。
+// 4. 优化：当前选中的对话会始终显示操作按钮，无需悬停 (继承自v31)。
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import AiTtsButton from './AiTtsButton';
@@ -73,9 +75,6 @@ const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate }) => {
     );
 };
 
-// ===================================================================
-// START OF MODIFICATION - 仅此组件有修改
-// ===================================================================
 const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDelete, onRename }) => {
     const [editingId, setEditingId] = useState(null);
     const [newName, setNewName] = useState('');
@@ -95,11 +94,6 @@ const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDele
                                 <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} onBlur={() => handleSaveRename(conv.id)} onKeyDown={(e) => e.key === 'Enter' && handleSaveRename(conv.id)} className="w-full bg-transparent p-0 border-b" autoFocus />
                             ) : ( <span className="text-sm">{conv.title}</span> )}
                         </div>
-                        {/* 
-                          MODIFICATION: 修改了这里的 className
-                          旧: "hidden group-hover:flex items-center shrink-0"
-                          新: 增加了判断，如果 conv.id === currentId，则直接显示 (flex)，否则保持原来的悬停显示逻辑
-                        */}
                         <div className={`items-center shrink-0 ${currentId === conv.id ? 'flex' : 'hidden group-hover:flex'}`}>
                            <button onClick={(e) => { e.stopPropagation(); handleRename(conv.id, conv.title); }} className="p-1 hover:text-primary"><i className="fas fa-pen text-xs"></i></button>
                            <button onClick={(e) => { e.stopPropagation(); if(window.confirm('确定删除此对话吗？')) onDelete(conv.id); }} className="p-1 hover:text-red-500"><i className="fas fa-trash text-xs"></i></button>
@@ -110,13 +104,16 @@ const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDele
         </div>
     );
 };
-// ===================================================================
-// END OF MODIFICATION
-// ===================================================================
 
+
+// ===================================================================
+// START OF MODIFICATION - 仅此组件有修改
+// ===================================================================
 const SettingsModal = ({ settings, onSave, onClose }) => {
     const [tempSettings, setTempSettings] = useState(settings);
     const [systemVoices, setSystemVoices] = useState([]);
+    const [promptsCollapsed, setPromptsCollapsed] = useState(true);
+    const [apiKeyInfoCollapsed, setApiKeyInfoCollapsed] = useState(true);
 
     useEffect(() => {
         const fetchSystemVoices = () => {
@@ -174,9 +171,69 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg overflow-y-auto max-h-[90vh]" onClick={e => e.stopPropagation()}>
                 <h3 className="text-2xl font-bold mb-4">设置</h3>
                 <div className="space-y-4">
+                    {/* MODIFICATION: Moved Prompt Management to the top and made it collapsible */}
+                    <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md">
+                        <button onClick={() => setPromptsCollapsed(!promptsCollapsed)} className="w-full flex justify-between items-center text-left">
+                            <h4 className="text-md font-semibold">自定义提示词管理</h4>
+                            <i className={`fas fa-chevron-down transition-transform duration-200 ${!promptsCollapsed ? 'rotate-180' : ''}`}></i>
+                        </button>
+                        {!promptsCollapsed && (
+                             <div className="mt-4">
+                                <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
+                                    {tempSettings.prompts.map(p => (
+                                        <div key={p.id} className="p-3 bg-gray-100 dark:bg-gray-700 rounded-md">
+                                            <div className="flex items-center justify-between">
+                                                <label className="flex items-center flex-grow cursor-pointer"><input type="radio" name="currentPrompt" checked={tempSettings.currentPromptId === p.id} onChange={() => handleChange('currentPromptId', p.id)} className="mr-2 text-primary" /><input type="text" value={p.name} onChange={(e) => handlePromptSettingChange(p.id, 'name', e.target.value)} className="font-medium bg-transparent w-full" /></label>
+                                                <button onClick={() => handleDeletePrompt(p.id)} className="p-1 ml-2 text-sm text-red-500 rounded"><i className="fas fa-trash"></i></button>
+                                            </div>
+                                            <textarea value={p.content} onChange={(e) => handlePromptSettingChange(p.id, 'content', e.target.value)} className="w-full mt-2 h-20 p-2 bg-white dark:bg-gray-800 border rounded-md text-sm" />
+                                            <div className="mt-2 space-y-2 text-sm">
+                                                <div className="flex items-center gap-2">
+                                                    <label className="shrink-0">模型:</label>
+                                                    <select value={p.model || settings.selectedModel} onChange={(e) => handlePromptSettingChange(p.id, 'model', e.target.value)} className="w-full px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs">
+                                                        {(tempSettings.chatModels || []).map(m => <option key={m.value} value={m.value}>{m.name}</option>)}
+                                                    </select>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <label className="shrink-0">声音:</label>
+                                                    <select value={p.ttsVoice || settings.thirdPartyTtsVoice} onChange={(e) => handlePromptSettingChange(p.id, 'ttsVoice', e.target.value)} className="w-full px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs">
+                                                        {microsoftTtsVoices.map(v => <option key={v.value} value={v.value}>{v.name}</option>)}
+                                                    </select>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <label className="shrink-0">头像:</label>
+                                                    <input type="text" value={p.avatarUrl || ''} onChange={(e) => handlePromptSettingChange(p.id, 'avatarUrl', e.target.value)} placeholder="输入头像图片URL" className="w-full px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <button onClick={handleAddPrompt} className="w-full py-2 bg-green-500 text-white rounded-md hover:bg-green-600"><i className="fas fa-plus mr-2"></i>添加新提示词</button>
+                            </div>
+                        )}
+                    </div>
                      <div>
                         <label className="block text-sm font-medium mb-1">Google Gemini API 密钥</label>
                         <input type="password" value={tempSettings.apiKey} onChange={(e) => handleChange('apiKey', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border rounded-md" />
+                    </div>
+                    {/* MODIFICATION: Added collapsible API key instructions */}
+                     <div className="text-sm">
+                         <button onClick={() => setApiKeyInfoCollapsed(!apiKeyInfoCollapsed)} className="w-full flex justify-between items-center text-left text-gray-600 dark:text-gray-400">
+                            <span><i className="fas fa-info-circle mr-2"></i>使用说明：如何获取 API 密钥？</span>
+                            <i className={`fas fa-chevron-down transition-transform text-xs ${!apiKeyInfoCollapsed ? 'rotate-180' : ''}`}></i>
+                         </button>
+                         {!apiKeyInfoCollapsed && (
+                             <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-md prose prose-sm dark:prose-invert max-w-none prose-a:text-primary">
+                                 <ol className="list-decimal pl-5 space-y-1">
+                                    <li>访问 <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio 官方网站</a>。</li>
+                                    <li>使用您的 Google 账户登录。</li>
+                                    <li>点击页面上的 “Create API key” (创建 API 密钥) 按钮。</li>
+                                    <li>在弹出的窗口中，选择或创建一个新的 Google Cloud 项目。</li>
+                                    <li>复制生成的密钥，并将其粘贴到上方的输入框中。</li>
+                                 </ol>
+                                 <p className="mt-2 text-xs">请妥善保管您的 API 密钥，不要与他人分享或在公开代码中泄露。</p>
+                             </div>
+                         )}
                     </div>
                     <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md">
                         <h4 className="text-md font-semibold mb-3">模型管理</h4>
@@ -246,39 +303,7 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                         <label className="block text-sm font-medium">AI 回复后自动朗读</label>
                         <input type="checkbox" checked={tempSettings.autoRead} onChange={(e) => handleChange('autoRead', e.target.checked)} className="h-5 w-5 text-primary rounded" />
                     </div>
-                     <div className="mb-6">
-                        <h4 className="text-lg font-bold mb-3">自定义提示词管理</h4>
-                        <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
-                            {tempSettings.prompts.map(p => (
-                                <div key={p.id} className="p-3 bg-gray-100 dark:bg-gray-700 rounded-md">
-                                    <div className="flex items-center justify-between">
-                                        <label className="flex items-center flex-grow cursor-pointer"><input type="radio" name="currentPrompt" checked={tempSettings.currentPromptId === p.id} onChange={() => handleChange('currentPromptId', p.id)} className="mr-2 text-primary" /><input type="text" value={p.name} onChange={(e) => handlePromptSettingChange(p.id, 'name', e.target.value)} className="font-medium bg-transparent w-full" /></label>
-                                        <button onClick={() => handleDeletePrompt(p.id)} className="p-1 ml-2 text-sm text-red-500 rounded"><i className="fas fa-trash"></i></button>
-                                    </div>
-                                    <textarea value={p.content} onChange={(e) => handlePromptSettingChange(p.id, 'content', e.target.value)} className="w-full mt-2 h-20 p-2 bg-white dark:bg-gray-800 border rounded-md text-sm" />
-                                    <div className="mt-2 space-y-2 text-sm">
-                                        <div className="flex items-center gap-2">
-                                            <label className="shrink-0">模型:</label>
-                                            <select value={p.model || settings.selectedModel} onChange={(e) => handlePromptSettingChange(p.id, 'model', e.target.value)} className="w-full px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs">
-                                                {(tempSettings.chatModels || []).map(m => <option key={m.value} value={m.value}>{m.name}</option>)}
-                                            </select>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <label className="shrink-0">声音:</label>
-                                            <select value={p.ttsVoice || settings.thirdPartyTtsVoice} onChange={(e) => handlePromptSettingChange(p.id, 'ttsVoice', e.target.value)} className="w-full px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs">
-                                                {microsoftTtsVoices.map(v => <option key={v.value} value={v.value}>{v.name}</option>)}
-                                            </select>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <label className="shrink-0">头像:</label>
-                                            <input type="text" value={p.avatarUrl || ''} onChange={(e) => handlePromptSettingChange(p.id, 'avatarUrl', e.target.value)} placeholder="输入头像图片URL" className="w-full px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs" />
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        <button onClick={handleAddPrompt} className="w-full py-2 bg-green-500 text-white rounded-md hover:bg-green-600"><i className="fas fa-plus mr-2"></i>添加新提示词</button>
-                    </div>
+                    {/* MODIFICATION: Original position of Prompt Management is now removed from here. */}
                 </div>
                 <div className="flex justify-end gap-3 mt-6">
                     <button onClick={onClose} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">关闭</button>
@@ -288,6 +313,9 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
         </div>
     );
 };
+// ===================================================================
+// END OF MODIFICATION
+// ===================================================================
 
 const DEFAULT_PROMPTS = [ { id: 'default-grammar-correction', name: '纠正中文语法', content: '你是一位专业的、耐心的中文老师，请纠正我发送的中文句子中的语法和用词错误，并给出修改建议和说明。', model: 'gemini-2.5-flash', ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural', avatarUrl: '' }, { id: 'explain-word', name: '解释中文词语', content: '你是一位专业的中文老师，请用简单易懂的方式解释我发送的中文词语，并提供几个例子。', model: 'gemini-1.5-pro-latest', ttsVoice: 'zh-CN-YunxiNeural', avatarUrl: '' }, { id: 'translate-myanmar', content: '你是一位专业的翻译助手，请将我发送的内容在中文和缅甸语之间进行互译。', model: 'gemini-2.5-flash', ttsVoice: 'my-MM-NilarNeural', avatarUrl: '' } ];
 
@@ -326,7 +354,7 @@ const AiChatAssistant = () => {
     const [showSettings, setShowSettings] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
     const [isFullScreen, setIsFullScreen] = useState(false);
-    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false); // MODIFICATION: Default state is false
     const [showPromptSelector, setShowPromptSelector] = useState(false);
     const [showModelSelector, setShowModelSelector] = useState(false);
     const [showMoreMenu, setShowMoreMenu] = useState(false);
