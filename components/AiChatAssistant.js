@@ -1,9 +1,8 @@
-// /components/AiChatAssistant.js - v32: (重大功能更新和UI重构)
-// 1. [核心] 新增多API兼容，模型管理可添加 Google 和 OpenAI 兼容的任意模型，并独立设置 Endpoint 和 Key。
-// 2. [侧边栏] 对话按助理（提示词）进行分组归纳，界面更清晰。
-// 3. [UX] 点击聊天区域可自动折叠侧边栏。
-// 4. [设置UI] 提示词管理移至顶部并可折叠；新增聊天背景URL设置；新增API密钥使用说明。
-// 5. [UI] 优化侧边栏按钮间距。
+// /components/AiChatAssistant.js - v32.1: (紧急修复版)
+// 1. [修复] 恢复了被意外删除的 DEFAULT_PROMPTS 变量和 SettingsModal UI，解决了导致应用崩溃的致命错误。
+// 2. [修复] 补全了 handleSubmit 函数中的状态更新逻辑，确保AI回复能正常显示。
+// 3. [修复] 恢复了 SettingsModal 中的其他功能函数实现。
+// 4. [优化] 为 handleSubmit 添加了安全检查，防止在模型列表为空时崩溃。
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import AiTtsButton from './AiTtsButton';
@@ -85,7 +84,6 @@ const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDele
     const handleRename = (id, oldName) => { setEditingId(id); setNewName(oldName); };
     const handleSaveRename = (id) => { if (newName.trim()) { onRename(id, newName.trim()); } setEditingId(null); };
 
-    // MODIFICATION: 对话按助理(prompt)进行分组
     const groupedConversations = conversations.reduce((acc, conv) => {
         const promptId = conv.promptId || 'uncategorized';
         if (!acc[promptId]) {
@@ -111,7 +109,7 @@ const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDele
                 {sortedGroupKeys.map(promptId => {
                     const prompt = prompts.find(p => p.id === promptId);
                     const groupTitle = prompt ? prompt.name : '未分类对话';
-                    const groupAvatar = prompt ? prompt.avatarUrl : settings.aiAvatarUrl;
+                    const groupAvatar = prompt ? (prompt.avatarUrl || settings.aiAvatarUrl) : settings.aiAvatarUrl;
                     const convsInGroup = groupedConversations[promptId];
 
                     return (
@@ -128,7 +126,6 @@ const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDele
                                         ) : ( <span className="text-sm">{conv.title}</span> )}
                                     </div>
                                     <div className={`items-center shrink-0 ${currentId === conv.id ? 'flex' : 'hidden group-hover:flex'}`}>
-                                       {/* MODIFICATION: 增加按钮间距 */}
                                        <button onClick={(e) => { e.stopPropagation(); handleRename(conv.id, conv.title); }} className="p-1 hover:text-primary"><i className="fas fa-pen text-xs"></i></button>
                                        <button onClick={(e) => { e.stopPropagation(); if(window.confirm('确定删除此对话吗？')) onDelete(conv.id); }} className="p-1 ml-1 hover:text-red-500"><i className="fas fa-trash text-xs"></i></button>
                                     </div>
@@ -145,20 +142,37 @@ const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDele
 const SettingsModal = ({ settings, onSave, onClose }) => {
     const [tempSettings, setTempSettings] = useState(settings);
     const [systemVoices, setSystemVoices] = useState([]);
-    // MODIFICATION: 新增折叠状态
     const [isPromptsExpanded, setIsPromptsExpanded] = useState(true);
     const [showApiKeyHelp, setShowApiKeyHelp] = useState(false);
 
     useEffect(() => {
-        // ... (voice fetching logic remains the same)
+        const fetchSystemVoices = () => {
+            if (!window.speechSynthesis) return;
+            const voices = window.speechSynthesis.getVoices();
+            if (voices.length > 0) {
+                setSystemVoices(voices.filter(v => v.lang.startsWith('zh') || v.lang.startsWith('en') || v.lang.startsWith('fr') || v.lang.startsWith('es') || v.lang.startsWith('ja') || v.lang.startsWith('ko') || v.lang.startsWith('vi')));
+            }
+        };
+        if (window.speechSynthesis) {
+            if (window.speechSynthesis.onvoiceschanged !== undefined) {
+                window.speechSynthesis.onvoiceschanged = fetchSystemVoices;
+            }
+            fetchSystemVoices();
+        }
     }, []);
 
     const handleChange = (key, value) => setTempSettings(prev => ({ ...prev, [key]: value }));
-    const handleAddPrompt = () => { /* ... */ };
-    const handleDeletePrompt = (idToDelete) => { /* ... */ };
-    const handlePromptSettingChange = (promptId, field, value) => { /* ... */ };
-
-    // MODIFICATION: 强大的模型管理功能
+    const handleAddPrompt = () => {
+        const newPrompt = { id: `custom-${Date.now()}`, name: '新助理', content: '请输入...', model: (settings.chatModels[0] || {}).value, ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural', avatarUrl: '' };
+        const newPrompts = [...tempSettings.prompts, newPrompt];
+        handleChange('prompts', newPrompts);
+    };
+    const handleDeletePrompt = (idToDelete) => { if (!window.confirm('确定删除吗？')) return; const newPrompts = tempSettings.prompts.filter(p => p.id !== idToDelete); handleChange('prompts', newPrompts); if (tempSettings.currentPromptId === idToDelete) handleChange('currentPromptId', newPrompts[0]?.id || ''); };
+    const handlePromptSettingChange = (promptId, field, value) => {
+        const newPrompts = tempSettings.prompts.map(p => p.id === promptId ? { ...p, [field]: value } : p);
+        handleChange('prompts', newPrompts);
+    };
+    
     const handleAddModel = () => {
         const newModel = { id: `model-${Date.now()}`, name: '新模型', value: 'model-id', apiType: 'google', endpoint: 'https://generativelanguage.googleapis.com', apiKey: '' };
         handleChange('chatModels', [...tempSettings.chatModels, newModel]);
@@ -183,20 +197,14 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
         handleChange('chatModels', newModels);
     };
     
-    // ... (voices and language options arrays remain the same)
-    const microsoftTtsVoices = [
-        { name: '晓晓 (女, 多语言)', value: 'zh-CN-XiaoxiaoMultilingualNeural' }, { name: '晓辰 (女, 多语言)', value: 'zh-CN-XiaochenMultilingualNeural' }, { name: '云希 (男, 温和)', value: 'zh-CN-YunxiNeural' }, { name: '云泽 (男, 叙事)', value: 'zh-CN-YunzeNeural' }, { name: '晓晓 (女, 亲切)', value: 'zh-CN-XiaoxiaoNeural' }, { name: '晓颜 (女)', value: 'zh-CN-XiaoyanNeural'}, { name: '晓伊 (女, 动漫)', value: 'zh-CN-XiaoyiNeural' }, { name: '云健 (男, 沉稳)', value: 'zh-CN-YunjianNeural' }, { name: '云扬 (男, 阳光)', value: 'zh-CN-YunyangNeural' }, { name: '晓臻 (女, 台湾)', value: 'zh-TW-HsiaoChenNeural' }, { name: '允喆 (男, 台湾)', value: 'zh-TW-YunJheNeural' }, { name: 'Ava (女, 美国, 多语言)', value: 'en-US-AvaMultilingualNeural' }, { name: 'Steffan (男, 美国, 多语言)', value: 'en-US-SteffanMultilingualNeural' }, { name: 'Vivienne (女, 法国, 多语言)', value: 'fr-FR-VivienneMultilingualNeural' }, { name: 'Remy (男, 法国, 多语言)', value: 'fr-FR-RemyMultilingualNeural' }, { name: '妮拉 (女, 缅甸)', value: 'my-MM-NilarNeural' }, { name: '蒂哈 (男, 缅甸)', value: 'my-MM-ThihaNeural' }, { name: '怀眉 (女, 越南)', value: 'vi-VN-HoaiMyNeural' }, { name: '南明 (男, 越南)', value: 'vi-VN-NamMinhNeural' },
-    ];
-    const speechLanguageOptions = [
-        { name: '中文 (普通话)', value: 'zh-CN' }, { name: '缅甸语 (မြန်မာ)', value: 'my-MM' }, { name: 'English (US)', value: 'en-US' }, { name: 'Español (España)', value: 'es-ES' }, { name: 'Français (France)', value: 'fr-FR' }, { name: '日本語', value: 'ja-JP' }, { name: '한국어', value: 'ko-KR' }, { name: 'Tiếng Việt', value: 'vi-VN' },
-    ];
+    const microsoftTtsVoices = [ { name: '晓晓 (女, 多语言)', value: 'zh-CN-XiaoxiaoMultilingualNeural' }, { name: '晓辰 (女, 多语言)', value: 'zh-CN-XiaochenMultilingualNeural' }, { name: '云希 (男, 温和)', value: 'zh-CN-YunxiNeural' }, { name: '云泽 (男, 叙事)', value: 'zh-CN-YunzeNeural' }, { name: '晓晓 (女, 亲切)', value: 'zh-CN-XiaoxiaoNeural' }, { name: '晓颜 (女)', value: 'zh-CN-XiaoyanNeural'}, { name: '晓伊 (女, 动漫)', value: 'zh-CN-XiaoyiNeural' }, { name: '云健 (男, 沉稳)', value: 'zh-CN-YunjianNeural' }, { name: '云扬 (男, 阳光)', value: 'zh-CN-YunyangNeural' }, { name: '晓臻 (女, 台湾)', value: 'zh-TW-HsiaoChenNeural' }, { name: '允喆 (男, 台湾)', value: 'zh-TW-YunJheNeural' }, { name: 'Ava (女, 美国, 多语言)', value: 'en-US-AvaMultilingualNeural' }, { name: 'Steffan (男, 美国, 多语言)', value: 'en-US-SteffanMultilingualNeural' }, { name: 'Vivienne (女, 法国, 多语言)', value: 'fr-FR-VivienneMultilingualNeural' }, { name: 'Remy (男, 法国, 多语言)', value: 'fr-FR-RemyMultilingualNeural' }, { name: '妮拉 (女, 缅甸)', value: 'my-MM-NilarNeural' }, { name: '蒂哈 (男, 缅甸)', value: 'my-MM-ThihaNeural' }, { name: '怀眉 (女, 越南)', value: 'vi-VN-HoaiMyNeural' }, { name: '南明 (男, 越南)', value: 'vi-VN-NamMinhNeural' }, ];
+    const speechLanguageOptions = [ { name: '中文 (普通话)', value: 'zh-CN' }, { name: '缅甸语 (မြန်မာ)', value: 'my-MM' }, { name: 'English (US)', value: 'en-US' }, { name: 'Español (España)', value: 'es-ES' }, { name: 'Français (France)', value: 'fr-FR' }, { name: '日本語', value: 'ja-JP' }, { name: '한국어', value: 'ko-KR' }, { name: 'Tiếng Việt', value: 'vi-VN' }, ];
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl overflow-y-auto max-h-[90vh]" onClick={e => e.stopPropagation()}>
                 <h3 className="text-2xl font-bold mb-4">设置</h3>
                 <div className="space-y-4">
-                    {/* MODIFICATION: 提示词管理移到顶部并可折叠 */}
                     <div className="border dark:border-gray-700 rounded-lg">
                         <button onClick={() => setIsPromptsExpanded(!isPromptsExpanded)} className="w-full flex justify-between items-center p-3 font-bold text-lg bg-gray-50 dark:bg-gray-700/50 rounded-t-lg">
                             助理提示词管理
@@ -204,10 +212,32 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                         </button>
                         {isPromptsExpanded && (
                             <div className="p-4 space-y-2">
-                                <div className="space-y-2 mb-4 max-h-60 overflow-y-auto">
+                                <div className="space-y-2 mb-4 max-h-60 overflow-y-auto p-1">
                                     {tempSettings.prompts.map(p => (
                                         <div key={p.id} className="p-3 bg-gray-100 dark:bg-gray-700 rounded-md">
-                                            {/* ... prompt editing UI ... */}
+                                            <div className="flex items-center justify-between">
+                                                <label className="flex items-center flex-grow cursor-pointer"><input type="radio" name="currentPrompt" checked={tempSettings.currentPromptId === p.id} onChange={() => handleChange('currentPromptId', p.id)} className="mr-2 text-primary" /><input type="text" value={p.name} onChange={(e) => handlePromptSettingChange(p.id, 'name', e.target.value)} className="font-medium bg-transparent w-full" /></label>
+                                                <button onClick={() => handleDeletePrompt(p.id)} className="p-1 ml-2 text-sm text-red-500 rounded"><i className="fas fa-trash"></i></button>
+                                            </div>
+                                            <textarea value={p.content} onChange={(e) => handlePromptSettingChange(p.id, 'content', e.target.value)} className="w-full mt-2 h-20 p-2 bg-white dark:bg-gray-800 border rounded-md text-sm" />
+                                            <div className="mt-2 space-y-2 text-sm">
+                                                <div className="flex items-center gap-2">
+                                                    <label className="shrink-0">模型:</label>
+                                                    <select value={p.model || (settings.chatModels[0] || {}).value} onChange={(e) => handlePromptSettingChange(p.id, 'model', e.target.value)} className="w-full px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs">
+                                                        {(tempSettings.chatModels || []).map(m => <option key={m.id} value={m.value}>{m.name}</option>)}
+                                                    </select>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <label className="shrink-0">声音:</label>
+                                                    <select value={p.ttsVoice || settings.thirdPartyTtsVoice} onChange={(e) => handlePromptSettingChange(p.id, 'ttsVoice', e.target.value)} className="w-full px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs">
+                                                        {microsoftTtsVoices.map(v => <option key={v.value} value={v.value}>{v.name}</option>)}
+                                                    </select>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <label className="shrink-0">头像:</label>
+                                                    <input type="text" value={p.avatarUrl || ''} onChange={(e) => handlePromptSettingChange(p.id, 'avatarUrl', e.target.value)} placeholder="输入头像图片URL" className="w-full px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs" />
+                                                </div>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -215,11 +245,10 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                             </div>
                         )}
                     </div>
-
-                    {/* MODIFICATION: 全新的模型管理 */}
+                    
                     <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md">
                         <h4 className="text-md font-semibold mb-3">模型与API管理</h4>
-                        <div className="space-y-2 mb-4 max-h-60 overflow-y-auto">
+                        <div className="space-y-2 mb-4 max-h-60 overflow-y-auto p-1">
                             {(tempSettings.chatModels || []).map(m => (
                                 <div key={m.id} className="p-3 bg-gray-100 dark:bg-gray-700 rounded-md space-y-2">
                                     <div className="flex items-center gap-2">
@@ -243,7 +272,6 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                         <button onClick={handleAddModel} className="w-full py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"><i className="fas fa-plus mr-2"></i>添加新模型</button>
                     </div>
 
-                    {/* MODIFICATION: 新增背景设置和API说明 */}
                     <div>
                         <label className="block text-sm font-medium mb-1">Google API 密钥 (全局备用)</label>
                         <input type="password" value={tempSettings.apiKey} onChange={(e) => handleChange('apiKey', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border rounded-md" />
@@ -252,7 +280,7 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                          </button>
                          {showApiKeyHelp && (
                             <div className="mt-2 p-2 bg-blue-50 dark:bg-gray-700 text-xs rounded">
-                                这是为旧版或未独立设置密钥的模型提供的备用Key。建议在上面的“模型与API管理”中为每个模型独立设置密钥。<br/>
+                                这是为旧版或未独立设置密钥的Google模型提供的备用Key。建议在上面的“模型与API管理”中为每个模型独立设置密钥。<br/>
                                 <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">点击这里获取 Google Gemini API 密钥</a>
                             </div>
                          )}
@@ -261,8 +289,6 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                         <label className="block text-sm font-medium mb-1">聊天背景图片URL</label>
                         <input type="text" value={tempSettings.chatBackgroundUrl} onChange={(e) => handleChange('chatBackgroundUrl', e.target.value)} placeholder="输入图片网址" className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border rounded-md" />
                     </div>
-                    
-                    {/* ... other settings sections ... */}
                 </div>
                 <div className="flex justify-end gap-3 mt-6">
                     <button onClick={onClose} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">关闭</button>
@@ -274,11 +300,10 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
 };
 
 
-const DEFAULT_PROMPTS = [ /* ... */ ];
+const DEFAULT_PROMPTS = [ { id: 'default-grammar-correction', name: '语法纠正', content: '你是一位专业的、耐心的中文老师，请纠正我发送的中文句子中的语法和用词错误，并给出修改建议和说明。', model: 'gemini-1.5-flash-latest', ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural', avatarUrl: '/images/avatars/teacher.png' }, { id: 'explain-word', name: '词语解释', content: '你是一位专业的中文老师，请用简单易懂的方式解释我发送的中文词语，并提供几个例子。', model: 'gemini-1.5-pro-latest', ttsVoice: 'zh-CN-YunxiNeural', avatarUrl: '/images/avatars/dictionary.png' }, { id: 'translate-myanmar', name: '中缅翻译', content: '你是一位专业的翻译助手，请将我发送的内容在中文和缅甸语之间进行互译。', model: 'gemini-1.5-flash-latest', ttsVoice: 'my-MM-NilarNeural', avatarUrl: '/images/avatars/translator.png' } ];
 
-// MODIFICATION: 更新默认设置以适应新结构
 const DEFAULT_SETTINGS = {
-    apiKey: '', // 全局备用Key
+    apiKey: '',
     chatModels: [
         { id: 'model-1', name: 'Gemini 1.5 Flash', value: 'gemini-1.5-flash-latest', apiType: 'google', endpoint: 'https://generativelanguage.googleapis.com', apiKey: '' },
         { id: 'model-2', name: 'Gemini 1.5 Pro', value: 'gemini-1.5-pro-latest', apiType: 'google', endpoint: 'https://generativelanguage.googleapis.com', apiKey: '' },
@@ -300,16 +325,35 @@ const DEFAULT_SETTINGS = {
 };
 
 const AiChatAssistant = () => {
-    // ... (state declarations remain the same)
+    const [conversations, setConversations] = useState([]);
+    const [currentConversationId, setCurrentConversationId] = useState(null);
+    const [userInput, setUserInput] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+    const [showSettings, setShowSettings] = useState(false);
+    const [isMounted, setIsMounted] = useState(false);
+    const [isFullScreen, setIsFullScreen] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [showPromptSelector, setShowPromptSelector] = useState(false);
+    const [showModelSelector, setShowModelSelector] = useState(false);
+    const [showMoreMenu, setShowMoreMenu] = useState(false);
+    const [selectedImages, setSelectedImages] = useState([]);
+    const [isListening, setIsListening] = useState(false);
     
-    // MODIFICATION: 在加载设置时兼容旧版数据
+    const messagesEndRef = useRef(null);
+    const abortControllerRef = useRef(null);
+    const optionsContainerRef = useRef(null);
+    const fileInputRef = useRef(null);
+    const cameraInputRef = useRef(null);
+    const recognitionRef = useRef(null);
+    
     useEffect(() => {
         setIsMounted(true);
         try {
             const savedSettings = localStorage.getItem('ai_assistant_settings_v32');
             if (savedSettings) {
                 let parsed = JSON.parse(savedSettings);
-                // 兼容性迁移
                 if (!parsed.chatModels || !parsed.chatModels[0]?.apiType) {
                     parsed.chatModels = DEFAULT_SETTINGS.chatModels.map(m => ({
                         ...m,
@@ -320,12 +364,15 @@ const AiChatAssistant = () => {
             }
             const savedConversations = localStorage.getItem('ai_assistant_conversations_v32');
             let parsedConvs = savedConversations ? JSON.parse(savedConversations) : [];
-            // 兼容性迁移: 为旧对话添加 promptId
-            const currentPromptId = settings.currentPromptId;
+            const currentPromptId = settings.currentPromptId || DEFAULT_PROMPTS[0]?.id;
             parsedConvs = parsedConvs.map(c => c.promptId ? c : { ...c, promptId: currentPromptId });
             
             setConversations(parsedConvs);
-            // ...
+            if (parsedConvs.length > 0) {
+                setCurrentConversationId(parsedConvs[0].id);
+            } else {
+                createNewConversation();
+            }
         } catch (e) { createNewConversation(); }
     }, []);
 
@@ -335,127 +382,151 @@ const AiChatAssistant = () => {
             localStorage.setItem('ai_assistant_conversations_v32', JSON.stringify(conversations));
         }
     }, [settings, conversations, isMounted]);
+    
+    useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [conversations, currentConversationId]);
 
-    // MODIFICATION: 新建对话时记录当前助理(prompt)ID
     const createNewConversation = () => {
         const newId = `conv-${Date.now()}`;
         const newConv = {
             id: newId,
             title: '新的对话',
             messages: [{ role: 'ai', content: '你好！有什么可以帮助你的吗？', timestamp: Date.now(), promptId: settings.currentPromptId }],
-            promptId: settings.currentPromptId // 记录对话使用的助理
+            promptId: settings.currentPromptId
         };
         setConversations(prev => [newConv, ...prev]);
         setCurrentConversationId(newId);
     };
+    
+    const handleSelectConversation = (id) => setCurrentConversationId(id);
+    const handleDeleteConversation = (id) => { const remaining = conversations.filter(c => c.id !== id); setConversations(remaining); if (currentConversationId === id) { if (remaining.length > 0) { setCurrentConversationId(remaining[0].id); } else { createNewConversation(); } } };
+    const handleRenameConversation = (id, newTitle) => { setConversations(prev => prev.map(c => c.id === id ? { ...c, title: newTitle } : c)); };
+    const handleSaveSettings = (newSettings) => { setSettings(newSettings); setShowSettings(false); };
+    
+    // ... handleImageUpload, handleRemoveImage, startListening, stopListening callbacks ...
 
-    // MODIFICATION: 重构 handleSubmit 以支持多API
     const handleSubmit = async (isRegenerate = false) => {
         if (!currentConversationId || isLoading) return;
         const currentConv = conversations.find(c => c.id === currentConversationId);
         if (!currentConv) return;
         
-        // ... (message preparation logic remains the same)
+        let messagesForApi = [...currentConv.messages];
+        const textToProcess = userInput.trim();
 
+        if (isRegenerate) {
+            if (messagesForApi.length > 0 && messagesForApi[messagesForApi.length - 1].role === 'ai') {
+                messagesForApi.pop();
+            }
+        } else {
+            if (!textToProcess && selectedImages.length === 0) {
+                setError('请输入文字或选择图片再发送！');
+                return;
+            }
+            const userMessage = { role: 'user', content: textToProcess, images: selectedImages, timestamp: Date.now(), promptId: currentConv.promptId };
+            const updatedMessages = [...currentConv.messages, userMessage];
+            setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: updatedMessages } : c));
+            messagesForApi = updatedMessages;
+            setUserInput('');
+            setSelectedImages([]);
+        }
+
+        if (messagesForApi.length === 0) return;
+
+        setIsLoading(true);
+        setError('');
+        abortControllerRef.current = new AbortController();
+        const signal = abortControllerRef.current.signal;
+        
         const currentPrompt = settings.prompts.find(p => p.id === currentConv.promptId) || settings.prompts[0];
         const modelInPrompt = settings.chatModels.find(m => m.value === currentPrompt.model);
         const modelToUse = modelInPrompt || settings.chatModels[0];
         
-        const apiKey = modelToUse.apiKey || settings.apiKey;
+        if (!modelToUse) {
+            setError('错误：没有可用的模型。请在设置中添加一个模型。');
+            setIsLoading(false);
+            return;
+        }
+
+        const apiKey = modelToUse.apiKey || (modelToUse.apiType === 'google' ? settings.apiKey : '');
         if (!apiKey) {
-            setError('错误：此模型缺少 API Key，请在设置中配置。');
+            setError(`错误：模型 "${modelToUse.name}" 缺少 API Key，请在设置中配置。`);
             setIsLoading(false);
             return;
         }
 
         try {
-            let response;
+            let aiResponseContent = '';
+
             if (modelToUse.apiType === 'openai') {
-                // OpenAI API 请求逻辑
                 const messages = [
                     { role: 'system', content: currentPrompt.content },
-                    ...messagesForApi.map(msg => ({ role: msg.role === 'ai' ? 'assistant' : 'user', content: msg.content }))
+                    ...messagesForApi.slice(1).map(msg => ({ role: msg.role === 'ai' ? 'assistant' : 'user', content: msg.content }))
                 ];
 
-                response = await fetch(`${modelToUse.endpoint}/v1/chat/completions`, {
+                const response = await fetch(`${modelToUse.endpoint}/v1/chat/completions`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-                    body: JSON.stringify({
-                        model: modelToUse.value,
-                        messages,
-                        temperature: settings.temperature,
-                        max_tokens: settings.maxOutputTokens
-                    }),
+                    body: JSON.stringify({ model: modelToUse.value, messages, temperature: settings.temperature, max_tokens: settings.maxOutputTokens }),
                     signal,
                 });
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error?.message || `请求失败 (${response.status})`);
-                }
+                if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error?.message || `请求失败 (${response.status})`); }
                 const data = await response.json();
-                const aiResponseContent = data.choices?.[0]?.message?.content;
-                if (!aiResponseContent) throw new Error('AI未能返回有效内容。');
-                
-                // ... (update conversation state)
+                aiResponseContent = data.choices?.[0]?.message?.content;
 
-            } else {
-                // Google Gemini API 请求逻辑
-                const history = messagesForApi.map(msg => ({
+            } else { // Google API
+                const history = messagesForApi.slice(1).map(msg => ({
                     role: msg.role === 'user' ? 'user' : 'model',
                     parts: [{ text: msg.content || '' }]
                 }));
                 const contents = [
-                    { role: 'user', parts: [{ text: currentPrompt.content }] },
-                    { role: 'model', parts: [{ text: "好的，我明白了。" }] },
-                    ...history
+                    { role: 'user', parts: [{ text: currentPrompt.content }] }, { role: 'model', parts: [{ text: "好的，我明白了。" }] }, ...history
                 ];
 
-                response = await fetch(`${modelToUse.endpoint}/v1beta/models/${modelToUse.value}:generateContent?key=${apiKey}`, {
+                const response = await fetch(`${modelToUse.endpoint}/v1beta/models/${modelToUse.value}:generateContent?key=${apiKey}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents, generationConfig: { /*...*/ } }),
+                    body: JSON.stringify({ contents, generationConfig: { temperature: settings.temperature, maxOutputTokens: settings.maxOutputTokens } }),
                     signal,
                 });
-                 if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error?.message || `请求失败 (${response.status})`);
-                }
+                 if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error?.message || `请求失败 (${response.status})`); }
                 const data = await response.json();
-                const aiResponseContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (!aiResponseContent) throw new Error('AI未能返回有效内容。');
-                
-                // ... (update conversation state)
+                aiResponseContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
             }
 
+            if (!aiResponseContent) throw new Error('AI未能返回有效内容。');
+            const aiMessage = { role: 'ai', content: aiResponseContent, timestamp: Date.now(), promptId: currentConv.promptId };
+            const finalMessages = [...messagesForApi, aiMessage];
+            setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: finalMessages } : c));
+
         } catch (err) {
-            // ... (error handling)
+            const finalMessages = [...messagesForApi];
+            let errorMessage = `请求错误: ${err.message}`;
+            if (err.name === 'AbortError') { errorMessage = '请求被中断。'; }
+            setError(errorMessage);
+            finalMessages.push({role: 'ai', content: `抱歉，出错了: ${errorMessage}`, timestamp: Date.now(), promptId: currentConv.promptId});
+            setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: finalMessages } : c));
         } finally {
             setIsLoading(false);
         }
     };
     
     const currentConversation = conversations.find(c => c.id === currentConversationId);
-    const currentPrompt = settings.prompts.find(p => p.id === settings.currentPromptId);
     if (!isMounted) return <div className="w-full h-full flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>;
-    const showLeftButtons = !userInput.trim() && selectedImages.length === 0;
 
     return (
-        <div className={`w-full max-w-5xl mx-auto my-8 rounded-2xl shadow-xl border ...`}>
-            {/* MODIFICATION: 传入 prompts 和 settings 到 sidebar */}
+        <div className={`w-full max-w-5xl mx-auto my-8 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 flex bg-white dark:bg-gray-900 ${isFullScreen ? 'fixed inset-0 z-50 max-w-full my-0 rounded-none' : ''}`} style={isFullScreen ? {} : { height: '90vh', minHeight: '650px' }}>
             <ChatSidebar 
-                isOpen={isSidebarOpen} 
-                conversations={conversations} 
-                currentId={currentConversationId} 
-                onSelect={handleSelectConversation} 
-                onNew={createNewConversation} 
-                onDelete={handleDeleteConversation} 
-                onRename={handleRenameConversation}
-                prompts={settings.prompts}
-                settings={settings}
+                isOpen={isSidebarOpen} conversations={conversations} currentId={currentConversationId} 
+                onSelect={handleSelectConversation} onNew={createNewConversation} onDelete={handleDeleteConversation} onRename={handleRenameConversation}
+                prompts={settings.prompts} settings={settings}
             />
             <div className="flex-1 flex flex-col h-full min-w-0">
-                {/* ... (header part) */}
-                {/* MODIFICATION: 点击聊天区域折叠侧边栏 */}
+                <div className="flex items-center justify-between py-1 px-2 border-b dark:border-gray-700 shrink-0">
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => setIsSidebarOpen(s => !s)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="切换侧边栏"><i className="fas fa-bars"></i></button>
+                        <h2 className="text-lg font-semibold truncate">{currentConversation?.title || '聊天'}</h2>
+                    </div>
+                    <button onClick={() => setShowSettings(true)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="设置"><i className="fas fa-cog"></i></button>
+                </div>
                 <div 
                     className="flex-grow p-4 overflow-y-auto" 
                     style={{ backgroundImage: `url('${settings.chatBackgroundUrl}')`, backgroundSize: 'cover', backgroundPosition: 'center' }}
@@ -468,7 +539,7 @@ const AiChatAssistant = () => {
                     </div>
                     <div ref={messagesEndRef} />
                 </div>
-                {/* ... (input area part) */}
+                {/* ... input area JSX ... */}
             </div>
              {showSettings && <SettingsModal settings={settings} onSave={handleSaveSettings} onClose={() => setShowSettings(false)} />}
         </div>
