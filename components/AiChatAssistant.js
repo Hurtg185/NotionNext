@@ -1,106 +1,10 @@
-// /components/AiChatAssistant.js - v32.1 (在 v26 基础上进行精确修改的最终完整版)
+// /components/AiChatAssistant.js - v36 (导入 AiTtsButton，优化语音识别)
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import AiTtsButton from './AiTtsButton'; // <-- 关键修改：从独立文件导入
 
-// --- 关键修改 1：新增 Gemini TTS 引擎类型 ---
-export const TTS_ENGINE = {
-    GEMINI_TTS: 'gemini_tts',
+export const TTS_ENGINE = { // TTS_ENGINE 仍然在这里定义并导出
     SYSTEM: 'system',
     THIRD_PARTY: 'third_party'
-};
-
-// --- 关键修改 2：重新定义 AiTtsButton，使其支持三种引擎 ---
-const AiTtsButton = ({ text, ttsSettings = {} }) => {
-    const [isLoading, setIsLoading] = useState(false);
-    const audioRef = useRef(null);
-    const utteranceRef = useRef(null);
-
-    useEffect(() => {
-        return () => {
-            if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-            if (window.speechSynthesis) { window.speechSynthesis.cancel(); }
-        };
-    }, []);
-
-    const synthesizeSpeech = useCallback(async (textToSpeak) => {
-        const cleanedText = textToSpeak.replace(/\*\*/g, '');
-        if (!cleanedText) return;
-
-        setIsLoading(true);
-        if (audioRef.current) audioRef.current.pause();
-        if (window.speechSynthesis) window.speechSynthesis.cancel();
-
-        try {
-            switch (ttsSettings.ttsEngine) {
-                case TTS_ENGINE.GEMINI_TTS:
-                    if (!ttsSettings.apiKey) throw new Error("API Key 为空！");
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${ttsSettings.geminiTtsModel}:generateContent?key=${ttsSettings.apiKey}`;
-                    const body = {
-                        contents: [{ parts: [{ text: cleanedText }] }],
-                        generationConfig: {
-                            ttsVoice: ttsSettings.geminiTtsVoice,
-                            responseMimeType: 'audio/mpeg'
-                        }
-                    };
-                    const response = await fetch(url, {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-                    });
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error?.message || `Gemini TTS API 错误`);
-                    }
-                    const data = await response.json();
-                    const audioContent = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-                    if (!audioContent) throw new Error('Gemini TTS 未能返回音频内容。');
-                    const audio = new Audio("data:audio/mp3;base64," + audioContent);
-                    audioRef.current = audio;
-                    audio.onended = () => setIsLoading(false);
-                    audio.onerror = () => { console.error('音频播放错误'); setIsLoading(false); };
-                    await audio.play();
-                    break;
-                case TTS_ENGINE.SYSTEM:
-                    if ('speechSynthesis' in window) {
-                        const utterance = new SpeechSynthesisUtterance(cleanedText);
-                        if (ttsSettings.systemTtsVoiceURI) {
-                            const selectedVoice = window.speechSynthesis.getVoices().find(v => v.voiceURI === ttsSettings.systemTtsVoiceURI);
-                            if (selectedVoice) utterance.voice = selectedVoice;
-                        }
-                        utterance.onend = () => setIsLoading(false);
-                        utterance.onerror = (e) => { console.error('系统TTS错误:', e); setIsLoading(false); };
-                        utteranceRef.current = utterance;
-                        window.speechSynthesis.speak(utterance);
-                    } else { throw new Error("浏览器不支持系统TTS。"); }
-                    break;
-                case TTS_ENGINE.THIRD_PARTY:
-                default:
-                    // 这是一个示例URL，请根据您的实际情况修改
-                    const thirdPartyUrl = `https://t.leftsite.cn/tts?t=${encodeURIComponent(cleanedText)}&v=${ttsSettings.thirdPartyTtsVoice}`;
-                    const thirdPartyResponse = await fetch(thirdPartyUrl);
-                    if (!thirdPartyResponse.ok) throw new Error(`第三方API错误`);
-                    const audioBlob = await thirdPartyResponse.blob();
-                    const audioUrl = URL.createObjectURL(audioBlob);
-                    const thirdPartyAudio = new Audio(audioUrl);
-                    audioRef.current = thirdPartyAudio;
-                    thirdPartyAudio.onended = () => { setIsLoading(false); URL.revokeObjectURL(audioUrl); };
-                    thirdPartyAudio.onerror = () => { console.error('第三方音频播放错误'); setIsLoading(false); };
-                    await thirdPartyAudio.play();
-                    break;
-            }
-        } catch (err) {
-            console.error('朗读失败:', err);
-            setIsLoading(false);
-        }
-    }, [ttsSettings]);
-
-    return (
-        <button
-            onClick={(e) => { e.stopPropagation(); synthesizeSpeech(text); }}
-            disabled={isLoading}
-            className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10"
-            title="朗读"
-        >
-            <i className={`fas fa-volume-up ${isLoading ? 'animate-pulse text-primary' : ''}`}></i>
-        </button>
-    );
 };
 
 const SimpleMarkdown = ({ text }) => {
@@ -150,7 +54,8 @@ const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate }) => {
                 </div>
                 {!isUser && msg.content && (
                     <div className="flex items-center gap-2 mt-2 -mb-1 text-gray-500 dark:text-gray-400">
-                        <AiTtsButton text={msg.content} ttsSettings={settings} />
+                        {/* 关键修改：向 AiTtsButton 传递 TTS_ENGINE */}
+                        <AiTtsButton text={msg.content} ttsSettings={settings} TTS_ENGINE={TTS_ENGINE} />
                         <button onClick={() => navigator.clipboard.writeText(msg.content)} className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10" title="复制"><i className="fas fa-copy"></i></button>
                         {isLastAiMessage && (
                            <button onClick={onRegenerate} className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10" title="重新生成"><i className="fas fa-sync-alt"></i></button>
@@ -197,8 +102,8 @@ const CHAT_MODELS = [
     { name: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash' }, { name: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro' }, { name: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash' }, { name: 'Gemini 1.5 Flash (最新)', value: 'gemini-1.5-flash-latest' }, { name: 'Gemini 1.5 Pro (最新)', value: 'gemini-1.5-pro-latest' },
 ];
 
-const AVAILABLE_TTS_VOICES = [
-    { id: 'Kore', name: 'Kore (Firm)' }, { id: 'Zephyr', name: 'Zephyr (Bright)' }, { id: 'Puck', name: 'Puck (Upbeat)' }, { id: 'Charon', name: 'Charon (Informative)' }, { id: 'Fenrir', name: 'Fenrir (Excitable)' }, { id: 'Leda', name: 'Leda (Youthful)' }, { id: 'Orus', name: 'Orus (Firm)' }
+const MICROSOFT_TTS_VOICES = [
+    { name: '晓晓 (女, 多语言)', value: 'zh-CN-XiaoxiaoMultilingualNeural' }, { name: '晓辰 (女, 多语言)', value: 'zh-CN-XiaochenMultilingualNeural' }, { name: '云希 (男, 温和)', value: 'zh-CN-YunxiNeural' }, { name: '云泽 (男, 叙事)', value: 'zh-CN-YunzeNeural' }, { name: '晓晓 (女, 亲切)', value: 'zh-CN-XiaoxiaoNeural' }, { name: '晓颜 (女)', value: 'zh-CN-XiaoyanNeural'}, { name: '晓伊 (女, 动漫)', value: 'zh-CN-XiaoyiNeural' }, { name: '云健 (男, 沉稳)', value: 'zh-CN-YunjianNeural' }, { name: '云扬 (男, 阳光)', value: 'zh-CN-YunyangNeural' }, { name: '晓臻 (女, 台湾)', value: 'zh-TW-HsiaoChenNeural' }, { name: '允喆 (男, 台湾)', value: 'zh-TW-YunJheNeural' }, { name: 'Ava (女, 美国, 多语言)', value: 'en-US-AvaMultilingualNeural' }, { name: 'Steffan (男, 美国, 多语言)', value: 'en-US-SteffanMultilingualNeural' }, { name: 'Vivienne (女, 法国, 多语言)', value: 'fr-FR-VivienneMultilingualNeural' }, { name: 'Remy (男, 法国, 多语言)', value: 'fr-FR-RemyMultilingualNeural' }, { name: '妮拉 (女, 缅甸)', value: 'my-MM-NilarNeural' }, { name: '蒂哈 (男, 缅甸)', value: 'my-MM-ThihaNeural' }, { name: '怀眉 (女, 越南)', value: 'vi-VN-HoaiMyNeural' }, { name: '南明 (男, 越南)', value: 'vi-VN-NamMinhNeural' },
 ];
 
 const SettingsModal = ({ settings, onSave, onClose }) => {
@@ -220,20 +125,17 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
 
     const handleChange = (key, value) => setTempSettings(prev => ({ ...prev, [key]: value }));
     const handleAddPrompt = () => {
-        const newPrompt = { id: `custom-${Date.now()}`, name: '新提示词', content: '请输入...', model: settings.selectedModel, ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural' };
+        const newPrompt = { id: `custom-${Date.now()}`, name: '新提示词', content: '请输入...', model: settings.selectedModel, ttsVoice: tempSettings.thirdPartyTtsVoice };
         const newPrompts = [...tempSettings.prompts, newPrompt];
         handleChange('prompts', newPrompts);
     };
-    const handleDeletePrompt = (idToDelete) => { if (!window.confirm('确定删除吗？')) return; const newPrompts = tempSettings.prompts.filter(p => p.id !== idToDelete); handleChange('prompts', newPrompts); if (tempSettings.currentPromptId === idToDelete) handleChange('currentPromptId', newPrompts[0]?.id || ''); };
+    const handleDeletePrompt = (idToDelete) => { if (!window.confirm('确定删除此对话吗？')) return; const newPrompts = tempSettings.prompts.filter(p => p.id !== idToDelete); handleChange('prompts', newPrompts); if (tempSettings.currentPromptId === idToDelete) handleChange('currentPromptId', newPrompts?.id || ''); };
     
     const handlePromptSettingChange = (promptId, field, value) => {
         const newPrompts = tempSettings.prompts.map(p => p.id === promptId ? { ...p, [field]: value } : p);
         handleChange('prompts', newPrompts);
     };
 
-    const microsoftTtsVoices = [
-        { name: '晓晓 (女, 多语言)', value: 'zh-CN-XiaoxiaoMultilingualNeural' }, { name: '晓辰 (女, 多语言)', value: 'zh-CN-XiaochenMultilingualNeural' }, { name: '云希 (男, 温和)', value: 'zh-CN-YunxiNeural' }, { name: '云泽 (男, 叙事)', value: 'zh-CN-YunzeNeural' }, { name: '晓晓 (女, 亲切)', value: 'zh-CN-XiaoxiaoNeural' }, { name: '晓颜 (女)', value: 'zh-CN-XiaoyanNeural'}, { name: '晓伊 (女, 动漫)', value: 'zh-CN-XiaoyiNeural' }, { name: '云健 (男, 沉稳)', value: 'zh-CN-YunjianNeural' }, { name: '云扬 (男, 阳光)', value: 'zh-CN-YunyangNeural' }, { name: '晓臻 (女, 台湾)', value: 'zh-TW-HsiaoChenNeural' }, { name: '允喆 (男, 台湾)', value: 'zh-TW-YunJheNeural' }, { name: 'Ava (女, 美国, 多语言)', value: 'en-US-AvaMultilingualNeural' }, { name: 'Steffan (男, 美国, 多语言)', value: 'en-US-SteffanMultilingualNeural' }, { name: 'Vivienne (女, 法国, 多语言)', value: 'fr-FR-VivienneMultilingualNeural' }, { name: 'Remy (男, 法国, 多语言)', value: 'fr-FR-RemyMultilingualNeural' }, { name: '妮拉 (女, 缅甸)', value: 'my-MM-NilarNeural' }, { name: '蒂哈 (男, 缅甸)', value: 'my-MM-ThihaNeural' }, { name: '怀眉 (女, 越南)', value: 'vi-VN-HoaiMyNeural' }, { name: '南明 (男, 越南)', value: 'vi-VN-NamMinhNeural' },
-    ];
     const speechLanguageOptions = [
         { name: '中文 (普通话)', value: 'zh-CN' }, { name: '缅甸语 (မြန်မာ)', value: 'my-MM' }, { name: 'English (US)', value: 'en-US' }, { name: 'Español (España)', value: 'es-ES' }, { name: 'Français (France)', value: 'fr-FR' }, { name: '日本語', value: 'ja-JP' }, { name: '한국어', value: 'ko-KR' }, { name: 'Tiếng Việt', value: 'vi-VN' },
     ];
@@ -258,31 +160,16 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                              <input type="range" min="10" max="120" step="5" value={tempSettings.apiTimeout / 1000} onChange={(e) => handleChange('apiTimeout', parseInt(e.target.value, 10) * 1000)} className="w-full"/>
                          </div>
                      </div>
-                    {/* --- 关键修改 3：更新朗读设置UI --- */}
+                    {/* --- 关键修改 4：朗读设置UI (移除Gemini TTS相关部分) --- */}
                     <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md space-y-4">
                         <h4 className="text-md font-semibold">朗读设置</h4>
                         <div>
                             <label className="block text-sm font-medium mb-1">朗读引擎</label>
                             <select value={tempSettings.ttsEngine} onChange={(e) => handleChange('ttsEngine', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 border rounded-md">
-                                <option value={TTS_ENGINE.GEMINI_TTS}>Gemini TTS (推荐)</option>
-                                <option value={TTS_ENGINE.THIRD_PARTY}>第三方 API</option>
-                                <option value={TTS_ENGINE.SYSTEM}>系统内置</option>
+                                <option value={TTS_ENGINE.THIRD_PARTY}>第三方 API (音质更好)</option>
+                                <option value={TTS_ENGINE.SYSTEM}>系统内置 (速度快)</option>
                             </select>
                         </div>
-                        {tempSettings.ttsEngine === TTS_ENGINE.GEMINI_TTS && (
-                            <>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Gemini TTS 模型</label>
-                                    <input type="text" value={tempSettings.geminiTtsModel} onChange={(e) => handleChange('geminiTtsModel', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 border rounded-md"/>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Gemini TTS 语音</label>
-                                    <select value={tempSettings.geminiTtsVoice} onChange={(e) => handleChange('geminiTtsVoice', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 border rounded-md">
-                                        {AVAILABLE_TTS_VOICES.map(voice => <option key={voice.id} value={voice.id}>{voice.name}</option>)}
-                                    </select>
-                                </div>
-                            </>
-                        )}
                         {tempSettings.ttsEngine === TTS_ENGINE.THIRD_PARTY && (
                             <div>
                                 <label className="block text-sm font-medium mb-1">发音人 (第三方)</label>
@@ -330,6 +217,14 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                                                 {CHAT_MODELS.map(m => <option key={m.value} value={m.value}>{m.name}</option>)}
                                             </select>
                                         </div>
+                                        <div className="flex items-center gap-2">
+                                            <label className="shrink-0">声音:</label>
+                                            <select value={p.ttsVoice || tempSettings.thirdPartyTtsVoice} onChange={(e) => handlePromptSettingChange(p.id, 'ttsVoice', e.target.value)} className="w-full px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs">
+                                                {(tempSettings.ttsEngine === TTS_ENGINE.THIRD_PARTY ? microsoftTtsVoices : systemVoices).map(v => 
+                                                    <option key={v.value || v.voiceURI} value={v.value || v.voiceURI}>{v.name} {v.lang ? `(${v.lang})` : ''}</option>
+                                                )}
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -346,8 +241,8 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
     );
 };
 
-// --- 关键修改 4：更新默认设置 ---
-const DEFAULT_PROMPTS = [ { id: 'default-grammar-correction', name: '纠正中文语法', content: '你是一位专业的、耐心的中文老师，请纠正我发送的中文句子中的语法和用词错误，并给出修改建议和说明。', model: 'gemini-2.5-flash' }];
+// --- 关键修改 5：更新默认设置 ---
+const DEFAULT_PROMPTS = [ { id: 'default-grammar-correction', name: '纠正中文语法', content: '你是一位专业的、耐心的中文老师，请纠正我发送的中文句子中的语法和用词错误，并给出修改建议和说明。', model: 'gemini-2.5-flash', ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural' }, { id: 'explain-word', name: '解释中文词语', content: '你是一位专业的中文老师，请用简单易懂的方式解释我发送的中文词语，并提供几个例子。', model: 'gemini-1.5-pro-latest', ttsVoice: 'zh-CN-YunxiNeural' }, { id: 'translate-myanmar', content: '你是一位专业的翻译助手，请将我发送的内容在中文和缅甸语之间进行互译。', model: 'gemini-2.5-flash', ttsVoice: 'my-MM-NilarNeural' } ];
 const DEFAULT_SETTINGS = {
     apiKey: '',
     selectedModel: 'gemini-2.5-flash',
@@ -355,19 +250,16 @@ const DEFAULT_SETTINGS = {
     maxOutputTokens: 2048,
     apiTimeout: 60000,
     prompts: DEFAULT_PROMPTS,
-    currentPromptId: DEFAULT_PROMPTS[0]?.id || '',
+    currentPromptId: DEFAULT_PROMPTS?.id || '',
     autoRead: false,
-    ttsEngine: TTS_ENGINE.GEMINI_TTS,
-    geminiTtsModel: 'gemini-2.5-flash-preview-tts',
-    geminiTtsVoice: 'Kore',
-    thirdPartyTtsVoice: 'zh-CN-XiaoxiaoMultilingualNeural',
-    systemTtsVoiceURI: '',
+    ttsEngine: TTS_ENGINE.THIRD_PARTY, // 默认使用第三方API
+    thirdPartyTtsVoice: 'zh-CN-XiaoxiaoMultilingualNeural', // 默认第三方语音
+    systemTtsVoiceURI: '', // 默认系统语音
     speechLanguage: 'zh-CN',
     chatBackgroundUrl: '/images/chat-bg.jpg',
     userAvatarUrl: '/images/user-avatar.png',
     aiAvatarUrl: '/images/ai-avatar.png',
 };
-
 
 const AiChatAssistant = () => {
     const [conversations, setConversations] = useState([]);
@@ -397,16 +289,18 @@ const AiChatAssistant = () => {
     useEffect(() => {
         setIsMounted(true);
         try {
-            const savedSettings = localStorage.getItem('ai_assistant_settings_v32');
+            const savedSettings = localStorage.getItem('ai_assistant_settings_v35'); // 使用新键
             if (savedSettings) {
                 const parsed = JSON.parse(savedSettings);
+                // 确保旧的自定义提示词也能获得正确的 ttsVoice 字段
+                parsed.prompts = parsed.prompts?.map(p => ({ ...p, ttsVoice: p.ttsVoice || DEFAULT_SETTINGS.thirdPartyTtsVoice })) || DEFAULT_PROMPTS;
                 setSettings(prev => ({ ...DEFAULT_SETTINGS, ...parsed }));
             }
             const savedConversations = localStorage.getItem('ai_assistant_conversations_v22_final');
             const parsedConvs = savedConversations ? JSON.parse(savedConversations) : [];
             setConversations(parsedConvs);
             if (parsedConvs.length > 0) {
-                setCurrentConversationId(parsedConvs[0].id);
+                setCurrentConversationId(parsedConvs.id);
             } else {
                 createNewConversation();
             }
@@ -427,7 +321,7 @@ const AiChatAssistant = () => {
 
     useEffect(() => {
         if (isMounted) {
-            localStorage.setItem('ai_assistant_settings_v32', JSON.stringify(settings));
+            localStorage.setItem('ai_assistant_settings_v35', JSON.stringify(settings)); // 使用新键
             localStorage.setItem('ai_assistant_conversations_v22_final', JSON.stringify(conversations));
         }
     }, [settings, conversations, isMounted]);
@@ -444,7 +338,7 @@ const AiChatAssistant = () => {
     };
     
     const handleSelectConversation = (id) => setCurrentConversationId(id);
-    const handleDeleteConversation = (id) => { const remaining = conversations.filter(c => c.id !== id); setConversations(remaining); if (currentConversationId === id) { if (remaining.length > 0) { setCurrentConversationId(remaining[0].id); } else { createNewConversation(); } } };
+    const handleDeleteConversation = (id) => { const remaining = conversations.filter(c => c.id !== id); setConversations(remaining); if (currentConversationId === id) { if (remaining.length > 0) { setCurrentConversationId(remaining.id); } else { createNewConversation(); } } };
     const handleRenameConversation = (id, newTitle) => { setConversations(prev => prev.map(c => c.id === id ? { ...c, title: newTitle } : c)); };
     const handleSaveSettings = (newSettings) => { setSettings(newSettings); setShowSettings(false); };
 
@@ -454,7 +348,7 @@ const AiChatAssistant = () => {
         const imagePromises = files.map(file => {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
-                reader.onloadend = () => resolve({ data: reader.result.split(',')[1], previewUrl: reader.result, type: file.type });
+                reader.onloadend = () => resolve({ data: reader.result.split(','), previewUrl: reader.result, type: file.type });
                 reader.onerror = reject;
                 reader.readAsDataURL(file);
             });
@@ -468,7 +362,7 @@ const AiChatAssistant = () => {
         setSelectedImages(prev => prev.filter((_, index) => index !== indexToRemove));
     };
 
-    // --- 关键修改 5：更新语音识别逻辑 ---
+    // --- 关键修改 6：更新语音识别逻辑，确保持续监听和调试日志 ---
     const startListening = useCallback(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) { alert('您的浏览器不支持语音输入。'); return; }
@@ -477,12 +371,13 @@ const AiChatAssistant = () => {
 
         const recognition = new SpeechRecognition();
         recognition.lang = settings.speechLanguage;
-        recognition.continuous = true;
-        recognition.interimResults = true;
+        recognition.continuous = true; // 开启持续识别
+        recognition.interimResults = true; // 开启实时结果
 
         recognition.onstart = () => {
             setIsListening(true);
-            setUserInput('');
+            setUserInput(''); // 开始新的识别时清空输入框
+            console.log("[STT] 语音识别已启动。");
         };
         
         let finalTranscript = '';
@@ -490,31 +385,35 @@ const AiChatAssistant = () => {
             let interimTranscript = '';
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 if (event.results[i].isFinal) {
-                    finalTranscript += event.results[i][0].transcript;
+                    finalTranscript += event.results[i].transcript;
                 } else {
-                    interimTranscript += event.results[i][0].transcript;
+                    interimTranscript += event.results[i].transcript;
                 }
             }
             setUserInput(finalTranscript + interimTranscript);
+            console.log(`[STT] 实时识别: ${finalTranscript + interimTranscript}`);
         };
 
         recognition.onerror = (event) => {
-            console.error("语音识别错误:", event.error);
+            console.error("[STT] 语音识别错误:", event.error);
             setIsListening(false);
+            setError(`语音识别失败: ${event.error}`); // 显示错误信息
         };
         recognition.onend = () => {
             setIsListening(false);
             recognitionRef.current = null;
+            console.log("[STT] 语音识别已结束。");
         };
 
         recognition.start();
         recognitionRef.current = recognition;
-    }, [settings.speechLanguage]);
+    }, [settings.speechLanguage, setError]);
     
     const stopListening = useCallback(() => {
         if (recognitionRef.current) {
             recognitionRef.current.stop();
             setIsListening(false);
+            console.log("[STT] 语音识别已手动停止。");
         }
     }, []);
 
@@ -550,7 +449,7 @@ const AiChatAssistant = () => {
         timeoutRef.current = setTimeout(() => { abortControllerRef.current?.abort(); }, settings.apiTimeout);
 
         try {
-            const currentPrompt = settings.prompts.find(p => p.id === settings.currentPromptId) || DEFAULT_PROMPTS[0];
+            const currentPrompt = settings.prompts.find(p => p.id === settings.currentPromptId) || DEFAULT_PROMPTS;
             const modelToUse = currentPrompt.model || settings.selectedModel;
             
             const history = messagesForApi.map(msg => {
@@ -574,7 +473,7 @@ const AiChatAssistant = () => {
             if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error?.message || `请求失败`); }
             
             const data = await response.json();
-            const aiResponseContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            const aiResponseContent = data.candidates?.?.content?.parts?.?.text;
             if (!aiResponseContent) throw new Error('AI未能返回有效内容。');
 
             const aiMessage = { role: 'ai', content: aiResponseContent };
