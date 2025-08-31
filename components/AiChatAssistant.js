@@ -1,4 +1,4 @@
-// /components/AiChatAssistant.js - v28: (修复编译错误及多个运行时Bugs)
+// /components/AiChatAssistant.js - v29: (修复致命编译错误和多个运行时逻辑Bugs)
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import AiTtsButton from './AiTtsButton';
 
@@ -107,15 +107,18 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
 
     useEffect(() => {
         const fetchSystemVoices = () => {
+            if (!window.speechSynthesis) return;
             const voices = window.speechSynthesis.getVoices();
             if (voices.length > 0) {
                 setSystemVoices(voices.filter(v => v.lang.startsWith('zh') || v.lang.startsWith('en') || v.lang.startsWith('fr') || v.lang.startsWith('es') || v.lang.startsWith('ja') || v.lang.startsWith('ko') || v.lang.startsWith('vi')));
             }
         };
-        if (window.speechSynthesis.onvoiceschanged !== undefined) {
-            window.speechSynthesis.onvoiceschanged = fetchSystemVoices;
+        if (window.speechSynthesis) {
+            if (window.speechSynthesis.onvoiceschanged !== undefined) {
+                window.speechSynthesis.onvoiceschanged = fetchSystemVoices;
+            }
+            fetchSystemVoices();
         }
-        fetchSystemVoices();
     }, []);
 
     const handleChange = (key, value) => setTempSettings(prev => ({ ...prev, [key]: value }));
@@ -403,7 +406,7 @@ const AiChatAssistant = () => {
 
         if (isRegenerate) {
             if (messagesForApi.length > 0 && messagesForApi[messagesForApi.length - 1].role === 'ai') {
-                messagesForApi.pop();
+                messagesForApi.pop(); // 移除最后一条AI消息
             }
         } else {
             if (!textToProcess && selectedImages.length === 0) {
@@ -411,9 +414,9 @@ const AiChatAssistant = () => {
                 return;
             }
             const userMessage = { role: 'user', content: textToProcess, images: selectedImages };
-            const newMessages = [...currentConv.messages, userMessage];
-            setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: newMessages } : c));
-            messagesForApi.push(userMessage);
+            const updatedMessages = [...currentConv.messages, userMessage];
+            setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: updatedMessages } : c));
+            messagesForApi = updatedMessages; // 更新用于API调用的消息列表
             setUserInput('');
             setSelectedImages([]);
         }
@@ -517,10 +520,9 @@ const AiChatAssistant = () => {
                             ))}
                         </div>
                     )}
-
                     {isLoading ? ( <div className="flex justify-center items-center gap-2 text-gray-500"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div> 正在思考中...</div> ) : (
                         <form onSubmit={(e)=>{e.preventDefault();handleSubmit(false)}} className="flex items-end gap-2">
-                             {showLeftButtons && (
+                            {showLeftButtons && (
                                 <div ref={optionsContainerRef} className="relative">
                                     <button type="button" onClick={() => setShowMoreMenu(s => !s)} className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0" title="切换助理或上传文件">
                                         <img src={currentPrompt?.avatarUrl || settings.aiAvatarUrl} alt="AI助理头像" className="w-6 h-6 rounded-full object-cover" />
@@ -553,4 +555,25 @@ const AiChatAssistant = () => {
                                     )}
                                 </div>
                             )}
-             
+                            
+                            <input type="file" ref={fileInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" multiple />
+                            <input type="file" ref={cameraInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" capture="environment" />
+
+                            <div className="flex-grow relative">
+                                <textarea value={userInput} onChange={(e) => setUserInput(e.target.value)} placeholder="与 AI 聊天..." className="w-full px-4 py-2 pr-12 rounded-2xl bg-gray-100 dark:bg-gray-700 resize-none overflow-hidden" rows="1" style={{minHeight:'44px'}} onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight) + 'px'; }} />
+                                <button type="button" onClick={isListening ? stopListening : startListening} className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-500 hover:text-primary'}`} title="语音输入">
+                                    <i className="fas fa-microphone"></i>
+                                </button>
+                            </div>
+                            <button type="submit" className="p-3 bg-primary text-white rounded-full hover:bg-blue-700 disabled:opacity-50 shrink-0" disabled={isLoading || (!userInput.trim() && selectedImages.length === 0)}><i className="fas fa-arrow-up"></i></button>
+                            <button type="button" onClick={() => setIsFullScreen(f => !f)} className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0" title={isFullScreen ? '退出全屏' : '全屏模式'}><i className={`fas ${isFullScreen ? 'fa-compress' : 'fa-expand'}`}></i></button>
+                        </form>
+                    )}
+                </div>
+            </div>
+             {showSettings && <SettingsModal settings={settings} onSave={handleSaveSettings} onClose={() => setShowSettings(false)} />}
+        </div>
+    );
+};
+
+export default AiChatAssistant;
