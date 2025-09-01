@@ -1,4 +1,4 @@
-// /pages/api/activate.js - v56 (支持手动5天 & 自动5分钟试用)
+// /pages/api/activate.js - v54 (终极修复版 - 永久码严格一机一码，防止多设备滥用)
 import { kv } from '@vercel/kv';
 const { v4: uuidv4 } = require('uuid');
 
@@ -16,8 +16,9 @@ export default async function handler(req, res) {
 
   try {
     const AUTO_TRIAL_DURATION_SECONDS = 5 * 60; // 自动试用期：5分钟
-    const MAX_AUTO_TRIAL_PER_IP = 1;
+    const MAX_AUTO_TRIAL_PER_IP = 1; // 每个IP地址只允许自动试用1次
 
+    // --- 自动试用逻辑 ---
     if (action === 'start_trial') {
       const ipTrialCount = await kv.get(`ip_trial_count:${ip}`) || 0;
       if (ipTrialCount >= MAX_AUTO_TRIAL_PER_IP) {
@@ -26,7 +27,7 @@ export default async function handler(req, res) {
       
       const hasDeviceTrialed = await kv.get(`device_trial_history:${deviceId}`);
       if (hasDeviceTrialed) {
-          return res.status(403).json({ success: false, message: '此设备已进行过自动试用，无法再次试用。' });
+          return res.status(403).json({ success: false, message: '此设备已进行过试用，无法再次试用。' });
       }
 
       const existingKeyForDevice = await kv.get(`device:${deviceId}`);
@@ -57,34 +58,26 @@ export default async function handler(req, res) {
       });
     }
 
+    // --- 手动激活逻辑 (主要用于永久码和人工发放的试用码) ---
     if (!key) { return res.status(400).json({ success: false, message: '激活码是必需的。' }); }
 
     const keyData = await kv.get(`key:${key}`);
     if (!keyData) { return res.status(404).json({ success: false, message: '激活码无效或不存在。' }); }
 
+    // 核心修复点：永久码的严格一机一码逻辑
+    // 如果激活码已被绑定，且绑定的设备ID与当前设备ID不符
     if (keyData.deviceId && keyData.deviceId !== deviceId) {
-        if (keyData.type === 'permanent') {
-            const oldDeviceId = keyData.deviceId;
-            const oldIp = keyData.ip;
-            keyData.deviceId = deviceId;
-            keyData.ip = ip;
-            keyData.activatedAt = Date.now();
-            
-            const pipeline = kv.pipeline();
-            pipeline.set(`key:${key}`, keyData);
-            if(oldDeviceId) { pipeline.del(`device:${oldDeviceId}`); }
-            if(oldIp) { pipeline.del(`ip:${oldIp}`); }
-            pipeline.set(`device:${deviceId}`, key);
-            pipeline.set(`ip:${ip}`, key);
-            await pipeline.exec();
-
-            return res.status(200).json({ success: true, message: '激活成功！设备已更新。', key: key, keyType: keyData.type, activatedAt: keyData.activatedAt });
-        } else {
-            return res.status(403).json({ success: false, message: '此试用激活码已被其他设备使用。' });
-        }
+        // 任何类型的码，只要被其他设备绑定，都拒绝
+        return res.status(403).json({ success: false, message: '此激活码已被其他设备绑定。' });
     }
-    
+    // 如果激活码已绑定设备ID，且绑定的IP与当前IP不符
+    if (keyData.ip && keyData.ip !== ip) {
+        // 任何类型的码，只要被其他IP绑定，都拒绝
+        return res.status(403).json({ success: false, message: '此激活码已被其他网络IP绑定。' });
+    }
+
     const now = Date.now();
+    // 如果是首次激活此码，则绑定设备和IP
     if (!keyData.deviceId) {
       keyData.deviceId = deviceId;
       keyData.ip = ip;
@@ -92,6 +85,7 @@ export default async function handler(req, res) {
       await kv.pipeline().set(`key:${key}`, keyData).set(`device:${deviceId}`, key).set(`ip:${ip}`, key).exec();
     }
     
+    // 检查试用码是否过期
     if (keyData.type === 'trial' && keyData.activatedAt) {
         const trialDurationMillis = (keyData.durationSeconds || 0) * 1000;
         if (now > keyData.activatedAt + trialDurationMillis) {
