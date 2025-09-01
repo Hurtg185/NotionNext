@@ -1,23 +1,14 @@
-// /components/AiChatAssistant.js - v61 (最终稳定版 - 移除本地知识库，修复所有编译和功能问题)
+// /components/AiChatAssistant.js - v61 (最终修复版 - 解决编译错误，功能完全)
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import AiTtsButton from './AiTtsButton';
 import FingerprintJS from '@fingerprintjs/fingerprintjs';
 
 // --- 轻量级滑动手势Hook (无需新依赖) ---
 const useSimpleSwipe = ({ onSwipeLeft, onSwipeRight }) => {
-    const touchStart = useRef({ x: 0, y: 0 });
-    const touchEnd = useRef({ x: 0, y: 0 });
-    const minSwipeDistance = 60; // 最小滑动距离
+    const touchStart = useRef({ x: 0, y: 0 }); const touchEnd = useRef({ x: 0, y: 0 }); const minSwipeDistance = 60;
 
-    const onTouchStart = useCallback((e) => {
-        touchEnd.current = { x: 0, y: 0 };
-        touchStart.current = { x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY };
-    }, []);
-
-    const onTouchMove = useCallback((e) => {
-        touchEnd.current = { x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY };
-    }, []);
-
+    const onTouchStart = useCallback((e) => { touchEnd.current = { x: 0, y: 0 }; touchStart.current = { x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY }; }, []);
+    const onTouchMove = useCallback((e) => { touchEnd.current = { x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY }; }, []);
     const onTouchEnd = useCallback(() => {
         if (!touchStart.current.x || !touchEnd.current.x) return;
         const xDistance = touchStart.current.x - touchEnd.current.x;
@@ -64,20 +55,7 @@ const DEFAULT_SETTINGS = {
 
 const TypingEffect = ({ text, onComplete }) => {
     const [displayedText, setDisplayedText] = useState('');
-    useEffect(() => {
-        if (!text) return;
-        setDisplayedText('');
-        let index = 0;
-        const intervalId = setInterval(() => {
-            setDisplayedText(prev => prev + text.charAt(index));
-            index++;
-            if (index >= text.length) {
-                clearInterval(intervalId);
-                if (onComplete) onComplete();
-            }
-        }, 30);
-        return () => clearInterval(intervalId);
-    }, [text, onComplete]);
+    useEffect(() => { if (!text) return; setDisplayedText(''); let index = 0; const intervalId = setInterval(() => { setDisplayedText(prev => prev + text.charAt(index)); index++; if (index >= text.length) { clearInterval(intervalId); if (onComplete) onComplete(); } }, 30); return () => clearInterval(intervalId); }, [text, onComplete]);
     return <SimpleMarkdown text={displayedText} />;
 };
 
@@ -407,7 +385,6 @@ const AiChatAssistant = ({ onClose }) => {
                 <div className="relative w-full max-w-sm bg-white/10 backdrop-blur-xl border border-white/20 rounded-lg shadow-xl p-8 flex flex-col items-center">
                     <h2 className="text-2xl font-bold mb-2 text-center text-white shadow-text">报名中文课程</h2>
                     <p className="text-gray-200 text-sm mb-2 text-center shadow-text">【课程介绍】结合中缅教学方案，高效学习中文，价格比大部分缅甸机构更优惠！</p>
-                    <p className="text-gray-200 text-sm mb-2 text-center shadow-text">【地址】仰光某区，欢迎线下咨询！</p>
                     <p className="text-xl font-bold text-green-400 mb-4 text-center shadow-text">【优惠价格】AI助手套餐：$50 / 月（原价$80）</p>
                     <p className="text-gray-200 text-sm mb-4 text-center shadow-text">请通过以下方式联系我们，获取专属学习方案：</p>
                     <div className="space-y-3 w-full mb-6">
@@ -474,11 +451,13 @@ const AiChatAssistant = ({ onClose }) => {
                                 </button>
                                 {showMoreMenu && (
                                     <div className="absolute bottom-full mb-2 w-56 bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 overflow-hidden z-20">
-                                        <button type="button" onClick={() => { setShowAssistantSelector(true); setShowMoreMenu(false); createNewConversation(); }} className="w-full flex items-center text-left px-4 py-3 text-sm hover:bg-primary/10"><i className="fas fa-user-astronaut w-6 mr-2"></i>选择助理</button>
+                                        <button type="button" onClick={() => { setShowAssistantSelector(true); setShowMoreMenu(false); }} className="w-full flex items-center text-left px-4 py-3 text-sm hover:bg-primary/10"><i className="fas fa-user-astronaut w-6 mr-2"></i>选择助理</button>
                                         <button type="button" onClick={() => { setShowModelSelector(true); setShowMoreMenu(false); }} className="w-full flex justify-between items-center text-left px-4 py-3 text-sm hover:bg-primary/10"> <span className="flex items-center"><i className="fas fa-robot w-6 mr-2"></i>切换模型</span> <span className="text-xs text-gray-500 truncate max-w-[100px]">{settings.chatModels.find(m => m.value === (currentConversation?.model || settings.selectedModel))?.name}</span> </button>
                                     </div>
                                 )}
                             </div>
+                            <input type="file" ref={fileInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" multiple />
+                            <input type="file" ref={cameraInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" capture="environment" />
                             <textarea ref={textareaRef} value={userInput} onChange={(e) => setUserInput(e.target.value)} placeholder="与 AI 聊天..." className="flex-1 bg-transparent focus:outline-none dark:text-gray-100 text-base resize-none overflow-hidden mx-2 py-1 leading-6 max-h-36 placeholder-gray-400 dark:placeholder-gray-500" rows="1" style={{minHeight:'2.5rem'}} />
                             <div className="flex items-center space-x-2 flex-shrink-0 ml-1">
                                 {!showSendButton && (<button type="button" onClick={isListening ? stopListening : startListening} className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${isListening ? 'text-white bg-red-500 animate-pulse' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'}`} title="语音输入"><i className="fas fa-microphone text-xl"></i></button>)}
