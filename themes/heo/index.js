@@ -1,4 +1,4 @@
-// themes/heo/index.js (最终修正版 - 彻底解决状态残留问题)
+// themes/heo/index.js (最终修正版 - 修复Portal在SSR下的问题)
 import Comment from '@/components/Comment'
 import { AdSlot } from '@/components/GoogleAdsense'
 import { HashTag } from '@/components/HeroIcons'
@@ -14,7 +14,7 @@ import { isBrowser } from '@/lib/utils'
 import { Transition } from '@headlessui/react'
 import SmartLink from '@/components/SmartLink'
 import { useRouter } from 'next/router'
-import { useEffect, useState, useMemo, useCallback } from 'react' // <--- 新增 useCallback
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import BlogPostArchive from './components/BlogPostArchive'
 import BlogPostListPage from './components/BlogPostListPage'
@@ -43,7 +43,10 @@ import AiChatAssistant from '@/components/AiChatAssistant'
 const XUANCHUAN_BANNERS = ['/images/xuanchuan3.jpg', '/images/xuanchuan4.jpg', '/images/xuanchuan5.jpg']
 
 const Modal = ({ isOpen, onClose, title, intro, children }) => {
-  if (!isOpen) return null
+  const [isMounted, setIsMounted] = useState(false)
+  useEffect(() => { setIsMounted(true) }, [])
+  if (!isOpen || !isMounted) return null
+
   return createPortal(
     <div className='fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4' onClick={onClose}>
       <div className='bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-sm w-full mx-auto animate-modal-pop' onClick={(e) => e.stopPropagation()}>
@@ -64,24 +67,19 @@ const AIAssistantPortal = ({ onClose }) => {
   const ref = useRef(null)
 
   useEffect(() => {
-    // 进入时请求全屏
     ref.current?.requestFullscreen().catch(err => {
-        console.error(`进入全屏模式失败: ${err.message}`)
+      console.error(`进入全屏模式失败: ${err.message}`)
     })
 
-    // 监听全屏变化
     const onFullscreenChange = () => {
-      // 当用户通过ESC等方式退出全屏时，调用关闭函数
       if (!document.fullscreenElement) {
         onClose()
       }
     }
     document.addEventListener('fullscreenchange', onFullscreenChange)
 
-    // 组件卸载时，执行清理操作
     return () => {
       document.removeEventListener('fullscreenchange', onFullscreenChange)
-      // 确保退出全屏
       if (document.fullscreenElement) {
         document.exitFullscreen()
       }
@@ -95,7 +93,6 @@ const AIAssistantPortal = ({ onClose }) => {
     document.body
   )
 }
-
 
 /**
  * 基础布局
@@ -170,7 +167,6 @@ const LayoutIndex = props => {
   const [activeModal, setActiveModal] = useState(null)
   const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false)
 
-  // 使用useCallback确保函数引用稳定，避免不必要的重渲染
   const handleOpenAssistant = useCallback(() => setIsAiAssistantOpen(true), [])
   const handleCloseAssistant = useCallback(() => setIsAiAssistantOpen(false), [])
 
@@ -204,7 +200,6 @@ const LayoutIndex = props => {
         {currentModal?.children}
       </Modal>
 
-      {/* 重大变更：只有在isOpen为true时才渲染Portal组件，确保每次都是新的 */}
       {isAiAssistantOpen && <AIAssistantPortal onClose={handleCloseAssistant} />}
     </>
   )
