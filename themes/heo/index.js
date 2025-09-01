@@ -1,10 +1,8 @@
 // themes/heo/index.js (由 AI 助手根据您的详细需求重构)
-
 import Comment from '@/components/Comment'
 import { AdSlot } from '@/components/GoogleAdsense'
 import { HashTag } from '@/components/HeroIcons'
 import LazyImage from '@/components/LazyImage'
-// import LoadingCover from '@/components/LoadingCover' // <-- 已删除：不再需要 LoadingCover 组件
 import replaceSearchResult from '@/components/Mark'
 import NotionPage from '@/components/NotionPage'
 import ShareBar from '@/components/ShareBar'
@@ -49,8 +47,6 @@ const XUANCHUAN_BANNERS = [
   // ... 请务必在这里列出所有您上传到 /public/images/xuanchuan/ 的图片路径
 ]
 
-// <-- 已删除：KAIPING_BANNERS 数组及其注释块已完全移除 -->
-
 // --- 新增：通用弹窗组件 ---
 const Modal = ({ isOpen, onClose, title, intro, children }) => {
   if (!isOpen) return null
@@ -63,10 +59,53 @@ const Modal = ({ isOpen, onClose, title, intro, children }) => {
         <div className='space-y-3'>{children}</div>
         <button
           onClick={onClose}
-          className='mt-6 w-full py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-200'>
+          className='mt-6 w-full py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-200'
+        >
           关闭
         </button>
       </div>
+    </div>
+  )
+}
+
+// --- 新增：全屏 AI 助手组件 ---
+const AIAssistantFullScreen = ({ isOpen, onClose }) => {
+  if (!isOpen) return null
+
+  return (
+    <div className='fixed inset-0 bg-white dark:bg-gray-900 z-[100] flex flex-col animate-fade-in'>
+      {/* 头部 */}
+      <header className='flex items-center justify-between p-4 border-b dark:border-gray-700 shadow-md flex-shrink-0'>
+        <div className='flex items-center space-x-3'>
+          <i className='fas fa-robot text-2xl text-indigo-500'></i>
+          <h2 className='text-xl font-bold dark:text-white'>AI 助手</h2>
+        </div>
+        <button onClick={onClose} className='p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors'>
+          <i className='fas fa-times text-xl dark:text-gray-300'></i>
+        </button>
+      </header>
+
+      {/* 聊天界面主体 (此处为占位符) */}
+      <main className='flex-1 p-4 overflow-y-auto'>
+        <div className='text-center text-gray-500 dark:text-gray-400 mt-10'>
+          <p className='text-lg'>AI 聊天界面即将上线...</p>
+          <p className='text-sm mt-2'>您可以在这里与智能助手进行对话。</p>
+        </div>
+      </main>
+
+      {/* 输入区域 */}
+      <footer className='p-4 border-t dark:border-gray-700 flex-shrink-0'>
+        <div className='flex items-center space-x-3 bg-gray-100 dark:bg-gray-800 rounded-lg p-2'>
+          <input
+            type='text'
+            placeholder='向 AI 助手提问...'
+            className='w-full bg-transparent focus:outline-none dark:text-white px-2'
+          />
+          <button className='px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors font-semibold'>
+            发送
+          </button>
+        </div>
+      </footer>
     </div>
   )
 }
@@ -78,9 +117,9 @@ const LayoutBase = props => {
   const { children, slotTop, className, post } = props
   const { fullWidth, isDarkMode } = useGlobal()
   const router = useRouter()
-  
+
   const isIndex = router.pathname === '/'
-  const isSlugPage = post && post.slug 
+  const isSlugPage = post && post.slug
 
   const headerSlot = (
     <header>
@@ -99,13 +138,11 @@ const LayoutBase = props => {
     router.route === '/404' || fullWidth ? null : <SideRight {...props} />
 
   const maxWidth = fullWidth ? 'max-w-[96rem] mx-auto' : 'max-w-[86rem]'
-
   const HEO_HERO_BODY_REVERSE = siteConfig(
     'HEO_HERO_BODY_REVERSE',
     false,
     CONFIG
   )
-  // const HEO_LOADING_COVER = siteConfig('HEO_LOADING_COVER', false, CONFIG) // <-- 已删除：HEO_LOADING_COVER 配置项不再需要
 
   useEffect(() => {
     loadWowJS()
@@ -128,21 +165,22 @@ const LayoutBase = props => {
             {children}
           </div>
           <div className='lg:px-2'></div>
-          <div className='hidden xl:block'>
-            {slotRight}
-          </div>
+          <div className='hidden xl:block'>{slotRight}</div>
         </div>
       </main>
       <Footer />
-      {/* {HEO_LOADING_COVER && <LoadingCover banners={KAIPING_BANNERS} />} */} {/* <-- 已删除：LoadingCover 组件不再被渲染 */}
     </div>
   )
 }
 
 // --- 重构：功能按钮 ---
 const FunctionButton = ({ title, icon, onClick, href, img, target }) => {
-  const style = img ? { backgroundImage: `url(${img})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}
-  const iconColorClass = img ? 'text-white' : 'text-gray-500 dark:text-gray-300 group-hover:text-indigo-500 dark:group-hover:text-yellow-500'
+  const style = img
+    ? { backgroundImage: `url(${img})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+    : {}
+  const iconColorClass = img
+    ? 'text-white'
+    : 'text-gray-500 dark:text-gray-300 group-hover:text-indigo-500 dark:group-hover:text-yellow-500'
   const textColorClass = img ? 'text-white' : 'text-gray-700 dark:text-gray-200'
 
   const content = (
@@ -152,35 +190,40 @@ const FunctionButton = ({ title, icon, onClick, href, img, target }) => {
         <div className={`text-3xl ${iconColorClass} transition-colors duration-200`}>
           <i className={icon} />
         </div>
-        <div className={`mt-2 text-sm font-semibold ${textColorClass}`}>
-          {title}
-        </div>
+        <div className={`mt-2 text-sm font-semibold ${textColorClass}`}>{title}</div>
       </div>
     </>
   )
 
   if (href) {
     return (
-      <SmartLink href={href} target={target} className='group relative flex flex-col justify-center items-center w-full h-24 bg-white dark:bg-[#1e1e1e] border dark:border-gray-700 rounded-xl shadow-md transform hover:scale-105 transition-transform duration-200 overflow-hidden' style={style}>
+      <SmartLink
+        href={href}
+        target={target}
+        className='group relative flex flex-col justify-center items-center w-full h-24 bg-white dark:bg-[#1e1e1e] border dark:border-gray-700 rounded-xl shadow-md transform hover:scale-105 transition-transform duration-200 overflow-hidden'
+        style={style}>
         {content}
       </SmartLink>
     )
   }
 
   return (
-    <button onClick={onClick} className='group relative flex flex-col justify-center items-center w-full h-24 bg-white dark:bg-[#1e1e1e] border dark:border-gray-700 rounded-xl shadow-md transform hover:scale-105 transition-transform duration-200 overflow-hidden' style={style}>
+    <button
+      onClick={onClick}
+      className='group relative flex flex-col justify-center items-center w-full h-24 bg-white dark:bg-[#1e1e1e] border dark:border-gray-700 rounded-xl shadow-md transform hover:scale-105 transition-transform duration-200 overflow-hidden'
+      style={style}>
       {content}
     </button>
   )
 }
 
-// --- 新增：主页顶部APP下载按钮 ---
-const AppDownloadButton = ({ onClick }) => {
+// --- 修改：主页顶部APP下载按钮 -> AI助手按钮 ---
+const AIAssistantButton = ({ onClick }) => {
   return (
     <div className='px-5 md:px-0 my-4'>
-      <button onClick={onClick} className='w-full flex items-center justify-center p-4 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg transform hover:scale-105 transition-transform duration-300'>
-        <i className='fas fa-mobile-alt text-2xl mr-3'></i>
-        <span className='text-lg font-bold'>客户端APP下载</span>
+      <button onClick={onClick} className='w-full flex items-center justify-center p-4 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg transform hover:scale-105 transition-transform duration-300'>
+        <i className='fas fa-robot text-2xl mr-3'></i>
+        <span className='text-lg font-bold'>与 AI 助手对话</span>
       </button>
     </div>
   )
@@ -204,16 +247,14 @@ const QuickAccessGrid = ({ setActiveModal }) => {
 
 // --- 新增：提问交流模块 ---
 const AskQuestionModule = () => {
-  const facebookGroupUrl = "https://www.facebook.com/share/g/15Fh7mrpa8/"; // 替换为您的 Facebook 小组 URL
-
+  const facebookGroupUrl = 'https://www.facebook.com/share/g/15Fh7mrpa8/' // 替换为您的 Facebook 小组 URL
   return (
     <div className='py-4'>
       <a // 使用 <a> 标签替换 SmartLink
         href={facebookGroupUrl} // 设置 href 属性
         target="_blank" // 在新标签页中打开链接
         rel="noopener noreferrer" // 增加安全性
-        className='group flex items-center justify-between p-4 bg-white dark:bg-[#1e1e1e] border dark:border-gray-700 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200'
-      >
+        className='group flex items-center justify-between p-4 bg-white dark:bg-[#1e1e1e] border dark:border-gray-700 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200'>
         <div className='flex items-center'>
           <i className='fas fa-question-circle text-3xl text-indigo-500 mr-4'></i>
           <div>
@@ -234,8 +275,8 @@ const StudyToolsGrid = ({ setActiveModal }) => {
     { title: '语法', icon: 'fa-solid fa-pen-ruler', modal: 'grammar' },
     { title: '练习题', icon: 'fa-solid fa-file-pen', modal: 'exercises' },
     { title: '生词', icon: 'fa-solid fa-spell-check', modal: 'vocabulary' },
-    { 'title': '短语', 'icon': 'fas fa-comments', modal: 'phrases' },
-    { 'title': '拼音', 'icon': 'fas fa-font', modal: 'pinyin' }
+    { title: '短语', icon: 'fas fa-comments', modal: 'phrases' },
+    { title: '拼音', icon: 'fas fa-font', modal: 'pinyin' }
   ]
   return (
     <div className='py-2'>
@@ -253,12 +294,12 @@ const RandomImageCard = ({ banners, linkUrl, alt }) => {
     // <-- 优化开始：检查 banners 数组是否为空，如果为空则提供默认图片
     if (!banners || banners.length === 0) {
       // 请确保在 /public/images/ 目录下放置一个名为 default-xuanchuan.jpg 的默认图片
-      console.warn("XUANCHUAN_BANNERS is empty or undefined. Using default fallback image.");
-      return '/images/default-xuanchuan.jpg'; 
+      console.warn('XUANCHUAN_BANNERS is empty or undefined. Using default fallback image.')
+      return '/images/default-xuanchuan.jpg'
     }
     // <-- 优化结束
-    return banners[Math.floor(Math.random() * banners.length)];
-  }, [banners]);
+    return banners[Math.floor(Math.random() * banners.length)]
+  }, [banners])
 
   return (
     <section className='mt-4'>
@@ -276,46 +317,19 @@ const RandomImageCard = ({ banners, linkUrl, alt }) => {
  */
 const LayoutIndex = props => {
   const [activeModal, setActiveModal] = useState(null)
-  
+  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false) // <-- 新增AI助手状态
+
   const modalContent = {
-    appDownload: {
-      title: '安卓APP下载',
-      intro: '下载我们的专属学习APP，随时随地高效学习中文！请按照以下步骤安装：',
-      children: (
-        <div className='text-sm text-gray-700 dark:text-gray-300'>
-          <a href='#' target='_blank' rel='noopener noreferrer' className='block w-full text-center p-3 rounded-lg bg-blue-500 text-white font-bold mb-4 hover:bg-blue-600 transition-colors'>
-            点击此处下载安卓APP
-          </a>
-          <ol className='list-decimal list-inside space-y-2 text-left'>
-            <li>点击上方链接下载APP文件。</li>
-            <li>下载完成后，请**断开网络**（Wi-Fi和移动数据）。</li>
-            <li>找到下载的APP文件（通常在“文件管理器”或“下载”文件夹），点击安装。</li>
-            <li>如果提示“禁止安装未知来源应用”，请前往手机设置中允许安装。</li>
-            <li>安装成功后，重新连接网络即可使用。</li>
-          </ol>
-          <a href='#' target='_blank' rel='noopener noreferrer' className='block text-center mt-4 text-blue-500 hover:underline'>
-            查看详细图文/视频教程 &rarr;
-          </a>
-        </div>
-      )
-    },
+    // 'appDownload' entry is removed as it's replaced by the AI Assistant
     enroll: {
       title: '报名课程',
       intro: '结合中缅教学方案，高效学习中文，价格比大部分缅甸机构更优惠！请通过以下方式联系我们，获取专属学习方案：',
       children: (
         <>
-          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200'>
-            <i className='fab fa-telegram-plane text-xl mr-3'></i> <span className='font-semibold'>Telegram 联系</span>
-          </SmartLink>
-          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-green-400 text-white hover:bg-green-500 transition-all duration-200'>
-            <i className='fab fa-line text-xl mr-3'></i> <span className='font-semibold'>Line 联系</span>
-          </SmartLink>
-          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-all duration-200'>
-            <i className='fab fa-viber text-xl mr-3'></i> <span className='font-semibold'>Viber 联系</span>
-          </SmartLink>
-          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-all duration-200'>
-            <i className='fab fa-facebook-f text-xl mr-3'></i> <span className='font-semibold'>Facebook 个人主页</span>
-          </SmartLink>
+          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200'><i className='fab fa-telegram-plane text-xl mr-3'></i> <span className='font-semibold'>Telegram 联系</span></SmartLink>
+          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-green-400 text-white hover:bg-green-500 transition-all duration-200'><i className='fab fa-line text-xl mr-3'></i> <span className='font-semibold'>Line 联系</span></SmartLink>
+          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-all duration-200'><i className='fab fa-viber text-xl mr-3'></i> <span className='font-semibold'>Viber 联系</span></SmartLink>
+          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-all duration-200'><i className='fab fa-facebook-f text-xl mr-3'></i> <span className='font-semibold'>Facebook 个人主页</span></SmartLink>
         </>
       )
     },
@@ -324,12 +338,12 @@ const LayoutIndex = props => {
       intro: '我们培训机构与上百家工厂长期合作，为您提供仰光、泰国、新加坡、马来西亚、中国等地的中文相关工作岗位！',
       children: (
         <>
-         <SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>仰光地区招聘</SmartLink>
-         <SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>泰国地区招聘</SmartLink>
-         <SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>新加坡地区招聘</SmartLink>
-         <SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>马来西亚地区招聘</SmartLink>
-         <SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>中国地区招聘</SmartLink>
-         <SmartLink href='#' className='block p-2 text-center rounded bg-green-500 text-white hover:bg-green-600 mt-2'>发布简历/咨询</SmartLink>
+          <SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>仰光地区招聘</SmartLink>
+          <SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>泰国地区招聘</SmartLink>
+          <SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>新加坡地区招聘</SmartLink>
+          <SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>马来西亚地区招聘</SmartLink>
+          <SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>中国地区招聘</SmartLink>
+          <SmartLink href='#' className='block p-2 text-center rounded bg-green-500 text-white hover:bg-green-600 mt-2'>发布简历/咨询</SmartLink>
         </>
       )
     },
@@ -392,23 +406,26 @@ const LayoutIndex = props => {
     <>
       <div id='post-outer-wrapper' className='px-5 md:px-0'>
         <CategoryBar {...props} />
-        <AppDownloadButton onClick={() => setActiveModal('appDownload')} />
+        {/* V-- 修改：将 AppDownloadButton 替换为 AIAssistantButton --V */}
+        <AIAssistantButton onClick={() => setIsAiAssistantOpen(true)} />
+        {/* A-- 修改结束 --A */}
         <div className='my-4'>
           <GlosbeSearchCard />
         </div>
         <QuickAccessGrid setActiveModal={setActiveModal} />
         <AskQuestionModule />
-        {siteConfig('POST_LIST_STYLE') === 'page' ? (
-          <BlogPostListPage {...props} />
-        ) : (
-          <BlogPostListScroll {...props} />
-        )}
+        {siteConfig('POST_LIST_STYLE') === 'page'
+          ? (<BlogPostListPage {...props} />)
+          : (<BlogPostListScroll {...props} />)}
         <StudyToolsGrid setActiveModal={setActiveModal} />
         <RandomImageCard banners={XUANCHUAN_BANNERS} linkUrl="#" alt="课程价格与联系信息" />
       </div>
       <Modal isOpen={!!activeModal} onClose={() => setActiveModal(null)} title={currentModal?.title} intro={currentModal?.intro}>
         {currentModal?.children}
       </Modal>
+      {/* V-- 新增：渲染全屏AI助手 --V */}
+      <AIAssistantFullScreen isOpen={isAiAssistantOpen} onClose={() => setIsAiAssistantOpen(false)} />
+      {/* A-- 新增结束 --A */}
     </>
   )
 }
@@ -418,14 +435,16 @@ const LayoutIndex = props => {
  */
 const LayoutPostList = props => {
   return (
-    <div id='post-outer-wrapper' className='px-5  md:px-0'>
-      <CategoryBar {...props} />
-      {siteConfig('POST_LIST_STYLE') === 'page' ? (
-        <BlogPostListPage {...props} />
-      ) : (
-        <BlogPostListScroll {...props} />
-      )}
-    </div>
+     <div id='post-outer-wrapper' className='px-5  md:px-0'>
+       <CategoryBar {...props} />
+       {siteConfig('POST_LIST_STYLE') === 'page'
+         ? (
+         <BlogPostListPage {...props} />
+           )
+         : (
+         <BlogPostListScroll {...props} />
+           )}
+     </div>
   )
 }
 
@@ -450,21 +469,18 @@ const LayoutSearch = props => {
         })
       }, 100)
     }
-  }, [])
+  }, [currentSearch])
+
   return (
     <div currentSearch={currentSearch}>
       <div id='post-outer-wrapper' className='px-5  md:px-0'>
-        {!currentSearch ? (
-          <SearchNav {...props} />
-        ) : (
-          <div id='posts-wrapper'>
-            {siteConfig('POST_LIST_STYLE') === 'page' ? (
-              <BlogPostListPage {...props} />
-            ) : (
-              <BlogPostListScroll {...props} />
-            )}
-          </div>
-        )}
+        {!currentSearch
+          ? (<SearchNav {...props} />)
+          : (<div id='posts-wrapper'>
+              {siteConfig('POST_LIST_STYLE') === 'page'
+                ? (<BlogPostListPage {...props} />)
+                : (<BlogPostListScroll {...props} />)}
+            </div>)}
       </div>
     </div>
   )
@@ -475,7 +491,6 @@ const LayoutSearch = props => {
  */
 const LayoutArchive = props => {
   const { archivePosts } = props
-
   return (
     <div className='p-5 rounded-xl border dark:border-gray-600 max-w-6xl w-full bg-white dark:bg-[#1e1e1e]'>
       <CategoryBar {...props} border={false} />
@@ -520,43 +535,34 @@ const LayoutSlug = props => {
   const waiting404 = siteConfig('POST_WAITING_TIME_FOR_404') * 1000
   useEffect(() => {
     if (!post) {
-      setTimeout(
-        () => {
-          if (isBrowser) {
-            const article = document.querySelector(
-              '#article-wrapper #notion-article'
-            )
-            if (!article) {
-              router.push('/404').then(() => {
-                console.warn('找不到页面', router.asPath)
-              })
-            }
+      setTimeout(() => {
+        if (isBrowser) {
+          const article = document.querySelector('#article-wrapper #notion-article')
+          if (!article) {
+            router.push('/404').then(() => {
+              console.warn('找不到页面', router.asPath)
+            })
           }
-        },
-        waiting404
-      )
+        }
+      }, waiting404)
     }
   }, [post])
-  
+
   const modalContent = {
     appDownload: {
       title: '安卓APP下载',
       intro: '下载我们的专属学习APP，随时随地高效学习中文！请按照以下步骤安装：',
       children: (
         <div className='text-sm text-gray-700 dark:text-gray-300'>
-          <a href='#' target='_blank' rel='noopener noreferrer' className='block w-full text-center p-3 rounded-lg bg-blue-500 text-white font-bold mb-4 hover:bg-blue-600 transition-colors'>
-            点击此处下载安卓APP
-          </a>
+          <a href='#' target='_blank' rel='noopener noreferrer' className='block w-full text-center p-3 rounded-lg bg-blue-500 text-white font-bold mb-4 hover:bg-blue-600 transition-colors'>点击此处下载安卓APP</a>
           <ol className='list-decimal list-inside space-y-2 text-left'>
             <li>点击上方链接下载APP文件。</li>
-            <li>下载完成后，请**断开网络**（Wi-Fi和移动数据）。</li>
+            <li>下载完成后，请断开网络（Wi-Fi和移动数据）。</li>
             <li>找到下载的APP文件（通常在“文件管理器”或“下载”文件夹），点击安装。</li>
             <li>如果提示“禁止安装未知来源应用”，请前往手机设置中允许安装。</li>
             <li>安装成功后，重新连接网络即可使用。</li>
           </ol>
-          <a href='#' target='_blank' rel='noopener noreferrer' className='block text-center mt-4 text-blue-500 hover:underline'>
-            查看详细图文/视频教程 &rarr;
-          </a>
+          <a href='#' target='_blank' rel='noopener noreferrer' className='block text-center mt-4 text-blue-500 hover:underline'>查看详细图文/视频教程 →</a>
         </div>
       )
     },
@@ -578,18 +584,10 @@ const LayoutSlug = props => {
       intro: '结合中缅教学方案，高效学习中文，价格比大部分缅甸机构更优惠！请通过以下方式联系我们，获取专属学习方案：',
       children: (
         <>
-          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200'>
-            <i className='fab fa-telegram-plane text-xl mr-3'></i> <span className='font-semibold'>Telegram 联系</span>
-          </SmartLink>
-          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-green-400 text-white hover:bg-green-500 transition-all duration-200'>
-            <i className='fab fa-line text-xl mr-3'></i> <span className='font-semibold'>Line 联系</span>
-          </SmartLink>
-          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-all duration-200'>
-            <i className='fab fa-viber text-xl mr-3'></i> <span className='font-semibold'>Viber 联系</span>
-          </SmartLink>
-          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-all duration-200'>
-            <i className='fab fa-facebook-f text-xl mr-3'></i> <span className='font-semibold'>Facebook 个人主页</span>
-          </SmartLink>
+          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200'><i className='fab fa-telegram-plane text-xl mr-3'></i> <span className='font-semibold'>Telegram 联系</span></SmartLink>
+          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-green-400 text-white hover:bg-green-500 transition-all duration-200'><i className='fab fa-line text-xl mr-3'></i> <span className='font-semibold'>Line 联系</span></SmartLink>
+          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-all duration-200'><i className='fab fa-viber text-xl mr-3'></i> <span className='font-semibold'>Viber 联系</span></SmartLink>
+          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-all duration-200'><i className='fab fa-facebook-f text-xl mr-3'></i> <span className='font-semibold'>Facebook 个人主页</span></SmartLink>
         </>
       )
     }
@@ -599,29 +597,27 @@ const LayoutSlug = props => {
 
   return (
     <>
-      <div
-        className={`article h-full w-full ${fullWidth ? '' : 'xl:max-w-5xl'} ${hasCode ? 'xl:w-[73.15vw]' : ''}  bg-white dark:bg-[#18171d] dark:border-gray-600 lg:hover:shadow lg:border rounded-2xl lg:px-2 lg:py-4 `}>
+      <div className={`article h-full w-full ${fullWidth ? '' : 'xl:max-w-5xl'} ${hasCode ? 'xl:w-[73.15vw]' : ''}  bg-white dark:bg-[#18171d] dark:border-gray-600 lg:hover:shadow lg:border rounded-2xl lg:px-2 lg:py-4`}>
         {lock && <PostLock validPassword={validPassword} />}
-
         {!lock && post && (
           <div className='mx-auto md:w-full md:px-5'>
             <article
               id='article-wrapper'
               itemScope
               itemType='https://schema.org/Movie'>
-                
+
               {/* 文章页顶部随机图片 */}
               <div className='px-5'>
                 <RandomImageCard banners={XUANCHUAN_BANNERS} linkUrl="#" alt="培训班简介" />
               </div>
-              
+
               <section
                 className='wow fadeInUp p-5 justify-center mx-auto'
                 data-wow-delay='.2s'>
                 <ArticleExpirationNotice post={post} />
                 <AISummary aiSummary={post.aiSummary} />
                 <WWAds orientation='horizontal' className='w-full' />
-                
+
                 {post?.type === 'Post' && <PostCopyright {...props} />}
 
                 {post && <NotionPage post={post} />}
@@ -629,7 +625,7 @@ const LayoutSlug = props => {
               </section>
 
               <ShareBar post={post} />
-              
+
               {/* --- 插入新的文章页按钮组 --- */}
               <div className='bg-white shadow-md my-2 p-4 rounded-md dark:bg-black'>
                 <div className='grid grid-cols-3 gap-3'>
@@ -647,7 +643,9 @@ const LayoutSlug = props => {
               )}
             </article>
 
-            {fullWidth ? null : (
+            {fullWidth
+              ? null
+              : (
               <div className={`${commentEnable && post ? '' : 'hidden'}`}>
                 <hr className='my-4 border-dashed' />
                 <div className='py-2'>
@@ -661,11 +659,11 @@ const LayoutSlug = props => {
                   <Comment frontMatter={post} className='' />
                 </div>
               </div>
-            )}
+                )}
           </div>
         )}
       </div>
-      
+
       <Modal isOpen={!!activeModal} onClose={() => setActiveModal(null)} title={currentModal?.title} intro={currentModal?.intro}>
         {currentModal?.children}
       </Modal>
@@ -682,45 +680,45 @@ const Layout404 = props => {
   const { onLoading, fullWidth } = useGlobal()
   return (
     <>
-      <main
-        id='wrapper-outer'
-        className={`flex-grow ${fullWidth ? '' : 'max-w-4xl'} w-screen mx-auto px-5`}>
-        <div id='error-wrapper' className={'w-full mx-auto justify-center'}>
-          <Transition
-            show={!onLoading}
-            appear={true}
-            enter='transition ease-in-out duration-700 transform order-first'
-            enterFrom='opacity-0 translate-y-16'
-            enterTo='opacity-100'
-            leave='transition ease-in-out duration-300 transform'
-            leaveFrom='opacity-100 translate-y-0'
-            leaveTo='opacity-0 -translate-y-16'
-            unmount={false}>
-            <div className='error-content flex flex-col md:flex-row w-full mt-12 h-[30rem] md:h-96 justify-center items-center bg-white dark:bg-[#1B1C20] border dark:border-gray-800 rounded-3xl'>
-              <LazyImage
-                className='error-img h-60 md:h-full p-4'
-                src={
-                  'https://bu.dusays.com/2023/03/03/6401a7906aa4a.gif'
-                }></LazyImage>
-              <div className='error-info flex-1 flex flex-col justify-center items-center space-y-4'>
-                <h1 className='error-title font-extrabold md:text-9xl text-7xl dark:text-white'>
-                  404
-                </h1>
-                <div className='dark:text-white'>请尝试站内搜索寻找文章</div>
-                <SmartLink href='/'>
-                  <button className='bg-blue-500 py-2 px-4 text-white shadow rounded-lg hover:bg-blue-600 hover:shadow-md duration-200 transition-all'>
-                    回到主页
-                  </button>
-                </SmartLink>
-              </div>
-            </div>
-            <div className='mt-12'>
-              <LatestPostsGroup {...props} />
-            </div>
-          </Transition>
-        </div>
-      </main>
-    </>
+       <main
+         id='wrapper-outer'
+         className={`flex-grow ${fullWidth ? '' : 'max-w-4xl'} w-screen mx-auto px-5`}>
+         <div id='error-wrapper' className={'w-full mx-auto justify-center'}>
+           <Transition
+             show={!onLoading}
+             appear={true}
+             enter='transition ease-in-out duration-700 transform order-first'
+             enterFrom='opacity-0 translate-y-16'
+             enterTo='opacity-100'
+             leave='transition ease-in-out duration-300 transform'
+             leaveFrom='opacity-100 translate-y-0'
+             leaveTo='opacity-0 -translate-y-16'
+             unmount={false}>
+             <div className='error-content flex flex-col md:flex-row w-full mt-12 h-[30rem] md:h-96 justify-center items-center bg-white dark:bg-[#1B1C20] border dark:border-gray-800 rounded-3xl'>
+               <LazyImage
+                 className='error-img h-60 md:h-full p-4'
+                 src={
+                   'https://bu.dusays.com/2023/03/03/6401a7906aa4a.gif'
+                 }></LazyImage>
+               <div className='error-info flex-1 flex flex-col justify-center items-center space-y-4'>
+                 <h1 className='error-title font-extrabold md:text-9xl text-7xl dark:text-white'>
+                   404
+                 </h1>
+                 <div className='dark:text-white'>请尝试站内搜索寻找文章</div>
+                 <SmartLink href='/'>
+                   <button className='bg-blue-500 py-2 px-4 text-white shadow rounded-lg hover:bg-blue-600 hover:shadow-md duration-200 transition-all'>
+                     回到主页
+                   </button>
+                 </SmartLink>
+               </div>
+             </div>
+             <div className='mt-12'>
+               <LatestPostsGroup {...props} />
+             </div>
+           </Transition>
+         </div>
+       </main>
+     </>
   )
 }
 
@@ -730,12 +728,9 @@ const Layout404 = props => {
 const LayoutCategoryIndex = props => {
   const { categoryOptions } = props
   const { locale } = useGlobal()
-
   return (
     <div id='category-outer-wrapper' className='mt-8 px-5 md:px-0'>
-      <div className='text-4xl font-extrabold dark:text-gray-200 mb-5'>
-        {locale.COMMON.CATEGORY}
-      </div>
+      <div className='text-4xl font-extrabold dark:text-gray-200 mb-5'>{locale.COMMON.CATEGORY}</div>
       <div
         id='category-list'
         className='duration-200 flex flex-wrap m-10 justify-center'>
@@ -747,9 +742,7 @@ const LayoutCategoryIndex = props => {
               passHref
               legacyBehavior>
               <div
-                className={
-                  'group mr-5 mb-5 flex flex-nowrap items-center border bg-white text-2xl rounded-xl dark:hover:text-white px-4 cursor-pointer py-3 hover:text-white hover:bg-indigo-600 transition-all hover:scale-110 duration-150'
-                }>
+                className={'group mr-5 mb-5 flex flex-nowrap items-center border bg-white text-2xl rounded-xl dark:hover:text-white px-4 cursor-pointer py-3 hover:text-white hover:bg-indigo-600 transition-all hover:scale-110 duration-150'}>
                 <HashTag className={'w-5 h-5 stroke-gray-500 stroke-2'} />
                 {category.name}
                 <div className='bg-[#f1f3f8] ml-1 px-2 rounded-lg group-hover:text-indigo-600 '>
@@ -770,12 +763,9 @@ const LayoutCategoryIndex = props => {
 const LayoutTagIndex = props => {
   const { tagOptions } = props
   const { locale } = useGlobal()
-
   return (
     <div id='tag-outer-wrapper' className='px-5 mt-8 md:px-0'>
-      <div className='text-4xl font-extrabold dark:text-gray-200 mb-5'>
-        {locale.COMMON.TAGS}
-      </div>
+      <div className='text-4xl font-extrabold dark:text-gray-200 mb-5'>{locale.COMMON.TAGS}</div>
       <div
         id='tag-list'
         className='duration-200 flex flex-wrap space-x-5 space-y-5 m-10 justify-center'>
@@ -787,9 +777,7 @@ const LayoutTagIndex = props => {
               passHref
               legacyBehavior>
               <div
-                className={
-                  'group flex flex-nowrap items-center border bg-white text-2xl rounded-xl dark:hover:text-white px-4 cursor-pointer py-3 hover:text-white hover:bg-indigo-600 transition-all hover:scale-110 duration-150'
-                }>
+                className={'group flex flex-nowrap items-center border bg-white text-2xl rounded-xl dark:hover:text-white px-4 cursor-pointer py-3 hover:text-white hover:bg-indigo-600 transition-all hover:scale-110 duration-150'}>
                 <HashTag className={'w-5 h-5 stroke-gray-500 stroke-2'} />
                 {tag.name}
                 <div className='bg-[#f1f3f8] ml-1 px-2 rounded-lg group-hover:text-indigo-600 '>
