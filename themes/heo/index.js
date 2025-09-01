@@ -1,4 +1,4 @@
-// themes/heo/index.js (最终完整版 - 已恢复所有代码并彻底解决问题)
+// themes/heo/index.js (最终修正版 - 修复Portal在SSR下的问题)
 import Comment from '@/components/Comment'
 import { AdSlot } from '@/components/GoogleAdsense'
 import { HashTag } from '@/components/HeroIcons'
@@ -58,18 +58,22 @@ const Modal = ({ isOpen, onClose, title, intro, children }) => {
   )
 }
 
-// --- 新增：使用Portal技术的AI助手全屏容器 ---
+// --- 重大变更：使用更稳定的方式创建Portal ---
 const AIAssistantPortal = ({ isOpen, onClose }) => {
+  const [isMounted, setIsMounted] = useState(false)
   const containerRef = useRef(null)
 
   useEffect(() => {
-    if (isOpen) {
-      // 打开时请求全屏
+    // 这个Effect确保组件只在客户端渲染，解决了SSR问题
+    setIsMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (isOpen && isMounted) {
       containerRef.current?.requestFullscreen().catch(err => {
         console.error(`无法进入全屏模式: ${err.message}`)
       })
 
-      // 监听全屏变化，用户按ESC退出时，调用onClose
       const handleFullscreenChange = () => {
         if (!document.fullscreenElement) {
           onClose()
@@ -78,18 +82,18 @@ const AIAssistantPortal = ({ isOpen, onClose }) => {
       document.addEventListener('fullscreenchange', handleFullscreenChange)
       return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
     }
-  }, [isOpen, onClose])
+  }, [isOpen, isMounted, onClose])
 
-  if (!isOpen || !isBrowser) {
+  if (!isMounted) {
     return null
   }
 
-  return createPortal(
-    <div ref={containerRef} className='fixed inset-0 z-[100] bg-white dark:bg-gray-900'>
+  return isOpen ? createPortal(
+    <div ref={containerRef} className='fixed inset-0 z-[1000] bg-white dark:bg-gray-900'>
       <AiChatAssistant onClose={onClose} />
     </div>,
     document.body
-  )
+  ) : null
 }
 
 /**
@@ -165,12 +169,8 @@ const LayoutIndex = props => {
   const [activeModal, setActiveModal] = useState(null)
   const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false)
 
-  const handleOpenAssistant = () => {
-    setIsAiAssistantOpen(true)
-  }
-
+  const handleOpenAssistant = () => setIsAiAssistantOpen(true)
   const handleCloseAssistant = () => {
-    // 如果当前在全屏模式，先退出全屏
     if (document.fullscreenElement) {
       document.exitFullscreen()
     }
