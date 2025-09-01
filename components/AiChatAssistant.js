@@ -18,7 +18,7 @@ const DEFAULT_SETTINGS = {
     autoRead: false, ttsEngine: TTS_ENGINE.THIRD_PARTY, thirdPartyTtsVoice: 'zh-CN-XiaoxiaoMultilingualNeural',
     systemTtsVoiceURI: '', speechLanguage: 'zh-CN', chatBackgroundUrl: '/images/chat-bg.jpg',
     userAvatarUrl: '/images/user-avatar.png', aiAvatarUrl: '/images/ai-avatar.png',
-    isFacebookApp:true, // 是否在Facebook App内
+    isFacebookApp:false, // 是否在Facebook App内
 };
 
 // 子组件定义
