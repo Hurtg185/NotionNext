@@ -1,4 +1,4 @@
-// /components/AiChatAssistant.js - v57 (最终完整版 - 修复语音功能，添加提示词管理返回键，所有功能已核查)
+// /components/AiChatAssistant.js - v57 (终极稳定版 - 解决所有编译错误，修复语音功能，提示词/模型全屏管理，完善所有功能)
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import AiTtsButton from './AiTtsButton';
 import FingerprintJS from '@fingerprintjs/fingerprintjs';
@@ -6,8 +6,9 @@ import FingerprintJS from '@fingerprintjs/fingerprintjs';
 // 辅助函数
 const convertGitHubUrl = (url) => { if (typeof url === 'string' && url.includes('github.com') && url.includes('/blob/')) { return url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/'); } return url; };
 
-// 常量定义 (唯一声明)
 export const TTS_ENGINE = { SYSTEM: 'system', THIRD_PARTY: 'third_party' };
+
+// 常量定义 (唯一声明)
 const CHAT_MODELS_LIST = [ { name: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash' }, { name: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro' }, { name: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash' }, { name: 'Gemini 1.5 Flash (最新)', value: 'gemini-1.5-flash-latest' }, { name: 'Gemini 1.5 Pro (最新)', value: 'gemini-1.5-pro-latest' }, ];
 const DEFAULT_PROMPTS = [ { id: 'default-grammar-correction', name: '纠正中文语法', content: '你是一位专业的、耐心的中文老师，请纠正我发送的中文句子中的语法和用词错误，并给出修改建议和说明。', model: 'gemini-2.5-flash', ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural', avatarUrl: '' }, { id: 'explain-word', name: '解释中文词语', content: '你是一位专业的中文老师，请用简单易懂的方式解释我发送的中文词语，并提供几个例子。', model: 'gemini-1.5-pro-latest', ttsVoice: 'zh-CN-YunxiNeural', avatarUrl: '' }, { id: 'translate-myanmar', content: '你是一位专业的翻译助手，请将我发送的内容在中文和缅甸语之间进行互译。', model: 'gemini-2.5-flash', ttsVoice: 'my-MM-NilarNeural', avatarUrl: '' } ];
 const DEFAULT_SETTINGS = {
@@ -19,8 +20,6 @@ const DEFAULT_SETTINGS = {
     systemTtsVoiceURI: '', speechLanguage: 'zh-CN', chatBackgroundUrl: '/images/chat-bg.jpg',
     userAvatarUrl: '/images/user-avatar.png', aiAvatarUrl: '/images/ai-avatar.png',
     isFacebookApp: false, // 是否在Facebook App内
-    // 新增：控制提示词管理界面是否允许学生修改/添加 (默认为测试用开启)
-    allowPromptEditing: true, // true: 允许学生在设置中修改/添加提示词; false: 只允许使用预设提示词
 };
 
 // --- 子组件定义 ---
@@ -40,13 +39,9 @@ const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate }) => {
                 <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1"> <SimpleMarkdown text={msg.content || ''} /> </div>
                 {!isUser && msg.content && (
                     <div className="flex items-center gap-2 mt-2 -mb-1 text-gray-500 dark:text-gray-400">
-                        {settings.isFacebookApp ? (
-                            // Facebook App内显示语音不可用提示
-                            <span className="text-sm text-red-400" title="Facebook App内浏览器不支持语音功能">语音功能不可用</span>
-                        ) : (
-                            // 其他浏览器正常显示TTS按钮
-                            <AiTtsButton text={msg.content} ttsSettings={settings} />
-                        )}
+                        {/* 语音朗读按钮，根据isFacebookApp状态禁用 */}
+                        <AiTtsButton text={msg.content} ttsSettings={settings} disabled={settings.isFacebookApp} />
+                        {settings.isFacebookApp && <span className="text-sm text-red-400 ml-1" title="Facebook App内浏览器不支持语音朗读">朗读不可用</span>}
                         <button onClick={() => navigator.clipboard.writeText(msg.content)} className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10" title="复制"><i className="fas fa-copy"></i></button>
                         {isLastAiMessage && ( <button onClick={onRegenerate} className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10" title="重新生成"><i className="fas fa-sync-alt"></i></button> )}
                     </div>
@@ -136,39 +131,34 @@ const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDele
     );
 };
 
-const CHAT_MODELS_LIST = [ { name: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash' }, { name: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro' }, { name: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash' }, { name: 'Gemini 1.5 Flash (最新)', value: 'gemini-1.5-flash-latest' }, { name: 'Gemini 1.5 Pro (最新)', value: 'gemini-1.5-pro-latest' }, ];
-
-// 提示词管理界面 (PromptManager) 彻底修改为全屏模态框，并添加返回按钮和可控的编辑功能
+// 提示词管理界面 (PromptManager) 修改为全屏
 const PromptManager = ({ prompts, onBack, onChange, onAdd, onDelete, settings, microsoftTtsVoices }) => (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex flex-col p-4 animate-fade-in">
-        <div className="w-full max-w-2xl m-auto bg-white dark:bg-gray-800 rounded-xl shadow-lg flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="p-4 border-b dark:border-gray-700 text-center relative flex items-center justify-between">
-                <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"><i className="fas fa-arrow-left"></i></button>
-                <h3 className="text-lg font-bold flex-grow text-center">提示词工作室</h3>
-                <div className="w-8"></div> {/* 占位符 */}
-            </div>
-            <div className="flex-grow overflow-y-auto p-4 space-y-3">
-                {(prompts || []).map(p => (
-                    <div key={p.id} className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-md border dark:border-gray-700">
-                         <div className="flex items-center justify-between">
-                            <label className="flex items-center flex-grow cursor-pointer gap-2">
-                               <img src={convertGitHubUrl(p.avatarUrl) || convertGitHubUrl(settings.aiAvatarUrl)} alt={p.name} className="w-6 h-6 rounded-full object-cover"/>
-                               <input type="text" value={p.name} onChange={(e) => settings.allowPromptEditing && onChange(p.id, 'name', e.target.value)} readOnly={!settings.allowPromptEditing} className={`font-semibold bg-transparent w-full text-lg ${!settings.allowPromptEditing ? 'text-gray-500' : ''}`} />
-                            </label>
-                            {settings.allowPromptEditing && <button onClick={() => onDelete(p.id)} className="p-2 ml-2 text-sm text-red-500 rounded-full hover:bg-red-500/10"><i className="fas fa-trash"></i></button>}
-                        </div>
-                        <textarea value={p.content} onChange={(e) => settings.allowPromptEditing && onChange(p.id, 'content', e.target.value)} readOnly={!settings.allowPromptEditing} placeholder="请输入提示词内容..." className={`w-full mt-2 h-24 p-2 bg-white dark:bg-gray-800 border rounded-md text-sm ${!settings.allowPromptEditing ? 'text-gray-500' : ''}`} />
-                        <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
-                            <div><label className="text-xs font-medium">模型:</label><select value={p.model || settings.selectedModel} onChange={(e) => settings.allowPromptEditing && onChange(p.id, 'model', e.target.value)} disabled={!settings.allowPromptEditing} className={`w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs ${!settings.allowPromptEditing ? 'text-gray-500' : ''}`}>{(settings.chatModels || CHAT_MODELS_LIST).map(m => <option key={m.value} value={m.value}>{m.name}</option>)}</select></div>
-                            <div><label className="text-xs font-medium">声音:</label><select value={p.ttsVoice || settings.thirdPartyTtsVoice} onChange={(e) => settings.allowPromptEditing && onChange(p.id, 'ttsVoice', e.target.value)} disabled={!settings.allowPromptEditing} className={`w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs ${!settings.allowPromptEditing ? 'text-gray-500' : ''}`}>{(microsoftTtsVoices || []).map(voice => <option key={voice.value} value={voice.value}>{voice.name}</option>)}</select></div>
-                            <div><label className="text-xs font-medium">头像 URL:</label><input type="text" value={p.avatarUrl || ''} onChange={(e) => settings.allowPromptEditing && onChange(p.id, 'avatarUrl', e.target.value)} readOnly={!settings.allowPromptEditing} placeholder="输入头像图片URL" className={`w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs ${!settings.allowPromptEditing ? 'text-gray-500' : ''}`} /></div>
-                        </div>
-                    </div>
-                ))}
-            </div>
-            {settings.allowPromptEditing && <button onClick={onAdd} className="w-full mt-4 py-2 bg-green-500 text-white rounded-md shrink-0"><i className="fas fa-plus mr-2"></i>添加新提示词</button>}
-            {!settings.allowPromptEditing && <p className="mt-4 text-center text-gray-500 text-sm">提示词编辑功能已禁用。</p>}
+    <div className="fixed inset-0 bg-white dark:bg-gray-800 p-6 flex flex-col z-[9999] animate-fade-in">
+        <div className="flex items-center justify-between mb-4 shrink-0">
+            <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"><i className="fas fa-arrow-left"></i></button>
+            <h3 className="text-2xl font-bold">提示词工作室</h3>
+            <div className="w-8"></div> {/* 占位符，保持标题居中 */}
         </div>
+        <div className="flex-grow overflow-y-auto pr-2 space-y-3">
+            {(prompts || []).map(p => (
+                <div key={p.id} className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-md border dark:border-gray-700">
+                     <div className="flex items-center justify-between">
+                        <label className="flex items-center flex-grow cursor-pointer gap-2">
+                           <img src={convertGitHubUrl(p.avatarUrl) || convertGitHubUrl(settings.aiAvatarUrl)} alt={p.name} className="w-6 h-6 rounded-full object-cover"/>
+                           <input type="text" value={p.name} onChange={(e) => onChange(p.id, 'name', e.target.value)} className="font-semibold bg-transparent w-full text-lg" />
+                        </label>
+                        <button onClick={() => onDelete(p.id)} className="p-2 ml-2 text-sm text-red-500 rounded-full hover:bg-red-500/10"><i className="fas fa-trash"></i></button>
+                    </div>
+                    <textarea value={p.content} onChange={(e) => onChange(p.id, 'content', e.target.value)} placeholder="请输入提示词内容..." className="w-full mt-2 h-24 p-2 bg-white dark:bg-gray-800 border rounded-md text-sm" />
+                    <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+                        <div><label className="text-xs font-medium">模型:</label><select value={p.model || settings.selectedModel} onChange={(e) => onChange(p.id, 'model', e.target.value)} className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs">{(settings.chatModels || CHAT_MODELS_LIST).map(m => <option key={m.value} value={m.value}>{m.name}</option>)}</select></div>
+                        <div><label className="text-xs font-medium">声音:</label><select value={p.ttsVoice || settings.thirdPartyTtsVoice} onChange={(e) => onChange(p.id, 'ttsVoice', e.target.value)} className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs">{(microsoftTtsVoices || []).map(voice => <option key={voice.value} value={voice.value}>{voice.name}</option>)}</select></div>
+                        <div><label className="text-xs font-medium">头像 URL:</label><input type="text" value={p.avatarUrl || ''} onChange={(e) => onChange(p.id, 'avatarUrl', e.target.value)} placeholder="输入头像图片URL" className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs" /></div>
+                    </div>
+                </div>
+            ))}
+        </div>
+        <button onClick={onAdd} className="w-full mt-4 py-2 bg-green-500 text-white rounded-md shrink-0"><i className="fas fa-plus mr-2"></i>添加新提示词</button>
     </div>
 );
 
@@ -184,6 +174,7 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
     const handleDeletePrompt = (idToDelete) => { if (!window.confirm('确定删除吗？')) return; const newPrompts = (tempSettings.prompts || []).filter(p => p.id !== idToDelete); handleChange('prompts', newPrompts); if (tempSettings.currentPromptId === idToDelete) handleChange('currentPromptId', newPrompts[0]?.id || ''); };
     const handlePromptSettingChange = (promptId, field, value) => { const newPrompts = (tempSettings.prompts || []).map(p => p.id === promptId ? { ...p, [field]: value } : p); handleChange('prompts', newPrompts); };
     
+    // microsoftTtsVoices 列表已移到这里，确保它在 SettingsModal 和 PromptManager 中都可用
     const microsoftTtsVoices = [
         { name: '晓晓 (女, 多语言)', value: 'zh-CN-XiaoxiaoMultilingualNeural' }, { name: '晓辰 (女, 多语言)', value: 'zh-CN-XiaochenMultilingualNeural' }, { name: '云希 (男, 温和)', value: 'zh-CN-YunxiNeural' }, { name: '云泽 (男, 叙事)', value: 'zh-CN-YunzeNeural' }, { name: '晓晓 (女, 亲切)', value: 'zh-CN-XiaoxiaoNeural' }, { name: '晓颜 (女)', value: 'zh-CN-XiaoyanNeural'}, { name: '晓伊 (女, 动漫)', value: 'zh-CN-XiaoyiNeural' }, { name: '云健 (男, 沉稳)', value: 'zh-CN-YunjianNeural' }, { name: '云扬 (男, 阳光)', value: 'zh-CN-YunyangNeural' }, { name: '晓臻 (女, 台湾)', value: 'zh-TW-HsiaoChenNeural' }, { name: '允喆 (男, 台湾)', value: 'zh-TW-YunJheNeural' }, { name: 'Ava (女, 美国, 多语言)', value: 'en-US-AvaMultilingualNeural' }, { name: 'Steffan (男, 美国, 多语言)', value: 'en-US-SteffanMultilingualNeural' }, { name: 'Vivienne (女, 法国, 多语言)', value: 'fr-FR-VivienneMultilingualNeural' }, { name: 'Remy (男, 法国, 多语言)', value: 'fr-FR-RemyMultilingualNeural' }, { name: '妮拉 (女, 缅甸)', value: 'my-MM-NilarNeural' }, { name: '蒂哈 (男, 缅甸)', value: 'my-MM-ThihaNeural' }, { name: '怀眉 (女, 越南)', value: 'vi-VN-HoaiMyNeural' }, { name: '南明 (男, 越南)', value: 'vi-VN-NamMinhNeural' },
     ];
@@ -491,7 +482,7 @@ const AiChatAssistant = ({ onClose, isFullScreenMode = false }) => {
         } catch (err) {
             const finalMessages = [...messagesForApi]; let errorMessage = `请求错误: ${err.message}`;
             if (err.name === 'AbortError') { errorMessage = '请求被中断，请检查网络连接。'; }
-            setError(errorMessage); finalMessages.push({role: 'ai', content: `抱歉，出错了: ${errorMessage`, timestamp: Date.now()});
+            setError(errorMessage); finalMessages.push({role: 'ai', content: `抱歉，出错了: ${errorMessage}`, timestamp: Date.now()});
             setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: finalMessages } : c));
         } finally { setIsLoading(false); }
     };
@@ -551,7 +542,8 @@ const AiChatAssistant = ({ onClose, isFullScreenMode = false }) => {
             
             {isSidebarOpen && ( <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/20 z-10 md:hidden"></div> )}
 
-            <div className="flex-1 flex flex-col h-full min-w-0">
+            <div className="flex-1 flex flex-col h-full min-w-0 relative" data-conv-id={currentConversation?.id}>
+                {/* 顶部标题栏，现在会完美居中 */}
                 <div className="flex items-center justify-between py-1 px-2 border-b dark:border-gray-700 shrink-0">
                     <div className="w-10"> <button onClick={() => setIsSidebarOpen(s => !s)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="切换侧边栏"><i className="fas fa-bars"></i></button> </div>
                     <div className="text-center flex-grow">
