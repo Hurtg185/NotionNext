@@ -196,7 +196,7 @@ const AiChatAssistant = ({ onClose, isFullScreenMode = false }) => {
             }
             // 检查是否在Facebook App内
             if (typeof navigator !== 'undefined' && /FBAN|FBAV/i.test(navigator.userAgent)) {
-                finalSettings.isFacebookApp = false;
+                finalSettings.isFacebookApp = true;
             }
             setSettings(finalSettings);
 
