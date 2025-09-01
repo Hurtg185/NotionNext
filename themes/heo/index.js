@@ -1,4 +1,4 @@
-// themes/heo/index.js (最终修正版 - 修复Portal在SSR下的问题)
+// themes/heo/index.js (最终稳定版 - 已移除所有全屏API，保证可靠性)
 import Comment from '@/components/Comment'
 import { AdSlot } from '@/components/GoogleAdsense'
 import { HashTag } from '@/components/HeroIcons'
@@ -14,7 +14,7 @@ import { isBrowser } from '@/lib/utils'
 import { Transition } from '@headlessui/react'
 import SmartLink from '@/components/SmartLink'
 import { useRouter } from 'next/router'
-import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import BlogPostArchive from './components/BlogPostArchive'
 import BlogPostListPage from './components/BlogPostListPage'
@@ -42,13 +42,17 @@ import AiChatAssistant from '@/components/AiChatAssistant'
 
 const XUANCHUAN_BANNERS = ['/images/xuanchuan3.jpg', '/images/xuanchuan4.jpg', '/images/xuanchuan5.jpg']
 
+// --- 使用Portal的Modal组件，确保在顶层渲染 ---
 const Modal = ({ isOpen, onClose, title, intro, children }) => {
   const [isMounted, setIsMounted] = useState(false)
   useEffect(() => { setIsMounted(true) }, [])
-  if (!isOpen || !isMounted) return null
+
+  if (!isOpen || !isMounted) {
+    return null
+  }
 
   return createPortal(
-    <div className='fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4' onClick={onClose}>
+    <div className='fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[1000] p-4' onClick={onClose}>
       <div className='bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-sm w-full mx-auto animate-modal-pop' onClick={(e) => e.stopPropagation()}>
         <h3 className='text-xl font-bold mb-2 dark:text-gray-100'>{title}</h3>
         {intro && <p className='text-sm text-gray-600 dark:text-gray-400 mb-4'>{intro}</p>}
@@ -62,32 +66,17 @@ const Modal = ({ isOpen, onClose, title, intro, children }) => {
   )
 }
 
-// --- 重大变更：使用更稳定健壮的Portal组件 ---
+// --- 最稳定可靠的Portal实现 ---
 const AIAssistantPortal = ({ onClose }) => {
-  const ref = useRef(null)
+  const [isMounted, setIsMounted] = useState(false)
+  useEffect(() => { setIsMounted(true) }, [])
 
-  useEffect(() => {
-    ref.current?.requestFullscreen().catch(err => {
-      console.error(`进入全屏模式失败: ${err.message}`)
-    })
-
-    const onFullscreenChange = () => {
-      if (!document.fullscreenElement) {
-        onClose()
-      }
-    }
-    document.addEventListener('fullscreenchange', onFullscreenChange)
-
-    return () => {
-      document.removeEventListener('fullscreenchange', onFullscreenChange)
-      if (document.fullscreenElement) {
-        document.exitFullscreen()
-      }
-    }
-  }, [onClose])
+  if (!isMounted) {
+    return null
+  }
 
   return createPortal(
-    <div ref={ref} className="fixed inset-0 z-[1000] bg-white dark:bg-gray-900">
+    <div className="fixed inset-0 z-[1000] bg-white dark:bg-gray-900">
       <AiChatAssistant onClose={onClose} />
     </div>,
     document.body
