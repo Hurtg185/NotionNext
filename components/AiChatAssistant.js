@@ -18,7 +18,7 @@ const DEFAULT_SETTINGS = {
     autoRead: false, ttsEngine: TTS_ENGINE.THIRD_PARTY, thirdPartyTtsVoice: 'zh-CN-XiaoxiaoMultilingualNeural',
     systemTtsVoiceURI: '', speechLanguage: 'zh-CN', chatBackgroundUrl: '/images/chat-bg.jpg',
     userAvatarUrl: '/images/user-avatar.png', aiAvatarUrl: '/images/ai-avatar.png',
-    isFacebookApp: false, // 是否在Facebook App内
+    isFacebookApp:true, // 是否在Facebook App内
 };
 
 // 子组件定义
@@ -196,7 +196,7 @@ const AiChatAssistant = ({ onClose, isFullScreenMode = false }) => {
             }
             // 检查是否在Facebook App内
             if (typeof navigator !== 'undefined' && /FBAN|FBAV/i.test(navigator.userAgent)) {
-                finalSettings.isFacebookApp = true;
+                finalSettings.isFacebookApp = false;
             }
             setSettings(finalSettings);
 
@@ -409,7 +409,7 @@ const AiChatAssistant = ({ onClose, isFullScreenMode = false }) => {
                 <div className="relative w-full max-w-sm bg-white/10 backdrop-blur-xl border border-white/20 rounded-lg shadow-xl p-8 flex flex-col items-center">
                     <h2 className="text-2xl font-bold mb-2 text-center text-white shadow-text">报名中文课程</h2>
                     <p className="text-gray-200 text-sm mb-2 text-center shadow-text">【课程介绍】结合中缅教学方案，高效学习中文，价格比大部分缅甸机构更优惠！</p>
-                    <p className="text-gray-200 text-sm mb-2 text-center shadow-text">【地址】仰光某区，欢迎线下咨询！</p>
+                    <p className="text-gray-200 text-sm mb-2 text-center shadow-text">【地址】仰光红灯区，欢迎线下咨询！</p>
                     <p className="text-xl font-bold text-green-400 mb-4 text-center shadow-text">【优惠价格】AI助手套餐：$50 / 月（原价$80）</p>
                     <p className="text-gray-200 text-sm mb-4 text-center shadow-text">请通过以下方式联系我们，获取专属学习方案：</p>
                     <div className="space-y-3 w-full mb-6">
