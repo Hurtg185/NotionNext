@@ -1,37 +1,14 @@
-// /components/AiChatAssistant.js - v57.1 (修复版 - 恢复激活流程并加固)
+// /components/AiChatAssistant.js - v57.2 (最终修复版 - 解决设置迁移崩溃问题)
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-// 确保您的 AiTtsButton 组件也已更新以支持新引擎
 import AiTtsButton from './AiTtsButton'; 
 import FingerprintJS from '@fingerprintjs/fingerprintjs';
 
 // --- 轻量级滑动手势Hook (无变化) ---
 const useSimpleSwipe = ({ onSwipeLeft, onSwipeRight }) => {
-    const touchStart = useRef({ x: 0, y: 0 });
-    const touchEnd = useRef({ x: 0, y: 0 });
-    const minSwipeDistance = 60;
-
-    const onTouchStart = (e) => {
-        touchEnd.current = { x: 0, y: 0 };
-        touchStart.current = { x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY };
-    };
-
-    const onTouchMove = (e) => {
-        touchEnd.current = { x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY };
-    };
-
-    const onTouchEnd = () => {
-        if (!touchStart.current.x || !touchEnd.current.x) return;
-        const xDistance = touchStart.current.x - touchEnd.current.x;
-        const yDistance = touchStart.current.y - touchEnd.current.y;
-        if (Math.abs(xDistance) < Math.abs(yDistance)) return;
-        if (xDistance > minSwipeDistance) {
-            if (onSwipeLeft) onSwipeLeft();
-        } else if (xDistance < -minSwipeDistance) {
-            if (onSwipeRight) onSwipeRight(); // 从左向右滑动
-        }
-        touchStart.current = { x: 0, y: 0 };
-        touchEnd.current = { x: 0, y: 0 };
-    };
+    const touchStart = useRef({ x: 0, y: 0 }); const touchEnd = useRef({ x: 0, y: 0 }); const minSwipeDistance = 60;
+    const onTouchStart = (e) => { touchEnd.current = { x: 0, y: 0 }; touchStart.current = { x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY }; };
+    const onTouchMove = (e) => { touchEnd.current = { x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY }; };
+    const onTouchEnd = () => { if (!touchStart.current.x || !touchEnd.current.x) return; const xDistance = touchStart.current.x - touchEnd.current.x; const yDistance = touchStart.current.y - touchEnd.current.y; if (Math.abs(xDistance) < Math.abs(yDistance)) return; if (xDistance > minSwipeDistance) { if (onSwipeLeft) onSwipeLeft(); } else if (xDistance < -minSwipeDistance) { if (onSwipeRight) onSwipeRight(); } touchStart.current = { x: 0, y: 0 }; touchEnd.current = { x: 0, y: 0 }; };
     return { onTouchStart, onTouchMove, onTouchEnd };
 };
 
@@ -41,53 +18,15 @@ const safeLocalStorageGet = (key) => { if (typeof window !== 'undefined') { retu
 const safeLocalStorageSet = (key, value) => { if (typeof window !== 'undefined') { localStorage.setItem(key, value); } };
 const safeLocalStorageRemove = (key) => { if (typeof window !== 'undefined') { localStorage.removeItem(key); } };
 
-// --- 常量定义 (更新) ---
+// --- 常量定义 (无变化) ---
 export const TTS_ENGINE = { SYSTEM: 'system', MICROSOFT: 'microsoft', OPENAI: 'openai', GOOGLE: 'google' };
 const API_TYPES = { GEMINI: 'gemini', OPENAI: 'openai' };
+const CHAT_MODELS_LIST = [ { name: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash', maxContext: 8192 }, { name: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro', maxContext: 8192 }, { name: 'Gemini 1.5 Flash (最新)', value: 'gemini-1.5-flash-latest', maxContext: 8192 }, { name: 'Gemini 1.5 Pro (最新)', value: 'gemini-1.5-pro-latest', maxContext: 8192 }, { name: 'GPT-4o (OpenAI 兼容)', value: 'gpt-4o', maxContext: 8192 }, { name: 'GPT-3.5 Turbo (OpenAI 兼容)', value: 'gpt-3.5-turbo', maxContext: 4096 }, ];
+const DEFAULT_PROMPTS = [ { id: 'default-grammar-correction', name: '纠正中文语法', content: '你是一位专业的、耐心的中文老师，请纠正我发送的中文句子中的语法和用词错误，并给出修改建议和说明。', model: 'gemini-2.5-flash', ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural', avatarUrl: '', isDefault: true }, { id: 'explain-word', name: '解释中文词语', content: '你是一位专业的中文老师，请用简单易懂的方式解释我发送的中文词语，并提供几个例子。', model: 'gemini-1.5-pro-latest', ttsVoice: 'zh-CN-YunxiNeural', avatarUrl: '', isDefault: true }, { id: 'translate-myanmar', content: '你是一位专业的翻译助手，请将我发送的内容在中文和缅甸语之间进行互译。', model: 'gemini-2.5-flash', ttsVoice: 'my-MM-NilarNeural', avatarUrl: '', isDefault: true } ];
+const DEFAULT_SETTINGS = { apiKeys: [{ id: 'default-gemini', name: '默认 Gemini Key', key: '', type: API_TYPES.GEMINI }], selectedApiKeyId: 'default-gemini', openaiCompatibleEndpoint: '', selectedModel: 'gemini-2.5-flash', chatModels: CHAT_MODELS_LIST, temperature: 0.8, maxOutputTokens: 2048, disableThinkingMode: true, startWithNewChat: false, prompts: DEFAULT_PROMPTS, currentPromptId: DEFAULT_PROMPTS[0]?.id || '', autoRead: false, ttsEngine: TTS_ENGINE.MICROSOFT, microsoftTtsVoice: 'zh-CN-XiaoxiaoMultilingualNeural', openaiTtsSettings: { apiKey: '', model: 'tts-1', voice: 'alloy' }, googleTtsSettings: { apiKey: '', model: 'text-to-speech', voice: 'zh-CN-Wavenet-A' }, systemTtsVoiceURI: '', speechLanguage: 'zh-CN', chatBackgroundUrl: '/images/chat-bg-2.jpg', userAvatarUrl: '/images/user-avatar.png', aiAvatarUrl: '/images/ai-avatar.png', isFacebookApp: false, };
+const SETTINGS_STORAGE_KEY = 'ai_assistant_settings_v57'; const CONVERSATIONS_STORAGE_KEY = 'ai_assistant_conversations_v57'; const ACTIVATION_KEY_STORAGE = 'ai_assistant_key_v57';
 
-const CHAT_MODELS_LIST = [
-    { name: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash', maxContext: 8192 },
-    { name: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro', maxContext: 8192 },
-    { name: 'Gemini 1.5 Flash (最新)', value: 'gemini-1.5-flash-latest', maxContext: 8192 },
-    { name: 'Gemini 1.5 Pro (最新)', value: 'gemini-1.5-pro-latest', maxContext: 8192 },
-    { name: 'GPT-4o (OpenAI 兼容)', value: 'gpt-4o', maxContext: 8192 },
-    { name: 'GPT-3.5 Turbo (OpenAI 兼容)', value: 'gpt-3.5-turbo', maxContext: 4096 },
-];
-const DEFAULT_PROMPTS = [
-    { id: 'default-grammar-correction', name: '纠正中文语法', content: '你是一位专业的、耐心的中文老师，请纠正我发送的中文句子中的语法和用词错误，并给出修改建议和说明。', model: 'gemini-2.5-flash', ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural', avatarUrl: '', isDefault: true },
-    { id: 'explain-word', name: '解释中文词语', content: '你是一位专业的中文老师，请用简单易懂的方式解释我发送的中文词语，并提供几个例子。', model: 'gemini-1.5-pro-latest', ttsVoice: 'zh-CN-YunxiNeural', avatarUrl: '', isDefault: true },
-    { id: 'translate-myanmar', content: '你是一位专业的翻译助手，请将我发送的内容在中文和缅甸语之间进行互译。', model: 'gemini-2.5-flash', ttsVoice: 'my-MM-NilarNeural', avatarUrl: '', isDefault: true }
-];
-const DEFAULT_SETTINGS = {
-    apiKeys: [{ id: 'default-gemini', name: '默认 Gemini Key', key: '', type: API_TYPES.GEMINI }],
-    selectedApiKeyId: 'default-gemini',
-    openaiCompatibleEndpoint: '',
-    selectedModel: 'gemini-2.5-flash',
-    chatModels: CHAT_MODELS_LIST,
-    temperature: 0.8,
-    maxOutputTokens: 2048,
-    disableThinkingMode: true,
-    startWithNewChat: false,
-    prompts: DEFAULT_PROMPTS,
-    currentPromptId: DEFAULT_PROMPTS[0]?.id || '',
-    autoRead: false,
-    ttsEngine: TTS_ENGINE.MICROSOFT,
-    microsoftTtsVoice: 'zh-CN-XiaoxiaoMultilingualNeural',
-    openaiTtsSettings: { apiKey: '', model: 'tts-1', voice: 'alloy' },
-    googleTtsSettings: { apiKey: '', model: 'text-to-speech', voice: 'zh-CN-Wavenet-A' },
-    systemTtsVoiceURI: '',
-    speechLanguage: 'zh-CN',
-    chatBackgroundUrl: '/images/chat-bg-2.jpg',
-    userAvatarUrl: '/images/user-avatar.png',
-    aiAvatarUrl: '/images/ai-avatar.png',
-    isFacebookApp: false,
-};
-// 注意：Local Storage 的 Key 已更新，以避免与旧的、可能不兼容的设置冲突
-const SETTINGS_STORAGE_KEY = 'ai_assistant_settings_v57';
-const CONVERSATIONS_STORAGE_KEY = 'ai_assistant_conversations_v57';
-const ACTIVATION_KEY_STORAGE = 'ai_assistant_key_v57';
-
-// --- 子组件 (与上一版相同，无需修改) ---
+// --- 子组件 (全部无变化，保持原样即可) ---
 const TypingEffect = ({ text, onComplete }) => { const [displayedText, setDisplayedText] = useState(''); useEffect(() => { if (!text) return; setDisplayedText(''); let index = 0; const intervalId = setInterval(() => { setDisplayedText(prev => prev + text.charAt(index)); index++; if (index >= text.length) { clearInterval(intervalId); if (onComplete) onComplete(); } }, 30); return () => clearInterval(intervalId); }, [text, onComplete]); return <SimpleMarkdown text={displayedText} />; };
 const SimpleMarkdown = ({ text }) => { if (!text) return null; const lines = text.split('\n').map((line, index) => { if (line.trim() === '') return <br key={index} />; if (line.match(/\*\*(.*?)\*\*/)) { const content = line.replace(/\*\*/g, ''); return <strong key={index} className="block mt-2 mb-1">{content}</strong>; } if (line.startsWith('* ') || line.startsWith('- ')) { return <li key={index} className="ml-5 list-disc">{line.substring(2)}</li>; } return <p key={index} className="my-1">{line}</p>; }); return <div>{lines}</div>; };
 const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate, onTypingComplete }) => { const isUser = msg.role === 'user'; const userBubbleClass = 'bg-primary text-white rounded-br-lg shadow-md'; const aiBubbleClass = 'bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm shadow-md'; return ( <div className={`flex items-end gap-2.5 my-4 ${isUser ? 'justify-end' : 'justify-start'}`}> {!isUser && <img src={convertGitHubUrl(settings.aiAvatarUrl)} alt="AI Avatar" className="w-8 h-8 rounded-full shrink-0" />} <div className={`p-3 rounded-2xl text-left flex flex-col ${isUser ? userBubbleClass : aiBubbleClass}`} style={{ maxWidth: '85%' }}> {msg.images && msg.images.length > 0 && ( <div className="flex flex-wrap gap-2 mb-2"> {msg.images.map((img, index) => <img key={index} src={img.previewUrl} alt={`附件 ${index + 1}`} className="w-24 h-24 object-cover rounded-md" />)} </div> )} <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1"> {isLastAiMessage && msg.isTyping ? <TypingEffect text={msg.content || ''} onComplete={onTypingComplete} /> : <SimpleMarkdown text={msg.content || ''} />} </div> {!isUser && msg.content && !msg.isTyping && ( <div className="flex items-center gap-2 mt-2 -mb-1 text-gray-500 dark:text-gray-400"> {settings.isFacebookApp && <span className="text-sm text-red-400" title="Facebook App内浏览器不支持语音功能">语音不可用</span>} {!settings.isFacebookApp && <AiTtsButton text={msg.content} ttsSettings={settings} />} <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(msg.content); }} className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10" title="复制"><i className="fas fa-copy"></i></button> {isLastAiMessage && ( <button onClick={(e) => { e.stopPropagation(); onRegenerate(); }} className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10" title="重新生成"><i className="fas fa-sync-alt"></i></button> )} </div> )} </div> {isUser && <img src={convertGitHubUrl(settings.userAvatarUrl)} alt="User Avatar" className="w-8 h-8 rounded-full shrink-0" />} </div> ); };
@@ -100,211 +39,124 @@ const SettingsModal = ({ settings, onSave, onClose }) => { const [tempSettings, 
 const ModelSelector = ({ settings, onSelect, onClose }) => ( <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-20 flex flex-col p-4 animate-fade-in" onClick={onClose}> <div className="w-full max-w-md m-auto bg-white dark:bg-gray-800 rounded-xl shadow-lg flex flex-col" onClick={e => e.stopPropagation()}> <div className="p-4 border-b dark:border-gray-700 text-center relative"> <h3 className="text-lg font-bold">切换模型</h3> <button onClick={onClose} className="absolute top-2 right-2 p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"><i className="fas fa-times"></i></button> </div> <div className="p-2 overflow-y-auto max-h-[60vh]"> {(settings.chatModels || []).map(m => ( <button key={m.value} type="button" onClick={() => { onSelect(m.value); onClose(); }} className={`w-full text-left px-4 py-3 text-sm rounded-lg hover:bg-primary/10 ${settings.selectedModel === m.value ? 'text-primary font-bold bg-primary/10' : ''}`}>{m.name}</button> ))} </div> </div> </div> );
 const AssistantSelector = ({ prompts, settings, onSelect, onClose }) => ( <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-20 flex flex-col p-4 animate-fade-in" onClick={onClose}> <div className="w-full max-w-2xl m-auto bg-white dark:bg-gray-800 rounded-xl shadow-lg flex flex-col" onClick={e => e.stopPropagation()}> <div className="p-4 border-b dark:border-gray-700 text-center relative"><h3 className="text-lg font-bold">更换助理</h3><button onClick={onClose} className="absolute top-2 right-2 p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"><i className="fas fa-times"></i></button></div> <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-4 overflow-y-auto max-h-[60vh]"> {(prompts || []).map(p => ( <button key={p.id} onClick={() => onSelect(p.id)} className={`flex flex-col items-center p-4 rounded-lg border-2 transition-all ${settings.currentPromptId === p.id ? 'border-primary bg-primary/10' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-700'}`}> <img src={convertGitHubUrl(p.avatarUrl) || convertGitHubUrl(settings.aiAvatarUrl)} alt={p.name} className="w-16 h-16 rounded-full object-cover mb-2 shadow-md"/> <span className="text-sm font-semibold text-center">{p.name}</span> </button> ))} </div> </div> </div> );
 
-
 const AiChatAssistant = ({ onClose }) => {
-    // --- 状态管理 (已恢复激活相关状态) ---
+    // --- 状态管理 (无变化) ---
     const [activationState, setActivationState] = useState('checking'); const [activationKey, setActivationKey] = useState(''); const [activationError, setActivationError] = useState(''); const [isActivating, setIsActivating] = useState(false); const [keyType, setKeyType] = useState(null); const [trialExpiryInfo, setTrialExpiryInfo] = useState(''); const [trialExpiryTimestamp, setTrialExpiryTimestamp] = useState(0);
-    const [conversations, setConversations] = useState([]); const [currentConversationId, setCurrentConversationId] = useState(null); const [userInput, setUserInput] = useState(''); const [isLoading, setIsLoading] = useState(false); const [error, setError] = useState(''); const [settings, setSettings] = useState(DEFAULT_SETTINGS); const [showSettings, setShowSettings] = useState(false); const [isMounted, setIsMounted] = useState(false); const [isSidebarOpen, setIsSidebarOpen] = useState(false); const [showAssistantSelector, setShowAssistantSelector] = useState(false); const [showModelSelector, setShowModelSelector] = useState(false); const [selectedImages, setSelectedImages] = useState([]); const [isListening, setIsListening] = useState(false);
+    const [conversations, setConversations] = useState([]); const [currentConversationId, setCurrentConversationId] = useState(null); const [userInput, setUserInput] = useState(''); const [isLoading, setIsLoading] = useState(false); const [error, setError] = useState(''); const [settings, setSettings] = useState(null); // 初始化为 null
+    const [isMounted, setIsMounted] = useState(false); const [isSidebarOpen, setIsSidebarOpen] = useState(false); const [showAssistantSelector, setShowAssistantSelector] = useState(false); const [showModelSelector, setShowModelSelector] = useState(false); const [selectedImages, setSelectedImages] = useState([]); const [isListening, setIsListening] = useState(false);
     
+    // --- Refs (无变化) ---
     const messagesEndRef = useRef(null); const abortControllerRef = useRef(null); const fileInputRef = useRef(null); const cameraInputRef = useRef(null); const recognitionRef = useRef(null); const textareaRef = useRef(null);
     
-    // --- 初始化和数据持久化逻辑 (已恢复激活流程) ---
+    // --- 初始化和数据持久化逻辑 (核心修复) ---
     const getDeviceId = async () => { try { const fp = await FingerprintJS.load(); const result = await fp.get(); return result.visitorId; } catch (e) { console.error("FingerprintJS error:", e); return 'fallback-device-id-' + Date.now(); } };
     
     useEffect(() => {
         const initializeApp = async () => {
             setIsMounted(true);
-            let finalSettings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+            
+            // --- [核心修复] 健壮的设置加载逻辑 ---
+            const defaults = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+            let finalSettings = { ...defaults };
             const savedSettings = safeLocalStorageGet(SETTINGS_STORAGE_KEY);
             if (savedSettings) {
                 const parsed = JSON.parse(savedSettings);
-                finalSettings = { ...finalSettings, ...parsed, apiKeys: parsed.apiKeys && parsed.apiKeys.length > 0 ? parsed.apiKeys : finalSettings.apiKeys, chatModels: parsed.chatModels && parsed.chatModels.length > 0 ? parsed.chatModels : finalSettings.chatModels, prompts: (parsed.prompts || []).map(p => ({ ...p, isDefault: DEFAULT_PROMPTS.some(dp => dp.id === p.id) })), };
+                // 逐层合并，而不是简单覆盖，确保新字段存在
+                finalSettings = {
+                    ...defaults,
+                    ...parsed,
+                    // 确保复杂的对象/数组结构被正确迁移
+                    apiKeys: Array.isArray(parsed.apiKeys) && parsed.apiKeys.length > 0 ? parsed.apiKeys : defaults.apiKeys,
+                    chatModels: Array.isArray(parsed.chatModels) && parsed.chatModels.length > 0 ? parsed.chatModels : defaults.chatModels,
+                    prompts: Array.isArray(parsed.prompts) ? parsed.prompts.map(p => ({ ...p, isDefault: defaults.prompts.some(dp => dp.id === p.id) })) : defaults.prompts,
+                    openaiTtsSettings: { ...defaults.openaiTtsSettings, ...(parsed.openaiTtsSettings || {}) },
+                    googleTtsSettings: { ...defaults.googleTtsSettings, ...(parsed.googleTtsSettings || {}) },
+                };
             }
             if (typeof navigator !== 'undefined' && /FBAN|FBAV/i.test(navigator.userAgent)) {
                 finalSettings.isFacebookApp = true;
             }
             setSettings(finalSettings);
+            // --- 修复结束 ---
 
             const savedConversations = safeLocalStorageGet(CONVERSATIONS_STORAGE_KEY);
             const parsedConvs = savedConversations ? JSON.parse(savedConversations) : [];
             setConversations(parsedConvs);
 
-            // --- [已恢复] 激活逻辑 ---
             setActivationState('checking');
             try {
-                const deviceId = await getDeviceId();
-                const storedKey = safeLocalStorageGet(ACTIVATION_KEY_STORAGE);
-                let activated = false;
+                const deviceId = await getDeviceId(); const storedKey = safeLocalStorageGet(ACTIVATION_KEY_STORAGE); let activated = false;
                 if (storedKey) {
                     const response = await fetch('/api/activate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: storedKey, deviceId }), });
                     const data = await response.json();
-                    if (response.ok && data.success) {
-                        setActivationState('activated');
-                        setKeyType(data.keyType);
-                        if (data.keyType === 'trial') {
-                            const expiryTime = data.activatedAt + (data.durationSeconds || 0) * 1000;
-                            setTrialExpiryTimestamp(expiryTime);
-                        } else {
-                            setTrialExpiryInfo('永久授权');
-                        }
-                        activated = true;
-                    } else {
-                        safeLocalStorageRemove(ACTIVATION_KEY_STORAGE);
-                        setActivationError(data.message || '本地激活码已失效。');
-                    }
+                    if (response.ok && data.success) { setActivationState('activated'); setKeyType(data.keyType); if (data.keyType === 'trial') { const expiryTime = data.activatedAt + (data.durationSeconds || 0) * 1000; setTrialExpiryTimestamp(expiryTime); } else { setTrialExpiryInfo('永久授权'); } activated = true; } else { safeLocalStorageRemove(ACTIVATION_KEY_STORAGE); setActivationError(data.message || '本地激活码已失效。'); }
                 }
                 if (!activated) {
                     const trialResponse = await fetch('/api/activate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'start_trial', deviceId }), });
                     const trialData = await trialResponse.json();
-                    if (trialResponse.ok && trialData.success) {
-                        safeLocalStorageSet(ACTIVATION_KEY_STORAGE, trialData.key);
-                        setActivationState('activated');
-                        setKeyType(trialData.keyType);
-                        const expiryTime = trialData.activatedAt + (trialData.durationSeconds || 0) * 1000;
-                        setTrialExpiryTimestamp(expiryTime);
-                    } else {
-                        setActivationState('unactivated');
-                        setActivationError(trialData.message || '无法自动开始试用。');
-                    }
+                    if (trialResponse.ok && trialData.success) { safeLocalStorageSet(ACTIVATION_KEY_STORAGE, trialData.key); setActivationState('activated'); setKeyType(trialData.keyType); const expiryTime = trialData.activatedAt + (trialData.durationSeconds || 0) * 1000; setTrialExpiryTimestamp(expiryTime); } else { setActivationState('unactivated'); setActivationError(trialData.message || '无法自动开始试用。'); }
                 }
-            } catch (error) {
-                setActivationState('unactivated');
-                setActivationError('网络错误，无法连接到激活服务器。');
-            }
-            // --- 激活逻辑结束 ---
-
+            } catch (error) { setActivationState('unactivated'); setActivationError('网络错误，无法连接到激活服务器。'); }
+            
             if (finalSettings.startWithNewChat || parsedConvs.length === 0) {
-                createNewConversation(finalSettings.currentPromptId);
-            } else {
-                setCurrentConversationId(parsedConvs[0].id);
-            }
+                // `createNewConversation` 依赖 `settings` state, 所以在 `settings` set 之后调用
+                const newId = `conv-${Date.now()}`; const promptId = finalSettings.currentPromptId; const newConv = { id: newId, title: '新的对话', messages: [{ role: 'ai', content: '你好！有什么可以帮助你的吗？', timestamp: Date.now() }], promptId: promptId }; setConversations(prev => [newConv, ...prev]); setCurrentConversationId(newId);
+            } else { setCurrentConversationId(parsedConvs[0].id); }
         };
         initializeApp();
     }, []);
 
-    useEffect(() => {
-        let timer;
-        if (keyType === 'trial' && trialExpiryTimestamp > 0) {
-            timer = setInterval(() => {
-                const remainingMillis = trialExpiryTimestamp - Date.now();
-                if (remainingMillis <= 0) {
-                    setTrialExpiryInfo('试用期已结束');
-                    setActivationState('unactivated');
-                    safeLocalStorageRemove(ACTIVATION_KEY_STORAGE);
-                    clearInterval(timer);
-                } else {
-                    const totalSeconds = Math.max(0, Math.floor(remainingMillis / 1000));
-                    const minutes = Math.floor(totalSeconds / 60);
-                    const seconds = totalSeconds % 60;
-                    setTrialExpiryInfo(`试用中: ${minutes}分${seconds < 10 ? '0' : ''}${seconds}秒`);
-                }
-            }, 1000);
-        } else if (keyType === 'permanent') {
-            setTrialExpiryInfo('永久授权');
-        }
-        return () => { if (timer) clearInterval(timer); };
-    }, [keyType, trialExpiryTimestamp]);
+    // 只有在 settings 和 conversations 都加载后才写入 localStorage
+    useEffect(() => { if (isMounted && settings && conversations) { safeLocalStorageSet(SETTINGS_STORAGE_KEY, JSON.stringify(settings)); safeLocalStorageSet(CONVERSATIONS_STORAGE_KEY, JSON.stringify(conversations)); } }, [settings, conversations, isMounted]);
     
-    useEffect(() => { if (isMounted) { safeLocalStorageSet(SETTINGS_STORAGE_KEY, JSON.stringify(settings)); safeLocalStorageSet(CONVERSATIONS_STORAGE_KEY, JSON.stringify(conversations)); } }, [settings, conversations, isMounted]);
-
+    // --- 其他 Hooks (无重大变化) ---
+    useEffect(() => { let timer; if (keyType === 'trial' && trialExpiryTimestamp > 0) { timer = setInterval(() => { const remainingMillis = trialExpiryTimestamp - Date.now(); if (remainingMillis <= 0) { setTrialExpiryInfo('试用期已结束'); setActivationState('unactivated'); safeLocalStorageRemove(ACTIVATION_KEY_STORAGE); clearInterval(timer); } else { const totalSeconds = Math.max(0, Math.floor(remainingMillis / 1000)); const minutes = Math.floor(totalSeconds / 60); const seconds = totalSeconds % 60; setTrialExpiryInfo(`试用中: ${minutes}分${seconds < 10 ? '0' : ''}${seconds}秒`); } }, 1000); } else if (keyType === 'permanent') { setTrialExpiryInfo('永久授权'); } return () => { if (timer) clearInterval(timer); }; }, [keyType, trialExpiryTimestamp]);
     const scrollToBottom = useCallback(() => { setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100); }, []);
     useEffect(scrollToBottom, [conversations, currentConversationId]);
-
     const lastAutoReadMessageId = useRef(null);
-    useEffect(() => { if (!currentConversation || !settings.autoRead || !isMounted || activationState !== 'activated') return; const lastMessage = currentConversation.messages[currentConversation.messages.length - 1]; if (lastMessage && lastMessage.role === 'ai' && lastMessage.content && !lastMessage.isTyping && lastMessage.timestamp > (lastAutoReadMessageId.current || 0)) { lastAutoReadMessageId.current = lastMessage.timestamp; setTimeout(() => { const bubble = document.getElementById(`msg-${currentConversation.id}-${currentConversation.messages.length - 1}`); if (bubble && document.body.contains(bubble)) { bubble.querySelector('button[title="朗读"]')?.click(); } }, 300); } }, [currentConversation?.messages, settings.autoRead, isMounted, currentConversation?.id, activationState]);
-    
+    useEffect(() => { if (!currentConversation || !settings?.autoRead || !isMounted || activationState !== 'activated') return; const lastMessage = currentConversation.messages[currentConversation.messages.length - 1]; if (lastMessage && lastMessage.role === 'ai' && lastMessage.content && !lastMessage.isTyping && lastMessage.timestamp > (lastAutoReadMessageId.current || 0)) { lastAutoReadMessageId.current = lastMessage.timestamp; setTimeout(() => { const bubble = document.getElementById(`msg-${currentConversation.id}-${currentConversation.messages.length - 1}`); if (bubble && document.body.contains(bubble)) { bubble.querySelector('button[title="朗读"]')?.click(); } }, 300); } }, [currentConversation?.messages, settings?.autoRead, isMounted, currentConversation?.id, activationState]);
     const adjustTextareaHeight = useCallback(() => { if (textareaRef.current) { textareaRef.current.style.height = 'auto'; textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`; } }, []);
     useEffect(adjustTextareaHeight, [userInput]);
 
-    const createNewConversation = (promptId) => { const newId = `conv-${Date.now()}`; const newConv = { id: newId, title: '新的对话', messages: [{ role: 'ai', content: '你好！有什么可以帮助你的吗？', timestamp: Date.now() }], promptId: promptId || settings.currentPromptId }; setConversations(prev => [newConv, ...prev]); setCurrentConversationId(newId); };
+    // --- 核心函数 (无重大变化, 但更加安全) ---
+    const createNewConversation = useCallback((promptId) => { if (!settings) return; const newId = `conv-${Date.now()}`; const newConv = { id: newId, title: '新的对话', messages: [{ role: 'ai', content: '你好！有什么可以帮助你的吗？', timestamp: Date.now() }], promptId: promptId || settings.currentPromptId }; setConversations(prev => [newConv, ...prev]); setCurrentConversationId(newId); }, [settings]);
     const handleSelectConversation = (id) => setCurrentConversationId(id);
     const handleDeleteConversation = (id) => { const remaining = conversations.filter(c => c.id !== id); setConversations(remaining); if (currentConversationId === id) { if (remaining.length > 0) { setCurrentConversationId(remaining[0].id); } else { createNewConversation(); } } };
     const handleRenameConversation = (id, newTitle) => { setConversations(prev => prev.map(c => c.id === id ? { ...c, title: newTitle } : c)); };
     const handleSaveSettings = (newSettings) => { setSettings(newSettings); setShowSettings(false); };
     const handleImageUpload = (e) => { const files = Array.from(e.target.files); if (!files.length) return; const imagePromises = files.map(file => new Promise((resolve, reject) => { const reader = new FileReader(); reader.onloadend = () => resolve({ data: reader.result.split(',')[1], previewUrl: reader.result, type: file.type }); reader.onerror = reject; reader.readAsDataURL(file); })); Promise.all(imagePromises).then(newImages => setSelectedImages(prev => [...prev, ...newImages])); e.target.value = ''; };
     const handleRemoveImage = (indexToRemove) => setSelectedImages(prev => prev.filter((_, index) => index !== indexToRemove));
-    const startListening = useCallback(() => { const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SpeechRecognition) { alert('您的浏览器不支持语音输入。'); return; } if (recognitionRef.current) recognitionRef.current.abort(); const recognition = new SpeechRecognition(); recognition.lang = settings.speechLanguage; recognition.onstart = () => setIsListening(true); recognition.onresult = (e) => setUserInput(e.results[0][0].transcript.trim()); recognition.onerror = (event) => { console.error("Speech recognition error:", event.error); setError(`语音识别失败: ${event.error}`); setIsListening(false); }; recognition.onend = () => setIsListening(false); recognition.start(); recognitionRef.current = recognition; }, [settings.speechLanguage]);
+    const startListening = useCallback(() => { if (!settings) return; const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SpeechRecognition) { alert('您的浏览器不支持语音输入。'); return; } if (recognitionRef.current) recognitionRef.current.abort(); const recognition = new SpeechRecognition(); recognition.lang = settings.speechLanguage; recognition.onstart = () => setIsListening(true); recognition.onresult = (e) => setUserInput(e.results[0][0].transcript.trim()); recognition.onerror = (event) => { console.error("Speech recognition error:", event.error); setError(`语音识别失败: ${event.error}`); setIsListening(false); }; recognition.onend = () => setIsListening(false); recognition.start(); recognitionRef.current = recognition; }, [settings]);
     const stopListening = useCallback(() => { if (recognitionRef.current) { recognitionRef.current.stop(); setIsListening(false); } }, []);
-    
     const handleActivate = async (e) => { e.preventDefault(); if (!activationKey.trim()) { setActivationError('请输入激活码。'); return; } setIsActivating(true); setActivationError(''); try { const deviceId = await getDeviceId(); const response = await fetch('/api/activate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: activationKey.trim(), deviceId }), }); const data = await response.json(); if (response.ok && data.success) { safeLocalStorageSet(ACTIVATION_KEY_STORAGE, activationKey.trim()); setActivationState('activated'); setKeyType(data.keyType); if (data.keyType === 'trial') { const expiryTime = data.activatedAt + (data.durationSeconds || 0) * 1000; setTrialExpiryTimestamp(expiryTime); } else { setTrialExpiryInfo('永久授权'); } } else { throw new Error(data.message || '激活失败。'); } } catch (err) { setActivationState('unactivated'); setActivationError(err.message); } finally { setIsActivating(false); } };
-
     const handleSubmit = async (isRegenerate = false) => {
-        if (!currentConversation || isLoading || activationState !== 'activated') return;
-        
+        if (!currentConversation || isLoading || activationState !== 'activated' || !settings) return;
         const activeApiKey = (settings.apiKeys || []).find(k => k.id === settings.selectedApiKeyId);
         if (!activeApiKey || !activeApiKey.key) { setError('请在设置中配置并选择一个有效的 API 密钥。'); return; }
-
-        let messagesForApi = [...currentConversation.messages];
-        const textToProcess = userInput.trim();
-
-        if (isRegenerate) {
-            if (messagesForApi.length > 0 && messagesForApi[messagesForApi.length - 1].role === 'ai') messagesForApi.pop();
-        } else {
-            if (!textToProcess && selectedImages.length === 0) { setError('请输入文字或选择图片再发送！'); return; }
-            const userMessage = { role: 'user', content: textToProcess, images: selectedImages, timestamp: Date.now() };
-            const updatedMessages = [...messagesForApi, userMessage];
-            setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: updatedMessages, promptId: c.promptId || settings.currentPromptId } : c));
-            messagesForApi = updatedMessages;
-            setUserInput(''); setSelectedImages([]);
-        }
-
-        if (messagesForApi.length === 0) return;
-        setIsLoading(true); setError('');
-        abortControllerRef.current = new AbortController();
-
+        let messagesForApi = [...currentConversation.messages]; const textToProcess = userInput.trim();
+        if (isRegenerate) { if (messagesForApi.length > 0 && messagesForApi[messagesForApi.length - 1].role === 'ai') messagesForApi.pop(); } else { if (!textToProcess && selectedImages.length === 0) { setError('请输入文字或选择图片再发送！'); return; } const userMessage = { role: 'user', content: textToProcess, images: selectedImages, timestamp: Date.now() }; const updatedMessages = [...messagesForApi, userMessage]; setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: updatedMessages, promptId: c.promptId || settings.currentPromptId } : c)); messagesForApi = updatedMessages; setUserInput(''); setSelectedImages([]); }
+        if (messagesForApi.length === 0) return; setIsLoading(true); setError(''); abortControllerRef.current = new AbortController();
         try {
             const currentPrompt = (settings.prompts || []).find(p => p.id === currentConversation.promptId) || (settings.prompts || []).find(p => p.id === settings.currentPromptId) || DEFAULT_PROMPTS[0];
             const modelInfo = (settings.chatModels || []).find(m => m.value === (currentPrompt.model || settings.selectedModel));
             if (!modelInfo) { throw new Error(`当前选择的模型 "${currentPrompt.model || settings.selectedModel}" 未在模型列表中找到，请在设置中检查。`); }
-            
-            const modelToUse = modelInfo.value;
-            const maxContext = modelInfo.maxContext || 512;
-            const contextMessages = messagesForApi.slice(-maxContext);
-            let response;
-
-            if (activeApiKey.type === API_TYPES.OPENAI) {
-                if (!settings.openaiCompatibleEndpoint) throw new Error("请在设置中配置 OpenAI 兼容接口地址。");
-                const messages = contextMessages.map(msg => ({ role: msg.role === 'ai' ? 'assistant' : 'user', content: [{ type: "text", text: msg.content || "" }, ...(msg.images || []).map(img => ({ type: "image_url", image_url: { url: `data:${img.type};base64,${img.data}` }}))] }));
-                const body = { model: modelToUse, messages: [{ role: 'system', content: currentPrompt.content }, ...messages], temperature: settings.temperature, max_tokens: settings.maxOutputTokens, };
-                response = await fetch(settings.openaiCompatibleEndpoint + '/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${activeApiKey.key}` }, body: JSON.stringify(body), signal: abortControllerRef.current.signal });
-            } else {
-                const history = contextMessages.map(msg => ({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.content || "" }, ...(msg.images || []).map(img => ({ inlineData: { mimeType: img.type, data: img.data } }))] }));
-                const contents = [{ role: 'user', parts: [{ text: currentPrompt.content }] }, { role: 'model', parts: [{ text: "好的，我明白了。" }] }, ...history];
-                const generationConfig = { temperature: settings.temperature, maxOutputTokens: settings.maxOutputTokens };
-                if (settings.disableThinkingMode && modelToUse.includes('gemini-2.5')) generationConfig.thinkingConfig = { thinkingBudget: 0 };
-                const body = { contents, generationConfig };
-                response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${activeApiKey.key}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: abortControllerRef.current.signal });
-            }
-
+            const modelToUse = modelInfo.value; const maxContext = modelInfo.maxContext || 512; const contextMessages = messagesForApi.slice(-maxContext); let response;
+            if (activeApiKey.type === API_TYPES.OPENAI) { if (!settings.openaiCompatibleEndpoint) throw new Error("请在设置中配置 OpenAI 兼容接口地址。"); const messages = contextMessages.map(msg => ({ role: msg.role === 'ai' ? 'assistant' : 'user', content: [{ type: "text", text: msg.content || "" }, ...(msg.images || []).map(img => ({ type: "image_url", image_url: { url: `data:${img.type};base64,${img.data}` }}))] })); const body = { model: modelToUse, messages: [{ role: 'system', content: currentPrompt.content }, ...messages], temperature: settings.temperature, max_tokens: settings.maxOutputTokens, }; response = await fetch(settings.openaiCompatibleEndpoint + '/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${activeApiKey.key}` }, body: JSON.stringify(body), signal: abortControllerRef.current.signal }); } else { const history = contextMessages.map(msg => ({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.content || "" }, ...(msg.images || []).map(img => ({ inlineData: { mimeType: img.type, data: img.data } }))] })); const contents = [{ role: 'user', parts: [{ text: currentPrompt.content }] }, { role: 'model', parts: [{ text: "好的，我明白了。" }] }, ...history]; const generationConfig = { temperature: settings.temperature, maxOutputTokens: settings.maxOutputTokens }; if (settings.disableThinkingMode && modelToUse.includes('gemini-2.5')) generationConfig.thinkingConfig = { thinkingBudget: 0 }; const body = { contents, generationConfig }; response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${activeApiKey.key}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: abortControllerRef.current.signal }); }
             if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error?.message || `请求失败`); }
-            const data = await response.json();
-            const aiResponseContent = activeApiKey.type === API_TYPES.OPENAI ? data.choices?.[0]?.message?.content : data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (!aiResponseContent) throw new Error('AI未能返回有效内容。');
-            
-            const aiMessage = { role: 'ai', content: aiResponseContent, timestamp: Date.now(), isTyping: true };
-            const finalMessages = [...messagesForApi, aiMessage];
-            setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: finalMessages } : c));
-        } catch (err) {
-            const finalMessages = [...messagesForApi];
-            let errorMessage = `请求错误: ${err.message}`;
-            if (err.name === 'AbortError') errorMessage = '请求被中断。';
-            setError(errorMessage);
-            finalMessages.push({ role: 'ai', content: `抱歉，出错了: ${errorMessage}`, timestamp: Date.now() });
-            setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: finalMessages } : c));
-        } finally { setIsLoading(false); }
+            const data = await response.json(); const aiResponseContent = activeApiKey.type === API_TYPES.OPENAI ? data.choices?.[0]?.message?.content : data.candidates?.[0]?.content?.parts?.[0]?.text; if (!aiResponseContent) throw new Error('AI未能返回有效内容。');
+            const aiMessage = { role: 'ai', content: aiResponseContent, timestamp: Date.now(), isTyping: true }; const finalMessages = [...messagesForApi, aiMessage]; setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: finalMessages } : c));
+        } catch (err) { const finalMessages = [...messagesForApi]; let errorMessage = `请求错误: ${err.message}`; if (err.name === 'AbortError') errorMessage = '请求被中断。'; setError(errorMessage); finalMessages.push({ role: 'ai', content: `抱歉，出错了: ${errorMessage}`, timestamp: Date.now() }); setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: finalMessages } : c)); } finally { setIsLoading(false); }
     };
-    
     const handleTypingComplete = useCallback(() => { setConversations(prev => prev.map(c => { if (c.id === currentConversationId) { const updatedMessages = c.messages.map((msg, index) => index === c.messages.length - 1 ? { ...msg, isTyping: false } : msg); return { ...c, messages: updatedMessages }; } return c; })); }, [currentConversationId]);
     const currentConversation = useMemo(() => conversations.find(c => c.id === currentConversationId), [conversations, currentConversationId]);
     
-    // --- 新增：主聊天界面右滑返回手势 ---
+    // --- 渲染逻辑 ---
     const swipeHandlers = useSimpleSwipe({ onSwipeRight: onClose });
 
-    if (!isMounted || activationState === 'checking') {
+    if (!isMounted || !settings || activationState === 'checking') {
         return <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-900"><div className="text-lg">正在加载应用...</div></div>;
     }
 
-    // --- [已恢复] 激活界面 ---
     if (activationState !== 'activated') {
         return (
             <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
@@ -313,9 +165,7 @@ const AiChatAssistant = ({ onClose }) => {
                     <p className="text-gray-600 dark:text-gray-400 mb-6">请输入您的激活码以继续使用。</p>
                     <form onSubmit={handleActivate} className="space-y-4">
                         <input type="text" value={activationKey} onChange={(e) => setActivationKey(e.target.value)} placeholder="输入激活码" className="w-full px-4 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary" />
-                        <button type="submit" disabled={isActivating} className="w-full bg-primary text-white py-2 rounded-md hover:bg-blue-700 disabled:opacity-50">
-                            {isActivating ? '正在激活...' : '激活'}
-                        </button>
+                        <button type="submit" disabled={isActivating} className="w-full bg-primary text-white py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"> {isActivating ? '正在激活...' : '激活'} </button>
                     </form>
                     {activationError && <p className="mt-4 text-sm text-red-500">{activationError}</p>}
                 </div>
@@ -341,14 +191,22 @@ const AiChatAssistant = ({ onClose }) => {
                         <div className="w-10 flex justify-end"> <button onClick={() => setShowSettings(true)} className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10" title="设置"><i className="fas fa-cog"></i></button> </div>
                     </div>
                     <div className="flex-grow p-4 overflow-y-auto">
-                        <div className="space-y-1">
-                            {currentConversation?.messages.map((msg, index) => (
-                                <div id={`msg-${currentConversation.id}-${index}`} key={`${currentConversation.id}-${index}`}>
-                                    <MessageBubble msg={msg} settings={settings} isLastAiMessage={index === currentConversation.messages.length - 1 && msg.role === 'ai'} onRegenerate={() => handleSubmit(true)} onTypingComplete={handleTypingComplete} />
+                        {currentConversation ? (
+                            <>
+                                <div className="space-y-1">
+                                    {currentConversation.messages.map((msg, index) => (
+                                        <div id={`msg-${currentConversation.id}-${index}`} key={`${currentConversation.id}-${index}`}>
+                                            <MessageBubble msg={msg} settings={settings} isLastAiMessage={index === currentConversation.messages.length - 1 && msg.role === 'ai'} onRegenerate={() => handleSubmit(true)} onTypingComplete={handleTypingComplete} />
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
-                        <div ref={messagesEndRef} />
+                                <div ref={messagesEndRef} />
+                            </>
+                        ) : (
+                            <div className="h-full flex items-center justify-center text-gray-500">
+                                <p>选择或创建一个新对话开始聊天。</p>
+                            </div>
+                        )}
                     </div>
                     <footer className="flex-shrink-0 px-4 pt-2 pb-safe bg-gradient-to-t from-white/95 via-white/80 to-transparent dark:from-gray-800/95 dark:via-gray-800/80 dark:to-transparent z-10">
                         {error && <div className="mb-2 p-2 bg-red-100 text-red-700 rounded-lg text-center text-sm" onClick={()=>setError('')}>{error} <span className='text-xs'>(点击关闭)</span></div>}
@@ -377,7 +235,6 @@ const AiChatAssistant = ({ onClose }) => {
                 {showAssistantSelector && <AssistantSelector prompts={settings.prompts} settings={settings} onSelect={(promptId) => { setSettings(s => ({...s, currentPromptId: promptId })); setShowAssistantSelector(false); }} onClose={() => setShowAssistantSelector(false)} />}
                 {showModelSelector && <ModelSelector settings={settings} onSelect={(modelValue) => { setSettings(s => ({...s, selectedModel: modelValue})); setShowModelSelector(false); }} onClose={() => setShowModelSelector(false)} />}
             </div>
-            {/* 隐藏的文件输入框 */}
             <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" multiple style={{ display: 'none' }} />
             <input type="file" ref={cameraInputRef} onChange={handleImageUpload} accept="image/*" capture="environment" style={{ display: 'none' }} />
         </div>
