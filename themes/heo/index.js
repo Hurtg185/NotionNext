@@ -1,4 +1,4 @@
-// themes/heo/index.js (最终修订版 - 直接包含 AiChatAssistant 组件)
+// themes/heo/index.js (最终修正版 - 已移除重复代码并完成集成)
 import Comment from '@/components/Comment'
 import { AdSlot } from '@/components/GoogleAdsense'
 import { HashTag } from '@/components/HeroIcons'
@@ -39,12 +39,9 @@ import ArticleExpirationNotice from '@/components/ArticleExpirationNotice'
 import GlosbeSearchCard from '@/components/GlosbeSearchCard'
 
 // ==================================================================
-// 已经为您导入了 AiChatAssistant 组件
-// 如果您的组件是命名导出，例如 `export const MyAiChatAssistant = ...`
-// 则需要将 `import AiChatAssistant` 修改为 `import { MyAiChatAssistant }`
-// 并且在下方渲染时使用 `<MyAiChatAssistant />`
+// 已为您导入 AiChatAssistant 组件
 // ==================================================================
-import AiChatAssistant from '@/components/AiChatAssistant' // <-- 已为您直接导入
+import AiChatAssistant from '@/components/AiChatAssistant'
 // ==================================================================
 
 
@@ -336,7 +333,7 @@ const LayoutIndex = props => {
         {/* ================================================================== */}
         {/* 已经为您直接渲染 AiChatAssistant 组件                            */}
         {/* ================================================================== */}
-        <AiChatAssistant /> {/* <-- 已经为您直接填写，无需修改 */}
+        <AiChatAssistant />
         {/* ================================================================== */}
       </AIAssistantModal>
     </>
@@ -571,236 +568,6 @@ const LayoutSlug = props => {
     </>
   )
 }
-
-
-/**博客列表*/
-const LayoutPostList = props => {
-  return (
-    <div id='post-outer-wrapper' className='px-5  md:px-0'>
-      <CategoryBar {...props} />
-      {siteConfig('POST_LIST_STYLE') === 'page' ? (
-        <BlogPostListPage {...props} />
-      ) : (
-        <BlogPostListScroll {...props} />
-      )}
-    </div>
-  )
-}
-
-/**搜索*/
-const LayoutSearch = props => {
-  const { keyword } = props
-  const router = useRouter()
-  const currentSearch = keyword || router?.query?.s
-
-  useEffect(() => {
-    if (currentSearch) {
-      setTimeout(() => {
-        replaceSearchResult({
-          doms: document.getElementsByClassName('replace'),
-          search: currentSearch,
-          target: {
-            element: 'span',
-            className: 'text-red-500 border-b border-dashed'
-          }
-        })
-      }, 100)
-    }
-  }, [currentSearch])
-
-  return (
-    <div currentSearch={currentSearch}>
-      <div id='post-outer-wrapper' className='px-5  md:px-0'>
-        {!currentSearch ? (<SearchNav {...props} />) : (
-          <div id='posts-wrapper'>
-            {siteConfig('POST_LIST_STYLE') === 'page' ? (<BlogPostListPage {...props} />) : (<BlogPostListScroll {...props} />)}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-/**归档*/
-const LayoutArchive = props => {
-  const { archivePosts } = props
-  return (
-    <div className='p-5 rounded-xl border dark:border-gray-600 max-w-6xl w-full bg-white dark:bg-[#1e1e1e]'>
-      <CategoryBar {...props} border={false} />
-      <div className='px-3'>
-        {Object.keys(archivePosts).map(archiveTitle => (
-          <BlogPostArchive
-            key={archiveTitle}
-            posts={archivePosts[archiveTitle]}
-            archiveTitle={archiveTitle}
-          />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-/**文章详情*/
-const LayoutSlug = props => {
-  const { post, lock, validPassword } = props
-  const { locale, fullWidth } = useGlobal()
-  const [hasCode, setHasCode] = useState(false)
-  const [activeModal, setActiveModal] = useState(null)
-
-  useEffect(() => {
-    const hasCode = document.querySelectorAll('[class^="language-"]').length > 0
-    setHasCode(hasCode)
-  }, [])
-
-  const commentEnable =
-    siteConfig('COMMENT_TWIKOO_ENV_ID') ||
-    siteConfig('COMMENT_WALINE_SERVER_URL') ||
-    siteConfig('COMMENT_VALINE_APP_ID') ||
-    siteConfig('COMMENT_GISCUS_REPO') ||
-    siteConfig('COMMENT_CUSDIS_APP_ID') ||
-    siteConfig('COMMENT_UTTERRANCES_REPO') ||
-    siteConfig('COMMENT_GITALK_CLIENT_ID') ||
-    siteConfig('COMMENT_WEBMENTION_ENABLE')
-
-  const router = useRouter()
-  const waiting404 = siteConfig('POST_WAITING_TIME_FOR_404') * 1000
-  useEffect(() => {
-    if (!post) {
-      setTimeout(() => {
-        if (isBrowser) {
-          const article = document.querySelector('#article-wrapper #notion-article')
-          if (!article) {
-            router.push('/404').then(() => {
-              console.warn('找不到页面', router.asPath)
-            })
-          }
-        }
-      }, waiting404)
-    }
-  }, [post])
-
-  const modalContent = {
-    appDownload: {
-      title: '安卓APP下载',
-      intro: '下载我们的专属学习APP，随时随地高效学习中文！请按照以下步骤安装：',
-      children: (
-        <div className='text-sm text-gray-700 dark:text-gray-300'>
-          <a href='#' target='_blank' rel='noopener noreferrer' className='block w-full text-center p-3 rounded-lg bg-blue-500 text-white font-bold mb-4 hover:bg-blue-600 transition-colors'>点击此处下载安卓APP</a>
-          <ol className='list-decimal list-inside space-y-2 text-left'>
-            <li>点击上方链接下载APP文件。</li>
-            <li>下载完成后，请断开网络（Wi-Fi和移动数据）。</li>
-            <li>找到下载的APP文件（通常在“文件管理器”或“下载”文件夹），点击安装。</li>
-            <li>如果提示“禁止安装未知来源应用”，请前往手机设置中允许安装。</li>
-            <li>安装成功后，重新连接网络即可使用。</li>
-          </ol>
-          <a href='#' target='_blank' rel='noopener noreferrer' className='block text-center mt-4 text-blue-500 hover:underline'>查看详细图文/视频教程 →</a>
-        </div>
-      )
-    },
-    notifications: {
-      title: '加入通知群',
-      intro: '获取最新课程优惠、免费资料、招聘信息、直播通知，重要消息不遗漏！',
-      children: (
-        <>
-          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200'><i className='fab fa-telegram-plane text-xl mr-3'></i> <span className='font-semibold'>Telegram</span></SmartLink>
-          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-green-400 text-white hover:bg-green-500 transition-all duration-200'><i className='fab fa-line text-xl mr-3'></i> <span className='font-semibold'>Line</span></SmartLink>
-          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-all duration-200'><i className='fab fa-viber text-xl mr-3'></i> <span className='font-semibold'>Viber</span></SmartLink>
-          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-all duration-200'><i className='fab fa-facebook-f text-xl mr-3'></i> <span className='font-semibold'>Facebook 个人主页</span></SmartLink>
-          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-black text-white hover:bg-gray-800 transition-all duration-200'><i className='fab fa-tiktok text-xl mr-3'></i> <span className='font-semibold'>TikTok</span></SmartLink>
-        </>
-      )
-    },
-    moreCourses: {
-      title: '报名课程',
-      intro: '结合中缅教学方案，高效学习中文，价格比大部分缅甸机构更优惠！请通过以下方式联系我们，获取专属学习方案：',
-      children: (
-        <>
-          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200'><i className='fab fa-telegram-plane text-xl mr-3'></i> <span className='font-semibold'>Telegram 联系</span></SmartLink>
-          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-green-400 text-white hover:bg-green-500 transition-all duration-200'><i className='fab fa-line text-xl mr-3'></i> <span className='font-semibold'>Line 联系</span></SmartLink>
-          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-all duration-200'><i className='fab fa-viber text-xl mr-3'></i> <span className='font-semibold'>Viber 联系</span></SmartLink>
-          <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-all duration-200'><i className='fab fa-facebook-f text-xl mr-3'></i> <span className='font-semibold'>Facebook 个人主页</span></SmartLink>
-        </>
-      )
-    }
-  }
-  const currentModal = modalContent[activeModal]
-
-  return (
-    <>
-      <div className={`article h-full w-full ${fullWidth ? '' : 'xl:max-w-5xl'} ${hasCode ? 'xl:w-[73.15vw]' : ''}  bg-white dark:bg-[#18171d] dark:border-gray-600 lg:hover:shadow lg:border rounded-2xl lg:px-2 lg:py-4`}>
-        {lock && <PostLock validPassword={validPassword} />}
-        {!lock && post && (
-          <div className='mx-auto md:w-full md:px-5'>
-            <article
-              id='article-wrapper'
-              itemScope
-              itemType='https://schema.org/Movie'>
-
-              {/* 文章页顶部随机图片 */}
-              <div className='px-5'>
-                <RandomImageCard banners={XUANCHUAN_BANNERS} linkUrl="#" alt="培训班简介" />
-              </div>
-
-              <section
-                className='wow fadeInUp p-5 justify-center mx-auto'
-                data-wow-delay='.2s'>
-                <ArticleExpirationNotice post={post} />
-                <AISummary aiSummary={post.aiSummary} />
-                <WWAds orientation='horizontal' className='w-full' />
-
-                {post?.type === 'Post' && <PostCopyright {...props} />}
-
-                {post && <NotionPage post={post} />}
-                <WWAds orientation='horizontal' className='w-full' />
-              </section>
-
-              <ShareBar post={post} />
-
-              {/* --- 插入新的文章页按钮组 --- */}
-              <div className='bg-white shadow-md my-2 p-4 rounded-md dark:bg-black'>
-                <div className='grid grid-cols-3 gap-3'>
-                  <FunctionButton title="APP下载" icon="fas fa-mobile-alt" onClick={() => setActiveModal('appDownload')} />
-                  <FunctionButton title="通知群" icon="fas fa-bell" onClick={() => setActiveModal('notifications')} />
-                  <FunctionButton title="更多课程" icon="fas fa-chalkboard-teacher" onClick={() => setActiveModal('moreCourses')} />
-                </div>
-              </div>
-
-              {post?.type === 'Post' && (
-                <div className='px-5'>
-                  {/* 招聘图片使用随机卡片 */}
-                  <RandomImageCard banners={XUANCHUAN_BANNERS} linkUrl="/jobs" alt="招聘信息" />
-                </div>
-              )}
-            </article>
-
-            {fullWidth ? null : (
-              <div className={`${commentEnable && post ? '' : 'hidden'}`}>
-                <hr className='my-4 border-dashed' />
-                <div className='py-2'>
-                  <AdSlot />
-                </div>
-                <div className='duration-200 overflow-x-auto px-5'>
-                  <div className='text-2xl dark:text-white'>
-                    <i className='fas fa-comment mr-1' />
-                    {locale.COMMON.COMMENTS}
-                  </div>
-                  <Comment frontMatter={post} className='' />
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      <Modal isOpen={!!activeModal} onClose={() => setActiveModal(null)} title={currentModal?.title} intro={currentModal?.intro}>
-        {currentModal?.children}
-      </Modal>
-
-      <FloatTocButton {...props} />
-    </>
-  )
-}
-
 
 /**404*/
 const Layout404 = props => {
