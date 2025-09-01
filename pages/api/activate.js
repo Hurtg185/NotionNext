@@ -1,4 +1,4 @@
-// /pages/api/activate.js - v54 (终极修复版 - 永久码严格一机一码，防止多设备滥用)
+// /pages/api/activate.js - v55 (终极修复版 - 永久码弹性绑定，彻底防止失效，堵塞多浏览器试用)
 import { kv } from '@vercel/kv';
 const { v4: uuidv4 } = require('uuid');
 
@@ -64,36 +64,54 @@ export default async function handler(req, res) {
     const keyData = await kv.get(`key:${key}`);
     if (!keyData) { return res.status(404).json({ success: false, message: '激活码无效或不存在。' }); }
 
-    // 核心修复点：永久码的严格一机一码逻辑
-    // 如果激活码已被绑定，且绑定的设备ID与当前设备ID不符
-    if (keyData.deviceId && keyData.deviceId !== deviceId) {
-        // 任何类型的码，只要被其他设备绑定，都拒绝
-        return res.status(403).json({ success: false, message: '此激活码已被其他设备绑定。' });
-    }
-    // 如果激活码已绑定设备ID，且绑定的IP与当前IP不符
-    if (keyData.ip && keyData.ip !== ip) {
-        // 任何类型的码，只要被其他IP绑定，都拒绝
-        return res.status(403).json({ success: false, message: '此激活码已被其他网络IP绑定。' });
-    }
+    // 1. 检查激活码类型
+    if (keyData.type === 'permanent') {
+        // --- 永久码的弹性绑定逻辑 ---
+        let message = '永久会员激活成功！';
+        let needsDbUpdate = false;
+        let oldDeviceId = keyData.deviceId;
+        let oldIp = keyData.ip;
 
-    const now = Date.now();
-    // 如果是首次激活此码，则绑定设备和IP
-    if (!keyData.deviceId) {
-      keyData.deviceId = deviceId;
-      keyData.ip = ip;
-      keyData.activatedAt = now;
-      await kv.pipeline().set(`key:${key}`, keyData).set(`device:${deviceId}`, key).set(`ip:${ip}`, key).exec();
-    }
-    
-    // 检查试用码是否过期
-    if (keyData.type === 'trial' && keyData.activatedAt) {
+        if (!keyData.deviceId || keyData.deviceId !== deviceId || !keyData.ip || keyData.ip !== ip) {
+            // 如果首次激活，或设备/IP有变化，则需要更新数据库
+            needsDbUpdate = true;
+            keyData.deviceId = deviceId;
+            keyData.ip = ip;
+            keyData.activatedAt = Date.now(); // 刷新激活时间
+            message = '永久会员激活成功！设备和网络信息已更新。';
+        }
+
+        if (needsDbUpdate) {
+            const pipeline = kv.pipeline();
+            pipeline.set(`key:${key}`, keyData); // 更新主记录
+            if (oldDeviceId && oldDeviceId !== deviceId) { pipeline.del(`device:${oldDeviceId}`); } // 删除旧设备的反向绑定
+            if (oldIp && oldIp !== ip) { pipeline.del(`ip:${oldIp}`); } // 删除旧IP的反向绑定
+            pipeline.set(`device:${deviceId}`, key); // 创建新设备的反向绑定
+            pipeline.set(`ip:${ip}`, key); // 创建新IP的反向绑定
+            await pipeline.exec();
+        }
+
+        return res.status(200).json({ success: true, message: message, key: key, keyType: keyData.type, activatedAt: keyData.activatedAt, durationSeconds: keyData.durationSeconds });
+
+    } else if (keyData.type === 'trial') {
+        // --- 试用码的严格绑定逻辑 (与永久码不同) ---
+        // 试用码一旦绑定，就不允许换绑，除非当前请求的deviceId和ip与数据库记录完全一致
+        if (keyData.deviceId && keyData.deviceId !== deviceId) {
+            return res.status(403).json({ success: false, message: '此试用激活码已被其他设备绑定。' });
+        }
+        if (keyData.ip && keyData.ip !== ip) {
+            return res.status(403).json({ success: false, message: '此试用激活码已被其他网络IP绑定。' });
+        }
+
+        const now = Date.now();
+        // 检查试用码是否过期
         const trialDurationMillis = (keyData.durationSeconds || 0) * 1000;
         if (now > keyData.activatedAt + trialDurationMillis) {
             return res.status(403).json({ success: false, message: '您的试用期已结束。' });
         }
-    }
 
-    res.status(200).json({ success: true, message: '激活成功！', key: key, keyType: keyData.type, activatedAt: keyData.activatedAt, durationSeconds: keyData.durationSeconds });
+        return res.status(200).json({ success: true, message: '试用激活成功！', key: key, keyType: keyData.type, activatedAt: keyData.activatedAt, durationSeconds: keyData.durationSeconds });
+    }
 
   } catch (error) {
     console.error('Activation API error:', error);
