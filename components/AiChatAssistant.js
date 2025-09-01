@@ -5,10 +5,19 @@ import FingerprintJS from '@fingerprintjs/fingerprintjs';
 
 // --- 轻量级滑动手势Hook (无需新依赖) ---
 const useSimpleSwipe = ({ onSwipeLeft, onSwipeRight }) => {
-    const touchStart = useRef({ x: 0, y: 0 }); const touchEnd = useRef({ x: 0, y: 0 }); const minSwipeDistance = 60;
+    const touchStart = useRef({ x: 0, y: 0 });
+    const touchEnd = useRef({ x: 0, y: 0 });
+    const minSwipeDistance = 60; // 最小滑动距离
 
-    const onTouchStart = useCallback((e) => { touchEnd.current = { x: 0, y: 0 }; touchStart.current = { x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY }; }, []);
-    const onTouchMove = useCallback((e) => { touchEnd.current = { x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY }; }, []);
+    const onTouchStart = useCallback((e) => {
+        touchEnd.current = { x: 0, y: 0 };
+        touchStart.current = { x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY };
+    }, []);
+
+    const onTouchMove = useCallback((e) => {
+        touchEnd.current = { x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY };
+    }, []);
+
     const onTouchEnd = useCallback(() => {
         if (!touchStart.current.x || !touchEnd.current.x) return;
         const xDistance = touchStart.current.x - touchEnd.current.x;
@@ -55,20 +64,7 @@ const DEFAULT_SETTINGS = {
 
 const TypingEffect = ({ text, onComplete }) => {
     const [displayedText, setDisplayedText] = useState('');
-    useEffect(() => {
-        if (!text) return;
-        setDisplayedText('');
-        let index = 0;
-        const intervalId = setInterval(() => {
-            setDisplayedText(prev => prev + text.charAt(index));
-            index++;
-            if (index >= text.length) {
-                clearInterval(intervalId);
-                if (onComplete) onComplete();
-            }
-        }, 30);
-        return () => clearInterval(intervalId);
-    }, [text, onComplete]);
+    useEffect(() => { if (!text) return; setDisplayedText(''); let index = 0; const intervalId = setInterval(() => { setDisplayedText(prev => prev + text.charAt(index)); index++; if (index >= text.length) { clearInterval(intervalId); if (onComplete) onComplete(); } }, 30); return () => clearInterval(intervalId); }, [text, onComplete]);
     return <SimpleMarkdown text={displayedText} />;
 };
 
@@ -217,16 +213,14 @@ const AiChatAssistant = ({ onClose }) => {
     const stopListening = useCallback(() => { if (recognitionRef.current) { recognitionRef.current.stop(); setIsListening(false); } }, []);
     
     // --- 激活码处理 ---
-    const handleActivate = async (e) => { e.preventDefault(); if (!activationKey.trim()) { setActivationError('请输入激活码。'); return; } setIsActivating(true); setActivationError(''); try { const deviceId = await getDeviceId(); const response = await fetch('/api/activate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: activationKey.trim(), deviceId }), }); const data = await response.json(); if (response.ok && data.success) { safeLocalStorageSet('ai_assistant_key', activationKey.trim()); setActivationState('activated'); setKeyType(data.keyType); if (data.keyType === 'trial') { const expiryTime = data.activatedAt + (data.durationSeconds || 0) * 1000; setTrialExpiryTimestamp(expiryTime); } else { setTrialExpiryInfo('永久授权'); } activated = true; } else { throw new Error(data.message || '激活失败。'); } } catch (err) { setActivationState('unactivated'); setActivationError(err.message); } finally { setIsActivating(false); } };
+    const handleActivate = async (e) => { e.preventDefault(); if (!activationKey.trim()) { setActivationError('请输入激活码。'); return; } setIsActivating(true); setActivationError(''); try { const deviceId = await getDeviceId(); const response = await fetch('/api/activate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: activationKey.trim(), deviceId }), }); const data = await response.json(); if (response.ok && data.success) { safeLocalStorageSet('ai_assistant_key', activationKey.trim()); setActivationState('activated'); setKeyType(data.keyType); if (data.keyType === 'trial') { const expiryTime = data.activatedAt + (data.durationSeconds || 0) * 1000; setTrialExpiryTimestamp(expiryTime); } else { setTrialExpiryInfo('永久授权'); } } else { throw new Error(data.message || '激活失败。'); } } catch (err) { setActivationState('unactivated'); setActivationError(err.message); } finally { setIsActivating(false); } };
     
-    // --- 消息提交与API请求 (已优化密钥轮询和知识库) ---
+    // --- 消息提交与API请求 (已优化密钥轮询) ---
     const handleSubmit = async (isRegenerate = false) => {
         if (!currentConversation || isLoading || activationState !== 'activated') return;
         let messagesForApi = [...currentConversation.messages];
         const textToProcess = userInput.trim();
 
-        // --- 移除本地知识库查询逻辑 ---
-        
         // --- 非知识库查询，继续API请求 ---
         if (isRegenerate) {
             if (messagesForApi.length > 0 && messagesForApi[messagesForApi.length - 1].role === 'ai') { messagesForApi.pop(); }
@@ -265,9 +259,7 @@ const AiChatAssistant = ({ onClose }) => {
                     role: content.role === 'user' ? 'user' : 'assistant',
                     content: content.parts.map(part => part.text).join('\n')
                 }));
-                // IMPORTANT: You need to configure your OpenAI compatible API base URL here.
-                // Example: 'https://api.openai.com/v1' or 'https://your-custom-openai-api.com/v1'
-                const baseOpenAiUrl = modelConfig.apiUrl || 'https://api.openai.com/v1'; 
+                const baseOpenAiUrl = modelConfig.apiUrl && modelConfig.apiUrl.trim() !== '' ? modelConfig.apiUrl : 'https://api.openai.com/v1'; 
                 apiUrl = `${baseOpenAiUrl}/chat/completions`; 
                 requestBody = {
                     model: modelConfig.value,
@@ -321,7 +313,7 @@ const AiChatAssistant = ({ onClose }) => {
                 }));
             }
         }
-        if (!activeKey) {
+        if (!activeKey) { 
              setError('没有可用的API密钥，请在设置中配置。');
              setIsLoading(false);
              return;
@@ -400,8 +392,7 @@ const AiChatAssistant = ({ onClose }) => {
                 <div className="relative w-full max-w-sm bg-white/10 backdrop-blur-xl border border-white/20 rounded-lg shadow-xl p-8 flex flex-col items-center">
                     <h2 className="text-2xl font-bold mb-2 text-center text-white shadow-text">报名中文课程</h2>
                     <p className="text-gray-200 text-sm mb-2 text-center shadow-text">【课程介绍】结合中缅教学方案，高效学习中文，价格比大部分缅甸机构更优惠！</p>
-                    <p className="text-gray-200 text-sm mb-2 text-center shadow-text">【地址】仰光某区，欢迎线下咨询！</p>
-                    <p className="text-xl font-bold text-green-400 mb-4 text-center shadow-text">【优惠价格】AI助手套餐：$50 / 月（原价$80）</p>
+                    <p className="text-2xl font-bold text-green-400 mb-4 text-center shadow-text">【优惠价格】AI助手套餐：$50 / 月（原价$80）</p>
                     <p className="text-gray-200 text-sm mb-4 text-center shadow-text">请通过以下方式联系我们，获取专属学习方案：</p>
                     <div className="space-y-3 w-full mb-6">
                         <a href="https://t.me/yourtelegramid" target="_blank" rel="noopener noreferrer" className="block w-full text-white bg-blue-500 hover:bg-blue-600 rounded-lg py-3 text-lg font-semibold flex items-center justify-center space-x-2 transition-all duration-300 transform hover:-translate-y-1 shadow-lg"><i className="fab fa-telegram-plane"></i> <span>Telegram 联系</span></a>
@@ -467,13 +458,11 @@ const AiChatAssistant = ({ onClose }) => {
                                 </button>
                                 {showMoreMenu && (
                                     <div className="absolute bottom-full mb-2 w-56 bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 overflow-hidden z-20">
-                                        <button type="button" onClick={() => { setShowAssistantSelector(true); setShowMoreMenu(false); createNewConversation(); }} className="w-full flex items-center text-left px-4 py-3 text-sm hover:bg-primary/10"><i className="fas fa-user-astronaut w-6 mr-2"></i>选择助理</button> {/* 改为选择助理 */}
+                                        <button type="button" onClick={() => { setShowAssistantSelector(true); setShowMoreMenu(false); createNewConversation(); }} className="w-full flex items-center text-left px-4 py-3 text-sm hover:bg-primary/10"><i className="fas fa-user-astronaut w-6 mr-2"></i>选择助理</button>
                                         <button type="button" onClick={() => { setShowModelSelector(true); setShowMoreMenu(false); }} className="w-full flex justify-between items-center text-left px-4 py-3 text-sm hover:bg-primary/10"> <span className="flex items-center"><i className="fas fa-robot w-6 mr-2"></i>切换模型</span> <span className="text-xs text-gray-500 truncate max-w-[100px]">{settings.chatModels.find(m => m.value === (currentConversation?.model || settings.selectedModel))?.name}</span> </button>
                                     </div>
                                 )}
                             </div>
-                            <input type="file" ref={fileInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" multiple />
-                            <input type="file" ref={cameraInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" capture="environment" />
                             <textarea ref={textareaRef} value={userInput} onChange={(e) => setUserInput(e.target.value)} placeholder="与 AI 聊天..." className="flex-1 bg-transparent focus:outline-none dark:text-gray-100 text-base resize-none overflow-hidden mx-2 py-1 leading-6 max-h-36 placeholder-gray-400 dark:placeholder-gray-500" rows="1" style={{minHeight:'2.5rem'}} />
                             <div className="flex items-center space-x-2 flex-shrink-0 ml-1">
                                 {!showSendButton && (<button type="button" onClick={isListening ? stopListening : startListening} className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${isListening ? 'text-white bg-red-500 animate-pulse' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'}`} title="语音输入"><i className="fas fa-microphone text-xl"></i></button>)}
