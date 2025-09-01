@@ -64,7 +64,20 @@ const DEFAULT_SETTINGS = {
 
 const TypingEffect = ({ text, onComplete }) => {
     const [displayedText, setDisplayedText] = useState('');
-    useEffect(() => { if (!text) return; setDisplayedText(''); let index = 0; const intervalId = setInterval(() => { setDisplayedText(prev => prev + text.charAt(index)); index++; if (index >= text.length) { clearInterval(intervalId); if (onComplete) onComplete(); } }, 30); return () => clearInterval(intervalId); }, [text, onComplete]);
+    useEffect(() => {
+        if (!text) return;
+        setDisplayedText('');
+        let index = 0;
+        const intervalId = setInterval(() => {
+            setDisplayedText(prev => prev + text.charAt(index));
+            index++;
+            if (index >= text.length) {
+                clearInterval(intervalId);
+                if (onComplete) onComplete();
+            }
+        }, 30);
+        return () => clearInterval(intervalId);
+    }, [text, onComplete]);
     return <SimpleMarkdown text={displayedText} />;
 };
 
@@ -221,6 +234,8 @@ const AiChatAssistant = ({ onClose }) => {
         let messagesForApi = [...currentConversation.messages];
         const textToProcess = userInput.trim();
 
+        // --- 移除本地知识库查询逻辑 ---
+        
         // --- 非知识库查询，继续API请求 ---
         if (isRegenerate) {
             if (messagesForApi.length > 0 && messagesForApi[messagesForApi.length - 1].role === 'ai') { messagesForApi.pop(); }
@@ -392,7 +407,8 @@ const AiChatAssistant = ({ onClose }) => {
                 <div className="relative w-full max-w-sm bg-white/10 backdrop-blur-xl border border-white/20 rounded-lg shadow-xl p-8 flex flex-col items-center">
                     <h2 className="text-2xl font-bold mb-2 text-center text-white shadow-text">报名中文课程</h2>
                     <p className="text-gray-200 text-sm mb-2 text-center shadow-text">【课程介绍】结合中缅教学方案，高效学习中文，价格比大部分缅甸机构更优惠！</p>
-                    <p className="text-2xl font-bold text-green-400 mb-4 text-center shadow-text">【优惠价格】AI助手套餐：$50 / 月（原价$80）</p>
+                    <p className="text-gray-200 text-sm mb-2 text-center shadow-text">【地址】仰光某区，欢迎线下咨询！</p>
+                    <p className="text-xl font-bold text-green-400 mb-4 text-center shadow-text">【优惠价格】AI助手套餐：$50 / 月（原价$80）</p>
                     <p className="text-gray-200 text-sm mb-4 text-center shadow-text">请通过以下方式联系我们，获取专属学习方案：</p>
                     <div className="space-y-3 w-full mb-6">
                         <a href="https://t.me/yourtelegramid" target="_blank" rel="noopener noreferrer" className="block w-full text-white bg-blue-500 hover:bg-blue-600 rounded-lg py-3 text-lg font-semibold flex items-center justify-center space-x-2 transition-all duration-300 transform hover:-translate-y-1 shadow-lg"><i className="fab fa-telegram-plane"></i> <span>Telegram 联系</span></a>
