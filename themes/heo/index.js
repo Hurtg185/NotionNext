@@ -1,4 +1,4 @@
-// themes/heo/index.js (最终完整、格式正确的版本)
+// themes/heo/index.js (最终完整版 - 已恢复所有代码并彻底解决问题)
 import Comment from '@/components/Comment'
 import { AdSlot } from '@/components/GoogleAdsense'
 import { HashTag } from '@/components/HeroIcons'
@@ -15,6 +15,7 @@ import { Transition } from '@headlessui/react'
 import SmartLink from '@/components/SmartLink'
 import { useRouter } from 'next/router'
 import { useEffect, useState, useMemo, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import BlogPostArchive from './components/BlogPostArchive'
 import BlogPostListPage from './components/BlogPostListPage'
 import BlogPostListScroll from './components/BlogPostListScroll'
@@ -39,10 +40,8 @@ import ArticleExpirationNotice from '@/components/ArticleExpirationNotice'
 import GlosbeSearchCard from '@/components/GlosbeSearchCard'
 import AiChatAssistant from '@/components/AiChatAssistant'
 
-// --- 新增：随机宣传图片数组 ---
 const XUANCHUAN_BANNERS = ['/images/xuanchuan3.jpg', '/images/xuanchuan4.jpg', '/images/xuanchuan5.jpg']
 
-// --- 通用弹窗组件 ---
 const Modal = ({ isOpen, onClose, title, intro, children }) => {
   if (!isOpen) return null
   return (
@@ -59,13 +58,37 @@ const Modal = ({ isOpen, onClose, title, intro, children }) => {
   )
 }
 
-// --- 重构：全屏AI助手容器 ---
-const AIAssistantModal = ({ isOpen, children }) => {
-  if (!isOpen) return null
-  return (
-    <div className='w-full h-full bg-white dark:bg-gray-900'>
-      {children}
-    </div>
+// --- 新增：使用Portal技术的AI助手全屏容器 ---
+const AIAssistantPortal = ({ isOpen, onClose }) => {
+  const containerRef = useRef(null)
+
+  useEffect(() => {
+    if (isOpen) {
+      // 打开时请求全屏
+      containerRef.current?.requestFullscreen().catch(err => {
+        console.error(`无法进入全屏模式: ${err.message}`)
+      })
+
+      // 监听全屏变化，用户按ESC退出时，调用onClose
+      const handleFullscreenChange = () => {
+        if (!document.fullscreenElement) {
+          onClose()
+        }
+      }
+      document.addEventListener('fullscreenchange', handleFullscreenChange)
+      return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+    }
+  }, [isOpen, onClose])
+
+  if (!isOpen || !isBrowser) {
+    return null
+  }
+
+  return createPortal(
+    <div ref={containerRef} className='fixed inset-0 z-[100] bg-white dark:bg-gray-900'>
+      <AiChatAssistant onClose={onClose} />
+    </div>,
+    document.body
   )
 }
 
@@ -105,108 +128,34 @@ const LayoutBase = props => {
   )
 }
 
-// --- 功能按钮 ---
 const FunctionButton = ({ title, icon, onClick, href, img, target }) => {
   const style = img ? { backgroundImage: `url(${img})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}
   const iconColorClass = img ? 'text-white' : 'text-gray-500 dark:text-gray-300 group-hover:text-indigo-500 dark:group-hover:text-yellow-500'
   const textColorClass = img ? 'text-white' : 'text-gray-700 dark:text-gray-200'
-  const content = (
-    <>
-      {img && <div className="absolute inset-0 bg-black bg-opacity-40 rounded-xl"></div>}
-      <div className='relative z-10 flex flex-col items-center justify-center'>
-        <div className={`text-3xl ${iconColorClass} transition-colors duration-200`}><i className={icon} /></div>
-        <div className={`mt-2 text-sm font-semibold ${textColorClass}`}>{title}</div>
-      </div>
-    </>
-  )
-  if (href) {
-    return (
-      <SmartLink href={href} target={target} className='group relative flex flex-col justify-center items-center w-full h-24 bg-white dark:bg-[#1e1e1e] border dark:border-gray-700 rounded-xl shadow-md transform hover:scale-105 transition-transform duration-200 overflow-hidden' style={style}>
-        {content}
-      </SmartLink>
-    )
-  }
-  return (
-    <button onClick={onClick} className='group relative flex flex-col justify-center items-center w-full h-24 bg-white dark:bg-[#1e1e1e] border dark:border-gray-700 rounded-xl shadow-md transform hover:scale-105 transition-transform duration-200 overflow-hidden' style={style}>
-      {content}
-    </button>
-  )
+  const content = (<>{img && <div className="absolute inset-0 bg-black bg-opacity-40 rounded-xl"></div>}<div className='relative z-10 flex flex-col items-center justify-center'><div className={`text-3xl ${iconColorClass} transition-colors duration-200`}><i className={icon} /></div><div className={`mt-2 text-sm font-semibold ${textColorClass}`}>{title}</div></div></>)
+  if (href) { return (<SmartLink href={href} target={target} className='group relative flex flex-col justify-center items-center w-full h-24 bg-white dark:bg-[#1e1e1e] border dark:border-gray-700 rounded-xl shadow-md transform hover:scale-105 transition-transform duration-200 overflow-hidden' style={style}>{content}</SmartLink>)}
+  return (<button onClick={onClick} className='group relative flex flex-col justify-center items-center w-full h-24 bg-white dark:bg-[#1e1e1e] border dark:border-gray-700 rounded-xl shadow-md transform hover:scale-105 transition-transform duration-200 overflow-hidden' style={style}>{content}</button>)
 }
 
-// --- 主页顶部 AI助手按钮 ---
 const AIAssistantButton = ({ onClick }) => {
-  return (
-    <div className='px-5 md:px-0 my-4'>
-      <button onClick={onClick} className='w-full flex items-center justify-center p-4 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg transform hover:scale-105 transition-transform duration-300'>
-        <i className='fas fa-robot text-2xl mr-3'></i>
-        <span className='text-lg font-bold'>与 AI 助手对话</span>
-      </button>
-    </div>
-  )
+  return (<div className='px-5 md:px-0 my-4'><button onClick={onClick} className='w-full flex items-center justify-center p-4 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg transform hover:scale-105 transition-transform duration-300'><i className='fas fa-robot text-2xl mr-3'></i><span className='text-lg font-bold'>与 AI 助手对话</span></button></div>)
 }
 
-// --- 快捷入口功能区 ---
 const QuickAccessGrid = ({ setActiveModal }) => {
   const functions = [{ title: '报名课程', icon: 'fa-solid fa-graduation-cap', modal: 'enroll' }, { title: '找工作', icon: 'fa-solid fa-briefcase', modal: 'jobs' }, { title: '试看课程', icon: 'fa-solid fa-video', modal: 'trial' }]
-  return (
-    <div className='py-2'>
-      <div className='grid grid-cols-3 gap-4'>
-        {functions.map(func => <FunctionButton key={func.title} title={func.title} icon={func.icon} onClick={() => setActiveModal(func.modal)} />)}
-      </div>
-    </div>
-  )
+  return (<div className='py-2'><div className='grid grid-cols-3 gap-4'>{functions.map(func => <FunctionButton key={func.title} title={func.title} icon={func.icon} onClick={() => setActiveModal(func.modal)} />)}</div></div>)
 }
-
-// --- 提问交流模块 ---
 const AskQuestionModule = () => {
   const facebookGroupUrl = "https://www.facebook.com/share/g/15Fh7mrpa8/";
-  return (
-    <div className='py-4'>
-      <a href={facebookGroupUrl} target="_blank" rel="noopener noreferrer" className='group flex items-center justify-between p-4 bg-white dark:bg-[#1e1e1e] border dark:border-gray-700 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200'>
-        <div className='flex items-center'>
-          <i className='fas fa-question-circle text-3xl text-indigo-500 mr-4'></i>
-          <div>
-            <h3 className='font-bold text-lg dark:text-white'>提问交流</h3>
-            <p className='text-sm text-gray-500 dark:text-gray-400'>遇到学习问题？来这里和大家一起讨论！</p>
-          </div>
-        </div>
-        <i className='fas fa-arrow-right text-gray-400 group-hover:translate-x-1 transition-transform duration-200'></i>
-      </a>
-    </div>
-  )
+  return (<div className='py-4'><a href={facebookGroupUrl} target="_blank" rel="noopener noreferrer" className='group flex items-center justify-between p-4 bg-white dark:bg-[#1e1e1e] border dark:border-gray-700 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200'><div className='flex items-center'><i className='fas fa-question-circle text-3xl text-indigo-500 mr-4'></i><div><h3 className='font-bold text-lg dark:text-white'>提问交流</h3><p className='text-sm text-gray-500 dark:text-gray-400'>遇到学习问题？来这里和大家一起讨论！</p></div></div><i className='fas fa-arrow-right text-gray-400 group-hover:translate-x-1 transition-transform duration-200'></i></a></div>)
 }
-
-// --- 学习工具功能区 ---
 const StudyToolsGrid = ({ setActiveModal }) => {
   const functions = [{ title: '书籍', icon: 'fa-solid fa-book', href: 'https://books.843075.xyz' }, { title: '语法', icon: 'fa-solid fa-pen-ruler', modal: 'grammar' }, { title: '练习题', icon: 'fa-solid fa-file-pen', modal: 'exercises' }, { title: '生词', icon: 'fa-solid fa-spell-check', modal: 'vocabulary' }, { 'title': '短语', 'icon': 'fas fa-comments', modal: 'phrases' }, { 'title': '拼音', 'icon': 'fas fa-font', modal: 'pinyin' }]
-  return (
-    <div className='py-2'>
-      <div className='text-2xl font-bold mb-4 text-center dark:text-white'>学习工具</div>
-      <div className='grid grid-cols-3 gap-4'>
-        {functions.map(func => <FunctionButton key={func.title} title={func.title} icon={func.icon} href={func.href} onClick={() => setActiveModal(func.modal)} />)}
-      </div>
-    </div>
-  )
+  return (<div className='py-2'><div className='text-2xl font-bold mb-4 text-center dark:text-white'>学习工具</div><div className='grid grid-cols-3 gap-4'>{functions.map(func => <FunctionButton key={func.title} title={func.title} icon={func.icon} href={func.href} onClick={() => setActiveModal(func.modal)} />)}</div></div>)
 }
-
-// --- 随机图片卡片组件 ---
 const RandomImageCard = ({ banners, linkUrl, alt }) => {
-  const randomImage = useMemo(() => {
-    if (!banners || banners.length === 0) {
-      console.warn("XUANCHUAN_BANNERS is empty or undefined. Using default fallback image.");
-      return '/images/default-xuanchuan.jpg';
-    }
-    return banners[Math.floor(Math.random() * banners.length)];
-  }, [banners]);
-  return (
-    <section className='mt-4'>
-      <SmartLink href={linkUrl || '#'}>
-        <div className='rounded-xl shadow-md overflow-hidden transform hover:scale-105 transition-transform duration-300'>
-          <LazyImage src={randomImage} alt={alt} className="w-full h-auto" />
-        </div>
-      </SmartLink>
-    </section>
-  )
+  const randomImage = useMemo(() => { if (!banners || banners.length === 0) { return '/images/default-xuanchuan.jpg'; } return banners[Math.floor(Math.random() * banners.length)]; }, [banners]);
+  return (<section className='mt-4'><SmartLink href={linkUrl || '#'}><div className='rounded-xl shadow-md overflow-hidden transform hover:scale-105 transition-transform duration-300'><LazyImage src={randomImage} alt={alt} className="w-full h-auto" /></div></SmartLink></section>)
 }
 
 /**
@@ -215,31 +164,14 @@ const RandomImageCard = ({ banners, linkUrl, alt }) => {
 const LayoutIndex = props => {
   const [activeModal, setActiveModal] = useState(null)
   const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false)
-  const assistantContainerRef = useRef(null)
-
-  const HEO_AI_ASSISTANT_FULLSCREEN_IMMERSIVE = siteConfig('HEO_AI_ASSISTANT_FULLSCREEN_IMMERSIVE', false, CONFIG)
-
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      if (!document.fullscreenElement) {
-        setIsAiAssistantOpen(false)
-      }
-    }
-    document.addEventListener('fullscreenchange', handleFullscreenChange)
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
-  }, [])
 
   const handleOpenAssistant = () => {
     setIsAiAssistantOpen(true)
-    if (HEO_AI_ASSISTANT_FULLSCREEN_IMMERSIVE && assistantContainerRef.current) {
-      assistantContainerRef.current.requestFullscreen().catch(err => {
-        console.error(`无法进入全屏模式: ${err.message} (${err.name})`)
-      })
-    }
   }
 
   const handleCloseAssistant = () => {
-    if (HEO_AI_ASSISTANT_FULLSCREEN_IMMERSIVE && document.fullscreenElement) {
+    // 如果当前在全屏模式，先退出全屏
+    if (document.fullscreenElement) {
       document.exitFullscreen()
     }
     setIsAiAssistantOpen(false)
@@ -275,13 +207,7 @@ const LayoutIndex = props => {
         {currentModal?.children}
       </Modal>
 
-      {isAiAssistantOpen && (
-        <div ref={assistantContainerRef} className='fixed inset-0 z-[100]'>
-          <AIAssistantModal isOpen={isAiAssistantOpen}>
-            <AiChatAssistant onClose={handleCloseAssistant} />
-          </AIAssistantModal>
-        </div>
-      )}
+      <AIAssistantPortal isOpen={isAiAssistantOpen} onClose={handleCloseAssistant} />
     </>
   )
 }
@@ -291,11 +217,7 @@ const LayoutPostList = props => {
   return (
     <div id='post-outer-wrapper' className='px-5  md:px-0'>
       <CategoryBar {...props} />
-      {siteConfig('POST_LIST_STYLE') === 'page' ? (
-        <BlogPostListPage {...props} />
-      ) : (
-        <BlogPostListScroll {...props} />
-      )}
+      {siteConfig('POST_LIST_STYLE') === 'page' ? (<BlogPostListPage {...props} />) : (<BlogPostListScroll {...props} />)}
     </div>
   )
 }
@@ -337,11 +259,7 @@ const LayoutArchive = props => {
       <CategoryBar {...props} border={false} />
       <div className='px-3'>
         {Object.keys(archivePosts).map(archiveTitle => (
-          <BlogPostArchive
-            key={archiveTitle}
-            posts={archivePosts[archiveTitle]}
-            archiveTitle={archiveTitle}
-          />
+          <BlogPostArchive key={archiveTitle} posts={archivePosts[archiveTitle]} archiveTitle={archiveTitle}/>
         ))}
       </div>
     </div>
