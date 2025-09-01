@@ -1,4 +1,4 @@
-// themes/heo/index.js (最终修正版 - 修复Portal在SSR下的问题)
+// themes/heo/index.js (最终修正版 - 彻底解决状态残留问题)
 import Comment from '@/components/Comment'
 import { AdSlot } from '@/components/GoogleAdsense'
 import { HashTag } from '@/components/HeroIcons'
@@ -14,7 +14,7 @@ import { isBrowser } from '@/lib/utils'
 import { Transition } from '@headlessui/react'
 import SmartLink from '@/components/SmartLink'
 import { useRouter } from 'next/router'
-import { useEffect, useState, useMemo, useRef } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react' // <--- 新增 useCallback
 import { createPortal } from 'react-dom'
 import BlogPostArchive from './components/BlogPostArchive'
 import BlogPostListPage from './components/BlogPostListPage'
@@ -44,7 +44,7 @@ const XUANCHUAN_BANNERS = ['/images/xuanchuan3.jpg', '/images/xuanchuan4.jpg', '
 
 const Modal = ({ isOpen, onClose, title, intro, children }) => {
   if (!isOpen) return null
-  return (
+  return createPortal(
     <div className='fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4' onClick={onClose}>
       <div className='bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-sm w-full mx-auto animate-modal-pop' onClick={(e) => e.stopPropagation()}>
         <h3 className='text-xl font-bold mb-2 dark:text-gray-100'>{title}</h3>
@@ -54,47 +54,48 @@ const Modal = ({ isOpen, onClose, title, intro, children }) => {
           关闭
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
-// --- 重大变更：使用更稳定的方式创建Portal ---
-const AIAssistantPortal = ({ isOpen, onClose }) => {
-  const [isMounted, setIsMounted] = useState(false)
-  const containerRef = useRef(null)
+// --- 重大变更：使用更稳定健壮的Portal组件 ---
+const AIAssistantPortal = ({ onClose }) => {
+  const ref = useRef(null)
 
   useEffect(() => {
-    // 这个Effect确保组件只在客户端渲染，解决了SSR问题
-    setIsMounted(true)
-  }, [])
+    // 进入时请求全屏
+    ref.current?.requestFullscreen().catch(err => {
+        console.error(`进入全屏模式失败: ${err.message}`)
+    })
 
-  useEffect(() => {
-    if (isOpen && isMounted) {
-      containerRef.current?.requestFullscreen().catch(err => {
-        console.error(`无法进入全屏模式: ${err.message}`)
-      })
-
-      const handleFullscreenChange = () => {
-        if (!document.fullscreenElement) {
-          onClose()
-        }
+    // 监听全屏变化
+    const onFullscreenChange = () => {
+      // 当用户通过ESC等方式退出全屏时，调用关闭函数
+      if (!document.fullscreenElement) {
+        onClose()
       }
-      document.addEventListener('fullscreenchange', handleFullscreenChange)
-      return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
     }
-  }, [isOpen, isMounted, onClose])
+    document.addEventListener('fullscreenchange', onFullscreenChange)
 
-  if (!isMounted) {
-    return null
-  }
+    // 组件卸载时，执行清理操作
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange)
+      // 确保退出全屏
+      if (document.fullscreenElement) {
+        document.exitFullscreen()
+      }
+    }
+  }, [onClose])
 
-  return isOpen ? createPortal(
-    <div ref={containerRef} className='fixed inset-0 z-[1000] bg-white dark:bg-gray-900'>
+  return createPortal(
+    <div ref={ref} className="fixed inset-0 z-[1000] bg-white dark:bg-gray-900">
       <AiChatAssistant onClose={onClose} />
     </div>,
     document.body
-  ) : null
+  )
 }
+
 
 /**
  * 基础布局
@@ -169,13 +170,9 @@ const LayoutIndex = props => {
   const [activeModal, setActiveModal] = useState(null)
   const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false)
 
-  const handleOpenAssistant = () => setIsAiAssistantOpen(true)
-  const handleCloseAssistant = () => {
-    if (document.fullscreenElement) {
-      document.exitFullscreen()
-    }
-    setIsAiAssistantOpen(false)
-  }
+  // 使用useCallback确保函数引用稳定，避免不必要的重渲染
+  const handleOpenAssistant = useCallback(() => setIsAiAssistantOpen(true), [])
+  const handleCloseAssistant = useCallback(() => setIsAiAssistantOpen(false), [])
 
   const modalContent = {
     enroll: { title: '报名课程', intro: '结合中缅教学方案，高效学习中文，价格比大部分缅甸机构更优惠！请通过以下方式联系我们，获取专属学习方案：', children: (<><SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200'><i className='fab fa-telegram-plane text-xl mr-3'></i> <span className='font-semibold'>Telegram 联系</span></SmartLink><SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-green-400 text-white hover:bg-green-500 transition-all duration-200'><i className='fab fa-line text-xl mr-3'></i> <span className='font-semibold'>Line 联系</span></SmartLink><SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-all duration-200'><i className='fab fa-viber text-xl mr-3'></i> <span className='font-semibold'>Viber 联系</span></SmartLink><SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-all duration-200'><i className='fab fa-facebook-f text-xl mr-3'></i> <span className='font-semibold'>Facebook 个人主页</span></SmartLink></>) },
@@ -207,7 +204,8 @@ const LayoutIndex = props => {
         {currentModal?.children}
       </Modal>
 
-      <AIAssistantPortal isOpen={isAiAssistantOpen} onClose={handleCloseAssistant} />
+      {/* 重大变更：只有在isOpen为true时才渲染Portal组件，确保每次都是新的 */}
+      {isAiAssistantOpen && <AIAssistantPortal onClose={handleCloseAssistant} />}
     </>
   )
 }
