@@ -238,7 +238,7 @@ const BeiDanCi = ({
 
       <div 
         className={`relative w-full overflow-hidden rounded-3xl shadow-2xl my-4 transition-all duration-500 border-4 border-transparent ${cardFeedbackClass}`}
-        style={{ height: '550px', maxWidth: '700px', margin: '0 auto' }} // 恢复 v5 的固定尺寸
+        style={{ height: '550px', maxWidth: '1700px', margin: '0 auto' }} // 恢复 v5 的固定尺寸
       >
         {/* 背景图层 (来自 v5) */}
         {currentBackgroundImage ? (
