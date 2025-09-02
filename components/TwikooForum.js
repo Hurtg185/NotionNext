@@ -1,8 +1,8 @@
-// /components/TwikooForum.js (这是一个新文件)
+// /components/TwikooForum.js (这是一个新文件，或者替换旧文件)
 import React, { useEffect } from 'react';
 import { useGlobal } from '@/lib/global';
 import { siteConfig } from '@/lib/config';
-import styles from './TwikooForum.module.css'; // 导入我们刚刚创建的CSS模块
+import styles from './TwikooForum.module.css'; // 我们将创建一个CSS模块来美化
 
 const TwikooForum = ({ frontMatter }) => {
   const { isDarkMode } = useGlobal();
