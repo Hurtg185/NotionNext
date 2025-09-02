@@ -1,14 +1,13 @@
-// /components/BeiDanCi.js - 极简稳定版 v12：核心功能，高度精简
+// /components/BeiDanCi.js - 美化增强版 v13：恢复美观与功能
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TextToSpeechButton from './TextToSpeechButton'; // 确保此组件路径正确
 
 /**
- * 极简背单词卡片组件
- * 核心功能：显示单词、TTS朗读、语音识别比对、基本切换/翻面交互。
- * 目标：提供一个尽可能稳定、无额外干扰的基石版本。
+ * 美化增强版背单词卡片组件
+ * 恢复所有设计和功能优化，包括背景图、玻璃拟态、优化播放按钮、自动翻面等。
  */
 const BeiDanCi = ({ data: dataProp }) => {
-  // --- 精简后的 State ---
+  // --- State 初始化 ---
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showBack, setShowBack] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -20,6 +19,9 @@ const BeiDanCi = ({ data: dataProp }) => {
   ]);
   const [questionTitle, setQuestionTitle] = useState('精简背单词');
   const [lang, setLang] = useState('zh-CN');
+  const [backgroundImages, setBackgroundImages] = useState([]);
+  const [correctSoundUrl, setCorrectSoundUrl] = useState('/sounds/correct.mp3'); // 默认值
+  const [incorrectSoundUrl, setIncorrectSoundUrl] = useState('/sounds/wrong.mp3'); // 默认值
 
   // 语音识别和音频
   const [isListening, setIsListening] = useState(false);
@@ -47,7 +49,7 @@ const BeiDanCi = ({ data: dataProp }) => {
     // 更新配置，如果传入数据有效则使用，否则保持默认
     const newFlashcards = (parsedData.flashcards && parsedData.flashcards.length > 0) 
                           ? parsedData.flashcards 
-                          : flashcards; // 使用传入数据或默认数据
+                          : [{ word: "你好", pinyin: "nǐ hǎo", meaning: "Hello", example: "你好，世界。", exampleTranslation: "Hello, world." },{ word: "测试", pinyin: "cè shì", meaning: "Test", example: "这是一个测试。", exampleTranslation: "This is a test." }]; // 确保这里有默认值
 
     const finalFlashcards = String(parsedData.isShuffle) === 'true'
                             ? [...newFlashcards].sort(() => Math.random() - 0.5)
@@ -56,17 +58,9 @@ const BeiDanCi = ({ data: dataProp }) => {
     setFlashcards(finalFlashcards);
     setQuestionTitle(parsedData.questionTitle || '精简背单词');
     setLang(parsedData.lang || 'zh-CN');
-
-    // 音效URL
-    const effectiveCorrectSoundUrl = parsedData.correctSoundUrl || '/sounds/correct.mp3'; // 假定默认路径
-    const effectiveIncorrectSoundUrl = parsedData.incorrectSoundUrl || '/sounds/wrong.mp3'; // 假定默认路径
-
-    if (effectiveCorrectSoundUrl && correctAudioRef.current?.src !== effectiveCorrectSoundUrl) {
-      correctAudioRef.current = new Audio(effectiveCorrectSoundUrl);
-    }
-    if (effectiveIncorrectSoundUrl && incorrectAudioRef.current?.src !== effectiveIncorrectSoundUrl) {
-      incorrectAudioRef.current = new Audio(effectiveIncorrectSoundUrl);
-    }
+    setBackgroundImages(parsedData.backgroundImages || []); // 恢复背景图
+    setCorrectSoundUrl(parsedData.correctSoundUrl || '/sounds/correct.mp3');
+    setIncorrectSoundUrl(parsedData.incorrectSoundUrl || '/sounds/wrong.mp3');
     
     // 重置交互状态
     setCurrentIndex(0);
@@ -143,6 +137,13 @@ const BeiDanCi = ({ data: dataProp }) => {
   }, [lang, flashcards, currentIndex, feedback.status, isListening]);
 
 
+  // 单独处理音频 URL 的变化
+  useEffect(() => {
+    if (correctSoundUrl) correctAudioRef.current = new Audio(correctSoundUrl);
+    if (incorrectSoundUrl) incorrectAudioRef.current = new Audio(incorrectSoundUrl);
+  }, [correctSoundUrl, incorrectSoundUrl]);
+
+
   // --- 交互逻辑 ---
   const handleToggleBack = useCallback(() => setShowBack(prev => !prev), []);
 
@@ -191,17 +192,20 @@ const BeiDanCi = ({ data: dataProp }) => {
   
   // --- 渲染部分 ---
   const currentCard = flashcards[currentIndex];
+  // 如果没有背景图，则默认提供一个纯色背景，而不是完全透明
+  const currentBackgroundImage = backgroundImages[currentIndex % backgroundImages.length] || ''; 
+
   const feedbackBorderColor = () => {
     switch (feedback.status) {
       case 'correct': return 'border-green-500';
       case 'incorrect': return 'border-red-500';
       case 'listening': return 'border-blue-500';
-      default: return 'border-gray-300 dark:border-gray-600!important'; // fallback color
+      default: return 'border-gray-300 dark:border-gray-600'; 
     }
   };
 
   // 如果卡片数据为空，但不是由于解析错误（即有默认数据），则显示默认卡片
-  // 否则，如果连默认数据都没有，那才显示“无数据”提示
+  // 否则，如果连默认数据都没有，那才显示“无数据”提示 (这种情况在有默认值后基本不会出现)
   if (!currentCard) {
     return (
       <div className="max-w-4xl mx-auto my-8 p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg border dark:border-gray-700">
@@ -214,14 +218,24 @@ const BeiDanCi = ({ data: dataProp }) => {
     <div className="max-w-4xl mx-auto my-8 p-4 bg-transparent">
       <h3 className="text-2xl sm:text-3xl font-extrabold mb-6 text-gray-800 dark:text-gray-100 text-center">{questionTitle}</h3>
 
-      <div className="relative w-full overflow-hidden rounded-2xl shadow-xl my-4 touch-action-pan-y" style={{ height: '550px', maxWidth: '700px', margin: '0 auto', backgroundColor: '#4A5568' }}> {/* 纯色背景 */}
-        {/* 内容 */}
+      <div className="relative w-full overflow-hidden rounded-2xl shadow-xl my-4 touch-action-pan-y" style={{ height: '550px', maxWidth: '700px', margin: '0 auto' }}>
+        {/* 背景图层 */}
+        {currentBackgroundImage ? (
+            <div className="absolute inset-0 z-0 transition-opacity duration-500" style={{ backgroundImage: `url('${currentBackgroundImage}')`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: isTransitioning ? 0 : 1 }}>
+              <div className="absolute inset-0 bg-black opacity-30"></div> {/* 蒙版 */}
+            </div>
+        ) : (
+            <div className="absolute inset-0 z-0 bg-gray-700 dark:bg-gray-900"></div> /* 纯色默认背景 */
+        )}
+        
+        {/* 内容容器 */}
         <div className={`absolute inset-0 z-10 transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
           {/* 正面 */}
           <div className={`w-full h-full p-6 sm:p-8 flex flex-col items-center justify-center text-center transition-all duration-300 ${showBack ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
             <p className="text-5xl sm:text-7xl font-bold leading-tight text-white select-none flex items-center drop-shadow-lg">
               {currentCard.word}
-              <TextToSpeechButton text={currentCard.word} lang={lang} className="ml-4 text-4xl sm:text-5xl drop-shadow-md" />
+              {/* 美化后的播放按钮 */}
+              <TextToSpeechButton text={currentCard.word} lang={lang} className="ml-4 w-10 h-10 flex items-center justify-center text-white/80 hover:text-white transition-colors duration-200"/>
             </p>
             {currentCard.pinyin && <p className="text-xl sm:text-2xl text-white/80 mt-2 font-light select-none drop-shadow-md">{currentCard.pinyin}</p>}
           </div>
@@ -230,10 +244,13 @@ const BeiDanCi = ({ data: dataProp }) => {
           <div className={`absolute inset-0 p-6 sm:p-8 flex flex-col items-center justify-center transition-all duration-300 ease-in-out ${showBack ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'} text-white`}>
             <div onClick={e => e.stopPropagation()} className="w-full h-full max-h-full flex flex-col justify-center overflow-y-auto custom-scrollbar p-4 text-center bg-black/30 rounded-lg backdrop-blur-md border border-white/20">
               <div className="space-y-4">
-                <h4 className="text-3xl sm:text-4xl font-extrabold flex items-center justify-center drop-shadow-md">{currentCard.word}<TextToSpeechButton text={currentCard.word} lang={lang} className="ml-4 text-3xl"/></h4>
-                {currentCard.pinyin && <p className="text-xl sm:text-2xl flex items-center justify-center drop-shadow-sm text-yellow-300"><span className="font-semibold mr-2 text-white">拼音:</span>{currentCard.pinyin}<TextToSpeechButton text={currentCard.pinyin} lang={lang} className="ml-2"/></p>}
-                {currentCard.meaning && <p className="text-xl sm:text-2xl flex items-center justify-center drop-shadow-sm"><span className="font-semibold mr-2">释义:</span>{currentCard.meaning}<TextToSpeechButton text={currentCard.meaning} lang={lang} className="ml-2"/></p>}
-                {currentCard.example && <div className="mt-4 pt-4 border-t border-white/20"><p className="text-lg sm:text-xl italic flex items-start justify-center drop-shadow-sm"><span className="font-semibold not-italic mr-2">例句:</span>{currentCard.example}<TextToSpeechButton text={currentCard.example} lang={lang} className="ml-2 shrink-0"/></p>{currentCard.exampleTranslation && <p className="text-base sm:text-lg flex items-start justify-center drop-shadow-sm opacity-80 mt-2"><span className="font-semibold mr-2">翻译:</span>{currentCard.exampleTranslation}<TextToSpeechButton text={currentCard.exampleTranslation} lang={lang} className="ml-2 shrink-0"/></p>}</div>}
+                <h4 className="text-3xl sm:text-4xl font-extrabold flex items-center justify-center drop-shadow-md">
+                    {currentCard.word}
+                    <TextToSpeechButton text={currentCard.word} lang={lang} className="ml-4 w-8 h-8 flex items-center justify-center text-white/70 hover:text-white transition-colors duration-200"/>
+                </h4>
+                {currentCard.pinyin && <p className="text-xl sm:text-2xl flex items-center justify-center drop-shadow-sm text-yellow-300"><span className="font-semibold mr-2 text-white">拼音:</span>{currentCard.pinyin}<TextToSpeechButton text={currentCard.pinyin} lang={lang} className="ml-2 w-6 h-6 flex items-center justify-center text-yellow-300/70 hover:text-yellow-300 transition-colors duration-200"/></p>}
+                {currentCard.meaning && <p className="text-xl sm:text-2xl flex items-center justify-center drop-shadow-sm"><span className="font-semibold mr-2">释义:</span>{currentCard.meaning}<TextToSpeechButton text={currentCard.meaning} lang={lang} className="ml-2 w-6 h-6 flex items-center justify-center text-white/70 hover:text-white transition-colors duration-200"/></p>}
+                {currentCard.example && <div className="mt-4 pt-4 border-t border-white/20"><p className="text-lg sm:text-xl italic flex items-start justify-center drop-shadow-sm"><span className="font-semibold not-italic mr-2">例句:</span>{currentCard.example}<TextToSpeechButton text={currentCard.example} lang={lang} className="ml-2 shrink-0 w-6 h-6 flex items-center justify-center text-white/70 hover:text-white transition-colors duration-200"/></p>{currentCard.exampleTranslation && <p className="text-base sm:text-lg flex items-start justify-center drop-shadow-sm opacity-80 mt-2"><span className="font-semibold mr-2">翻译:</span>{currentCard.exampleTranslation}<TextToSpeechButton text={currentCard.exampleTranslation} lang={lang} className="ml-2 shrink-0 w-6 h-6 flex items-center justify-center text-white/70 hover:text-white transition-colors duration-200"/></p>}</div>}
               </div>
             </div>
           </div>
