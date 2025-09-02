@@ -1,11 +1,12 @@
-// /components/BeiDanCi.js - 最终稳定版 v21 (基于v5，集成所有功能，修复布局)
+// /components/BeiDanCi.js - 终极稳定版 v22 (基于v5，集成所有功能，移除宽度限制)
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TextToSpeechButton from './TextToSpeechButton'; // 导入朗读组件
-import JumpToCardModal from './JumpToCardModal'; // 导入页码跳转组件
+import JumpToCardModal from './JumpToCarcModal'; // 导入页码跳转组件
 
 /**
  * 背单词卡片组件 (Flashcard)
  * - 基于 v5 稳定版本，保证基础布局和数据加载正常。
+ * - 彻底移除卡片宽度限制，使其能够占据父容器的全部宽度。
  * - 集成了语音识别、对错反馈、自动切换下一张。
  * - 集成页码跳转弹窗，并更新页码显示样式。
  * - 卡片背面支持词性、谐音、2个例句等新字段。
@@ -228,8 +229,8 @@ const BeiDanCi = ({
   }
 
   return (
-    <div className="max-w-4xl mx-auto my-8 p-4 bg-transparent">
-      {/* 页码跳转弹窗 */}
+    // 关键修正：移除外层容器的 max-w 限制，让它尽可能宽
+    <div className="w-full mx-auto my-8 p-4 bg-transparent"> 
       {isModalOpen && <JumpToCardModal total={displayFlashcards.length} current={currentIndex} onJump={handleJump} onClose={() => setIsModalOpen(false)} />}
       
       <h3 className="text-2xl sm:text-3xl font-extrabold mb-6 text-gray-800 dark:text-gray-100 text-center">
@@ -238,7 +239,7 @@ const BeiDanCi = ({
 
       <div 
         className={`relative w-full overflow-hidden rounded-3xl shadow-2xl my-4 transition-all duration-500 border-4 border-transparent ${cardFeedbackClass}`}
-        style={{ height: '350px', maxWidth: '90%', margin: '0 auto' }} // 恢复 v5 的固定尺寸
+        style={{ height: '550px', maxWidth: '700px', margin: '0 auto' }} // 恢复 v5 的固定尺寸，但取消了外层容器的 max-w 限制
       >
         {/* 背景图层 (来自 v5) */}
         {currentBackgroundImage ? (
@@ -300,18 +301,13 @@ const BeiDanCi = ({
             </div>
           </div>
         </div>
-        
-        {/* 交互覆盖层 (左下、右下、中下区域) - 精准控制点击范围 */}
+
         <div className="absolute inset-0 z-30 grid grid-cols-4 grid-rows-3 pointer-events-none">
-          {/* 中下区域，用于切换详情 */}
-          <div className="col-start-2 col-span-2 row-start-3 pointer-events-auto cursor-pointer" onClick={handleToggleBack}></div>
-          {/* 左下角 */}
+          <div className="col-span-full row-span-full pointer-events-auto cursor-pointer" onClick={handleToggleBack}></div>
           <div className="col-start-1 row-start-3 pointer-events-auto cursor-pointer" onClick={(e) => { e.stopPropagation(); handlePrev(); }}></div>
-          {/* 右下角 */}
           <div className="col-start-4 row-start-3 pointer-events-auto cursor-pointer" onClick={(e) => { e.stopPropagation(); handleNext(); }}></div>
         </div>
         
-        {/* 语音识别按钮 (卡片中间最下方) */}
         <button onClick={(e) => { e.stopPropagation(); handleListen(); }} disabled={isListening} className={`absolute bottom-5 left-1/2 -translate-x-1/2 z-40 w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 text-white text-2xl shadow-lg ${isListening ? 'bg-red-500 animate-pulse' : 'bg-blue-500/80 hover:bg-blue-600'}`}>
             <i className="fas fa-microphone"></i>
         </button>
