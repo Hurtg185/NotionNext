@@ -1,22 +1,17 @@
 /* /components/TwikooForum.module.css */
-
-/* 整体容器，打造卡片感 */
 .twikooWrapper {
     max-width: 800px;
     margin: 2rem auto;
     padding: 2rem;
-    background-color: var(--bg-white); /* 适配主题颜色变量 */
-    border-radius: 1.5rem; /* 更大的圆角 */
+    background-color: var(--bg-white);
+    border-radius: 1.5rem;
     box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.1);
     border: 1px solid var(--gray-2);
 }
-
 .dark .twikooWrapper {
-    background-color: #1E1E1E; /* 深色模式背景 */
+    background-color: #1E1E1E;
     border-color: #333;
 }
-
-/* 标题和描述 */
 .title {
     text-align: center;
     font-size: 2.5rem;
@@ -24,14 +19,11 @@
     margin-bottom: 0.5rem;
     color: var(--text-color);
 }
-
 .description {
     text-align: center;
     color: var(--gray-5);
     margin-bottom: 2.5rem;
 }
-
-/* Twikoo 容器的全局样式覆盖 */
 .twikooContainer :global(.tk-input),
 .twikooContainer :global(.tk-textarea) {
     background-color: var(--bg-gray) !important;
@@ -39,20 +31,17 @@
     border: 1px solid var(--gray-3) !important;
     transition: all 0.2s ease-in-out;
 }
-
-.twikooContainer :global(.tk-input:focus),
-.twikooContainer :global(.tk-textarea:focus) {
-    border-color: var(--theme-color) !important;
-    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.3) !important; /* Tailwind's blue-300 with opacity */
-}
-
 .dark .twikooContainer :global(.tk-input),
 .dark .twikooContainer :global(.tk-textarea) {
     background-color: #374151 !important;
     border-color: #4b5563 !important;
     color: #e5e7eb !important;
 }
-
+.twikooContainer :global(.tk-input:focus),
+.twikooContainer :global(.tk-textarea:focus) {
+    border-color: var(--theme-color) !important;
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.3) !important;
+}
 .twikooContainer :global(.tk-submit) {
     border-radius: 12px !important;
     background-color: var(--theme-color) !important;
@@ -61,12 +50,10 @@
     padding: 12px 20px !important;
     transition: all 0.2s ease-in-out;
 }
-
 .twikooContainer :global(.tk-submit:hover) {
     transform: translateY(-2px);
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
-
 .twikooContainer :global(.tk-comment) {
     margin-top: 1.5rem !important;
     border-radius: 12px !important;
@@ -76,7 +63,6 @@
     box-shadow: none !important;
     border-top: 1px solid var(--gray-2) !important;
 }
-
 .dark .twikooContainer :global(.tk-comment) {
     border-top-color: #333 !important;
 }
