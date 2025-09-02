@@ -1,4 +1,4 @@
-// /components/BeiDanCi.js - 终极修复版 v10：彻底解决数据加载问题
+// /components/BeiDanCi.js - 终极修复版 v11：彻底解决编译错误
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TextToSpeechButton from './TextToSpeechButton'; // 确保此组件路径正确
 
@@ -32,9 +32,9 @@ const BeiDanCi = ({ data: dataProp }) => {
   const speechRecognitionRef = useRef(null);
   const correctAudioRef = useRef(null);
   const incorrectAudioRef = useRef(null);
-  const isComponentMounted = useRef(false);
+  const isComponentMounted = useRef(false); // 用于防止在onend中设置已卸载组件的状态
 
-  // --- Prop 解析与数据初始化 (关键修复点) ---
+  // --- Prop 解析与数据初始化 (关键步骤) ---
   useEffect(() => {
     isComponentMounted.current = true; // 标记组件已挂载
     if (!dataProp) {
@@ -178,7 +178,7 @@ const BeiDanCi = ({ data: dataProp }) => {
       speechRecognitionRef.current.start();
     } catch(e) {
       console.error("Speech recognition could not start:", e);
-      setFeedback({ status: 'error', message: '无法启动麦克风 (请检查权限)" });
+      setFeedback({ status: 'error', message: '无法启动麦克风 (请检查权限)' }); // 修正：移除了多余的引号
     }
   }, [isListening, currentCard]);
 
