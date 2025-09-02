@@ -4,15 +4,25 @@ import CusdisForum from '@/components/CusdisForum';
 import { useGlobal } from '@/lib/global';
 import { useRouter } from 'next/router';
 import { siteConfig } from '@/lib/config'; // 确保导入siteConfig
-import Head from 'next/head'; // 导入Head用于加载脚本
+import Head from 'next/head';
 
-const ForumPage = () => {
+// --- 新增：使用 getStaticProps 在服务器端获取配置 ---
+export async function getStaticProps() {
+  const siteUrl = siteConfig('LINK') || 'https://your-website.com'; // 从配置读取，或提供一个备用URL
+  return {
+    props: {
+      siteUrl,
+    },
+    revalidate: 1,
+  };
+}
+
+const ForumPage = ({ siteUrl }) => { // 接收从getStaticProps传递来的siteUrl
   const { locale } = useGlobal();
   const router = useRouter();
 
-  // 为Cusdis生成唯一的页面ID和URL，确保评论区与此页面绑定
+  // 为Cusdis生成唯一的页面ID和URL
   const pageId = router.asPath;
-  const siteUrl = siteConfig('LINK') || 'https://your-website.com'; // 从配置读取，或提供一个备用URL
   const pageUrl = siteUrl + router.asPath;
 
   return (
