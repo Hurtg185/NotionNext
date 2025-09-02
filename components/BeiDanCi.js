@@ -1,7 +1,8 @@
-// /components/BeiDanCi.js - 终极稳定版 v22 (基于v5，集成所有功能，移除宽度限制)
+// /components/BeiDanCi.js - 终极稳定版 v23 (修复JumpToCardModal导入路径)
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TextToSpeechButton from './TextToSpeechButton'; // 导入朗读组件
-import JumpToCardModal from './JumpToCarcModal'; // 导入页码跳转组件
+// 关键修正：将 './JumpToCarcModal' 改为 './JumpToCardModal'
+import JumpToCardModal from './JumpToCardModal'; // 导入页码跳转组件
 
 /**
  * 背单词卡片组件 (Flashcard)
@@ -229,7 +230,7 @@ const BeiDanCi = ({
   }
 
   return (
-    // 关键修正：移除外层容器的 max-w 限制，让它尽可能宽
+    // 关键修正：移除外层容器的 max-w 限制，让它尽可能宽，但保持居中
     <div className="w-full mx-auto my-8 p-4 bg-transparent"> 
       {isModalOpen && <JumpToCardModal total={displayFlashcards.length} current={currentIndex} onJump={handleJump} onClose={() => setIsModalOpen(false)} />}
       
@@ -239,15 +240,15 @@ const BeiDanCi = ({
 
       <div 
         className={`relative w-full overflow-hidden rounded-3xl shadow-2xl my-4 transition-all duration-500 border-4 border-transparent ${cardFeedbackClass}`}
-        style={{ height: '550px', maxWidth: '700px', margin: '0 auto' }} // 恢复 v5 的固定尺寸，但取消了外层容器的 max-w 限制
+        style={{ height: '550px', maxWidth: '700px', margin: '0 auto' }} // 保持卡片本身的 max-width 700px 和居中
       >
         {/* 背景图层 (来自 v5) */}
         {currentBackgroundImage ? (
             <div className="absolute inset-0 z-0 transition-opacity duration-500" style={{ backgroundImage: `url('${currentBackgroundImage}')`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: isTransitioning ? 0 : 1 }}>
-              <div className="absolute inset-0 bg-black opacity-40 backdrop-blur-sm"></div> {/* 磨砂玻璃效果 */}
+              <div className="absolute inset-0 bg-black opacity-40 backdrop-blur-sm" /> {/* 磨砂玻璃效果 */}
             </div>
         ) : (
-            <div className="absolute inset-0 z-0 bg-gray-700 dark:bg-gray-900"></div> /* 纯色默认背景 */
+            <div className="absolute inset-0 z-0 bg-gray-700 dark:bg-gray-900" /> /* 纯色默认背景 */
         )}
         
         {/* 页码 (点击弹出跳转组件，无背景) */}
@@ -262,7 +263,7 @@ const BeiDanCi = ({
         <div className={`absolute inset-0 z-20 transition-opacity duration-300 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
           {/* 正面 */}
           <div className={`w-full h-full p-6 flex flex-col items-center justify-center text-center transition-opacity duration-300 ${showBack ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-            <div className="flex-grow"></div>
+            <div className="flex-grow" />
             <p className="text-6xl sm:text-8xl font-bold text-white select-none flex items-center drop-shadow-lg">
               {currentCard.word}
               <TextToSpeechButton text={currentCard.word} lang={lang} className="ml-4 w-12 h-12 text-3xl" />
@@ -271,7 +272,7 @@ const BeiDanCi = ({
             <div className="h-8 mt-4 text-xl font-semibold">
               {feedback.status !== 'idle' && <span className={feedbackColor}>{recognizedText || feedback.message}</span>}
             </div>
-            <div className="flex-grow"></div>
+            <div className="flex-grow" />
           </div>
 
           {/* 背面 (已添加新字段和玻璃效果) */}
@@ -281,13 +282,13 @@ const BeiDanCi = ({
                 <div className="space-y-3">
                   <h4 className="text-4xl font-bold flex items-center">{currentCard.word}<TextToSpeechButton text={currentCard.word} lang={lang} className="ml-3 w-9 h-9 text-2xl" /></h4>
                   {currentCard.pinyin && <p className="text-xl text-yellow-300">{currentCard.pinyin}</p>}
-                  {currentCard.partOfSpeech && <p className="flex items-center text-base text-gray-300"><i className="fa-solid fa-book-open w-5 text-center mr-2 text-gray-400"></i><span className="font-semibold mr-2">【词性】</span> {currentCard.partOfSpeech}</p>}
-                  {currentCard.homophone && <p className="flex items-center text-base text-gray-300"><i className="fa-solid fa-ear-listen w-5 text-center mr-2 text-gray-400"></i><span className="font-semibold mr-2">【谐音】</span> {currentCard.homophone}</p>}
+                  {currentCard.partOfSpeech && <p className="flex items-center text-base text-gray-300"><i className="fa-solid fa-book-open w-5 text-center mr-2 text-gray-400" /><span className="font-semibold mr-2">【词性】</span> {currentCard.partOfSpeech}</p>}
+                  {currentCard.homophone && <p className="flex items-center text-base text-gray-300"><i className="fa-solid fa-ear-listen w-5 text-center mr-2 text-gray-400" /><span className="font-semibold mr-2">【谐音】</span> {currentCard.homophone}</p>}
                   {currentCard.meaning && <p className="text-xl font-semibold flex items-center">{currentCard.meaning}<TextToSpeechButton text={currentCard.meaning} lang={lang} className="ml-3 w-7 h-7 text-lg" /></p>}
                 </div>
                 <hr className="my-6 border-white/20" />
                 <div className="space-y-4">
-                  <p className="flex items-center text-sm text-gray-400 font-semibold"><i className="fa-solid fa-quote-left w-5 text-center mr-2"></i> 【例句】</p>
+                  <p className="flex items-center text-sm text-gray-400 font-semibold"><i className="fa-solid fa-quote-left w-5 text-center mr-2" /> 【例句】</p>
                   {currentCard.example1 && <div>
                     <p className="text-lg flex items-start"><span className="flex-grow">{currentCard.example1}</span><TextToSpeechButton text={currentCard.example1} lang={lang} className="ml-2 shrink-0 w-6 h-6 text-base" /></p>
                     {currentCard.example1Translation && <p className="text-sm text-gray-400 italic mt-1">{currentCard.example1Translation}</p>}
@@ -303,13 +304,13 @@ const BeiDanCi = ({
         </div>
 
         <div className="absolute inset-0 z-30 grid grid-cols-4 grid-rows-3 pointer-events-none">
-          <div className="col-span-full row-span-full pointer-events-auto cursor-pointer" onClick={handleToggleBack}></div>
-          <div className="col-start-1 row-start-3 pointer-events-auto cursor-pointer" onClick={(e) => { e.stopPropagation(); handlePrev(); }}></div>
-          <div className="col-start-4 row-start-3 pointer-events-auto cursor-pointer" onClick={(e) => { e.stopPropagation(); handleNext(); }}></div>
+          <div className="col-span-full row-span-full pointer-events-auto cursor-pointer" onClick={handleToggleBack} />
+          <div className="col-start-1 row-start-3 pointer-events-auto cursor-pointer" onClick={(e) => { e.stopPropagation(); handlePrev(); }} />
+          <div className="col-start-4 row-start-3 pointer-events-auto cursor-pointer" onClick={(e) => { e.stopPropagation(); handleNext(); }} />
         </div>
         
         <button onClick={(e) => { e.stopPropagation(); handleListen(); }} disabled={isListening} className={`absolute bottom-5 left-1/2 -translate-x-1/2 z-40 w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 text-white text-2xl shadow-lg ${isListening ? 'bg-red-500 animate-pulse' : 'bg-blue-500/80 hover:bg-blue-600'}`}>
-            <i className="fas fa-microphone"></i>
+            <i className="fas fa-microphone" />
         </button>
       </div>
     </div>
