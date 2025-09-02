@@ -1,83 +1,87 @@
-// /components/BeiDanCi.js - 终极修复版 v11：彻底解决编译错误
+// /components/BeiDanCi.js - 极简稳定版 v12：核心功能，高度精简
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TextToSpeechButton from './TextToSpeechButton'; // 确保此组件路径正确
 
 /**
- * 背单词卡片组件 (Flashcard)
- * - 采用最新的单行JSON对象传参方式。
- * - 恢复并优化了经典的三区交互模型，解决了所有交互冲突。
- * - 融合了玻璃拟态视觉效果，并增强了学习流程的智能化。
- * - 优化数据加载逻辑，确保卡片数据可靠显示。
+ * 极简背单词卡片组件
+ * 核心功能：显示单词、TTS朗读、语音识别比对、基本切换/翻面交互。
+ * 目标：提供一个尽可能稳定、无额外干扰的基石版本。
  */
 const BeiDanCi = ({ data: dataProp }) => {
-  // --- State 初始化 ---
+  // --- 精简后的 State ---
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showBack, setShowBack] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
-  // --- 从JSON解析的配置State - 直接在这里初始化，确保渲染时有值 ---
-  const [parsedFlashcards, setParsedFlashcards] = useState([]);
-  const [questionTitle, setQuestionTitle] = useState('背单词');
+  // 默认配置和卡片数据，即使JSON解析失败也能显示
+  const [flashcards, setFlashcards] = useState([
+    { word: "你好", pinyin: "nǐ hǎo", meaning: "Hello", example: "你好，世界。", exampleTranslation: "Hello, world." },
+    { word: "测试", pinyin: "cè shì", meaning: "Test", example: "这是一个测试。", exampleTranslation: "This is a test." }
+  ]);
+  const [questionTitle, setQuestionTitle] = useState('精简背单词');
   const [lang, setLang] = useState('zh-CN');
-  const [backgroundImages, setBackgroundImages] = useState([]);
-  const [correctSoundUrl, setCorrectSoundUrl] = useState('');
-  const [incorrectSoundUrl, setIncorrectSoundUrl] = useState('');
 
-  // --- 语音识别State ---
+  // 语音识别和音频
   const [isListening, setIsListening] = useState(false);
   const [recognizedText, setRecognizedText] = useState('');
-  const [feedback, setFeedback] = useState({ status: 'idle', message: '' });
-
-  // --- Refs ---
+  const [feedback, setFeedback] = useState({ status: 'idle', message: '' }); // idle, listening, correct, incorrect
+  
   const speechRecognitionRef = useRef(null);
   const correctAudioRef = useRef(null);
   const incorrectAudioRef = useRef(null);
-  const isComponentMounted = useRef(false); // 用于防止在onend中设置已卸载组件的状态
+  const isComponentMounted = useRef(false);
 
-  // --- Prop 解析与数据初始化 (关键步骤) ---
+  // --- 数据解析与 State 设置 ---
   useEffect(() => {
-    isComponentMounted.current = true; // 标记组件已挂载
-    if (!dataProp) {
-        console.error("BeiDanCi component: 'data' prop is missing or empty.");
-        setParsedFlashcards([]); // 清空卡片数据
-        return;
+    isComponentMounted.current = true;
+    let parsedData = {};
+    if (dataProp) {
+        try {
+            parsedData = JSON.parse(dataProp);
+        } catch (e) {
+            console.error("BeiDanCi component: Error parsing 'data' JSON string.", e);
+            // 保持flashcards为默认值
+        }
     }
-    try {
-      const allProps = JSON.parse(dataProp);
-      
-      const cards = allProps.flashcards || [];
-      const shuffled = String(allProps.isShuffle) === 'true'
-        ? [...cards].sort(() => Math.random() - 0.5)
-        : cards;
-      
-      // 直接更新各个独立的State，确保立刻生效
-      setParsedFlashcards(shuffled);
-      setQuestionTitle(allProps.questionTitle || '背单词');
-      setLang(allProps.lang || 'zh-CN');
-      setBackgroundImages(allProps.backgroundImages || []);
-      setCorrectSoundUrl(allProps.correctSoundUrl || '');
-      setIncorrectSoundUrl(allProps.incorrectSoundUrl || '');
 
-      // 重置交互相关State
-      setCurrentIndex(0);
-      setShowBack(false);
-      setFeedback({ status: 'idle', message: '' });
-      setRecognizedText('');
+    // 更新配置，如果传入数据有效则使用，否则保持默认
+    const newFlashcards = (parsedData.flashcards && parsedData.flashcards.length > 0) 
+                          ? parsedData.flashcards 
+                          : flashcards; // 使用传入数据或默认数据
 
-    } catch (e) {
-      console.error("BeiDanCi component: Error parsing 'data' JSON string.", e);
-      setParsedFlashcards([]); // 解析失败时清空数据
+    const finalFlashcards = String(parsedData.isShuffle) === 'true'
+                            ? [...newFlashcards].sort(() => Math.random() - 0.5)
+                            : newFlashcards;
+    
+    setFlashcards(finalFlashcards);
+    setQuestionTitle(parsedData.questionTitle || '精简背单词');
+    setLang(parsedData.lang || 'zh-CN');
+
+    // 音效URL
+    const effectiveCorrectSoundUrl = parsedData.correctSoundUrl || '/sounds/correct.mp3'; // 假定默认路径
+    const effectiveIncorrectSoundUrl = parsedData.incorrectSoundUrl || '/sounds/wrong.mp3'; // 假定默认路径
+
+    if (effectiveCorrectSoundUrl && correctAudioRef.current?.src !== effectiveCorrectSoundUrl) {
+      correctAudioRef.current = new Audio(effectiveCorrectSoundUrl);
     }
+    if (effectiveIncorrectSoundUrl && incorrectAudioRef.current?.src !== effectiveIncorrectSoundUrl) {
+      incorrectAudioRef.current = new Audio(effectiveIncorrectSoundUrl);
+    }
+    
+    // 重置交互状态
+    setCurrentIndex(0);
+    setShowBack(false);
+    setFeedback({ status: 'idle', message: '' });
+    setRecognizedText('');
 
     return () => {
-      isComponentMounted.current = false; // 标记组件已卸载
+      isComponentMounted.current = false;
     };
-  }, [dataProp]); // 仅当dataProp变化时重新解析
+  }, [dataProp]); // 仅在dataProp变化时重新解析
 
-  // --- 初始化语音识别和音频对象 ---
+  // --- 语音识别初始化 ---
   useEffect(() => {
-    // 确保相关配置和数据已加载
-    if (typeof window === 'undefined' || !lang || parsedFlashcards.length === 0) return;
+    if (typeof window === 'undefined' || !lang) return;
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -112,8 +116,8 @@ const BeiDanCi = ({ data: dataProp }) => {
 
       recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript.trim().replace(/[.,。，]/g, '');
-        const currentWord = parsedFlashcards[currentIndex]?.word.trim();
-        if (isComponentMounted.current) { // 确保组件仍挂载
+        const currentWord = flashcards[currentIndex]?.word.trim();
+        if (isComponentMounted.current) {
           setRecognizedText(transcript);
           
           if (transcript === currentWord) {
@@ -131,26 +135,19 @@ const BeiDanCi = ({ data: dataProp }) => {
       console.warn("此浏览器不支持语音识别功能。"); 
     }
     
-    // 清理函数：组件卸载时停止识别
     return () => {
       if (speechRecognitionRef.current && isListening) {
         speechRecognitionRef.current.stop();
       }
     };
-  }, [lang, parsedFlashcards, currentIndex, feedback.status, isListening]); // 简化依赖项
-
-  // 单独处理音频 URL 的变化
-  useEffect(() => {
-    if (correctSoundUrl) correctAudioRef.current = new Audio(correctSoundUrl);
-    if (incorrectSoundUrl) incorrectAudioRef.current = new Audio(incorrectSoundUrl);
-  }, [correctSoundUrl, incorrectSoundUrl]);
+  }, [lang, flashcards, currentIndex, feedback.status, isListening]);
 
 
   // --- 交互逻辑 ---
   const handleToggleBack = useCallback(() => setShowBack(prev => !prev), []);
 
   const changeCard = (newIndex) => {
-    if (isTransitioning || parsedFlashcards.length === 0) return;
+    if (isTransitioning || flashcards.length === 0) return;
     setIsTransitioning(true);
     setShowBack(false);
     setRecognizedText('');
@@ -163,29 +160,26 @@ const BeiDanCi = ({ data: dataProp }) => {
       setIsTransitioning(false);
     }, 200);
   };
-
-  const currentCard = parsedFlashcards[currentIndex];
-  const currentBackgroundImage = backgroundImages[currentIndex % backgroundImages.length] || '';
   
-  const handleNext = useCallback(() => changeCard((currentIndex + 1) % parsedFlashcards.length), [currentIndex, parsedFlashcards.length, isTransitioning, changeCard]);
-  const handlePrev = useCallback(() => changeCard((currentIndex - 1 + parsedFlashcards.length) % parsedFlashcards.length), [currentIndex, parsedFlashcards.length, isTransitioning, changeCard]);
+  const handleNext = useCallback(() => changeCard((currentIndex + 1) % flashcards.length), [currentIndex, flashcards.length, isTransitioning, changeCard]);
+  const handlePrev = useCallback(() => changeCard((currentIndex - 1 + flashcards.length) % flashcards.length), [currentIndex, flashcards.length, isTransitioning, changeCard]);
   
   const handleListen = useCallback(() => {
-    if (isListening || !speechRecognitionRef.current || !currentCard?.word) return; // 确保有当前单词才启动
+    if (isListening || !speechRecognitionRef.current || !flashcards[currentIndex]?.word) return;
     setRecognizedText('');
     setFeedback({ status: 'idle', message: '' });
     try {
       speechRecognitionRef.current.start();
     } catch(e) {
       console.error("Speech recognition could not start:", e);
-      setFeedback({ status: 'error', message: '无法启动麦克风 (请检查权限)' }); // 修正：移除了多余的引号
+      setFeedback({ status: 'error', message: '无法启动麦克风 (请检查权限)' });
     }
-  }, [isListening, currentCard]);
+  }, [isListening, currentIndex, flashcards]);
 
   // 键盘事件
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (parsedFlashcards.length === 0 || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (flashcards.length === 0 || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       if (e.key === 'ArrowRight') handleNext();
       else if (e.key === 'ArrowLeft') handlePrev();
       else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); handleToggleBack(); }
@@ -193,20 +187,22 @@ const BeiDanCi = ({ data: dataProp }) => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleNext, handlePrev, handleToggleBack, handleListen, parsedFlashcards.length]);
+  }, [handleNext, handlePrev, handleToggleBack, handleListen, flashcards.length]);
   
   // --- 渲染部分 ---
+  const currentCard = flashcards[currentIndex];
   const feedbackBorderColor = () => {
     switch (feedback.status) {
       case 'correct': return 'border-green-500';
       case 'incorrect': return 'border-red-500';
       case 'listening': return 'border-blue-500';
-      default: return 'border-gray-300 dark:border-gray-600';
+      default: return 'border-gray-300 dark:border-gray-600!important'; // fallback color
     }
   };
 
-  // 关键：在卡片数据准备好之前，显示加载状态
-  if (parsedFlashcards.length === 0) {
+  // 如果卡片数据为空，但不是由于解析错误（即有默认数据），则显示默认卡片
+  // 否则，如果连默认数据都没有，那才显示“无数据”提示
+  if (!currentCard) {
     return (
       <div className="max-w-4xl mx-auto my-8 p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg border dark:border-gray-700">
         <p className="text-center text-gray-600 dark:text-gray-300">正在加载或没有卡片数据... (请检查Notion代码块或数据格式)</p>
@@ -218,12 +214,8 @@ const BeiDanCi = ({ data: dataProp }) => {
     <div className="max-w-4xl mx-auto my-8 p-4 bg-transparent">
       <h3 className="text-2xl sm:text-3xl font-extrabold mb-6 text-gray-800 dark:text-gray-100 text-center">{questionTitle}</h3>
 
-      <div className="relative w-full overflow-hidden rounded-2xl shadow-xl my-4 touch-action-pan-y" style={{ height: '550px', maxWidth: '700px', margin: '0 auto' }}>
-        {/* 背景图层 */}
-        <div className="absolute inset-0 z-0 transition-opacity duration-500" style={{ backgroundImage: `url('${currentBackgroundImage}')`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: isTransitioning ? 0 : 1 }}>
-          <div className="absolute inset-0 bg-black opacity-30"></div>
-        </div>
-        
+      <div className="relative w-full overflow-hidden rounded-2xl shadow-xl my-4 touch-action-pan-y" style={{ height: '550px', maxWidth: '700px', margin: '0 auto', backgroundColor: '#4A5568' }}> {/* 纯色背景 */}
+        {/* 内容 */}
         <div className={`absolute inset-0 z-10 transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
           {/* 正面 */}
           <div className={`w-full h-full p-6 sm:p-8 flex flex-col items-center justify-center text-center transition-all duration-300 ${showBack ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
@@ -247,7 +239,7 @@ const BeiDanCi = ({ data: dataProp }) => {
           </div>
         </div>
         
-        {/* 交互覆盖层：左(1/5), 中(3/5), 右(1/5) */}
+        {/* 交互覆盖层：左下(1/5), 中下(3/5), 右下(1/5) - 区域精确化 */}
         <div className="absolute inset-x-0 bottom-0 h-1/4 z-20 grid grid-cols-5 pointer-events-none">
           <div className="col-span-1 pointer-events-auto cursor-pointer" onClick={(e) => { e.stopPropagation(); handlePrev(); }}></div>
           <div className="col-span-3 pointer-events-auto cursor-pointer" onClick={(e) => { e.stopPropagation(); handleToggleBack(); }}></div>
@@ -263,7 +255,7 @@ const BeiDanCi = ({ data: dataProp }) => {
         <button onClick={handleListen} disabled={isListening} className={`flex-shrink-0 w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 ${isListening ? 'bg-red-500 animate-pulse' : 'bg-blue-500 hover:bg-blue-600'} text-white text-2xl shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`} aria-label="开始语音识别">
           <i className="fas fa-microphone"></i>
         </button>
-        <span className="text-gray-600 dark:text-gray-300 text-xl sm:text-2xl font-medium self-center w-20 text-center">{currentIndex + 1} / {parsedFlashcards.length}</span>
+        <span className="text-gray-600 dark:text-gray-300 text-xl sm:text-2xl font-medium self-center w-20 text-center">{currentIndex + 1} / {flashcards.length}</span>
       </div>
     </div>
   );
