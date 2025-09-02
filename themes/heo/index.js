@@ -1,4 +1,4 @@
-// themes/heo/index.js (最终修复版 - 劫持/forum页面)
+// themes/heo/index.js (最终稳定版 - 已移除所有全屏API，保证可靠性)
 import Comment from '@/components/Comment'
 import { AdSlot } from '@/components/GoogleAdsense'
 import { HashTag } from '@/components/HeroIcons'
@@ -39,7 +39,6 @@ import AISummary from '@/components/AISummary'
 import ArticleExpirationNotice from '@/components/ArticleExpirationNotice'
 import GlosbeSearchCard from '@/components/GlosbeSearchCard'
 import AiChatAssistant from '@/components/AiChatAssistant'
-import TwikooForum from '@/components/TwikooForum' // <--- 1. 导入TwikooForum
 
 const XUANCHUAN_BANNERS = ['/images/xuanchuan3.jpg', '/images/xuanchuan4.jpg', '/images/xuanchuan5.jpg']
 
@@ -47,7 +46,11 @@ const XUANCHUAN_BANNERS = ['/images/xuanchuan3.jpg', '/images/xuanchuan4.jpg', '
 const Modal = ({ isOpen, onClose, title, intro, children }) => {
   const [isMounted, setIsMounted] = useState(false)
   useEffect(() => { setIsMounted(true) }, [])
-  if (!isOpen || !isMounted) { return null }
+
+  if (!isOpen || !isMounted) {
+    return null
+  }
+
   return createPortal(
     <div className='fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[1000] p-4' onClick={onClose}>
       <div className='bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-sm w-full mx-auto animate-modal-pop' onClick={(e) => e.stopPropagation()}>
@@ -64,11 +67,11 @@ const Modal = ({ isOpen, onClose, title, intro, children }) => {
 }
 
 // --- 最稳定可靠的Portal实现 ---
-const AIAssistantPortal = ({ isOpen, onClose }) => {
+const AIAssistantPortal = ({ onClose }) => {
   const [isMounted, setIsMounted] = useState(false)
   useEffect(() => { setIsMounted(true) }, [])
 
-  if (!isOpen || !isMounted) {
+  if (!isMounted) {
     return null
   }
 
