@@ -1,4 +1,4 @@
-// /components/BeiDanCi.js - 终极稳定版 v24 (彻底移除卡片宽度限制)
+// /components/BeiDanCi.js - 终极稳定版 v25 (修复重复 className 属性)
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TextToSpeechButton from './TextToSpeechButton'; // 导入朗读组件
 import JumpToCardModal from './JumpToCardModal'; // 导入页码跳转组件
@@ -56,16 +56,17 @@ const BeiDanCi = ({
   useEffect(() => {
     let cards = [];
     if (typeof flashcardsProp === 'string') {
-      try { cards = JSON.parse(flashcardsProp); } catch (e) { cards = []; console.error("Error parsing flashcards JSON string:", e); }
+      try { cards = JSON.parse(flashcardsProp); } catch (e) { console.error("Error parsing flashcards JSON string:", e); cards = []; }
     } else if (Array.isArray(flashcardsProp)) { cards = flashcardsProp; }
 
     if (!cards || cards.length === 0) {
       setDisplayFlashcards([]);
-      setCurrentIndex(0);
+      setCurrentIndex(0); // 确保在无数据时重置
       setShowBack(false);
       return;
     }
 
+    // 处理洗牌逻辑
     setDisplayFlashcards(internalIsShuffle ? [...cards].sort(() => Math.random() - 0.5) : [...cards]);
     setCurrentIndex(0);
     setShowBack(false);
@@ -74,7 +75,7 @@ const BeiDanCi = ({
   useEffect(() => {
     let images = [];
     if (typeof backgroundImagesProp === 'string') {
-      try { images = JSON.parse(backgroundImagesProp); } catch (e) { images = []; console.error("Error parsing backgroundImages JSON string:", e); }
+      try { images = JSON.parse(backgroundImagesProp); } catch (e) { console.error("Error parsing backgroundImages JSON string:", e); images = []; }
     } else if (Array.isArray(backgroundImagesProp)) { images = backgroundImagesProp; }
     setParsedBackgroundImages(images);
   }, [backgroundImagesProp]);
@@ -146,9 +147,9 @@ const BeiDanCi = ({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, correctSoundUrl, incorrectSoundUrl, flipSoundUrl, changeCardSoundUrl, displayFlashcards, currentIndex]); // 省略了 handleNext 依赖
+  }, [lang, correctSoundUrl, incorrectSoundUrl, flipSoundUrl, changeCardSoundUrl, displayFlashcards, currentIndex]);
 
-  // --- 交互逻辑 (基于 v5，并增加了语音状态和自动切换重置) ---
+  // --- 交互逻辑 ---
   const handleToggleBack = useCallback((e) => {
     // 关键修正：确保点击这个区域才翻面，阻止其他地方的点击事件
     e.stopPropagation(); 
@@ -252,7 +253,7 @@ const BeiDanCi = ({
     if (!textInput) return '';
     // 假设对于 1-4 个字的单词我们加空格，确保停顿，但避免破坏长短语和句子的自然连读
     // 修正：确保只对纯汉字且长度在范围内的文本加空格，避免对拼音或英文加空格
-    const isPureChineseWord = /^[u4e00-\u9fa5]+$/.test(textInput);
+    const isPureChineseWord = /^[\u4e00-\u9fa5]+$/.test(textInput); // 修正正则表达式
     if (isPureChineseWord && textInput.length > 0 && textInput.length <= 4) {
       return Array.from(textInput).join(' ');
     }
@@ -305,10 +306,7 @@ const BeiDanCi = ({
             <div className="flex-grow" />
             <p className="text-6xl sm:text-8xl font-bold text-white select-none flex items-center drop-shadow-lg">
               {currentCard.word}
-              {/* 朗读按钮，点击不翻面 */}
-              <span onClick={handleSpeechButtonClick}>
-                <TextToSpeechButton text={getTextForTTS(currentCard.word)} lang={lang} className="ml-4 w-12 h-12 text-3xl" />
-              </span>
+              <TextToSpeechButton text={getTextForTTS(currentCard.word)} lang={lang} className="ml-4 w-12 h-12 text-3xl" />
             </p>
             {/* 语音识别结果 (显示在单词下方) */}
             <div className="h-8 mt-4 text-xl font-semibold">
@@ -325,7 +323,7 @@ const BeiDanCi = ({
                   <h4 className="text-4xl font-bold flex items-center">{currentCard.word}<TextToSpeechButton text={getTextForTTS(currentCard.word)} lang={lang} className="ml-3 w-9 h-9 text-2xl" /></h4>
                   {currentCard.pinyin && <p className="text-xl text-yellow-300">{currentCard.pinyin}</p>}
                   {currentCard.partOfSpeech && <p className="flex items-center text-base text-gray-300"><i className="fa-solid fa-book-open w-5 text-center mr-2 text-gray-400" /><span className="font-semibold mr-2">【词性】</span> {currentCard.partOfSpeech}</p>}
-                  {currentCard.homophone && <p className="flex items-center text-base text-gray-300"><i className className="fa-solid fa-ear-listen w-5 text-center mr-2 text-gray-400" /><span className="font-semibold mr-2">【谐音】</span> {currentCard.homophone}</p>}
+                  {currentCard.homophone && <p className="flex items-center text-base text-gray-300"><i className="fa-solid fa-ear-listen w-5 text-center mr-2 text-gray-400" /><span className="font-semibold mr-2">【谐音】</span> {currentCard.homophone}</p>}
                   {currentCard.meaning && <p className="text-xl font-semibold flex items-center">{currentCard.meaning}<TextToSpeechButton text={currentCard.meaning} lang={lang} className="ml-3 w-7 h-7 text-lg" /></p>}
                 </div>
                 <hr className="my-6 border-white/20" />
@@ -372,7 +370,7 @@ const BeiDanCi = ({
         </div>
         
         <button onClick={(e) => { e.stopPropagation(); handleListen(); }} disabled={isListening} className={`absolute bottom-5 left-1/2 -translate-x-1/2 z-40 w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 text-white text-2xl shadow-lg ${isListening ? 'bg-red-500 animate-pulse' : 'bg-blue-500/80 hover:bg-blue-600'}`}>
-            <i className="fas fa-microphone" />
+            <i className="fas fa-microphone"></i>
         </button>
       </div>
       
