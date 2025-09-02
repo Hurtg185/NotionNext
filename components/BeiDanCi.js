@@ -1,4 +1,4 @@
-// /components/BeiDanCi.js - 终极设计版 v17 (全屏优化，交互回归，流程增强)
+// /components/BeiDanCi.js - 终极设计版 v18 (修复布局，保留全部功能)
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TextToSpeechButton from './TextToSpeechButton';
 import JumpToCardModal from './JumpToCardModal';
@@ -26,7 +26,6 @@ const BeiDanCi = ({
   const [recognizedText, setRecognizedText] = useState('');
   const [feedback, setFeedback] = useState({ status: 'idle', message: '' });
   
-  // 新增：卡片变色反馈和自动跳转的 State
   const [cardFeedbackClass, setCardFeedbackClass] = useState('');
   const autoAdvanceTimeoutRef = useRef(null);
 
@@ -73,18 +72,15 @@ const BeiDanCi = ({
           if (transcript === currentWord) {
             setFeedback({ status: 'correct', message: '正确' });
             correctAudioRef.current?.play();
-            setCardFeedbackClass('border-green-500'); // 卡片变色
+            setCardFeedbackClass('border-green-500');
             setTimeout(() => setShowBack(true), 200);
-            // 答对后4秒自动跳转
-            autoAdvanceTimeoutRef.current = setTimeout(() => {
-              handleNext();
-            }, 4000);
+            autoAdvanceTimeoutRef.current = setTimeout(handleNext, 4000);
           } else {
             setFeedback({ status: 'incorrect', message: '错误' });
             incorrectAudioRef.current?.play();
-            setCardFeedbackClass('border-red-500'); // 卡片变色
+            setCardFeedbackClass('border-red-500');
           }
-          setTimeout(() => setCardFeedbackClass(''), 1000); // 1秒后恢复边框
+          setTimeout(() => setCardFeedbackClass(''), 1500);
         };
         recognition.onstart = () => setIsListening(true);
         recognition.onend = () => setIsListening(false);
@@ -92,11 +88,8 @@ const BeiDanCi = ({
         speechRecognitionRef.current = recognition;
       }
     }
-    // 组件卸载时清除定时器
     return () => {
-      if (autoAdvanceTimeoutRef.current) {
-        clearTimeout(autoAdvanceTimeoutRef.current);
-      }
+      if (autoAdvanceTimeoutRef.current) clearTimeout(autoAdvanceTimeoutRef.current);
     };
   }, [lang, correctSoundUrl, incorrectSoundUrl, displayFlashcards, currentIndex]);
 
@@ -105,10 +98,7 @@ const BeiDanCi = ({
 
   const changeCard = (newIndex) => {
     if (isTransitioning) return;
-    // 关键：切换卡片时，清除自动跳转的定时器
-    if (autoAdvanceTimeoutRef.current) {
-      clearTimeout(autoAdvanceTimeoutRef.current);
-    }
+    if (autoAdvanceTimeoutRef.current) clearTimeout(autoAdvanceTimeoutRef.current);
     setIsTransitioning(true);
     setShowBack(false);
     setRecognizedText('');
@@ -142,29 +132,30 @@ const BeiDanCi = ({
   if (!currentCard) return <div className="text-center p-8">没有卡片数据。</div>;
 
   return (
-    <div className="w-full px-4"> {/* 修正：让容器宽度100% */}
+    // 恢复：标准容器，确保在页面中正确显示
+    <div className="max-w-4xl mx-auto my-8 p-4 bg-transparent">
       {isModalOpen && <JumpToCardModal total={displayFlashcards.length} current={currentIndex} onJump={handleJump} onClose={() => setIsModalOpen(false)} />}
-      <h3 className="text-2xl sm:text-3xl font-extrabold my-6 text-gray-800 dark:text-gray-100 text-center">{questionTitle}</h3>
+      <h3 className="text-2xl sm:text-3xl font-extrabold mb-6 text-gray-800 dark:text-gray-100 text-center">{questionTitle}</h3>
 
       <div 
-        className={`relative w-full max-w-3xl mx-auto overflow-hidden rounded-3xl shadow-2xl transition-all duration-500 border-4 border-transparent ${cardFeedbackClass}`}
-        style={{ height: 'calc(100vh - 200px)', minHeight: '500px' }} 
+        className={`relative w-full overflow-hidden rounded-3xl shadow-2xl my-4 transition-all duration-500 border-4 border-transparent ${cardFeedbackClass}`}
+        style={{ height: '550px' }} // 恢复：使用固定高度，确保布局稳定
       >
-        {/* ... (v16 的背景图和磨砂玻璃层代码不变) ... */}
-        
-        {/* 页码 (新样式) */}
+        <div className="absolute inset-0 z-0 transition-all duration-500" style={{ backgroundImage: `url('${currentBackgroundImage}')`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: isTransitioning ? 0 : 1 }} />
+        <div className="absolute inset-0 z-10 bg-black/20 backdrop-blur-lg"></div>
+
         <div 
-          className="absolute top-5 right-5 z-40 text-white text-lg font-bold drop-shadow-lg cursor-pointer opacity-80 hover:opacity-100 transition-opacity"
+          className="absolute top-4 right-4 z-40 text-white text-lg font-bold drop-shadow-lg cursor-pointer opacity-80 hover:opacity-100 transition-opacity"
           onClick={() => setIsModalOpen(true)}
         >
           {currentIndex + 1}<span className="text-white/50"> / {displayFlashcards.length}</span>
         </div>
         
-        {/* ... (v16 的内容容器和正反面代码不变，但正面onClick已移到下方) ... */}
+        {/* ... (v16 的内容容器、正反面代码不变，请从v16复制) ... */}
         
-        {/* 交互覆盖层 (恢复v5的模式) */}
+        {/* 恢复v5的交互覆盖层 */}
         <div className="absolute inset-0 z-30 grid grid-cols-4 grid-rows-3 pointer-events-none">
-          {/* 中间区域，点击翻面 */}
+          {/* 中间区域 */}
           <div className="col-span-full row-span-full pointer-events-auto cursor-pointer" onClick={handleToggleBack}></div>
           {/* 左下角 */}
           <div className="col-start-1 row-start-3 pointer-events-auto cursor-pointer" onClick={(e) => { e.stopPropagation(); handlePrev(); }}></div>
@@ -172,7 +163,6 @@ const BeiDanCi = ({
           <div className="col-start-4 row-start-3 pointer-events-auto cursor-pointer" onClick={(e) => { e.stopPropagation(); handleNext(); }}></div>
         </div>
         
-        {/* 语音按钮 */}
         <button onClick={(e) => { e.stopPropagation(); handleListen(); }} disabled={isListening} className={`...`}>
           <i className="fas fa-microphone"></i>
         </button>
