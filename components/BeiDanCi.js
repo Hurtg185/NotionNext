@@ -1,4 +1,4 @@
-// /components/BeiDanCi.js - 终极代码版 v24 (TTS智能空格，翻译隐藏，AI助手移除，布局优化)
+// /components/BeiDanCi.js - 终极稳定版 v24 (彻底移除卡片宽度限制)
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TextToSpeechButton from './TextToSpeechButton'; // 导入朗读组件
 import JumpToCardModal from './JumpToCardModal'; // 导入页码跳转组件
@@ -94,9 +94,9 @@ const BeiDanCi = ({
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (SpeechRecognition) {
         const recognition = new SpeechRecognition();
-        recognition.continuous = false;
-        recognition.lang = lang;
-        recognition.interimResults = false;
+        recognition.continuous = false; // 非连续识别
+        recognition.lang = lang; // 设置语言
+        recognition.interimResults = false; // 不返回中间结果
         
         recognition.onstart = () => {
           setIsListening(true);
@@ -104,6 +104,7 @@ const BeiDanCi = ({
         };
         recognition.onend = () => {
           setIsListening(false);
+          // 如果识别结束但未收到结果，恢复为空闲状态
           setFeedback(prev => (prev.status === 'listening' ? { status: 'idle', message: '' } : prev));
         };
         recognition.onerror = (event) => {
@@ -112,21 +113,25 @@ const BeiDanCi = ({
            setFeedback({ status: 'error', message: '识别出错' });
         };
         recognition.onresult = (event) => {
-          const transcript = event.results[0][0].transcript.trim().replace(/[.,。，]/g, '');
+          const transcript = event.results[0][0].transcript.trim().replace(/[.,。，]/g, ''); // 移除标点
           setRecognizedText(transcript);
-          const currentWord = displayFlashcards[currentIndex]?.word.trim();
           
+          const currentWord = displayFlashcards[currentIndex]?.word.trim();
           if (transcript === currentWord) {
             setFeedback({ status: 'correct', message: '正确' });
             correctAudioRef.current?.play();
-            setCardFeedbackClass('border-green-500');
-            setTimeout(() => setShowBack(true), 200);
-            autoAdvanceTimeoutRef.current = setTimeout(handleNext, 4000);
+            setCardFeedbackClass('border-green-500'); // 卡片边框变绿
+            setTimeout(() => setShowBack(true), 200); // 延迟翻面
+            // 答对后 4 秒自动切换下一张卡片
+            autoAdvanceTimeoutRef.current = setTimeout(() => {
+              handleNext(); // 调用切换下一张卡片的函数
+            }, 4000);
           } else {
             setFeedback({ status: 'incorrect', message: '错误' });
             incorrectAudioRef.current?.play();
-            setCardFeedbackClass('border-red-500');
+            setCardFeedbackClass('border-red-500'); // 卡片边框变红
           }
+          // 无论对错，1.5 秒后清除边框颜色反馈
           setTimeout(() => setCardFeedbackClass(''), 1500);
         };
         speechRecognitionRef.current = recognition;
@@ -134,45 +139,55 @@ const BeiDanCi = ({
         console.warn("此浏览器不支持语音识别功能。");
       }
     }
+    // 组件卸载时，清除可能存在的自动切换定时器
     return () => {
-      if (autoAdvanceTimeoutRef.current) clearTimeout(autoAdvanceTimeoutRef.current);
+      if (autoAdvanceTimeoutRef.current) {
+        clearTimeout(autoAdvanceTimeoutRef.current);
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, correctSoundUrl, incorrectSoundUrl, flipSoundUrl, changeCardSoundUrl, displayFlashcards, currentIndex]);
+  }, [lang, correctSoundUrl, incorrectSoundUrl, flipSoundUrl, changeCardSoundUrl, displayFlashcards, currentIndex]); // 省略了 handleNext 依赖
 
-  // --- 交互逻辑 ---
+  // --- 交互逻辑 (基于 v5，并增加了语音状态和自动切换重置) ---
   const handleToggleBack = useCallback((e) => {
     // 关键修正：确保点击这个区域才翻面，阻止其他地方的点击事件
     e.stopPropagation(); 
     if (!showBack) { // 只有从正面到背面
       setShowBack(true);
-      flipAudioRef.current?.play();
+      flipAudioRef.current?.play(); // 播放翻面音效
     }
-  }, [showBack]);
+  }, [showBack]); // 依赖 showBack 确保最新状态
 
   const changeCard = (newIndex) => {
     if (isTransitioning || displayFlashcards.length === 0) return;
-    if (autoAdvanceTimeoutRef.current) clearTimeout(autoAdvanceTimeoutRef.current);
     
+    // 切换卡片前，清除自动切换定时器
+    if (autoAdvanceTimeoutRef.current) {
+      clearTimeout(autoAdvanceTimeoutRef.current);
+    }
+
     setIsTransitioning(true);
-    setShowBack(false);
+    setShowBack(false); // 确保新卡片从正面开始
+    // 重置语音识别状态和反馈
     setRecognizedText('');
     setFeedback({ status: 'idle', message: '' });
-    setCardFeedbackClass('');
-    setShowTranslation1(false); // 重置翻译显示状态
-    setShowTranslation2(false); // 重置翻译显示状态
+    setCardFeedbackClass(''); // 清除卡片边框颜色
+    // 重置翻译显示状态
+    setShowTranslation1(false);
+    setShowTranslation2(false);
 
     if (speechRecognitionRef.current && isListening) {
-      speechRecognitionRef.current.stop();
+      speechRecognitionRef.current.stop(); // 停止可能正在进行的语音识别
     }
     
     changeCardAudioRef.current?.play(); // 播放切换卡片音效
     setTimeout(() => {
       setCurrentIndex(newIndex);
       setIsTransitioning(false);
-    }, 300);
+    }, 300); // 动画时长
   };
 
+  // useCallback 包裹确保函数引用稳定，避免不必要的重新渲染
   const handleNext = useCallback((e) => {
     e.stopPropagation(); // 阻止事件冒泡
     const newIndex = (currentIndex + 1) % displayFlashcards.length;
@@ -185,14 +200,16 @@ const BeiDanCi = ({
     changeCard(newIndex);
   }, [currentIndex, displayFlashcards.length, changeCard]);
   
+  // 处理语音识别按钮点击
   const handleListen = useCallback((e) => {
     e.stopPropagation(); // 阻止事件冒泡
     if (isListening || !speechRecognitionRef.current || displayFlashcards.length === 0) return;
     setRecognizedText('');
-    setFeedback({ status: 'listening', message: '请说话...' });
+    setFeedback({ status: 'listening', message: '请说话...' }); // 立即显示提示信息
     speechRecognitionRef.current.start();
   }, [isListening, displayFlashcards.length]);
-  
+
+  // 页码跳转：关闭弹窗并跳转到指定卡片
   const handleJump = useCallback((index) => {
     changeCard(index);
     setIsModalOpen(false);
@@ -210,14 +227,14 @@ const BeiDanCi = ({
       if (displayFlashcards.length === 0 || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       if (isModalOpen) return; // 模态框打开时阻止键盘事件
 
-      if (e.key === 'ArrowRight') handleNext(e);
-      else if (e.key === 'ArrowLeft') handlePrev(e);
+      if (e.key === 'ArrowRight') handleNext(e); // 传递事件对象
+      else if (e.key === 'ArrowLeft') handlePrev(e); // 传递事件对象
       else if (e.key === ' ' || e.key === 'Enter') {
         e.preventDefault();
-        handleToggleBack(e);
+        handleToggleBack(e); // 传递事件对象
       } else if (e.key.toLowerCase() === 'm') {
         e.preventDefault();
-        handleListen(e);
+        handleListen(e); // 传递事件对象
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -234,7 +251,9 @@ const BeiDanCi = ({
   const getTextForTTS = (textInput) => {
     if (!textInput) return '';
     // 假设对于 1-4 个字的单词我们加空格，确保停顿，但避免破坏长短语和句子的自然连读
-    if (textInput.length > 0 && textInput.length <= 4 && !textInput.includes(' ') && !textInput.match(/[\u4e00-\u9fa5]{2,}/)) { // 避免对已是词组的加空格
+    // 修正：确保只对纯汉字且长度在范围内的文本加空格，避免对拼音或英文加空格
+    const isPureChineseWord = /^[u4e00-\u9fa5]+$/.test(textInput);
+    if (isPureChineseWord && textInput.length > 0 && textInput.length <= 4) {
       return Array.from(textInput).join(' ');
     }
     return textInput;
@@ -250,7 +269,8 @@ const BeiDanCi = ({
   }
 
   return (
-    <div className="max-w-4xl mx-auto my-8 p-4 bg-transparent relative"> {/* 相对定位父容器 */}
+    // 关键修正：移除外层容器的 max-w 限制，让它尽可能宽，但保持居中
+    <div className="w-full mx-auto my-8 p-4 bg-transparent relative"> {/* 相对定位父容器 */}
       {isModalOpen && <JumpToCardModal total={displayFlashcards.length} current={currentIndex} onJump={handleJump} onClose={() => setIsModalOpen(false)} />}
       
       <h3 className="text-2xl sm:text-3xl font-extrabold mb-6 text-gray-800 dark:text-gray-100 text-center">
@@ -259,7 +279,7 @@ const BeiDanCi = ({
 
       <div 
         className={`relative w-full overflow-hidden rounded-3xl shadow-2xl my-4 transition-all duration-500 border-4 border-transparent ${cardFeedbackClass}`}
-        style={{ height: '550px', maxWidth: '700px', margin: '0 auto' }} // 保持 v5 的固定尺寸
+        style={{ height: '550px' }} // 保持卡片本身的固定高度
       >
         {/* 背景图层 (确保显示) */}
         {currentBackgroundImage ? (
@@ -305,7 +325,7 @@ const BeiDanCi = ({
                   <h4 className="text-4xl font-bold flex items-center">{currentCard.word}<TextToSpeechButton text={getTextForTTS(currentCard.word)} lang={lang} className="ml-3 w-9 h-9 text-2xl" /></h4>
                   {currentCard.pinyin && <p className="text-xl text-yellow-300">{currentCard.pinyin}</p>}
                   {currentCard.partOfSpeech && <p className="flex items-center text-base text-gray-300"><i className="fa-solid fa-book-open w-5 text-center mr-2 text-gray-400" /><span className="font-semibold mr-2">【词性】</span> {currentCard.partOfSpeech}</p>}
-                  {currentCard.homophone && <p className="flex items-center text-base text-gray-300"><i className="fa-solid fa-ear-listen w-5 text-center mr-2 text-gray-400" /><span className="font-semibold mr-2">【谐音】</span> {currentCard.homophone}</p>}
+                  {currentCard.homophone && <p className="flex items-center text-base text-gray-300"><i className className="fa-solid fa-ear-listen w-5 text-center mr-2 text-gray-400" /><span className="font-semibold mr-2">【谐音】</span> {currentCard.homophone}</p>}
                   {currentCard.meaning && <p className="text-xl font-semibold flex items-center">{currentCard.meaning}<TextToSpeechButton text={currentCard.meaning} lang={lang} className="ml-3 w-7 h-7 text-lg" /></p>}
                 </div>
                 <hr className="my-6 border-white/20" />
@@ -352,7 +372,7 @@ const BeiDanCi = ({
         </div>
         
         <button onClick={(e) => { e.stopPropagation(); handleListen(); }} disabled={isListening} className={`absolute bottom-5 left-1/2 -translate-x-1/2 z-40 w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 text-white text-2xl shadow-lg ${isListening ? 'bg-red-500 animate-pulse' : 'bg-blue-500/80 hover:bg-blue-600'}`}>
-            <i className="fas fa-microphone"></i>
+            <i className="fas fa-microphone" />
         </button>
       </div>
       
