@@ -1,4 +1,4 @@
-// /components/BeiDanCi.js - 最终审查版 v9：稳定、健壮
+// /components/BeiDanCi.js - 终极修复版 v10：彻底解决数据加载问题
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TextToSpeechButton from './TextToSpeechButton'; // 确保此组件路径正确
 
@@ -7,6 +7,7 @@ import TextToSpeechButton from './TextToSpeechButton'; // 确保此组件路径�
  * - 采用最新的单行JSON对象传参方式。
  * - 恢复并优化了经典的三区交互模型，解决了所有交互冲突。
  * - 融合了玻璃拟态视觉效果，并增强了学习流程的智能化。
+ * - 优化数据加载逻辑，确保卡片数据可靠显示。
  */
 const BeiDanCi = ({ data: dataProp }) => {
   // --- State 初始化 ---
@@ -14,17 +15,14 @@ const BeiDanCi = ({ data: dataProp }) => {
   const [showBack, setShowBack] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
-  // --- 从JSON解析的配置State ---
-  const [config, setConfig] = useState({
-    flashcards: [], // 默认空数组，防止渲染错误
-    questionTitle: '背单词',
-    lang: 'zh-CN',
-    backgroundImages: [],
-    isShuffle: false,
-    correctSoundUrl: '',
-    incorrectSoundUrl: ''
-  });
-  
+  // --- 从JSON解析的配置State - 直接在这里初始化，确保渲染时有值 ---
+  const [parsedFlashcards, setParsedFlashcards] = useState([]);
+  const [questionTitle, setQuestionTitle] = useState('背单词');
+  const [lang, setLang] = useState('zh-CN');
+  const [backgroundImages, setBackgroundImages] = useState([]);
+  const [correctSoundUrl, setCorrectSoundUrl] = useState('');
+  const [incorrectSoundUrl, setIncorrectSoundUrl] = useState('');
+
   // --- 语音识别State ---
   const [isListening, setIsListening] = useState(false);
   const [recognizedText, setRecognizedText] = useState('');
@@ -34,34 +32,33 @@ const BeiDanCi = ({ data: dataProp }) => {
   const speechRecognitionRef = useRef(null);
   const correctAudioRef = useRef(null);
   const incorrectAudioRef = useRef(null);
-  const isComponentMounted = useRef(false); // 用于防止在onend中设置已卸载组件的状态
+  const isComponentMounted = useRef(false);
 
-  // --- Prop 解析与数据初始化 (关键步骤) ---
+  // --- Prop 解析与数据初始化 (关键修复点) ---
   useEffect(() => {
+    isComponentMounted.current = true; // 标记组件已挂载
     if (!dataProp) {
         console.error("BeiDanCi component: 'data' prop is missing or empty.");
-        // 即使没有数据，也保持组件结构，显示无数据提示
-        setConfig(prev => ({...prev, flashcards: []}));
+        setParsedFlashcards([]); // 清空卡片数据
         return;
     }
     try {
-      const parsedData = JSON.parse(dataProp);
-      const cards = parsedData.flashcards || [];
-      const finalCards = String(parsedData.isShuffle) === 'true'
+      const allProps = JSON.parse(dataProp);
+      
+      const cards = allProps.flashcards || [];
+      const shuffled = String(allProps.isShuffle) === 'true'
         ? [...cards].sort(() => Math.random() - 0.5)
         : cards;
       
-      setConfig({
-        flashcards: finalCards,
-        questionTitle: parsedData.questionTitle || '背单词',
-        lang: parsedData.lang || 'zh-CN',
-        backgroundImages: parsedData.backgroundImages || [],
-        isShuffle: String(parsedData.isShuffle) === 'true',
-        correctSoundUrl: parsedData.correctSoundUrl || '',
-        incorrectSoundUrl: parsedData.incorrectSoundUrl || ''
-      });
+      // 直接更新各个独立的State，确保立刻生效
+      setParsedFlashcards(shuffled);
+      setQuestionTitle(allProps.questionTitle || '背单词');
+      setLang(allProps.lang || 'zh-CN');
+      setBackgroundImages(allProps.backgroundImages || []);
+      setCorrectSoundUrl(allProps.correctSoundUrl || '');
+      setIncorrectSoundUrl(allProps.incorrectSoundUrl || '');
 
-      // 重置状态
+      // 重置交互相关State
       setCurrentIndex(0);
       setShowBack(false);
       setFeedback({ status: 'idle', message: '' });
@@ -69,84 +66,91 @@ const BeiDanCi = ({ data: dataProp }) => {
 
     } catch (e) {
       console.error("BeiDanCi component: Error parsing 'data' JSON string.", e);
-      // 解析失败时，清空卡片数据，页面会显示无数据提示
-      setConfig(prev => ({...prev, flashcards: []}));
+      setParsedFlashcards([]); // 解析失败时清空数据
     }
-  }, [dataProp]);
+
+    return () => {
+      isComponentMounted.current = false; // 标记组件已卸载
+    };
+  }, [dataProp]); // 仅当dataProp变化时重新解析
 
   // --- 初始化语音识别和音频对象 ---
   useEffect(() => {
-    isComponentMounted.current = true;
-    if (typeof window !== 'undefined') {
-      const { lang, flashcards } = config;
+    // 确保相关配置和数据已加载
+    if (typeof window === 'undefined' || !lang || parsedFlashcards.length === 0) return;
 
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        const recognition = new SpeechRecognition();
-        recognition.continuous = false;
-        recognition.lang = lang;
-        recognition.interimResults = false;
-        
-        recognition.onstart = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.lang = lang;
+      recognition.interimResults = false;
+      
+      recognition.onstart = () => {
+        if (isComponentMounted.current) {
           setIsListening(true);
           setFeedback({ status: 'listening', message: '请说话...' });
-        };
+        }
+      };
 
-        recognition.onend = () => {
-             // 确保组件仍在挂载状态
-            if (isComponentMounted.current) {
-                setIsListening(false);
-                // 仅在识别未产生结果时重置状态
-                setFeedback(prev => (prev.status === 'listening' ? { status: 'idle', message: '' } : prev));
-            }
-        };
+      recognition.onend = () => {
+        if (isComponentMounted.current) {
+          setIsListening(false);
+          if (feedback.status === 'listening') {
+             setFeedback({ status: 'idle', message: '' });
+          }
+        }
+      };
 
-        recognition.onerror = (event) => {
-           console.error('Speech recognition error:', event.error);
-           if (isComponentMounted.current) {
-               setIsListening(false);
-               setFeedback({ status: 'error', message: '识别出错' });
-           }
-        };
+      recognition.onerror = (event) => {
+         console.error('Speech recognition error:', event.error);
+         if (isComponentMounted.current) {
+             setIsListening(false);
+             setFeedback({ status: 'error', message: '识别出错' });
+         }
+      };
 
-        recognition.onresult = (event) => {
-          const transcript = event.results[0][0].transcript.trim().replace(/[.,。，]/g, '');
-          const currentWord = flashcards[currentIndex]?.word.trim();
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript.trim().replace(/[.,。，]/g, '');
+        const currentWord = parsedFlashcards[currentIndex]?.word.trim();
+        if (isComponentMounted.current) { // 确保组件仍挂载
           setRecognizedText(transcript);
           
           if (transcript === currentWord) {
             setFeedback({ status: 'correct', message: '回答正确！' });
             correctAudioRef.current?.play();
-            setTimeout(() => setShowBack(true), 100); // 答对后延迟一点自动翻面
+            setTimeout(() => setShowBack(true), 100); 
           } else {
             setFeedback({ status: 'incorrect', message: '再试一次' });
             incorrectAudioRef.current?.play();
           }
-        };
-
-        speechRecognitionRef.current = recognition;
-      } else { 
-        console.warn("此浏览器不支持语音识别功能。"); 
-      }
+        }
+      };
+      speechRecognitionRef.current = recognition;
+    } else { 
+      console.warn("此浏览器不支持语音识别功能。"); 
     }
-    // 组件卸载时清除
+    
+    // 清理函数：组件卸载时停止识别
     return () => {
-        isComponentMounted.current = false;
-    }
-  }, [config.lang, config.flashcards, currentIndex]); // 简化依赖项
+      if (speechRecognitionRef.current && isListening) {
+        speechRecognitionRef.current.stop();
+      }
+    };
+  }, [lang, parsedFlashcards, currentIndex, feedback.status, isListening]); // 简化依赖项
 
   // 单独处理音频 URL 的变化
   useEffect(() => {
-    if (config.correctSoundUrl) correctAudioRef.current = new Audio(config.correctSoundUrl);
-    if (config.incorrectSoundUrl) incorrectAudioRef.current = new Audio(config.incorrectSoundUrl);
-  }, [config.correctSoundUrl, config.incorrectSoundUrl]);
+    if (correctSoundUrl) correctAudioRef.current = new Audio(correctSoundUrl);
+    if (incorrectSoundUrl) incorrectAudioRef.current = new Audio(incorrectSoundUrl);
+  }, [correctSoundUrl, incorrectSoundUrl]);
 
 
   // --- 交互逻辑 ---
   const handleToggleBack = useCallback(() => setShowBack(prev => !prev), []);
 
   const changeCard = (newIndex) => {
-    if (isTransitioning || config.flashcards.length === 0) return;
+    if (isTransitioning || parsedFlashcards.length === 0) return;
     setIsTransitioning(true);
     setShowBack(false);
     setRecognizedText('');
@@ -160,24 +164,28 @@ const BeiDanCi = ({ data: dataProp }) => {
     }, 200);
   };
 
-  const handleNext = useCallback(() => changeCard((currentIndex + 1) % config.flashcards.length), [currentIndex, config.flashcards, isTransitioning]);
-  const handlePrev = useCallback(() => changeCard((currentIndex - 1 + config.flashcards.length) % config.flashcards.length), [currentIndex, config.flashcards, isTransitioning]);
+  const currentCard = parsedFlashcards[currentIndex];
+  const currentBackgroundImage = backgroundImages[currentIndex % backgroundImages.length] || '';
+  
+  const handleNext = useCallback(() => changeCard((currentIndex + 1) % parsedFlashcards.length), [currentIndex, parsedFlashcards.length, isTransitioning, changeCard]);
+  const handlePrev = useCallback(() => changeCard((currentIndex - 1 + parsedFlashcards.length) % parsedFlashcards.length), [currentIndex, parsedFlashcards.length, isTransitioning, changeCard]);
+  
   const handleListen = useCallback(() => {
-    if (isListening || !speechRecognitionRef.current) return;
+    if (isListening || !speechRecognitionRef.current || !currentCard?.word) return; // 确保有当前单词才启动
     setRecognizedText('');
     setFeedback({ status: 'idle', message: '' });
     try {
       speechRecognitionRef.current.start();
     } catch(e) {
       console.error("Speech recognition could not start:", e);
-      setFeedback({ status: 'error', message: '无法启动麦克风' });
+      setFeedback({ status: 'error', message: '无法启动麦克风 (请检查权限)" });
     }
-  }, [isListening]);
+  }, [isListening, currentCard]);
 
   // 键盘事件
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (config.flashcards.length === 0 || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (parsedFlashcards.length === 0 || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       if (e.key === 'ArrowRight') handleNext();
       else if (e.key === 'ArrowLeft') handlePrev();
       else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); handleToggleBack(); }
@@ -185,12 +193,9 @@ const BeiDanCi = ({ data: dataProp }) => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleNext, handlePrev, handleToggleBack, handleListen, config.flashcards.length]);
+  }, [handleNext, handlePrev, handleToggleBack, handleListen, parsedFlashcards.length]);
   
   // --- 渲染部分 ---
-  const { flashcards, backgroundImages, questionTitle, lang } = config;
-  const currentCard = flashcards[currentIndex];
-  const currentBackgroundImage = backgroundImages[currentIndex % backgroundImages.length] || '';
   const feedbackBorderColor = () => {
     switch (feedback.status) {
       case 'correct': return 'border-green-500';
@@ -201,10 +206,10 @@ const BeiDanCi = ({ data: dataProp }) => {
   };
 
   // 关键：在卡片数据准备好之前，显示加载状态
-  if (flashcards.length === 0) {
+  if (parsedFlashcards.length === 0) {
     return (
       <div className="max-w-4xl mx-auto my-8 p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg border dark:border-gray-700">
-        <p className="text-center text-gray-600 dark:text-gray-300">正在加载或没有卡片数据...</p>
+        <p className="text-center text-gray-600 dark:text-gray-300">正在加载或没有卡片数据... (请检查Notion代码块或数据格式)</p>
       </div>
     );
   }
@@ -258,7 +263,7 @@ const BeiDanCi = ({ data: dataProp }) => {
         <button onClick={handleListen} disabled={isListening} className={`flex-shrink-0 w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 ${isListening ? 'bg-red-500 animate-pulse' : 'bg-blue-500 hover:bg-blue-600'} text-white text-2xl shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`} aria-label="开始语音识别">
           <i className="fas fa-microphone"></i>
         </button>
-        <span className="text-gray-600 dark:text-gray-300 text-xl sm:text-2xl font-medium self-center w-20 text-center">{currentIndex + 1} / {flashcards.length}</span>
+        <span className="text-gray-600 dark:text-gray-300 text-xl sm:text-2xl font-medium self-center w-20 text-center">{currentIndex + 1} / {parsedFlashcards.length}</span>
       </div>
     </div>
   );
