@@ -1,4 +1,4 @@
-// /components/TextToSpeechButton.js - 晓辰专用版，图标与语速已修正
+// /components/TextToSpeechButton.js - 晓辰专用版，图标与语速已修正，恢复原始结构
 import React, { useState, useRef, useCallback } from 'react';
 
 const TextToSpeechButton = ({ text, className = '' }) => {
@@ -6,7 +6,7 @@ const TextToSpeechButton = ({ text, className = '' }) => {
   const audioRef = useRef(null);
 
   const synthesizeSpeech = useCallback(async (textToSpeak) => {
-    if (!textToSpeak || textToSpeak.trim() === '') return;
+    if (!textToSpeak || textToSPeak.trim() === '') return;
     setIsLoading(true);
 
     const encodedText = encodeURIComponent(textToSpeak);
@@ -20,7 +20,6 @@ const TextToSpeechButton = ({ text, className = '' }) => {
     try {
       if (audioRef.current) {
         audioRef.current.pause();
-        audioRef.current.src = ''; // 停止并释放旧的音频
       }
 
       const response = await fetch(url);
@@ -33,18 +32,14 @@ const TextToSpeechButton = ({ text, className = '' }) => {
       const audio = new Audio(audioUrl);
       audioRef.current = audio;
 
-      // 监听音频播放结束事件，以确保 loading 状态正确切换
-      audio.onended = () => {
-        setIsLoading(false);
-      };
+      audio.onended = () => setIsLoading(false);
+      audio.onerror = () => setIsLoading(false); // 播放出错也应停止loading
 
       await audio.play();
-      // 注意：如果网络很快，play() 之后的 setIsLoading(false) 可能会在音频播放结束前执行。
-      // 因此，我们将 setIsLoading(false) 移到 onended 事件中。
 
     } catch (err) {
       console.error('朗读失败:', err);
-      setIsLoading(false); // 发生错误时也要停止 loading
+      setIsLoading(false); 
     }
   }, []);
 
@@ -54,17 +49,17 @@ const TextToSpeechButton = ({ text, className = '' }) => {
         e.stopPropagation(); // 阻止事件冒泡，非常重要！
         synthesizeSpeech(text);
       }}
-      className={`inline-block ${className}`} // 将 className 移到外层 div，以便更好地控制样式
+      className={`inline-block ${className}`} // className 依旧在外层，以便 BeiDanCi 控制尺寸和位置
     >
       <button
         disabled={isLoading}
-        className={`tts-button w-full h-full inline-flex items-center justify-center transition-all duration-200 disabled:cursor-not-allowed`}
+        className={`tts-button w-full h-full inline-flex items-center justify-center transition-all duration-200 disabled:cursor-not-allowed text-white/80 hover:text-white`}
         aria-label={`朗读: ${text}`}
       >
         {isLoading ? (
           <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
         ) : (
-          // 关键修正：替换为 Font Awesome 图标
+          // 替换为 Font Awesome 图标
           <i className="fa-solid fa-volume-high text-xl"></i>
         )}
       </button>
