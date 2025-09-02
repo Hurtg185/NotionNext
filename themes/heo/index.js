@@ -1,418 +1,410 @@
-// themes/heo/index.js (最终稳定版 - 已移除所有全屏API，保证可靠性)
-import Comment from '@/components/Comment'
-import { AdSlot } from '@/components/GoogleAdsense'
-import { HashTag } from '@/components/HeroIcons'
-import LazyImage from '@/components/LazyImage'
-import replaceSearchResult from '@/components/Mark'
-import NotionPage from '@/components/NotionPage'
-import ShareBar from '@/components/ShareBar'
-import WWAds from '@/components/WWAds'
-import { siteConfig } from '@/lib/config'
-import { useGlobal } from '@/lib/global'
-import { loadWowJS } from '@/lib/plugins/wow'
-import { isBrowser } from '@/lib/utils'
-import { Transition } from '@headlessui/react'
-import SmartLink from '@/components/SmartLink'
-import { useRouter } from 'next/router'
-import { useEffect, useState, useMemo, useCallback } from 'react'
-import { createPortal } from 'react-dom'
-import BlogPostArchive from './components/BlogPostArchive'
-import BlogPostListPage from './components/BlogPostListPage'
-import BlogPostListScroll from './components/BlogPostListScroll'
-import CategoryBar from './components/CategoryBar'
-import FloatTocButton from './components/FloatTocButton'
-import Footer from './components/Footer'
-import Header from './components/Header'
-import Hero from './components/Hero'
-import LatestPostsGroup from './components/LatestPostsGroup'
-import { NoticeBar } from './components/NoticeBar'
-import PostAdjacent from './components/PostAdjacent'
-import PostCopyright from './components/PostCopyright'
-import PostHeader from './components/PostHeader'
-import { PostLock } from './components/PostLock'
-import PostRecommend from './components/PostRecommend'
-import SearchNav from './components/SearchNav'
-import SideRight from './components/SideRight'
-import CONFIG from './config'
-import { Style } from './style'
-import AISummary from '@/components/AISummary'
-import ArticleExpirationNotice from '@/components/ArticleExpirationNotice'
-import GlosbeSearchCard from '@/components/GlosbeSearchCard'
-import AiChatAssistant from '@/components/AiChatAssistant'
+// /components/AiChatAssistant.js - v62 (最终稳定版 - 实现所有新功能并修复所有已知Bug)
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import AiTtsButton from './AiTtsButton';
+import FingerprintJS from '@fingerprintjs/fingerprintjs';
 
-const XUANCHUAN_BANNERS = ['/images/xuanchuan3.jpg', '/images/xuanchuan4.jpg', '/images/xuanchuan5.jpg']
+// --- 轻量级滑动手势Hook (无需新依赖) ---
+const useSimpleSwipe = ({ onSwipeLeft, onSwipeRight }) => {
+    const touchStart = useRef({ x: 0, y: 0 });
+    const touchEnd = useRef({ x: 0, y: 0 });
+    const minSwipeDistance = 60; // 最小滑动距离
 
-// --- 使用Portal的Modal组件，确保在顶层渲染 ---
-const Modal = ({ isOpen, onClose, title, intro, children }) => {
-  const [isMounted, setIsMounted] = useState(false)
-  useEffect(() => { setIsMounted(true) }, [])
+    const onTouchStart = useCallback((e) => {
+        touchEnd.current = { x: 0, y: 0 };
+        touchStart.current = { x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY };
+    }, []);
 
-  if (!isOpen || !isMounted) {
-    return null
-  }
+    const onTouchMove = useCallback((e) => {
+        touchEnd.current = { x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY };
+    }, []);
 
-  return createPortal(
-    <div className='fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[1000] p-4' onClick={onClose}>
-      <div className='bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-sm w-full mx-auto animate-modal-pop' onClick={(e) => e.stopPropagation()}>
-        <h3 className='text-xl font-bold mb-2 dark:text-gray-100'>{title}</h3>
-        {intro && <p className='text-sm text-gray-600 dark:text-gray-400 mb-4'>{intro}</p>}
-        <div className='space-y-3'>{children}</div>
-        <button onClick={onClose} className='mt-6 w-full py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-200'>
-          关闭
-        </button>
-      </div>
-    </div>,
-    document.body
-  )
-}
+    const onTouchEnd = useCallback(() => {
+        if (!touchStart.current.x || !touchEnd.current.x) return;
+        const xDistance = touchStart.current.x - touchEnd.current.x;
+        const yDistance = touchStart.current.y - touchEnd.current.y;
 
-// --- 最稳定可靠的Portal实现 ---
-const AIAssistantPortal = ({ onClose }) => {
-  const [isMounted, setIsMounted] = useState(false)
-  useEffect(() => { setIsMounted(true) }, [])
+        if (Math.abs(xDistance) < Math.abs(yDistance) || Math.abs(xDistance) < minSwipeDistance) return;
 
-  if (!isMounted) {
-    return null
-  }
-
-  return createPortal(
-    <div className="fixed inset-0 z-[1000] bg-white dark:bg-gray-900">
-      <AiChatAssistant onClose={onClose} />
-    </div>,
-    document.body
-  )
-}
-
-/**
- * 基础布局
- */
-const LayoutBase = props => {
-  const { children, slotTop, className, post } = props
-  const { fullWidth, isDarkMode } = useGlobal()
-  const router = useRouter()
-  const isIndex = router.pathname === '/'
-  const isSlugPage = post && post.slug
-  const headerSlot = (
-    <header>
-      <Header {...props} />
-      {isIndex ? (<><NoticeBar /><Hero {...props} /></>) : null}
-      {isSlugPage && !fullWidth ? <PostHeader {...props} isDarkMode={isDarkMode} /> : null}
-    </header>
-  )
-  const slotRight = router.route === '/404' || fullWidth ? null : <SideRight {...props} />
-  const maxWidth = fullWidth ? 'max-w-[96rem] mx-auto' : 'max-w-[86rem]'
-  const HEO_HERO_BODY_REVERSE = siteConfig('HEO_HERO_BODY_REVERSE', false, CONFIG)
-  useEffect(() => { loadWowJS() }, [])
-  return (
-    <div id='theme-heo' className={`${siteConfig('FONT_STYLE')} bg-[#f7f9fe] dark:bg-[#18171d] h-full min-h-screen flex flex-col scroll-smooth`}>
-      <Style />
-      {headerSlot}
-      <main id='wrapper-outer' className={`w-full ${maxWidth} mx-auto relative md:px-5`}>
-        <div id='container-inner' className={`${HEO_HERO_BODY_REVERSE ? 'flex-row-reverse' : ''} w-full mx-auto lg:flex justify-center relative z-10`}>
-          <div className={`w-full h-auto ${className || ''}`}>{slotTop}{children}</div>
-          <div className='lg:px-2'></div>
-          <div className='hidden xl:block'>{slotRight}</div>
-        </div>
-      </main>
-      <Footer />
-    </div>
-  )
-}
-
-const FunctionButton = ({ title, icon, onClick, href, img, target }) => {
-  const style = img ? { backgroundImage: `url(${img})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}
-  const iconColorClass = img ? 'text-white' : 'text-gray-500 dark:text-gray-300 group-hover:text-indigo-500 dark:group-hover:text-yellow-500'
-  const textColorClass = img ? 'text-white' : 'text-gray-700 dark:text-gray-200'
-  const content = (<>{img && <div className="absolute inset-0 bg-black bg-opacity-40 rounded-xl"></div>}<div className='relative z-10 flex flex-col items-center justify-center'><div className={`text-3xl ${iconColorClass} transition-colors duration-200`}><i className={icon} /></div><div className={`mt-2 text-sm font-semibold ${textColorClass}`}>{title}</div></div></>)
-  if (href) { return (<SmartLink href={href} target={target} className='group relative flex flex-col justify-center items-center w-full h-24 bg-white dark:bg-[#1e1e1e] border dark:border-gray-700 rounded-xl shadow-md transform hover:scale-105 transition-transform duration-200 overflow-hidden' style={style}>{content}</SmartLink>)}
-  return (<button onClick={onClick} className='group relative flex flex-col justify-center items-center w-full h-24 bg-white dark:bg-[#1e1e1e] border dark:border-gray-700 rounded-xl shadow-md transform hover:scale-105 transition-transform duration-200 overflow-hidden' style={style}>{content}</button>)
-}
-
-const AIAssistantButton = ({ onClick }) => {
-  return (<div className='px-5 md:px-0 my-4'><button onClick={onClick} className='w-full flex items-center justify-center p-4 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg transform hover:scale-105 transition-transform duration-300'><i className='fas fa-robot text-2xl mr-3'></i><span className='text-lg font-bold'>与 AI 助手对话</span></button></div>)
-}
-
-const QuickAccessGrid = ({ setActiveModal }) => {
-  const functions = [{ title: '报名课程', icon: 'fa-solid fa-graduation-cap', modal: 'enroll' }, { title: '找工作', icon: 'fa-solid fa-briefcase', modal: 'jobs' }, { title: '试看课程', icon: 'fa-solid fa-video', modal: 'trial' }]
-  return (<div className='py-2'><div className='grid grid-cols-3 gap-4'>{functions.map(func => <FunctionButton key={func.title} title={func.title} icon={func.icon} onClick={() => setActiveModal(func.modal)} />)}</div></div>)
-}
-const AskQuestionModule = () => {
-  const facebookGroupUrl = "https://www.facebook.com/share/g/15Fh7mrpa8/";
-  return (<div className='py-4'><a href={facebookGroupUrl} target="_blank" rel="noopener noreferrer" className='group flex items-center justify-between p-4 bg-white dark:bg-[#1e1e1e] border dark:border-gray-700 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200'><div className='flex items-center'><i className='fas fa-question-circle text-3xl text-indigo-500 mr-4'></i><div><h3 className='font-bold text-lg dark:text-white'>提问交流</h3><p className='text-sm text-gray-500 dark:text-gray-400'>遇到学习问题？来这里和大家一起讨论！</p></div></div><i className='fas fa-arrow-right text-gray-400 group-hover:translate-x-1 transition-transform duration-200'></i></a></div>)
-}
-const StudyToolsGrid = ({ setActiveModal }) => {
-  const functions = [{ title: '书籍', icon: 'fa-solid fa-book', href: 'https://books.843075.xyz' }, { title: '语法', icon: 'fa-solid fa-pen-ruler', modal: 'grammar' }, { title: '练习题', icon: 'fa-solid fa-file-pen', modal: 'exercises' }, { title: '生词', icon: 'fa-solid fa-spell-check', modal: 'vocabulary' }, { 'title': '短语', 'icon': 'fas fa-comments', modal: 'phrases' }, { 'title': '拼音', 'icon': 'fas fa-font', modal: 'pinyin' }]
-  return (<div className='py-2'><div className='text-2xl font-bold mb-4 text-center dark:text-white'>学习工具</div><div className='grid grid-cols-3 gap-4'>{functions.map(func => <FunctionButton key={func.title} title={func.title} icon={func.icon} href={func.href} onClick={() => setActiveModal(func.modal)} />)}</div></div>)
-}
-const RandomImageCard = ({ banners, linkUrl, alt }) => {
-  const randomImage = useMemo(() => { if (!banners || banners.length === 0) { return '/images/default-xuanchuan.jpg'; } return banners[Math.floor(Math.random() * banners.length)]; }, [banners]);
-  return (<section className='mt-4'><SmartLink href={linkUrl || '#'}><div className='rounded-xl shadow-md overflow-hidden transform hover:scale-105 transition-transform duration-300'><LazyImage src={randomImage} alt={alt} className="w-full h-auto" /></div></SmartLink></section>)
-}
-
-/**
- * 首页
- */
-const LayoutIndex = props => {
-  const [activeModal, setActiveModal] = useState(null)
-  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false)
-
-  const handleOpenAssistant = useCallback(() => setIsAiAssistantOpen(true), [])
-  const handleCloseAssistant = useCallback(() => setIsAiAssistantOpen(false), [])
-
-  const modalContent = {
-    enroll: { title: '报名课程', intro: '结合中缅教学方案，高效学习中文，价格比大部分缅甸机构更优惠！请通过以下方式联系我们，获取专属学习方案：', children: (<><SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200'><i className='fab fa-telegram-plane text-xl mr-3'></i> <span className='font-semibold'>Telegram 联系</span></SmartLink><SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-green-400 text-white hover:bg-green-500 transition-all duration-200'><i className='fab fa-line text-xl mr-3'></i> <span className='font-semibold'>Line 联系</span></SmartLink><SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-all duration-200'><i className='fab fa-viber text-xl mr-3'></i> <span className='font-semibold'>Viber 联系</span></SmartLink><SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-all duration-200'><i className='fab fa-facebook-f text-xl mr-3'></i> <span className='font-semibold'>Facebook 个人主页</span></SmartLink></>) },
-    jobs: { title: '找工作', intro: '我们培训机构与上百家工厂长期合作，为您提供仰光、泰国、新加坡、马来西亚、中国等地的中文相关工作岗位！', children: (<><SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>仰光地区招聘</SmartLink><SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>泰国地区招聘</SmartLink><SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>新加坡地区招聘</SmartLink><SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>马来西亚地区招聘</SmartLink><SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>中国地区招聘</SmartLink><SmartLink href='#' className='block p-2 text-center rounded bg-green-500 text-white hover:bg-green-600 mt-2'>发布简历/咨询</SmartLink></>) },
-    trial: { title: '试看课程', intro: '免费体验我们的教学质量，即刻开始您的中文学习之旅！', children: (<><SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>入门发音课</SmartLink><SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>HSK1 体验课</SmartLink><SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>日常对话片段</SmartLink><SmartLink href='#' className='block p-2 text-center rounded bg-indigo-500 text-white hover:bg-indigo-600 mt-2'>查看更多试看</SmartLink></>) },
-    notifications: { title: '加入通知群', intro: '获取最新课程优惠、免费资料、招聘信息、直播通知，重要消息不遗漏！', children: (<><SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200'><i className='fab fa-telegram-plane text-xl mr-3'></i> <span className='font-semibold'>Telegram</span></SmartLink><SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-green-400 text-white hover:bg-green-500 transition-all duration-200'><i className='fab fa-line text-xl mr-3'></i> <span className='font-semibold'>Line</span></SmartLink><SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-all duration-200'><i className='fab fa-viber text-xl mr-3'></i> <span className='font-semibold'>Viber</span></SmartLink><SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-all duration-200'><i className='fab fa-facebook-f text-xl mr-3'></i> <span className='font-semibold'>Facebook 个人主页</span></SmartLink><SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-black text-white hover:bg-gray-800 transition-all duration-200'><i className='fab fa-tiktok text-xl mr-3'></i> <span className='font-semibold'>TikTok</span></SmartLink></>) },
-    grammar: { title: '语法学习', intro: '掌握中文语法结构，轻松构建句子！', children: ['基础句型', '动词时态', '量词用法', '介词短语', '比较句', '被动句', '疑问句', '复杂句式', '语法练习', '语法视频教程'].map(item => <SmartLink key={item} href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>{item}</SmartLink>) },
-    exercises: { title: 'HSK练习题', intro: '巩固所学知识，挑战不同难度的 HSK 练习题！', children: ['HSK1', 'HSK2', 'HSK3', 'HSK4', 'HSK5', 'HSK6'].map(item => <SmartLink key={item} href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>{`${item} 练习`}</SmartLink>) },
-    vocabulary: { title: 'HSK生词', intro: '按 HSK 等级分类的词汇表，助你高效记忆！', children: ['HSK1', 'HSK2', 'HSK3', 'HSK4', 'HSK5', 'HSK6'].map(item => <SmartLink key={item} href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>{`${item} 生词`}</SmartLink>) },
-    phrases: { title: '常用短语', intro: '掌握常用中文短语，轻松应对日常交流！', children: ['打招呼', '购物', '问路', '点餐', '交通', '看医生', '银行', '酒店入住', '紧急情况', '日常对话'].map(item => <SmartLink key={item} href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>{item}</SmartLink>) },
-    pinyin: { title: '拼音学习', intro: '快速掌握中文发音，从零开始学拼音！', children: ['拼音基础发音', '声母韵母表', '四声调学习', '拼音易错点', '拼音发音视频', '声调练习', '拼音输入法', '拼音口诀', '拼音学习App推荐', '免费拼音课程'].map(item => <SmartLink key={item} href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>{item}</SmartLink>) }
-  }
-  const currentModal = modalContent[activeModal]
-
-  return (
-    <>
-      <div id='post-outer-wrapper' className='px-5 md:px-0'>
-        <CategoryBar {...props} />
-        <AIAssistantButton onClick={handleOpenAssistant} />
-        <div className='my-4'><GlosbeSearchCard /></div>
-        <QuickAccessGrid setActiveModal={setActiveModal} />
-        <AskQuestionModule />
-        {siteConfig('POST_LIST_STYLE') === 'page' ? (<BlogPostListPage {...props} />) : (<BlogPostListScroll {...props} />)}
-        <StudyToolsGrid setActiveModal={setActiveModal} />
-        <RandomImageCard banners={XUANCHUAN_BANNERS} linkUrl="#" alt="课程价格与联系信息" />
-      </div>
-
-      <Modal isOpen={!!activeModal} onClose={() => setActiveModal(null)} title={currentModal?.title} intro={currentModal?.intro}>
-        {currentModal?.children}
-      </Modal>
-
-      {isAiAssistantOpen && <AIAssistantPortal onClose={handleCloseAssistant} />}
-    </>
-  )
-}
-
-/**博客列表*/
-const LayoutPostList = props => {
-  return (
-    <div id='post-outer-wrapper' className='px-5  md:px-0'>
-      <CategoryBar {...props} />
-      {siteConfig('POST_LIST_STYLE') === 'page' ? (<BlogPostListPage {...props} />) : (<BlogPostListScroll {...props} />)}
-    </div>
-  )
-}
-
-/**搜索*/
-const LayoutSearch = props => {
-  const { keyword } = props
-  const router = useRouter()
-  const currentSearch = keyword || router?.query?.s
-  useEffect(() => {
-    if (currentSearch) {
-      setTimeout(() => {
-        replaceSearchResult({
-          doms: document.getElementsByClassName('replace'),
-          search: currentSearch,
-          target: { element: 'span', className: 'text-red-500 border-b border-dashed' }
-        })
-      }, 100)
-    }
-  }, [currentSearch])
-  return (
-    <div currentSearch={currentSearch}>
-      <div id='post-outer-wrapper' className='px-5  md:px-0'>
-        {!currentSearch ? (<SearchNav {...props} />) : (
-          <div id='posts-wrapper'>
-            {siteConfig('POST_LIST_STYLE') === 'page' ? (<BlogPostListPage {...props} />) : (<BlogPostListScroll {...props} />)}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-/**归档*/
-const LayoutArchive = props => {
-  const { archivePosts } = props
-  return (
-    <div className='p-5 rounded-xl border dark:border-gray-600 max-w-6xl w-full bg-white dark:bg-[#1e1e1e]'>
-      <CategoryBar {...props} border={false} />
-      <div className='px-3'>
-        {Object.keys(archivePosts).map(archiveTitle => (
-          <BlogPostArchive key={archiveTitle} posts={archivePosts[archiveTitle]} archiveTitle={archiveTitle}/>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-/**文章详情*/
-const LayoutSlug = props => {
-  const { post, lock, validPassword } = props
-  const { locale, fullWidth } = useGlobal()
-  const [hasCode, setHasCode] = useState(false)
-  const [activeModal, setActiveModal] = useState(null)
-  useEffect(() => {
-    const hasCode = document.querySelectorAll('[class^="language-"]').length > 0
-    setHasCode(hasCode)
-  }, [])
-  const commentEnable = siteConfig('COMMENT_TWIKOO_ENV_ID') || siteConfig('COMMENT_WALINE_SERVER_URL') || siteConfig('COMMENT_VALINE_APP_ID') || siteConfig('COMMENT_GISCUS_REPO') || siteConfig('COMMENT_CUSDIS_APP_ID') || siteConfig('COMMENT_UTTERRANCES_REPO') || siteConfig('COMMENT_GITALK_CLIENT_ID') || siteConfig('COMMENT_WEBMENTION_ENABLE')
-  const router = useRouter()
-  const waiting404 = siteConfig('POST_WAITING_TIME_FOR_404') * 1000
-  useEffect(() => {
-    if (!post) {
-      setTimeout(() => {
-        if (isBrowser) {
-          const article = document.querySelector('#article-wrapper #notion-article')
-          if (!article) {
-            router.push('/404').then(() => {
-              console.warn('找不到页面', router.asPath)
-            })
-          }
+        if (xDistance > 0) { // 从右向左
+            if (onSwipeLeft) onSwipeLeft();
+        } else { // 从左向右
+            if (onSwipeRight) onSwipeRight();
         }
-      }, waiting404)
-    }
-  }, [post])
-  const modalContent = {
-    appDownload: { title: '安卓APP下载', intro: '下载我们的专属学习APP，随时随地高效学习中文！请按照以下步骤安装：', children: ( <div className='text-sm text-gray-700 dark:text-gray-300'> <a href='#' target='_blank' rel='noopener noreferrer' className='block w-full text-center p-3 rounded-lg bg-blue-500 text-white font-bold mb-4 hover:bg-blue-600 transition-colors'>点击此处下载安卓APP</a> <ol className='list-decimal list-inside space-y-2 text-left'> <li>点击上方链接下载APP文件。</li> <li>下载完成后，请断开网络（Wi-Fi和移动数据）。</li> <li>找到下载的APP文件（通常在“文件管理器”或“下载”文件夹），点击安装。</li> <li>如果提示“禁止安装未知来源应用”，请前往手机设置中允许安装。</li> <li>安装成功后，重新连接网络即可使用。</li> </ol> <a href='#' target='_blank' rel='noopener noreferrer' className='block text-center mt-4 text-blue-500 hover:underline'>查看详细图文/视频教程 →</a> </div> ) },
-    notifications: { title: '加入通知群', intro: '获取最新课程优惠、免费资料、招聘信息、直播通知，重要消息不遗漏！', children: ( <> <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200'><i className='fab fa-telegram-plane text-xl mr-3'></i> <span className='font-semibold'>Telegram</span></SmartLink> <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-green-400 text-white hover:bg-green-500 transition-all duration-200'><i className='fab fa-line text-xl mr-3'></i> <span className='font-semibold'>Line</span></SmartLink> <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-all duration-200'><i className='fab fa-viber text-xl mr-3'></i> <span className='font-semibold'>Viber</span></SmartLink> <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-all duration-200'><i className='fab fa-facebook-f text-xl mr-3'></i> <span className='font-semibold'>Facebook 个人主页</span></SmartLink> <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-black text-white hover:bg-gray-800 transition-all duration-200'><i className='fab fa-tiktok text-xl mr-3'></i> <span className='font-semibold'>TikTok</span></SmartLink> </> ) },
-    moreCourses: { title: '报名课程', intro: '结合中缅教学方案，高效学习中文，价格比大部分缅甸机构更优惠！请通过以下方式联系我们，获取专属学习方案：', children: ( <> <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200'><i className='fab fa-telegram-plane text-xl mr-3'></i> <span className='font-semibold'>Telegram 联系</span></SmartLink> <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-green-400 text-white hover:bg-green-500 transition-all duration-200'><i className='fab fa-line text-xl mr-3'></i> <span className='font-semibold'>Line 联系</span></SmartLink> <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-all duration-200'><i className='fab fa-viber text-xl mr-3'></i> <span className='font-semibold'>Viber 联系</span></SmartLink> <SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-all duration-200'><i className='fab fa-facebook-f text-xl mr-3'></i> <span className='font-semibold'>Facebook 个人主页</span></SmartLink> </> ) }
-  }
-  const currentModal = modalContent[activeModal]
-  return (
-    <>
-      <div className={`article h-full w-full ${fullWidth ? '' : 'xl:max-w-5xl'} ${hasCode ? 'xl:w-[73.15vw]' : ''}  bg-white dark:bg-[#18171d] dark:border-gray-600 lg:hover:shadow lg:border rounded-2xl lg:px-2 lg:py-4`}>
-        {lock && <PostLock validPassword={validPassword} />}
-        {!lock && post && (
-          <div className='mx-auto md:w-full md:px-5'>
-            <article id='article-wrapper' itemScope itemType='https://schema.org/Movie'>
-              <div className='px-5'>
-                <RandomImageCard banners={XUANCHUAN_BANNERS} linkUrl="#" alt="培训班简介" />
-              </div>
-              <section className='wow fadeInUp p-5 justify-center mx-auto' data-wow-delay='.2s'>
-                <ArticleExpirationNotice post={post} />
-                <AISummary aiSummary={post.aiSummary} />
-                <WWAds orientation='horizontal' className='w-full' />
-                {post?.type === 'Post' && <PostCopyright {...props} />}
-                {post && <NotionPage post={post} />}
-                <WWAds orientation='horizontal' className='w-full' />
-              </section>
-              <ShareBar post={post} />
-              <div className='bg-white shadow-md my-2 p-4 rounded-md dark:bg-black'>
-                <div className='grid grid-cols-3 gap-3'>
-                  <FunctionButton title="APP下载" icon="fas fa-mobile-alt" onClick={() => setActiveModal('appDownload')} />
-                  <FunctionButton title="通知群" icon="fas fa-bell" onClick={() => setActiveModal('notifications')} />
-                  <FunctionButton title="更多课程" icon="fas fa-chalkboard-teacher" onClick={() => setActiveModal('moreCourses')} />
-                </div>
-              </div>
-              {post?.type === 'Post' && (
-                <div className='px-5'>
-                  <RandomImageCard banners={XUANCHUAN_BANNERS} linkUrl="/jobs" alt="招聘信息" />
-                </div>
-              )}
-            </article>
-            {fullWidth ? null : (
-              <div className={`${commentEnable && post ? '' : 'hidden'}`}>
-                <hr className='my-4 border-dashed' />
-                <div className='py-2'><AdSlot /></div>
-                <div className='duration-200 overflow-x-auto px-5'>
-                  <div className='text-2xl dark:text-white'><i className='fas fa-comment mr-1' />{locale.COMMON.COMMENTS}</div>
-                  <Comment frontMatter={post} className='' />
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-      <Modal isOpen={!!activeModal} onClose={() => setActiveModal(null)} title={currentModal?.title} intro={currentModal?.intro}>
-        {currentModal?.children}
-      </Modal>
-      <FloatTocButton {...props} />
-    </>
-  )
-}
 
-/**404*/
-const Layout404 = props => {
-  const { onLoading, fullWidth } = useGlobal()
-  return (
-    <>
-      <main id='wrapper-outer' className={`flex-grow ${fullWidth ? '' : 'max-w-4xl'} w-screen mx-auto px-5`}>
-        <div id='error-wrapper' className={'w-full mx-auto justify-center'}>
-          <Transition show={!onLoading} appear={true} enter='transition ease-in-out duration-700 transform order-first' enterFrom='opacity-0 translate-y-16' enterTo='opacity-100' leave='transition ease-in-out duration-300 transform' leaveFrom='opacity-100 translate-y-0' leaveTo='opacity-0 -translate-y-16' unmount={false}>
-            <div className='error-content flex flex-col md:flex-row w-full mt-12 h-[30rem] md:h-96 justify-center items-center bg-white dark:bg-[#1B1C20] border dark:border-gray-800 rounded-3xl'>
-              <LazyImage className='error-img h-60 md:h-full p-4' src={'https://bu.dusays.com/2023/03/03/6401a7906aa4a.gif'}></LazyImage>
-              <div className='error-info flex-1 flex flex-col justify-center items-center space-y-4'>
-                <h1 className='error-title font-extrabold md:text-9xl text-7xl dark:text-white'>404</h1>
-                <div className='dark:text-white'>请尝试站内搜索寻找文章</div>
-                <SmartLink href='/'><button className='bg-blue-500 py-2 px-4 text-white shadow rounded-lg hover:bg-blue-600 hover:shadow-md duration-200 transition-all'>回到主页</button></SmartLink>
-              </div>
+        touchStart.current = { x: 0, y: 0 };
+        touchEnd.current = { x: 0, y: 0 };
+    }, [onSwipeLeft, onSwipeRight]);
+
+    return { onTouchStart, onTouchMove, onTouchEnd };
+};
+
+// --- 辅助函数 ---
+const convertGitHubUrl = (url) => { if (typeof url === 'string' && url.includes('github.com') && url.includes('/blob/')) { return url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/'); } return url; };
+const safeLocalStorageGet = (key) => { if (typeof window !== 'undefined') { try { return localStorage.getItem(key); } catch (e) { console.error("localStorage.getItem error:", e); return null; } } return null; };
+const safeLocalStorageSet = (key, value) => { if (typeof window !== 'undefined') { try { localStorage.setItem(key, value); } catch (e) { console.error("localStorage.setItem error:", e); } } };
+const safeLocalStorageRemove = (key) => { if (typeof window !== 'undefined') { try { localStorage.removeItem(key); } catch (e) { console.error("localStorage.removeItem error:", e); } } };
+
+// --- 常量定义 ---
+export const TTS_ENGINE = { SYSTEM: 'system', THIRD_PARTY: 'third_party' };
+const CHAT_MODELS_LIST = [ { name: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash', family: 'google' }, { name: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro', family: 'google' }, { name: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash', family: 'google' }, { name: 'Gemini 1.5 Flash (最新)', value: 'gemini-1.5-flash-latest', family: 'google' }, { name: 'Gemini 1.5 Pro (最新)', value: 'gemini-1.5-pro-latest', family: 'google' }, ];
+const DEFAULT_PROMPTS = [ { id: 'default-grammar-correction', name: '纠正中文语法', content: '你是一位专业的、耐心的中文老师，请纠正我发送的中文句子中的语法和用词错误，并给出修改建议和说明。', model: 'gemini-2.5-flash', ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural', avatarUrl: '' }, { id: 'explain-word', name: '解释中文词语', content: '你是一位专业的中文老师，请用简单易懂的方式解释我发送的中文词语，并提供几个例子。', model: 'gemini-1.5-pro-latest', ttsVoice: 'zh-CN-YunxiNeural', avatarUrl: '' }, { id: 'translate-myanmar', content: '你是一位专业的翻译助手，请将我发送的内容在中文和缅甸语之间进行互译。', model: 'gemini-2.5-flash', ttsVoice: 'my-MM-NilarNeural', avatarUrl: '' } ];
+const DEFAULT_SETTINGS = {
+    apiKeys: [{ id: `key-${Date.now()}`, value: '', name: '默认密钥', status: 'valid', active: true }],
+    selectedModel: 'gemini-2.5-flash', chatModels: CHAT_MODELS_LIST,
+    temperature: 0.8, maxOutputTokens: 2048, contextLength: 512,
+    disableThinkingMode: true, startWithNewChat: false,
+    prompts: DEFAULT_PROMPTS, currentPromptId: DEFAULT_PROMPTS[0]?.id || '',
+    autoRead: false, ttsEngine: TTS_ENGINE.THIRD_PARTY, thirdPartyTtsVoice: 'zh-CN-XiaoxiaoMultilingualNeural',
+    systemTtsVoiceURI: '', speechLanguage: 'zh-CN', chatBackgroundUrl: '/images/chat-bg-2.jpg',
+    userAvatarUrl: '/images/user-avatar.png', aiAvatarUrl: '/images/ai-avatar.png',
+    isFacebookApp: false,
+};
+
+// --- 子组件 ---
+
+const TypingEffect = ({ text, onComplete }) => {
+    const [displayedText, setDisplayedText] = useState('');
+    useEffect(() => {
+        if (!text) return;
+        setDisplayedText('');
+        let index = 0;
+        const intervalId = setInterval(() => {
+            setDisplayedText(prev => prev + text.charAt(index));
+            index++;
+            if (index >= text.length) {
+                clearInterval(intervalId);
+                if (onComplete) onComplete();
+            }
+        }, 30);
+        return () => clearInterval(intervalId);
+    }, [text, onComplete]);
+    return <SimpleMarkdown text={displayedText} />;
+};
+
+const SimpleMarkdown = ({ text }) => {
+    if (!text) return null;
+    const lines = text.split('\n').map((line, index) => {
+        if (line.trim() === '') return <br key={index} />;
+        if (line.match(/\*\*(.*?)\*\*/)) {
+            const content = line.replace(/\*\*/g, '');
+            return <strong key={index} className="block mt-2 mb-1">{content}</strong>;
+        }
+        if (line.startsWith('* ') || line.startsWith('- ')) {
+            return <li key={index} className="ml-5 list-disc">{line.substring(2)}</li>;
+        }
+        return <p key={index} className="my-1">{line}</p>;
+    });
+    return <div>{lines}</div>;
+};
+
+const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate, onTypingComplete }) => {
+    const isUser = msg.role === 'user';
+    const userBubbleClass = 'bg-primary text-white rounded-br-lg shadow-md';
+    const aiBubbleClass = 'bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm shadow-md';
+
+    const handleTtsClick = (e) => {
+        e.stopPropagation();
+        if (settings.isFacebookApp) {
+            alert('Facebook App内浏览器不支持语音播放，请使用Google Chrome等浏览器打开。');
+            return;
+        }
+        const bubble = document.getElementById(`msg-${msg.timestamp}`);
+        const ttsButton = bubble?.querySelector('.tts-button-hook');
+        if (ttsButton) ttsButton.click();
+    };
+
+    return (
+        <div id={`msg-${msg.timestamp}`} className={`flex items-end gap-2.5 my-4 ${isUser ? 'justify-end' : 'justify-start'}`}>
+            {!isUser && <img src={convertGitHubUrl(settings.aiAvatarUrl)} alt="AI Avatar" className="w-8 h-8 rounded-full shrink-0" />}
+            <div className={`p-3 rounded-2xl text-left flex flex-col ${isUser ? userBubbleClass : aiBubbleClass}`} style={{ maxWidth: '85%' }}>
+                {msg.images && msg.images.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-2">
+                        {msg.images.map((img, index) => <img key={index} src={img.previewUrl} alt={`附件 ${index + 1}`} className="w-24 h-24 object-cover rounded-md" />)}
+                    </div>
+                )}
+                <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1">
+                    {isLastAiMessage && msg.isTyping ? <TypingEffect text={msg.content || ''} onComplete={onTypingComplete} /> : <SimpleMarkdown text={msg.content || ''} />}
+                </div>
+                {!isUser && msg.content && !msg.isTyping && (
+                    <div className="flex items-center gap-2 mt-2 -mb-1 text-gray-500 dark:text-gray-400">
+                        <button onClick={handleTtsClick} className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10" title="朗读"><i className="fas fa-volume-up"></i></button>
+                        <div className="w-0 h-0 overflow-hidden"><AiTtsButton text={msg.content || ''} ttsSettings={settings} className="tts-button-hook"/></div>
+                        <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(msg.content); }} className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10" title="复制"><i className="fas fa-copy"></i></button>
+                        {isLastAiMessage && ( <button onClick={(e) => { e.stopPropagation(); onRegenerate(); }} className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10" title="重新生成"><i className="fas fa-sync-alt"></i></button> )}
+                    </div>
+                )}
             </div>
-            <div className='mt-12'><LatestPostsGroup {...props} /></div>
-          </Transition>
+            {isUser && <img src={convertGitHubUrl(settings.userAvatarUrl)} alt="User Avatar" className="w-8 h-8 rounded-full shrink-0" />}
         </div>
-      </main>
-    </>
-  )
-}
+    );
+};
 
-/**分类列表*/
-const LayoutCategoryIndex = props => {
-  const { categoryOptions } = props
-  const { locale } = useGlobal()
-  return (
-    <div id='category-outer-wrapper' className='mt-8 px-5 md:px-0'>
-      <div className='text-4xl font-extrabold dark:text-gray-200 mb-5'>{locale.COMMON.CATEGORY}</div>
-      <div id='category-list' className='duration-200 flex flex-wrap m-10 justify-center'>
-        {categoryOptions?.map(category => {
-          return (
-            <SmartLink key={category.name} href={`/category/${category.name}`} passHref legacyBehavior>
-              <div className={'group mr-5 mb-5 flex flex-nowrap items-center border bg-white text-2xl rounded-xl dark:hover:text-white px-4 cursor-pointer py-3 hover:text-white hover:bg-indigo-600 transition-all hover:scale-110 duration-150'}>
-                <HashTag className={'w-5 h-5 stroke-gray-500 stroke-2'} />{category.name}
-                <div className='bg-[#f1f3f8] ml-1 px-2 rounded-lg group-hover:text-indigo-600 '>{category.count}</div>
-              </div>
-            </SmartLink>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
+const ConversationMenu = ({ onRename, onDelete }) => ( <div className="absolute right-0 top-full mt-1 w-28 bg-white dark:bg-gray-800 rounded-md shadow-lg border dark:border-gray-700 z-10"> <button onClick={(e) => { e.stopPropagation(); onRename(); }} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"><i className="fas fa-pen w-4"></i>重命名</button> <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"><i className="fas fa-trash"></i></button> </div> );
+const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDelete, onRename, prompts, settings }) => { const [editingId, setEditingId] = useState(null); const [newName, setNewName] = useState(''); const [activeMenu, setActiveMenu] = useState(null); const handleRename = (id, oldName) => { setEditingId(id); setNewName(oldName); setActiveMenu(null); }; const handleSaveRename = (id) => { if (newName.trim()) { onRename(id, newName.trim()); } setEditingId(null); }; const groupedConversations = useMemo(() => { const groups = new Map(); const uncategorized = []; (conversations || []).forEach(conv => { const promptId = conv.promptId; const prompt = (prompts || []).find(p => p.id === promptId); if (prompt) { if (!groups.has(promptId)) { groups.set(promptId, { prompt, conversations: [] }); } groups.get(promptId).conversations.push(conv); } else { uncategorized.push(conv); } }); return { sortedGroups: Array.from(groups.values()), uncategorized }; }, [conversations, prompts]); const renderConversationItem = (conv) => ( <div key={conv.id} className={`group flex items-center p-2 rounded-md cursor-pointer ${currentId === conv.id ? 'bg-primary/20' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`} onClick={(e) => { e.stopPropagation(); onSelect(conv.id); setActiveMenu(null); }}> <div className="flex-grow truncate" onDoubleClick={(e) => { e.stopPropagation(); handleRename(conv.id, conv.title); }}> {editingId === conv.id ? ( <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} onBlur={() => handleSaveRename(conv.id)} onKeyDown={(e) => e.key === 'Enter' && handleSaveRename(conv.id)} className="w-full bg-transparent p-0 border-b" autoFocus /> ) : ( <span className="text-sm">{conv.title}</span> )} </div> <div className="relative shrink-0"> <button onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === conv.id ? null : conv.id); }} className={`p-1 rounded-full ${currentId === conv.id || activeMenu === conv.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}> <i className="fas fa-ellipsis-h text-xs"></i> </button> {activeMenu === conv.id && ( <ConversationMenu onRename={() => handleRename(conv.id, conv.title)} onDelete={() => { if(window.confirm('确定删除此对话吗？')) onDelete(conv.id); setActiveMenu(null); }} /> )} </div> </div> ); return ( <div className={`h-full bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-sm flex flex-col border-r dark:border-gray-700 transition-all duration-300 ${isOpen ? 'w-44 p-2' : 'w-0 p-0'} overflow-hidden`}> <button onClick={onNew} className="w-full flex items-center justify-between p-2 mb-2 rounded-md border border-dashed hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0"> <span>新对话</span><i className="fas fa-plus"></i> </button> <div className="flex-grow overflow-y-auto space-y-2"> {groupedConversations.sortedGroups.map(({ prompt, conversations }) => ( <details key={prompt.id} className="group" open> <summary className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 list-none"> <img src={convertGitHubUrl(prompt.avatarUrl) || convertGitHubUrl(settings.aiAvatarUrl)} alt={prompt.name} className="w-5 h-5 rounded-full object-cover"/> <span className="text-xs font-semibold flex-grow">{prompt.name}</span> <i className="fas fa-chevron-down text-xs text-gray-500 transition-transform group-open:rotate-180"></i> </summary> <div className="pl-3 mt-1 space-y-1"> {(conversations || []).map(renderConversationItem)} </div> </details> ))} {groupedConversations.uncategorized.length > 0 && ( <details className="group" open> <summary className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 list-none"> <i className="fas fa-folder w-5 h-5 text-gray-500"></i> <span className="text-xs font-semibold flex-grow">未分类对话</span> <i className="fas fa-chevron-down text-xs text-gray-500 transition-transform group-open:rotate-180"></i> </summary> <div className="pl-3 mt-1 space-y-1"> {(groupedConversations.uncategorized || []).map(renderConversationItem)} </div> </details> )} </div> </div> ); };
+const PromptManager = ({ prompts, onBack, onChange, onAdd, onDelete, settings, microsoftTtsVoices }) => { const swipeHandlers = useSimpleSwipe({ onSwipeLeft: onBack }); const [editingId, setEditingId] = useState(null); return ( <div {...swipeHandlers} className="fixed inset-0 bg-white dark:bg-gray-800 p-6 flex flex-col z-[9999] animate-fade-in"> <div className="flex items-center justify-between mb-4 shrink-0"> <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"><i className="fas fa-arrow-left"></i></button> <h3 className="text-2xl font-bold">提示词工作室</h3> <div className="w-8"></div> </div> <div className="flex-grow overflow-y-auto pr-2 space-y-3"> {(prompts || []).map(p => ( <div key={p.id} className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-md border dark:border-gray-700"> <div className="flex items-center justify-between"> <label className="flex items-center flex-grow cursor-pointer gap-2"> <img src={convertGitHubUrl(p.avatarUrl) || convertGitHubUrl(settings.aiAvatarUrl)} alt={p.name} className="w-6 h-6 rounded-full object-cover"/> <input type="text" value={p.name} onChange={(e) => onChange(p.id, 'name', e.target.value)} className="font-semibold bg-transparent w-full text-lg" /> </label> <div> {p.id.startsWith('custom-') && (<button onClick={() => setEditingId(editingId === p.id ? null : p.id)} className="p-2 ml-2 text-sm rounded-full hover:bg-gray-500/10"><i className="fas fa-pen"></i></button>)} <button onClick={() => onDelete(p.id)} className="p-2 ml-2 text-sm text-red-500 rounded-full hover:bg-red-500/10"><i className="fas fa-trash"></i></button> </div> </div> { (editingId === p.id || p.id.startsWith('custom-')) && (<> <textarea value={p.content} onChange={(e) => onChange(p.id, 'content', e.target.value)} placeholder="请输入提示词内容..." className="w-full mt-2 h-24 p-2 bg-white dark:bg-gray-800 border rounded-md text-sm" /> <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2 text-sm"> <div><label className="text-xs font-medium">模型:</label><select value={p.model || settings.selectedModel} onChange={(e) => onChange(p.id, 'model', e.target.value)} className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs">{(settings.chatModels || CHAT_MODELS_LIST).map(m => <option key={m.value} value={m.value}>{m.name}</option>)}</select></div> <div><label className="text-xs font-medium">声音:</label><select value={p.ttsVoice || settings.thirdPartyTtsVoice} onChange={(e) => onChange(p.id, 'ttsVoice', e.target.value)} className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs">{(microsoftTtsVoices || []).map(voice => <option key={voice.value} value={voice.value}>{voice.name}</option>)}</select></div> <div><label className="text-xs font-medium">头像 URL:</label><input type="text" value={p.avatarUrl || ''} onChange={(e) => onChange(p.id, 'avatarUrl', e.target.value)} placeholder="输入头像图片URL" className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs" /></div> </div></>) } </div> ))} </div> <button onClick={() => { onAdd(); const newId = `custom-${Date.now()}`; setEditingId(newId); }} className="w-full mt-4 py-2 bg-green-500 text-white rounded-md shrink-0"><i className="fas fa-plus mr-2"></i>添加新提示词</button> </div> );}
+const ModelManager = ({ models, onBack, onChange, onAdd, onDelete }) => { const swipeHandlers = useSimpleSwipe({ onSwipeLeft: onBack }); return ( <div {...swipeHandlers} className="fixed inset-0 bg-white dark:bg-gray-800 p-6 flex flex-col z-[9999] animate-fade-in"> <div className="flex items-center justify-between mb-4 shrink-0"> <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"><i className="fas fa-arrow-left"></i></button> <h3 className="text-2xl font-bold">模型管理</h3> <div className="w-8"></div> </div> <div className="flex-grow overflow-y-auto pr-2 space-y-3"> {(models || []).map(m => ( <div key={m.value} className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-md border dark:border-gray-700"> <div className="flex items-center justify-between"> <input type="text" value={m.name} onChange={(e) => onChange(m.value, 'name', e.target.value)} className="font-semibold bg-transparent w-full text-lg" /> <button onClick={() => onDelete(m.value)} className="p-2 ml-2 text-sm text-red-500 rounded-full hover:bg-red-500/10"><i className="fas fa-trash"></i></button> </div> <div className="mt-2 space-y-2 text-sm"> <div><label className="text-xs font-medium">模型值 (API Value)</label><input type="text" value={m.value} onChange={(e) => onChange(m.value, 'value', e.target.value)} placeholder="例如 gemini-1.5-pro-latest" className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs" /></div> <div><label className="text-xs font-medium">模型家族 (Family)</label><select value={m.family || 'google'} onChange={(e) => onChange(m.value, 'family', e.target.value)} className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs"><option value="google">Google Gemini</option><option value="openai">OpenAI 兼容</option></select></div> {(m.family === 'openai') && (<div><label className="text-xs font-medium">OpenAI兼容API基础URL</label><input type="text" value={m.apiUrl || ''} onChange={(e) => onChange(m.value, 'apiUrl', e.target.value)} placeholder="例如 https://api.openai.com/v1" className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border rounded-md text-xs" /></div>)} </div> </div> ))} </div> <button onClick={onAdd} className="w-full mt-4 py-2 bg-green-500 text-white rounded-md shrink-0"><i className="fas fa-plus mr-2"></i>添加新模型</button> </div> ); };
+const SettingsModal = ({ settings, onSave, onClose }) => { const [tempSettings, setTempSettings] = useState(settings); const [systemVoices, setSystemVoices] = useState([]); const [view, setView] = useState('main'); useEffect(() => { const fetchSystemVoices = () => { if (!window.speechSynthesis) return; const voices = window.speechSynthesis.getVoices(); if (voices.length > 0) { setSystemVoices(voices.filter(v => v.lang.startsWith('zh') || v.lang.startsWith('en') || v.lang.startsWith('fr') || v.lang.startsWith('es') || v.lang.startsWith('ja') || v.lang.startsWith('ko') || v.lang.startsWith('vi'))); } }; if (window.speechSynthesis) { if (window.speechSynthesis.onvoiceschanged !== undefined) { window.speechSynthesis.onvoiceschanged = fetchSystemVoices; } fetchSystemVoices(); } }, []); const handleChange = (key, value) => setTempSettings(prev => ({ ...prev, [key]: value })); const handleAddPrompt = (newId) => { const newPrompt = { id: newId, name: '新提示词', content: '请输入...', model: settings.selectedModel, ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural', avatarUrl: '' }; const newPrompts = [...(tempSettings.prompts || []), newPrompt]; handleChange('prompts', newPrompts); }; const handleDeletePrompt = (idToDelete) => { if (!window.confirm('确定删除吗？')) return; const newPrompts = (tempSettings.prompts || []).filter(p => p.id !== idToDelete); handleChange('prompts', newPrompts); if (tempSettings.currentPromptId === idToDelete) handleChange('currentPromptId', newPrompts[0]?.id || ''); }; const handlePromptSettingChange = (promptId, field, value) => { const newPrompts = (tempSettings.prompts || []).map(p => p.id === promptId ? { ...p, [field]: value } : p); handleChange('prompts', newPrompts); }; const microsoftTtsVoices = [ { name: '晓晓 (女, 多语言)', value: 'zh-CN-XiaoxiaoMultilingualNeural' }, { name: '晓辰 (女, 多语言)', value: 'zh-CN-XiaochenMultilingualNeural' }, { name: '云希 (男, 温和)', value: 'zh-CN-YunxiNeural' }, { name: '云泽 (男, 叙事)', value: 'zh-CN-YunzeNeural' }, { name: '晓晓 (女, 亲切)', value: 'zh-CN-XiaoxiaoNeural' }, { name: '晓颜 (女)', value: 'zh-CN-XiaoyanNeural'}, { name: '晓伊 (女, 动漫)', value: 'zh-CN-XiaoyiNeural' }, { name: '云健 (男, 沉稳)', value: 'zh-CN-YunjianNeural' }, { name: '云扬 (男, 阳光)', value: 'zh-CN-YunyangNeural' }, { name: '晓臻 (女, 台湾)', value: 'zh-TW-HsiaoChenNeural' }, { name: '允喆 (男, 台湾)', value: 'zh-TW-YunJheNeural' }, { name: 'Ava (女, 美国, 多语言)', value: 'en-US-AvaMultilingualNeural' }, { name: 'Steffan (男, 美国, 多语言)', value: 'en-US-SteffanMultilingualNeural' }, { name: 'Vivienne (女, 法国, 多语言)', value: 'fr-FR-VivienneMultilingualNeural' }, { name: 'Remy (男, 法国, 多语言)', value: 'fr-FR-RemyMultilingualNeural' }, { name: '妮拉 (女, 缅甸)', value: 'my-MM-NilarNeural' }, { name: '蒂哈 (男, 缅甸)', value: 'my-MM-ThihaNeural' }, { name: '怀眉 (女, 越南)', value: 'vi-VN-HoaiMyNeural' }, { name: '南明 (男, 越南)', value: 'vi-VN-NamMinhNeural' }, ]; const speechLanguageOptions = [ { name: '中文 (普通话)', value: 'zh-CN' }, { name: '缅甸语 (မြန်မာ)', value: 'my-MM' }, { name: 'English (US)', value: 'en-US' }, { name: 'Español (España)', value: 'es-ES' }, { name: 'Français (France)', value: 'fr-FR' }, { name: '日本語', value: 'ja-JP' }, { name: '한국어', value: 'ko-KR' }, { name: 'Tiếng Việt', value: 'vi-VN' }, ]; const swipeHandlers = useSimpleSwipe({ onSwipeLeft: () => view === 'main' ? onClose() : setView('main') }); const handleKeyChange = (id, field, value) => { const newKeys = tempSettings.apiKeys.map(k => k.id === id ? {...k, [field]: value} : k); handleChange('apiKeys', newKeys); }; const handleAddKey = () => { const newKey = { id: `key-${Date.now()}`, value: '', name: `新密钥-${tempSettings.apiKeys.length + 1}`, status: 'valid', active: false }; handleChange('apiKeys', [...tempSettings.apiKeys, newKey]); }; const handleDeleteKey = (id) => { handleChange('apiKeys', tempSettings.apiKeys.filter(k => k.id !== id)); }; const handleSetActiveKey = (id) => { const newKeys = tempSettings.apiKeys.map(k => ({...k, active: k.id === id})); handleChange('apiKeys', newKeys); }; return ( <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}> <div {...swipeHandlers} className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg overflow-hidden relative" style={{ height: 'min(650px, 90vh)' }} onClick={e => e.stopPropagation()}> {view === 'main' && ( <div className="p-6 h-full flex flex-col"> <h3 className="text-2xl font-bold mb-4 shrink-0">设置</h3> <div className="space-y-4 flex-grow overflow-y-auto pr-2"> <div><h4 className="text-lg font-bold mb-2">API 密钥管理</h4><div className="space-y-2">{tempSettings.apiKeys.map(k => (<div key={k.id} className="flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-700/50 rounded-md"><input type="radio" name="active_key" checked={k.active} onChange={() => handleSetActiveKey(k.id)} className="w-5 h-5 text-primary focus:ring-primary"/><input type="text" value={k.name} onChange={(e) => handleKeyChange(k.id, 'name', e.target.value)} placeholder="密钥名称" className="w-24 px-2 py-1 text-sm bg-transparent border-b"/><input type="password" value={k.value} onChange={(e) => handleKeyChange(k.id, 'value', e.target.value)} className="flex-grow px-2 py-1 text-sm bg-transparent border-b"/><span className={`text-xs px-2 py-1 rounded-full ${k.status === 'valid' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>{k.status}</span><button onClick={() => handleDeleteKey(k.id)} className="p-1 text-red-500 rounded-full hover:bg-red-500/10"><i className="fas fa-trash"></i></button><button onClick={() => handleChange('apiKeys', tempSettings.apiKeys.map(key => key.id === k.id ? { ...key, status: 'valid' } : key))} className="p-1 ml-1 text-gray-500 rounded-full hover:bg-gray-500/10" title="重置状态"><i className="fas fa-redo"></i></button></div>))}<button onClick={handleAddKey} className="w-full text-sm mt-2 py-1 border border-dashed rounded-md hover:bg-gray-100 dark:hover:bg-gray-700">添加密钥</button></div></div> <div><button type="button" onClick={() => setView('prompts')} className="w-full flex justify-between items-center p-3 rounded-md bg-gray-100 dark:bg-gray-700/50 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"><h4 className="text-lg font-bold">提示词工作室</h4><i className={`fas fa-arrow-right`}></i></button></div> <div><button type="button" onClick={() => setView('models')} className="w-full flex justify-between items-center p-3 rounded-md bg-gray-100 dark:bg-gray-700/50 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"><h4 className="text-lg font-bold">模型管理</h4><i className={`fas fa-arrow-right`}></i></button></div> <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md space-y-3"><label className="block text-sm font-medium">高级参数</label><div className="flex items-center gap-4"><label className="text-sm shrink-0">温度: {tempSettings.temperature}</label><input type="range" min="0" max="1" step="0.1" value={tempSettings.temperature} onChange={(e) => handleChange('temperature', parseFloat(e.target.value))} className="w-full"/></div><div><label className="text-sm shrink-0">上下文长度: {tempSettings.contextLength}</label><input type="range" min="0" max="2048" step="1" value={tempSettings.contextLength} onChange={(e) => handleChange('contextLength', parseInt(e.target.value, 10))} className="w-full"/></div><div><div className="flex items-center justify-between"><label htmlFor="thinking-mode-toggle" className="block text-sm font-medium">关闭 2.5 系列模型思考模式</label><input id="thinking-mode-toggle" type="checkbox" checked={tempSettings.disableThinkingMode} onChange={(e) => handleChange('disableThinkingMode', e.target.checked)} className="h-5 w-5 text-primary rounded cursor-pointer" /></div><p className="text-xs text-gray-500 mt-1">开启后可大幅提升响应速度和降低成本。</p></div></div> <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md space-y-4"><h4 className="text-md font-semibold">朗读设置</h4><div><label className="block text-sm font-medium mb-1">朗读引擎</label><select value={tempSettings.ttsEngine} onChange={(e) => handleChange('ttsEngine', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 border rounded-md"><option value={TTS_ENGINE.THIRD_PARTY}>第三方 API (音质更好)</option><option value={TTS_ENGINE.SYSTEM}>系统内置 (速度快)</option></select></div>{tempSettings.ttsEngine === TTS_ENGINE.THIRD_PARTY && (<div><label className="block text-sm font-medium mb-1">发音人 (第三方)</label><select value={tempSettings.thirdPartyTtsVoice} onChange={(e) => handleChange('thirdPartyTtsVoice', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 border rounded-md">{microsoftTtsVoices.map(voice => <option key={voice.value} value={voice.value}>{voice.name}</option>)}</select></div>)}{tempSettings.ttsEngine === TTS_ENGINE.SYSTEM && (<div><label className="block text-sm font-medium mb-1">发音人 (系统)</label>{systemVoices.length > 0 ? (<select value={tempSettings.systemTtsVoiceURI} onChange={(e) => handleChange('systemTtsVoiceURI', e.target.value)} className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 border rounded-md"><option value="">浏览器默认</option>{systemVoices.map(voice => <option key={voice.voiceURI} value={voice.voiceURI}>{`${voice.name} (${voice.lang})`}</option>)}</select>) : <p className="text-sm text-gray-500 mt-1">无可用内置声音。</p>}</div>)}</div> <div className="flex items-center justify-between"><label className="block text-sm font-medium">AI 回复后自动朗读</label><input type="checkbox" checked={tempSettings.autoRead} onChange={(e) => handleChange('autoRead', e.target.checked)} className="h-5 w-5 text-primary rounded" /></div> </div> <div className="flex justify-end gap-3 mt-6 shrink-0"><button onClick={onClose} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">关闭</button><button onClick={() => onSave(tempSettings)} className="px-4 py-2 bg-primary text-white rounded-md">保存</button></div> </div> )} {view === 'prompts' && (<PromptManager prompts={tempSettings.prompts} settings={tempSettings} onBack={() => setView('main')} onChange={handlePromptSettingChange} onAdd={handleAddPrompt} onDelete={handleDeletePrompt} microsoftTtsVoices={microsoftTtsVoices} />)} {view === 'models' && (<ModelManager models={tempSettings.chatModels} onBack={() => setView('main')} onChange={(modelValue, field, value) => handleChange('chatModels', tempSettings.chatModels.map(m => m.value === modelValue ? {...m, [field]: value} : m))} onAdd={() => handleChange('chatModels', [...tempSettings.chatModels, { id:`model-${Date.now()}`, name: '新模型', value: `custom-model-${Date.now()}`, family: 'google' }])} onDelete={(modelValue) => handleChange('chatModels', tempSettings.chatModels.filter(m => m.value !== modelValue))} />)} </div> </div> ); };
+const ModelSelector = ({ settings, onSelect, onClose }) => ( <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-20 flex flex-col p-4 animate-fade-in" onClick={onClose}> <div className="w-full max-w-md m-auto bg-white dark:bg-gray-800 rounded-xl shadow-lg flex flex-col" onClick={e => e.stopPropagation()}> <div className="p-4 border-b dark:border-gray-700 text-center relative"> <h3 className="text-lg font-bold">切换模型</h3> <button onClick={onClose} className="absolute top-2 right-2 p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"><i className="fas fa-times"></i></button> </div> <div className="p-2 overflow-y-auto max-h-[60vh]"> {(settings.chatModels || []).map(m => ( <button key={m.value} type="button" onClick={() => { onSelect(m.value); onClose(); }} className={`w-full text-left px-4 py-3 text-sm rounded-lg hover:bg-primary/10 ${settings.selectedModel === m.value ? 'text-primary font-bold bg-primary/10' : ''}`}>{m.name}</button> ))} </div> </div> </div> );
+const AssistantSelector = ({ prompts, settings, onSelect, onClose }) => ( <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-20 flex flex-col p-4 animate-fade-in" onClick={onClose}> <div className="w-full max-w-2xl m-auto bg-white dark:bg-gray-800 rounded-xl shadow-lg flex flex-col" onClick={e => e.stopPropagation()}> <div className="p-4 border-b dark:border-gray-700 text-center relative"><h3 className="text-lg font-bold">更换助理</h3><button onClick={onClose} className="absolute top-2 right-2 p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"><i className="fas fa-times"></i></button></div> <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-4 overflow-y-auto max-h-[60vh]"> {(prompts || []).map(p => ( <button key={p.id} onClick={() => onSelect(p.id)} className={`flex flex-col items-center p-4 rounded-lg border-2 transition-all ${settings.currentPromptId === p.id ? 'border-primary bg-primary/10' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-700'}`}> <img src={convertGitHubUrl(p.avatarUrl) || convertGitHubUrl(settings.aiAvatarUrl)} alt={p.name} className="w-16 h-16 rounded-full object-cover mb-2 shadow-md"/> <span className="text-sm font-semibold text-center">{p.name}</span> </button> ))} </div> </div> </div> );
 
-/**标签列表*/
-const LayoutTagIndex = props => {
-  const { tagOptions } = props
-  const { locale } = useGlobal()
-  return (
-    <div id='tag-outer-wrapper' className='px-5 mt-8 md:px-0'>
-      <div className='text-4xl font-extrabold dark:text-gray-200 mb-5'>{locale.COMMON.TAGS}</div>
-      <div id='tag-list' className='duration-200 flex flex-wrap space-x-5 space-y-5 m-10 justify-center'>
-        {tagOptions.map(tag => {
-          return (
-            <SmartLink key={tag.name} href={`/tag/${tag.name}`} passHref legacyBehavior>
-              <div className={'group flex flex-nowrap items-center border bg-white text-2xl rounded-xl dark:hover:text-white px-4 cursor-pointer py-3 hover:text-white hover:bg-indigo-600 transition-all hover:scale-110 duration-150'}>
-                <HashTag className={'w-5 h-5 stroke-gray-500 stroke-2'} />{tag.name}
-                <div className='bg-[#f1f3f8] ml-1 px-2 rounded-lg group-hover:text-indigo-600 '>{tag.count}</div>
-              </div>
-            </SmartLink>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
 
-export {
-  Layout404,
-  LayoutArchive,
-  LayoutBase,
-  LayoutCategoryIndex,
-  LayoutIndex,
-  LayoutPostList,
-  LayoutSearch,
-  LayoutSlug,
-  LayoutTagIndex,
-  CONFIG as THEME_CONFIG
-}
+const AiChatAssistant = ({ onClose, isFullScreenMode = false }) => {
+    // --- 状态管理 (大部分无变化) ---
+    const [activationState, setActivationState] = useState('checking'); const [activationKey, setActivationKey] = useState(''); const [activationError, setActivationError] = useState(''); const [isActivating, setIsActivating] = useState(false); const [keyType, setKeyType] = useState(null); const [trialExpiryInfo, setTrialExpiryInfo] = useState(''); const [trialExpiryTimestamp, setTrialExpiryTimestamp] = useState(0);
+    const [conversations, setConversations] = useState([]); const [currentConversationId, setCurrentConversationId] = useState(null); const [userInput, setUserInput] = useState(''); const [isLoading, setIsLoading] = useState(false); const [error, setError] = useState(''); const [settings, setSettings] = useState(DEFAULT_SETTINGS); const [showSettings, setShowSettings] = useState(false); const [isMounted, setIsMounted] = useState(false); const [isSidebarOpen, setIsSidebarOpen] = useState(false); const [showAssistantSelector, setShowAssistantSelector] = useState(false); const [showModelSelector, setShowModelSelector] = useState(false); const [showMoreMenu, setShowMoreMenu] = useState(false); const [selectedImages, setSelectedImages] = useState([]); const [isListening, setIsListening] = useState(false);
+    // --- Refs (大部分无变化) ---
+    const messagesEndRef = useRef(null); const abortControllerRef = useRef(null); const optionsContainerRef = useRef(null); const fileInputRef = useRef(null); const cameraInputRef = useRef(null); const recognitionRef = useRef(null); const conversationMessageCount = useRef({}); const textareaRef = useRef(null);
+    const getDeviceId = async () => { try { const fp = await FingerprintJS.load(); const result = await fp.get(); return result.visitorId; } catch (e) { console.error("FingerprintJS error:", e); return 'fallback-device-id-' + Date.now(); } };
+    useEffect(() => { const initializeApp = async () => { setIsMounted(true); let finalSettings = { ...DEFAULT_SETTINGS }; const savedSettings = safeLocalStorageGet('ai_assistant_settings_v22_final'); if (savedSettings) { const parsed = JSON.parse(savedSettings); parsed.prompts = (parsed.prompts || []).map(p => ({ ...p, model: p.model || DEFAULT_SETTINGS.selectedModel, ttsVoice: p.ttsVoice || 'zh-CN-XiaoxiaoMultilingualNeural', avatarUrl: p.avatarUrl || '' })); if (!parsed.chatModels || parsed.chatModels.length === 0) { parsed.chatModels = CHAT_MODELS_LIST; } finalSettings = { ...DEFAULT_SETTINGS, ...parsed }; } if (typeof navigator !== 'undefined' && /FBAN|FBAV/i.test(navigator.userAgent)) { finalSettings.isFacebookApp = true; } setSettings(finalSettings); const savedConversations = safeLocalStorageGet('ai_assistant_conversations_v22_final'); const parsedConvs = savedConversations ? JSON.parse(savedConversations) : []; setConversations(parsedConvs); setActivationState('checking'); try { const deviceId = await getDeviceId(); const storedKey = safeLocalStorageGet('ai_assistant_key'); let activated = false; if (storedKey) { const response = await fetch('/api/activate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: storedKey, deviceId }), }); const data = await response.json(); if (response.ok && data.success) { setActivationState('activated'); setKeyType(data.keyType); if (data.keyType === 'trial') { const expiryTime = data.activatedAt + (data.durationSeconds || 0) * 1000; setTrialExpiryTimestamp(expiryTime); } else { setTrialExpiryInfo('永久授权'); } activated = true; } else { safeLocalStorageRemove('ai_assistant_key'); setActivationError(data.message || '本地激活码已失效。'); } } if (!activated) { const trialResponse = await fetch('/api/activate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'start_trial', deviceId }), }); const trialData = await trialResponse.json(); if (trialResponse.ok && trialData.success) { safeLocalStorageSet('ai_assistant_key', trialData.key); setActivationState('activated'); setKeyType(trialData.keyType); const expiryTime = trialData.activatedAt + (trialData.durationSeconds || 0) * 1000; setTrialExpiryTimestamp(expiryTime); } else { setActivationState('unactivated'); setActivationError(trialData.message || '无法自动开始试用。'); } } } catch (error) { setActivationState('unactivated'); setActivationError('网络错误，无法连接到激活服务器。'); } if (finalSettings.startWithNewChat || parsedConvs.length === 0) { createNewConversation(finalSettings.currentPromptId); } else { setCurrentConversationId(parsedConvs[0].id); } }; initializeApp(); }, []);
+    useEffect(() => { let timer; if (keyType === 'trial' && trialExpiryTimestamp > 0) { timer = setInterval(() => { const remainingMillis = trialExpiryTimestamp - Date.now(); if (remainingMillis <= 0) { setTrialExpiryInfo('试用期已结束'); setActivationState('unactivated'); safeLocalStorageRemove('ai_assistant_key'); clearInterval(timer); } else { const totalSeconds = Math.max(0, Math.floor(remainingMillis / 1000)); const minutes = Math.floor(totalSeconds / 60); const seconds = totalSeconds % 60; setTrialExpiryInfo(`试用中，剩余: ${minutes}分${seconds < 10 ? '0' : ''}${seconds}秒`); } }, 1000); return () => clearInterval(timer); } else if (keyType === 'permanent') { setTrialExpiryInfo('永久授权'); } return () => { if (timer) clearInterval(timer); }; }, [keyType, trialExpiryTimestamp]);
+    const currentConversation = useMemo(() => conversations.find(c => c.id === currentConversationId), [conversations, currentConversationId]);
+    useEffect(() => { const handleClickOutside = (event) => { if (optionsContainerRef.current && !optionsContainerRef.current.contains(event.target)) { setShowMoreMenu(false); } }; document.addEventListener('mousedown', handleClickOutside); return () => document.removeEventListener('mousedown', handleClickOutside); }, []);
+    useEffect(() => { if (isMounted) { safeLocalStorageSet('ai_assistant_settings_v22_final', JSON.stringify(settings)); safeLocalStorageSet('ai_assistant_conversations_v22_final', JSON.stringify(conversations)); } }, [settings, conversations, isMounted]);
+    const scrollToBottom = useCallback(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, []);
+    useEffect(() => { const timeout = setTimeout(scrollToBottom, 100); return () => clearTimeout(timeout); }, [currentConversation?.messages, scrollToBottom]);
+    useEffect(() => {
+        if (!currentConversation || !settings.autoRead || !isMounted || activationState !== 'activated') return;
+        const messages = currentConversation.messages;
+        const currentMessageCount = messages.length;
+        const lastKnownCount = conversationMessageCount.current[currentConversation.id] || 0;
+        const lastMessage = messages[currentMessageCount - 1];
+        if (currentMessageCount > lastKnownCount && lastMessage?.role === 'ai' && lastMessage?.content && lastMessage?.timestamp && (Date.now() - lastMessage.timestamp < 3000)) {
+            setTimeout(() => {
+                const bubble = document.getElementById(`msg-${currentConversation.id}-${currentMessageCount - 1}`);
+                const ttsButton = bubble?.querySelector('button[title="朗读"]');
+                if (bubble && document.body.contains(bubble)) { ttsButton?.click(); }
+            }, 300);
+        }
+        conversationMessageCount.current[currentConversation.id] = currentMessageCount;
+    }, [currentConversation, settings.autoRead, isMounted, activationState]);
+    const adjustTextareaHeight = useCallback(() => { if (textareaRef.current) { textareaRef.current.style.height = 'auto'; textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`; } }, []);
+    useEffect(() => { adjustTextareaHeight(); }, [userInput, adjustTextareaHeight]);
+    const createNewConversation = (promptId) => { const newId = `conv-${Date.now()}`; const newConv = { id: newId, title: '新的对话', messages: [{ role: 'ai', content: '你好！有什么可以帮助你的吗？', timestamp: Date.now() }], promptId: promptId || settings.currentPromptId }; setConversations(prev => [newConv, ...prev]); setCurrentConversationId(newId); };
+    const handleSelectConversation = (id) => setCurrentConversationId(id);
+    const handleDeleteConversation = (id) => { const remaining = conversations.filter(c => c.id !== id); setConversations(remaining); if (currentConversationId === id) { if (remaining.length > 0) { setCurrentConversationId(remaining[0].id); } else { createNewConversation(); } } };
+    const handleRenameConversation = (id, newTitle) => { setConversations(prev => prev.map(c => c.id === id ? { ...c, title: newTitle } : c)); };
+    const handleSaveSettings = (newSettings) => { setSettings(newSettings); setShowSettings(false); };
+    const handleImageUpload = (e) => { const files = Array.from(e.target.files); if (!files.length) return; const imagePromises = files.map(file => { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onloadend = () => resolve({ data: reader.result.split(',')[1], previewUrl: reader.result, type: file.type }); reader.onerror = reject; reader.readAsDataURL(file); }); }); Promise.all(imagePromises).then(newImages => setSelectedImages(prev => [...prev, ...newImages])); if (fileInputRef.current) fileInputRef.current.value = ''; if (cameraInputRef.current) cameraInputRef.current.value = ''; };
+    const handleRemoveImage = (indexToRemove) => { setSelectedImages(prev => prev.filter((_, index) => index !== indexToRemove)); };
+    const startListening = useCallback(() => { const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SpeechRecognition) { alert('您的浏览器不支持语音输入。'); return; } if (recognitionRef.current) recognitionRef.current.abort(); const recognition = new SpeechRecognition(); recognition.lang = settings.speechLanguage; recognition.interimResults = false; recognition.maxAlternatives = 1; recognition.onstart = () => setIsListening(true); recognition.onresult = (e) => { const transcript = e.results[0][0].transcript.trim(); setUserInput(transcript); }; recognition.onerror = (event) => { console.error("Speech recognition error:", event.error); setError(`语音识别失败: ${event.error}`); setIsListening(false); }; recognition.onend = () => setIsListening(false); recognition.start(); recognitionRef.current = recognition; }, [settings.speechLanguage]);
+    const stopListening = useCallback(() => { if (recognitionRef.current) { recognitionRef.current.stop(); setIsListening(false); } }, []);
+    
+    const handleActivate = async (e) => {
+        e.preventDefault();
+        if (!activationKey.trim()) { setActivationError('请输入激活码。'); return; }
+        setIsActivating(true); setActivationError('');
+        try {
+            const deviceId = await getDeviceId();
+            const response = await fetch('/api/activate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: activationKey.trim(), deviceId }), });
+            const data = await response.json();
+            if (response.ok && data.success) {
+                safeLocalStorageSet('ai_assistant_key', activationKey.trim());
+                setActivationState('activated'); setKeyType(data.keyType);
+                if (data.keyType === 'trial') {
+                    const expiryTime = data.activatedAt + (data.durationSeconds || 0) * 1000;
+                    setTrialExpiryTimestamp(expiryTime);
+                } else {
+                    setTrialExpiryInfo('永久授权');
+                }
+            } else { throw new Error(data.message || '激活失败。'); }
+        } catch (err) { setActivationState('unactivated'); setActivationError(err.message); } finally { setIsActivating(false); }
+    };
+
+    const handleSubmit = async (isRegenerate = false) => {
+        if (!currentConversation || isLoading || activationState !== 'activated') return;
+        
+        let messagesForApi = [...currentConversation.messages];
+        const textToProcess = userInput.trim();
+
+        if (isRegenerate) {
+            if (messagesForApi.length > 0 && messagesForApi[messagesForApi.length - 1].role === 'ai') { messagesForApi.pop(); }
+        } else {
+            if (!textToProcess && selectedImages.length === 0) { setError('请输入文字或选择图片再发送！'); return; }
+            const userMessage = { role: 'user', content: textToProcess, images: selectedImages, timestamp: Date.now() };
+            const updatedMessages = [...messagesForApi, userMessage];
+            setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: updatedMessages, promptId: c.promptId || settings.currentPromptId } : c));
+            messagesForApi = updatedMessages;
+            setUserInput(''); setSelectedImages([]);
+        }
+
+        if (messagesForApi.length === 0) return;
+
+        setIsLoading(true); setError(''); abortControllerRef.current = new AbortController(); const signal = abortControllerRef.current.signal;
+        try {
+            const currentPrompt = (settings.prompts || []).find(p => p.id === currentConversation.promptId) || (settings.prompts || []).find(p => p.id === settings.currentPromptId) || DEFAULT_PROMPTS[0];
+            const modelToUse = currentPrompt.model || settings.selectedModel;
+            
+            const contextMessages = messagesForApi.slice(-(settings.contextLength || 512));
+            const history = contextMessages.map(msg => {
+                const parts = [];
+                if (msg.content) parts.push({ text: msg.content });
+                if (msg.images) msg.images.forEach(img => parts.push({ inlineData: { mimeType: img.type, data: img.data } }));
+                return { role: msg.role === 'user' ? 'user' : 'model', parts };
+            });
+
+            const contents = [ { role: 'user', parts: [{ text: currentPrompt.content }] }, { role: 'model', parts: [{ text: "好的，我明白了。" }] }, ...history ];
+            const generationConfig = { temperature: settings.temperature, maxOutputTokens: settings.maxOutputTokens, };
+            if (settings.disableThinkingMode && modelToUse.includes('gemini-2.5')) { generationConfig.thinkingConfig = { thinkingBudget: 0 }; }
+            
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${settings.apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents, generationConfig }), signal, });
+            if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error?.message || `请求失败`); }
+            const data = await response.json(); const aiResponseContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!aiResponseContent) throw new Error('AI未能返回有效内容。');
+            const aiMessage = { role: 'ai', content: aiResponseContent, timestamp: Date.now() };
+            const finalMessages = [...messagesForApi, aiMessage];
+            setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: finalMessages } : c));
+        } catch (err) {
+            const finalMessages = [...messagesForApi]; let errorMessage = `请求错误: ${err.message}`;
+            if (err.name === 'AbortError') { errorMessage = '请求被中断，请检查网络连接。'; }
+            setError(errorMessage); finalMessages.push({role: 'ai', content: `抱歉，出错了: ${errorMessage}`, timestamp: Date.now()});
+            setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: finalMessages } : c));
+        } finally { setIsLoading(false); }
+    };
+    
+    const safeGetCurrentPrompt = useMemo(() => { return (settings.prompts || []).find(p => p.id === settings.currentPromptId) || (settings.prompts || [])[0] || { name: 'AI助理', avatarUrl: settings.aiAvatarUrl }; }, [settings.currentPromptId, settings.prompts, settings.aiAvatarUrl]);
+
+    if (!isMounted) return <div className="w-full h-full flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>;
+    const showLeftButtons = !userInput.trim() && selectedImages.length === 0;
+    
+    const containerClasses = isFullScreenMode ? 'w-full h-full flex bg-white dark:bg-gray-900' : `w-full max-w-5xl mx-auto my-8 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 flex bg-white dark:bg-gray-900`;
+    const containerStyle = isFullScreenMode ? {} : { height: '90vh', minHeight: '650px' };
+
+    if (activationState === 'checking') {
+        return (
+            <div className={containerClasses} style={containerStyle}>
+                <div className="w-full h-full flex items-center justify-center bg-white dark:bg-gray-900">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    <p className="ml-3 text-gray-500">正在检查激活状态...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (activationState !== 'activated') {
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-cover bg-center" style={{ backgroundImage: `url('/images/jihuomatu.jpg')` }}>
+                <div className="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
+                <div className="relative w-full max-w-sm bg-white/10 backdrop-blur-xl border border-white/20 rounded-lg shadow-xl p-8 flex flex-col items-center">
+                    <h2 className="text-2xl font-bold mb-2 text-center text-white shadow-text">报名中文课程</h2>
+                    <p className="text-gray-200 text-sm mb-2 text-center shadow-text">【课程介绍】结合中缅教学方案，高效学习中文，价格比大部分缅甸机构更优惠！</p>
+                    <p className="text-gray-200 text-sm mb-2 text-center shadow-text">【地址】仰光某区，欢迎线下咨询！</p>
+                    <p className="text-xl font-bold text-green-400 mb-4 text-center shadow-text">【优惠价格】AI助手套餐：$50 / 月（原价$80）</p>
+                    <p className="text-gray-200 text-sm mb-4 text-center shadow-text">请通过以下方式联系我们，获取专属学习方案：</p>
+                    <div className="space-y-3 w-full mb-6">
+                        <a href="https://t.me/yourtelegramid" target="_blank" rel="noopener noreferrer" className="block w-full text-white bg-blue-500 hover:bg-blue-600 rounded-lg py-3 text-lg font-semibold flex items-center justify-center space-x-2 transition-all duration-300 transform hover:-translate-y-1 shadow-lg"><i className="fab fa-telegram-plane"></i> <span>Telegram 联系</span></a>
+                        <a href="https://line.me/ti/p/@yourlineid" target="_blank" rel="noopener noreferrer" className="block w-full text-white bg-green-500 hover:bg-green-600 rounded-lg py-3 text-lg font-semibold flex items-center justify-center space-x-2 transition-all duration-300 transform hover:-translate-y-1 shadow-lg"><i className="fab fa-line"></i> <span>Line 联系</span></a>
+                        <a href="viber://chat?number=+959XXXXXXXX" target="_blank" rel="noopener noreferrer" className="block w-full text-white bg-purple-500 hover:bg-purple-600 rounded-lg py-3 text-lg font-semibold flex items-center justify-center space-x-2 transition-all duration-300 transform hover:-translate-y-1 shadow-lg"><i className="fab fa-viber"></i> <span>Viber 联系</span></a>
+                        <a href="https://www.facebook.com/share/1FSxz6cm2Z" target="_blank" rel="noopener noreferrer" className="block w-full text-white bg-blue-700 hover:bg-blue-800 rounded-lg py-3 text-lg font-semibold flex items-center justify-center space-x-2 transition-all duration-300 transform hover:-translate-y-1 shadow-lg"><i className="fab fa-facebook"></i> <span>Facebook 主页</span></a>
+                    </div>
+                    {activationError && <p className="text-red-400 text-sm mb-4 animate-shake">{activationError}</p>}
+                    <form onSubmit={handleActivate} className="space-y-4 w-full">
+                        <input type="text" value={activationKey} onChange={(e) => setActivationKey(e.target.value)} placeholder="在此输入您的激活码" className="w-full px-4 py-3 text-center bg-gray-700/50 border border-gray-500/50 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary"/>
+                        <button type="submit" disabled={isActivating} className="w-full py-3 px-4 bg-primary text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-all duration-300 transform hover:-translate-y-1 shadow-lg">
+                            {isActivating ? (<><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div> 验证中...</>) : "立即激活"}
+                        </button>
+                    </form>
+                    {isFullScreenMode && <button onClick={onClose} className="mt-4 px-6 py-2 text-gray-300 hover:text-white bg-white/10 rounded-full shadow-md transition-all duration-300 hover:scale-105">返回网站</button>}
+                </div>
+            </div>
+        );
+    }
+    
+    return (
+        <div className={containerClasses} style={containerStyle}>
+            <ChatSidebar isOpen={isSidebarOpen} conversations={conversations} currentId={currentConversationId} onSelect={handleSelectConversation} onNew={() => createNewConversation()} onDelete={handleDeleteConversation} onRename={handleRenameConversation} prompts={settings.prompts} settings={settings} />
+            
+            {isSidebarOpen && ( <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/20 z-10 md:hidden"></div> )}
+
+            <div className="flex-1 flex flex-col h-full min-w-0 relative" data-conv-id={currentConversation?.id}>
+                {/* 顶部标题栏，现在会完美居中 */}
+                <div className="flex items-center justify-between py-1 px-2 border-b dark:border-gray-700 shrink-0">
+                    <div className="w-10"> <button onClick={() => setIsSidebarOpen(s => !s)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="切换侧边栏"><i className="fas fa-bars"></i></button> </div>
+                    <div className="text-center flex-grow">
+                        <h2 className="text-lg font-semibold truncate">{currentConversation?.title || '聊天'}</h2>
+                        {trialExpiryInfo && <div className={`text-xs font-semibold ${keyType === 'trial' ? 'text-green-500' : 'text-yellow-500'}`}>{trialExpiryInfo}</div>}
+                    </div>
+                    <div className="w-20 flex justify-end items-center gap-2">
+                        <button onClick={() => setShowSettings(true)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="设置"><i className="fas fa-cog"></i></button>
+                        {isFullScreenMode && ( <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="关闭"><i className="fas fa-times"></i></button> )}
+                    </div>
+                </div>
+
+                <div className="flex-grow p-4 overflow-y-auto" style={{ backgroundImage: `url('${convertGitHubUrl(settings.chatBackgroundUrl)}')`}}>
+                    <div className="space-y-1">
+                        {currentConversation?.messages.map((msg, index) => (
+                            <div id={`msg-${currentConversation.id}-${index}`} key={index}>
+                                <MessageBubble msg={msg} settings={settings} isLastAiMessage={index === currentConversation.messages.length - 1 && msg.role === 'ai'} onRegenerate={() => handleSubmit(true)} />
+                            </div>
+                        ))}
+                    </div>
+                    <div ref={messagesEndRef} />
+                </div>
+                <div className="p-3 border-t dark:border-gray-700 shrink-0">
+                    {error && <div className="mb-2 p-2 bg-red-100 text-red-700 rounded-lg text-center text-sm" onClick={()=>setError('')}>{error} <span className='text-xs'>(点击关闭)</span></div>}
+                    
+                    {selectedImages.length > 0 && (
+                        <div className="mb-2 flex gap-2 overflow-x-auto p-1">
+                            {selectedImages.map((image, index) => (
+                                <div key={index} className="relative w-24 h-24 object-cover rounded-lg shrink-0">
+                                    <img src={image.previewUrl} alt={`预览 ${index + 1}`} className="w-full h-full object-cover rounded-lg" />
+                                    <button type="button" onClick={() => handleRemoveImage(index)} className="absolute -top-2 -right-2 bg-red-500 text-white w-5 h-5 flex items-center justify-center rounded-full text-xs" title="移除"><i className="fas fa-times"></i></button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {isLoading ? ( <div className="flex justify-center items-center gap-2 text-gray-500"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div> 正在思考中...</div> ) : (
+                        <form onSubmit={(e)=>{e.preventDefault();handleSubmit(false)}} className="flex items-end gap-2">
+                            {showLeftButtons && (
+                                <div ref={optionsContainerRef} className="relative">
+                                    <button type="button" onClick={() => setShowMoreMenu(s => !s)} className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0" title="切换助理或上传文件">
+                                        <img src={safeGetCurrentPrompt?.avatarUrl || settings.aiAvatarUrl} alt="AI助理头像" className="w-8 h-8 rounded-full object-cover" />
+                                        <span className="font-bold text-base">助理</span>
+                                    </button>
+                                    {showMoreMenu && (
+                                        <div className="absolute bottom-full mb-2 w-56 bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 overflow-hidden z-20">
+                                            <button type="button" onClick={() => { setShowModelSelector(true); setShowMoreMenu(false); }} className="w-full flex justify-between items-center text-left px-4 py-3 text-sm hover:bg-primary/10">
+                                                <span className="flex items-center"><i className="fas fa-robot w-6 mr-2"></i>切换模型</span>
+                                                <span className="text-xs text-gray-500 truncate max-w-[100px]">{settings.chatModels.find(m => m.value === (safeGetCurrentPrompt?.model || settings.selectedModel))?.name}</span>
+                                            </button>
+                                            <button type="button" onClick={() => { setShowAssistantSelector(true); setShowMoreMenu(false); }} className="w-full flex justify-between items-center text-left px-4 py-3 text-sm hover:bg-primary/10">
+                                                <span className="flex items-center"><i className="fas fa-user-astronaut w-6 mr-2"></i>更换助理</span>
+                                                <span className="text-xs text-gray-500 truncate max-w-[100px]">{safeGetCurrentPrompt?.name}</span>
+                                            </button>
+                                            <div className="border-t my-1 dark:border-gray-700"></div>
+                                            <button type="button" onClick={() => { fileInputRef.current.click(); setShowMoreMenu(false); }} className="w-full flex items-center text-left px-4 py-3 text-sm hover:bg-primary/10"><i className="fas fa-image w-6 mr-2"></i>上传图片</button>
+                                            <button type="button" onClick={() => { cameraInputRef.current.click(); setShowMoreMenu(false); }} className="w-full flex items-center text-left px-4 py-3 text-sm hover:bg-primary/10"><i className="fas fa-camera w-6 mr-2"></i>拍照上传</button>
+                                        </div>
+                                    )}
+                                    {showModelSelector && (
+                                        <div className="absolute bottom-full mb-2 w-48 bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 overflow-hidden z-20">
+                                            {settings.chatModels.map(m => ( <button key={m.value} type="button" onClick={()=>{setSettings(s=>({...s, selectedModel: m.value})); setShowModelSelector(false);}} className={`w-full text-left px-4 py-2 text-sm hover:bg-primary/10 ${settings.selectedModel === m.value ? 'text-primary font-bold' : ''}`}>{m.name}</button>))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            
+                            <input type="file" ref={fileInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" multiple />
+                            <input type="file" ref={cameraInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" capture="environment" />
+
+                            <div className="flex-grow relative">
+                                <textarea value={userInput} onChange={(e) => setUserInput(e.target.value)} placeholder="与 AI 聊天..." className="w-full px-4 py-2 pr-12 rounded-2xl bg-gray-100 dark:bg-gray-700 resize-none overflow-hidden" rows="1" style={{minHeight:'44px'}} onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight) + 'px'; }} />
+                                <button type="button" onClick={isListening ? stopListening : startListening} className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-500 hover:text-primary'}`} title="语音输入">
+                                    <i className="fas fa-microphone"></i>
+                                </button>
+                            </div>
+                            <button type="submit" className="p-3 bg-primary text-white rounded-full hover:bg-blue-700 disabled:opacity-50 shrink-0" disabled={isLoading || (!userInput.trim() && selectedImages.length === 0)}><i className="fas fa-arrow-up"></i></button>
+                            {!isFullScreenMode && ( <button type="button" onClick={() => console.log('This button is for non-fullscreen mode')} className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0" title={'全屏模式'}> <i className={`fas fa-expand`}></i> </button> )}
+                        </form>
+                    )}
+                </div>
+            </div>
+             {showSettings && <SettingsModal settings={settings} onSave={handleSaveSettings} onClose={() => setShowSettings(false)} />}
+             {showAssistantSelector && <AssistantSelector prompts={settings.prompts} settings={settings} onSelect={(promptId) => { setSettings(s => ({...s, currentPromptId: promptId })); setShowAssistantSelector(false); }} onClose={() => setShowAssistantSelector(false)} />}
+             {showModelSelector && ( // ModelSelector 模态框的实际渲染
+                <ModelSelector settings={settings} onSelect={(modelValue) => { setSettings(s => ({...s, selectedModel: modelValue})); setShowModelSelector(false); }} onClose={() => setShowModelSelector(false)} />
+            )}
+        </div>
+    );
+};
+
+export default AiChatAssistant;
