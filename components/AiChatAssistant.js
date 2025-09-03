@@ -1,4 +1,4 @@
-// /components/AiChatAssistant.js - v65 (崩溃修复 & 功能增强稳定版)
+// /components/AiChatAssistant.js - v65.1 (编译错误修复版)
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import AiTtsButton from './AiTtsButton';
 import FingerprintJS from '@fingerprintjs/fingerprintjs';
@@ -40,6 +40,7 @@ const AiTtsButtonModified = ({ text, ttsSettings }) => {
 };
 
 const TypingEffect = ({ text, onComplete, onUpdate }) => {
+    // [编译错误修复] 增加等号 =
     const [displayedText, setDisplayedText] = useState('');
     useEffect(() => {
         if (!text) return; setDisplayedText(''); let index = 0;
