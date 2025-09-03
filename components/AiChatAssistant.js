@@ -1,4 +1,4 @@
-// /components/AiChatAssistant.js - v62 (精致立体感优化版)
+// /components/AiChatAssistant.js - v63 (视觉、手势与TTS终极优化版)
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import AiTtsButton from './AiTtsButton';
 import FingerprintJS from '@fingerprintjs/fingerprintjs';
@@ -60,10 +60,14 @@ const DEFAULT_SETTINGS = {
 
 // --- 子组件 ---
 
-// (无变化)
+// [核心修改] TTS: 增加对括号内容的过滤
 const AiTtsButtonModified = ({ text, ttsSettings }) => {
     const emojiRegex = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/g;
-    const modifiedText = text ? text.replace(emojiRegex, '') : '';
+    const parenthesesRegex = /\uff08.*?\uff09|\(.*?\)/g; // 匹配全角和半角括号
+    
+    // 先移除括号内容，再移除表情
+    const modifiedText = text ? text.replace(parenthesesRegex, '').replace(emojiRegex, '') : '';
+    
     return <AiTtsButton text={modifiedText} ttsSettings={ttsSettings} />;
 };
 const TypingEffect = ({ text, onComplete, onUpdate }) => {
@@ -87,27 +91,24 @@ const TypingEffect = ({ text, onComplete, onUpdate }) => {
 };
 const SimpleMarkdown = ({ text }) => { if (!text) return null; const lines = text.split('\n').map((line, index) => { if (line.trim() === '') return <br key={index} />; if (line.match(/\*\*(.*?)\*\*/)) { const content = line.replace(/\*\*/g, ''); return <strong key={index} className="block mt-2 mb-1">{content}</strong>; } if (line.startsWith('* ') || line.startsWith('- ')) { return <li key={index} className="ml-5 list-disc">{line.substring(2)}</li>; } return <p key={index} className="my-1">{line}</p>; }); return <div>{lines}</div>; };
 
-
-// [核心修改] 1. MessageBubble: 精致立体化气泡
+// [核心修改] 视觉: 调整边框颜色和为头像添加边框
 const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate, onTypingComplete, onTypingUpdate }) => {
     const isUser = msg.role === 'user';
-    
-    // 用户气泡：更柔和的蓝色，深邃的同色系阴影，白色文字
     const userBubbleClass = 'bg-blue-500 text-white rounded-br-lg shadow-[0_5px_15px_rgba(59,130,246,0.3),_0_12px_28px_rgba(59,130,246,0.2)]';
-    
-    // AI气泡：纯白背景 + 纤细边框（双层效果）+ 更深邃的阴影
-    const aiBubbleClass = 'bg-white border border-gray-200/50 shadow-[0_5px_15px_rgba(0,0,0,0.12),_0_15px_35px_rgba(0,0,0,0.08)]';
+    // 边框颜色加深
+    const aiBubbleClass = 'bg-white border border-gray-300/70 shadow-[0_5px_15px_rgba(0,0,0,0.12),_0_15px_35px_rgba(0,0,0,0.08)]';
+    // 头像样式
+    const avatarClass = "w-8 h-8 rounded-full shrink-0 border-2 border-white/50 shadow-sm";
 
     return (
         <div className={`flex items-end gap-2.5 my-4 ${isUser ? 'justify-end' : 'justify-start'}`}>
-            {!isUser && <img src={convertGitHubUrl(settings.aiAvatarUrl)} alt="AI Avatar" className="w-8 h-8 rounded-full shrink-0 shadow-sm" />}
+            {!isUser && <img src={convertGitHubUrl(settings.aiAvatarUrl)} alt="AI Avatar" className={avatarClass} />}
             <div className={`p-3 rounded-2xl text-left flex flex-col transition-shadow duration-300 ${isUser ? userBubbleClass : aiBubbleClass}`} style={{ maxWidth: '85%' }}>
                 {msg.images && msg.images.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-2">
                         {msg.images.map((img, index) => <img key={index} src={img.previewUrl} alt={`附件 ${index + 1}`} className="w-24 h-24 object-cover rounded-md" />)}
                     </div>
                 )}
-                {/* 核心修改：为用户气泡添加 prose-white 以便Markdown内容也是白色 */}
                 <div className={`prose prose-sm max-w-none prose-p:my-1 ${isUser ? 'prose-white' : 'text-gray-800'}`}>
                     {isLastAiMessage && msg.isTyping ? <TypingEffect text={msg.content || ''} onComplete={onTypingComplete} onUpdate={onTypingUpdate} /> : <SimpleMarkdown text={msg.content || ''} />}
                 </div>
@@ -122,12 +123,12 @@ const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate, onTypingC
                     </div>
                 )}
             </div>
-            {isUser && <img src={convertGitHubUrl(settings.userAvatarUrl)} alt="User Avatar" className="w-8 h-8 rounded-full shrink-0 shadow-sm" />}
+            {isUser && <img src={convertGitHubUrl(settings.userAvatarUrl)} alt="User Avatar" className={avatarClass} />}
         </div>
     );
 };
 
-// [核心修改] 2. ChatSidebar: 修复交互问题，视觉微调
+// (无核心变化，保留上一版交互修复)
 const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDelete, onRename, prompts, settings }) => {
     const [editingId, setEditingId] = useState(null);
     const [newName, setNewName] = useState('');
@@ -156,7 +157,6 @@ const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDele
         </div>
     );
     return (
-        // 增加 z-index 确保在最前
         <div className={`h-full bg-gray-100/90 backdrop-blur-md flex flex-col transition-all duration-300 z-30 ${isOpen ? 'w-60 p-3 shadow-[10px_0px_20px_rgba(0,0,0,0.1)]' : 'w-0 p-0'} overflow-hidden`}>
              <button onClick={onNew} className="flex items-center justify-center w-full p-2 mb-3 text-sm font-semibold text-gray-700 bg-white/70 rounded-lg hover:bg-gray-200/50 border border-gray-200/80 shadow-sm transition-all">
                 <i className="fas fa-plus mr-2"></i>
@@ -260,7 +260,6 @@ const AiChatAssistant = ({ onClose }) => {
     const removeSelectedImage = (index) => { const imageToRemove = selectedImages[index]; if (imageToRemove) { URL.revokeObjectURL(imageToRemove.previewUrl); } setSelectedImages(prev => prev.filter((_, i) => i !== index)); };
     const handleSubmit = async (isRegenerate = false) => { if (!currentConversation || isLoading || activationState !== 'activated') return; const activeKey = (settings.apiKeys || []).find(k => k.id === settings.activeApiKeyId); if (!activeKey || !activeKey.key) { setError('请在设置中配置并激活一个有效的 API 密钥。'); return; } let messagesForApi = [...currentConversation.messages]; const textToProcess = userInput.trim(); if (isRegenerate) { if (messagesForApi.length > 0 && messagesForApi[messagesForApi.length - 1].role === 'ai') { messagesForApi.pop(); } } else { if (!textToProcess && selectedImages.length === 0) { setError('请输入文字或添加图片后再发送！'); return; } const userMessage = { role: 'user', content: textToProcess, images: selectedImages, timestamp: Date.now() }; const updatedMessages = [...messagesForApi, userMessage]; setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: updatedMessages, promptId: c.promptId || settings.currentPromptId } : c)); messagesForApi = updatedMessages; setUserInput(''); setSelectedImages([]); } if (messagesForApi.length === 0) return; setIsLoading(true); setError(''); abortControllerRef.current = new AbortController(); try { const currentPrompt = (settings.prompts || []).find(p => p.id === currentConversation.promptId) || (settings.prompts || []).find(p => p.id === settings.currentPromptId) || DEFAULT_PROMPTS[0]; const modelInfo = (settings.chatModels || []).find(m => m.value === currentPrompt.model) || (settings.chatModels || [])[0]; const modelToUse = modelInfo.value; const contextLimit = modelInfo.maxContextTokens || 8192; const contextMessages = messagesForApi.slice(-contextLimit); let response; if (activeKey.provider === 'gemini') { const history = contextMessages.map(msg => { const parts = []; if (msg.content) parts.push({ text: msg.content }); if (msg.images) msg.images.forEach(img => parts.push({ inlineData: { mimeType: img.type, data: img.data } })); return { role: msg.role === 'user' ? 'user' : 'model', parts }; }); const contents = [ { role: 'user', parts: [{ text: currentPrompt.content }] }, { role: 'model', parts: [{ text: "好的，我明白了。" }] }, ...history ]; const generationConfig = { temperature: settings.temperature, maxOutputTokens: settings.maxOutputTokens }; if (settings.disableThinkingMode && modelToUse.includes('gemini-2.5')) { generationConfig.thinkingConfig = { thinkingBudget: 0 }; } const url = `${activeKey.url || 'https://generativelanguage.googleapis.com/v1beta/models/'}${modelToUse}:generateContent?key=${activeKey.key}`; response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents, generationConfig }), signal: abortControllerRef.current.signal }); } else if (activeKey.provider === 'openai') { const messages = [ { role: 'system', content: currentPrompt.content }, ...contextMessages.map(msg => ({ role: msg.role === 'user' ? 'user' : 'assistant', content: msg.content })) ]; const url = `${activeKey.url || 'https://api.openai.com/v1'}/chat/completions`; response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${activeKey.key}` }, body: JSON.stringify({ model: modelToUse, messages, temperature: settings.temperature, max_tokens: settings.maxOutputTokens, stream: false }), signal: abortControllerRef.current.signal }); } if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error?.message || `请求失败 (状态码: ${response.status})`); } const data = await response.json(); let aiResponseContent; if (activeKey.provider === 'gemini') { aiResponseContent = data.candidates?.[0]?.content?.parts?.[0]?.text; } else { aiResponseContent = data.choices?.[0]?.message?.content; } if (!aiResponseContent) throw new Error('AI未能返回有效内容。'); const aiMessage = { role: 'ai', content: aiResponseContent, timestamp: Date.now(), isTyping: true }; const finalMessages = [...messagesForApi, aiMessage]; setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: finalMessages } : c)); } catch (err) { const finalMessages = [...messagesForApi]; let errorMessage = `请求错误: ${err.message}`; if (err.name === 'AbortError') errorMessage = '请求被中断，请检查网络连接。'; setError(errorMessage); finalMessages.push({ role: 'ai', content: `抱歉，出错了: ${errorMessage}`, timestamp: Date.now() }); setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, messages: finalMessages } : c)); } finally { setIsLoading(false); } };
     const handleTypingComplete = useCallback(() => { setConversations(prev => prev.map(c => { if (c.id === currentConversationId) { const updatedMessages = c.messages.map((msg, index) => index === c.messages.length - 1 ? { ...msg, isTyping: false } : msg); return { ...c, messages: updatedMessages }; } return c; })); }, [currentConversationId]);
-    const swipeHandlers = useSimpleSwipe({ onSwipeLeft: onClose });
     
     // --- 渲染逻辑 ---
     if (!isMounted || activationState === 'checking') { return <div className="w-full h-full flex items-center justify-center bg-white"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div><p className="ml-3 text-gray-500">正在加载并检查激活状态...</p></div>; }
@@ -271,7 +270,8 @@ const AiChatAssistant = ({ onClose }) => {
     const showSendButton = userInput.trim().length > 0 || selectedImages.length > 0;
     
     return (
-        <div {...swipeHandlers} className="w-full h-full flex flex-col bg-gray-100 text-gray-800">
+        // [核心修改] 移除全局的 swipeHandlers
+        <div className="w-full h-full flex flex-col bg-gray-100 text-gray-800">
             <div className="absolute inset-0 bg-cover bg-center opacity-30" style={{ backgroundImage: `url('${convertGitHubUrl(settings.chatBackgroundUrl)}')`}}></div>
             <div className="absolute inset-0 bg-gray-100/60"></div>
             
@@ -308,7 +308,6 @@ const AiChatAssistant = ({ onClose }) => {
                         <div ref={messagesEndRef} />
                     </main>
 
-                    {/* [核心修改] 恢复 v59 的 footer 样式并增强阴影 */}
                     <footer className="flex-shrink-0 px-4 pt-2 pb-safe bg-gradient-to-t from-gray-100 via-gray-100/80 to-transparent z-10">
                         {error && <div className="mb-2 p-2 bg-red-100 text-red-800 rounded-lg text-center text-sm" onClick={()=>setError('')}>{error} <span className='text-xs'>(点击关闭)</span></div>}
                         
