@@ -1,4 +1,4 @@
-// /components/AiChatAssistant.js - v61 (高端新拟物化 + 侧边栏交互修复版)
+// /components/AiChatAssistant.js - v62 (精致立体感优化版)
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import AiTtsButton from './AiTtsButton';
 import FingerprintJS from '@fingerprintjs/fingerprintjs';
@@ -37,7 +37,7 @@ const DEFAULT_PROMPTS = [
 ];
 const DEFAULT_SETTINGS = {
     apiKey: '',
-    apiKeys: [], 
+    apiKeys: [],
     activeApiKeyId: '',
     chatModels: CHAT_MODELS_LIST,
     selectedModel: 'gemini-2.5-flash',
@@ -87,27 +87,28 @@ const TypingEffect = ({ text, onComplete, onUpdate }) => {
 };
 const SimpleMarkdown = ({ text }) => { if (!text) return null; const lines = text.split('\n').map((line, index) => { if (line.trim() === '') return <br key={index} />; if (line.match(/\*\*(.*?)\*\*/)) { const content = line.replace(/\*\*/g, ''); return <strong key={index} className="block mt-2 mb-1">{content}</strong>; } if (line.startsWith('* ') || line.startsWith('- ')) { return <li key={index} className="ml-5 list-disc">{line.substring(2)}</li>; } return <p key={index} className="my-1">{line}</p>; }); return <div>{lines}</div>; };
 
-// [核心修改] 1. MessageBubble: 新拟物化聊天气泡
+
+// [核心修改] 1. MessageBubble: 精致立体化气泡
 const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate, onTypingComplete, onTypingUpdate }) => {
     const isUser = msg.role === 'user';
     
-    // 新拟物化阴影 (右下深色, 左上亮色)
-    const neumorphicShadow = 'shadow-[8px_8px_16px_#d1d9e6,_-8px_-8px_16px_#ffffff]';
-    const userNeumorphicShadow = 'shadow-[6px_6px_12px_rgba(30,80,180,0.3),_-6px_-6px_12px_rgba(80,180,255,0.4)]';
+    // 用户气泡：更柔和的蓝色，深邃的同色系阴影，白色文字
+    const userBubbleClass = 'bg-blue-500 text-white rounded-br-lg shadow-[0_5px_15px_rgba(59,130,246,0.3),_0_12px_28px_rgba(59,130,246,0.2)]';
     
-    const userBubbleClass = `bg-primary text-white rounded-br-lg ${userNeumorphicShadow}`;
-    const aiBubbleClass = `bg-gray-100 ${neumorphicShadow}`;
+    // AI气泡：纯白背景 + 纤细边框（双层效果）+ 更深邃的阴影
+    const aiBubbleClass = 'bg-white border border-gray-200/50 shadow-[0_5px_15px_rgba(0,0,0,0.12),_0_15px_35px_rgba(0,0,0,0.08)]';
 
     return (
         <div className={`flex items-end gap-2.5 my-4 ${isUser ? 'justify-end' : 'justify-start'}`}>
-            {!isUser && <img src={convertGitHubUrl(settings.aiAvatarUrl)} alt="AI Avatar" className="w-8 h-8 rounded-full shrink-0" />}
+            {!isUser && <img src={convertGitHubUrl(settings.aiAvatarUrl)} alt="AI Avatar" className="w-8 h-8 rounded-full shrink-0 shadow-sm" />}
             <div className={`p-3 rounded-2xl text-left flex flex-col transition-shadow duration-300 ${isUser ? userBubbleClass : aiBubbleClass}`} style={{ maxWidth: '85%' }}>
                 {msg.images && msg.images.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-2">
                         {msg.images.map((img, index) => <img key={index} src={img.previewUrl} alt={`附件 ${index + 1}`} className="w-24 h-24 object-cover rounded-md" />)}
                     </div>
                 )}
-                <div className="prose prose-sm max-w-none prose-p:my-1 text-gray-800">
+                {/* 核心修改：为用户气泡添加 prose-white 以便Markdown内容也是白色 */}
+                <div className={`prose prose-sm max-w-none prose-p:my-1 ${isUser ? 'prose-white' : 'text-gray-800'}`}>
                     {isLastAiMessage && msg.isTyping ? <TypingEffect text={msg.content || ''} onComplete={onTypingComplete} onUpdate={onTypingUpdate} /> : <SimpleMarkdown text={msg.content || ''} />}
                 </div>
                 {!isUser && msg.content && !msg.isTyping && (
@@ -121,12 +122,12 @@ const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate, onTypingC
                     </div>
                 )}
             </div>
-            {isUser && <img src={convertGitHubUrl(settings.userAvatarUrl)} alt="User Avatar" className="w-8 h-8 rounded-full shrink-0" />}
+            {isUser && <img src={convertGitHubUrl(settings.userAvatarUrl)} alt="User Avatar" className="w-8 h-8 rounded-full shrink-0 shadow-sm" />}
         </div>
     );
 };
 
-// [核心修改] 2. ChatSidebar: 修复交互并应用新拟物化风格
+// [核心修改] 2. ChatSidebar: 修复交互问题，视觉微调
 const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDelete, onRename, prompts, settings }) => {
     const [editingId, setEditingId] = useState(null);
     const [newName, setNewName] = useState('');
@@ -144,8 +145,7 @@ const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDele
     }, [conversations, prompts]);
     
     const renderConversationItem = (conv) => (
-        // 按下效果: shadow-inner, 选中时: bg-primary/10
-        <div key={conv.id} className={`group flex items-center p-2 rounded-md cursor-pointer transition-all duration-200 ${currentId === conv.id ? 'bg-primary/10 shadow-[inset_3px_3px_5px_#d1d9e6,_inset_-3px_-3px_5px_#ffffff]' : 'hover:bg-gray-200/50'}`} onClick={() => onSelect(conv.id)}>
+        <div key={conv.id} className={`group flex items-center p-2 rounded-md cursor-pointer transition-all duration-200 ${currentId === conv.id ? 'bg-primary/10' : 'hover:bg-gray-200/50'}`} onClick={() => onSelect(conv.id)}>
             <div className="flex-grow truncate" onDoubleClick={(e) => { e.stopPropagation(); handleRename(conv.id, conv.title); }}>
                 {editingId === conv.id ? ( <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} onBlur={() => handleSaveRename(conv.id)} onKeyDown={(e) => e.key === 'Enter' && handleSaveRename(conv.id)} className="w-full bg-transparent p-0 border-b border-gray-400" autoFocus /> ) : ( <span className={`text-sm ${currentId === conv.id ? 'text-primary font-semibold' : ''}`}>{conv.title}</span> )}
             </div>
@@ -156,9 +156,9 @@ const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDele
         </div>
     );
     return (
-        // 应用新拟物化阴影, 增加 z-index 确保在最前
-        <div className={`h-full bg-gray-100 flex flex-col transition-all duration-300 z-30 ${isOpen ? 'w-60 p-3 shadow-[10px_0px_20px_rgba(0,0,0,0.1)]' : 'w-0 p-0'} overflow-hidden`}>
-             <button onClick={onNew} className="flex items-center justify-center w-full p-2 mb-3 text-sm font-semibold text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 shadow-[5px_5px_10px_#d1d9e6,_-5px_-5px_10px_#ffffff] active:shadow-[inset_5px_5px_10px_#d1d9e6,_inset_-5px_-5px_10px_#ffffff] transition-all">
+        // 增加 z-index 确保在最前
+        <div className={`h-full bg-gray-100/90 backdrop-blur-md flex flex-col transition-all duration-300 z-30 ${isOpen ? 'w-60 p-3 shadow-[10px_0px_20px_rgba(0,0,0,0.1)]' : 'w-0 p-0'} overflow-hidden`}>
+             <button onClick={onNew} className="flex items-center justify-center w-full p-2 mb-3 text-sm font-semibold text-gray-700 bg-white/70 rounded-lg hover:bg-gray-200/50 border border-gray-200/80 shadow-sm transition-all">
                 <i className="fas fa-plus mr-2"></i>
                 新对话
             </button>
@@ -271,9 +271,7 @@ const AiChatAssistant = ({ onClose }) => {
     const showSendButton = userInput.trim().length > 0 || selectedImages.length > 0;
     
     return (
-        // [核心修改] 整体背景色调整为浅灰，为新拟物化做铺垫
         <div {...swipeHandlers} className="w-full h-full flex flex-col bg-gray-100 text-gray-800">
-            {/* 保留背景图，但覆盖一层浅灰色蒙版 */}
             <div className="absolute inset-0 bg-cover bg-center opacity-30" style={{ backgroundImage: `url('${convertGitHubUrl(settings.chatBackgroundUrl)}')`}}></div>
             <div className="absolute inset-0 bg-gray-100/60"></div>
             
@@ -285,15 +283,13 @@ const AiChatAssistant = ({ onClose }) => {
                     onSelect={handleSelectConversation} 
                     onDelete={handleDeleteConversation} 
                     onRename={handleRenameConversation}
-                    onNew={() => createNewConversation()} // 传递 onNew 方法
+                    onNew={() => createNewConversation()}
                     prompts={settings.prompts} 
                     settings={settings} 
                 />
                 
-                {/* 修复侧边栏交互：为移动端遮罩层设置较低的 z-index */}
                 {isSidebarOpen && ( <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/20 z-20 md:hidden"></div> )}
                 
-                {/* 修复侧边栏交互：为主要内容区设置 z-index */}
                 <div className="flex-1 flex flex-col h-full min-w-0 z-10">
                     <header className="flex items-center justify-between py-1 px-2 shrink-0 bg-gray-100/80 backdrop-blur-sm border-b border-gray-200/50">
                         <div className="w-10"> <button onClick={() => setIsSidebarOpen(s => !s)} className="p-2 rounded-full hover:bg-black/10" title="切换侧边栏"><i className="fas fa-bars"></i></button> </div>
@@ -312,10 +308,10 @@ const AiChatAssistant = ({ onClose }) => {
                         <div ref={messagesEndRef} />
                     </main>
 
-                    <footer className="flex-shrink-0 px-4 pt-2 pb-safe bg-gray-100/80 backdrop-blur-sm z-10 border-t border-gray-200/50">
+                    {/* [核心修改] 恢复 v59 的 footer 样式并增强阴影 */}
+                    <footer className="flex-shrink-0 px-4 pt-2 pb-safe bg-gradient-to-t from-gray-100 via-gray-100/80 to-transparent z-10">
                         {error && <div className="mb-2 p-2 bg-red-100 text-red-800 rounded-lg text-center text-sm" onClick={()=>setError('')}>{error} <span className='text-xs'>(点击关闭)</span></div>}
                         
-                        {/* [核心修改] 保留原有的三个按钮 */}
                         <div className="flex items-center justify-start gap-3 mb-2 max-w-2xl mx-auto">
                              <button onClick={() => createNewConversation()} className="flex items-center gap-2 px-3 py-1 bg-white/50 border border-gray-300 rounded-full text-sm hover:bg-gray-100" title="新对话">
                                 <i className="fas fa-plus"></i>
@@ -342,24 +338,22 @@ const AiChatAssistant = ({ onClose }) => {
                             </div>
                         )}
 
-                        {/* [核心修改] 新拟物化输入框面板 */}
-                        <form onSubmit={(e)=>{e.preventDefault();handleSubmit(false)}} className="flex items-end w-full max-w-2xl mx-auto p-2 bg-gray-100 rounded-2xl shadow-[10px_10px_20px_#bebebe,_-10px_-10px_20px_#ffffff]">
+                        <form onSubmit={(e)=>{e.preventDefault();handleSubmit(false)}} className="flex items-end w-full max-w-2xl mx-auto p-2 bg-white backdrop-blur-sm rounded-2xl border border-gray-200/80 transition-shadow duration-300 ease-in-out hover:shadow-2xl focus-within:shadow-2xl shadow-[0_-10px_25px_rgba(0,0,0,0.1),_0_-5px_10px_rgba(0,0,0,0.06)]">
                             <input type="file" ref={imageInputRef} onChange={handleImageSelection} accept="image/*" multiple className="hidden" />
-                            <div className="flex items-center flex-shrink-0 mr-1">
-                                <button type="button" onClick={triggerImageInput} className="p-2 rounded-full hover:bg-gray-200 active:shadow-[inset_2px_2px_4px_#bebebe,_inset_-2px_-2px_4px_#ffffff]" title="选择图片"><i className="fas fa-image text-xl text-gray-500"></i></button>
-                                <button type="button" onClick={triggerCameraInput} className="p-2 rounded-full hover:bg-gray-200 active:shadow-[inset_2px_2px_4px_#bebebe,_inset_-2px_-2px_4px_#ffffff]" title="拍照"><i className="fas fa-camera text-xl text-gray-500"></i></button>
+                             <div className="flex items-center flex-shrink-0 mr-1">
+                                <button type="button" onClick={triggerImageInput} className="p-2 rounded-full hover:bg-gray-200" title="选择图片"><i className="fas fa-image text-xl text-gray-500"></i></button>
+                                <button type="button" onClick={triggerCameraInput} className="p-2 rounded-full hover:bg-gray-200" title="拍照"><i className="fas fa-camera text-xl text-gray-500"></i></button>
                             </div>
                             
-                            {/* 内凹的输入框 */}
-                            <textarea ref={textareaRef} value={userInput} onChange={(e) => setUserInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(false); } }} placeholder="与 AI 聊天..." className="flex-1 bg-gray-100 focus:outline-none text-gray-800 text-base resize-none overflow-hidden mx-2 py-2 px-3 rounded-lg shadow-[inset_5px_5px_10px_#bebebe,_inset_-5px_-5px_10px_#ffffff] leading-6 max-h-36 placeholder-gray-500" rows="1" style={{minHeight:'2.5rem'}} />
+                            <textarea ref={textareaRef} value={userInput} onChange={(e) => setUserInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(false); } }} placeholder="与 AI 聊天..." className="flex-1 bg-transparent focus:outline-none text-gray-800 text-base resize-none overflow-hidden mx-2 py-1 leading-6 max-h-36 placeholder-gray-500" rows="1" style={{minHeight:'2.5rem'}} />
                             
                             <div className="flex items-center flex-shrink-0 ml-1">
                                 {!showSendButton ? (
-                                    <button type="button" onClick={isListening ? stopListening : startListening} className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${isListening ? 'text-white bg-red-500 animate-pulse' : 'text-gray-500 hover:bg-gray-200 active:shadow-[inset_2px_2px_4px_#bebebe,_inset_-2px_-2px_4px_#ffffff]'}`} title="语音输入">
+                                    <button type="button" onClick={isListening ? stopListening : startListening} className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${isListening ? 'text-white bg-red-500 animate-pulse' : 'text-gray-500 hover:bg-gray-200'}`} title="语音输入">
                                         <i className="fas fa-microphone text-xl"></i>
                                     </button>
                                 ) : (
-                                    <button type="submit" className="w-10 h-10 flex items-center justify-center bg-primary text-white rounded-full shadow-lg shadow-blue-500/30 hover:bg-blue-700 disabled:opacity-50 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95" disabled={isLoading}>
+                                    <button type="submit" className="w-10 h-10 flex items-center justify-center bg-primary text-white rounded-full shadow-md hover:bg-blue-700 disabled:opacity-50 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95" disabled={isLoading}>
                                         <i className="fas fa-arrow-up text-xl"></i>
                                     </button>
                                 )}
