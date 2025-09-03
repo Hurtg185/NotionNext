@@ -1,9 +1,9 @@
-// /components/AiTtsButton.js - v68 (最终精准朗读规则修正版)
+// /components/AiTtsButton.js - v69 (最终精准朗读规则 + 可调语速修正版)
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { TTS_ENGINE } from './AiChatAssistant'; // 从主组件导入引擎类型
+import { TTS_ENGINE } from './AiChatAssistant';
 
 /**
- * [核心修正] 更新文本清理规则，精准移除各类拼音，保留()内非拼音内容
+ * [核心修正] 更新文本清理规则: 外面拼音朗读, ()里拼音不朗读, 【】不朗读
  * @param {string} text - 原始文本
  * @returns {string} - 清理后的文本
  */
@@ -12,21 +12,14 @@ const cleanTextForSpeech = (text) => {
   
   let cleaned = text;
 
-  // 规则 1: 移除【】或[]及其内部的所有内容 (最高优先级)
+  // 规则 1: 全局移除【】或[]及其内部的所有内容
   cleaned = cleaned.replace(/【.*?】|\[.*?\]/g, '');
 
-  // 规则 2: [核心修正] 移除各类拼音 (带声调符号、带声调数字、不带声调)
-  // 这个正则表达式会匹配由小写字母、声调符号组成的独立单词，或带数字声调的单词
-  // 它不会错误地移除 "Hello" 或 "API" 这样的大写开头的英文单词
+  // 规则 2: [核心修正] 只移除括号()内部的拼音
   const pinyinRegex = /\b([a-zA-Z\u00FC\u00DC\u00E1\u00E9\u00ED\u00F3\u00FA\u0101\u0113\u012B\u014D\u016B\u01CE\u01D0\u01D2\u01D4\u01D6\u01D8\u01DA\u01DC\u00E0\u00E8\u00EC\u00F2\u00F9\u0103\u0115\u012D\u014F\u016D\u0105\u0117\u012F\u0151\u016F]+[1-5]?)\b\s*/g;
-  cleaned = cleaned.replace(pinyinRegex, (match, p1) => {
-      // 添加一个例外，如果匹配到的词是常见的英文小写单词，则不移除
-      const commonEnglishWords = new Set(['a', 'an', 'the', 'is', 'are', 'was', 'were', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'and', 'or', 'but', 'i']);
-      const wordOnly = p1.replace(/[1-5]/, '');
-      if (commonEnglishWords.has(wordOnly.toLowerCase())) {
-          return match; // 如果是常见英文小写单词，则保留
-      }
-      return ''; // 否则，移除拼音
+  cleaned = cleaned.replace(/\((.*?)\)/g, (match, contentInsideParentheses) => {
+    // 只对括号内的内容应用拼音移除规则
+    return contentInsideParentheses.replace(pinyinRegex, '');
   });
 
   // 规则 3: 移除 Markdown 格式
@@ -35,9 +28,6 @@ const cleanTextForSpeech = (text) => {
   // 规则 4: 移除 Emoji
   const emojiRegex = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/g;
   cleaned = cleaned.replace(emojiRegex, '');
-
-  // 规则 5: 将括号()替换为空格，以保留其内部的文字
-  cleaned = cleaned.replace(/[()]/g, ' ');
 
   // 最后，清理多余的空格并返回
   return cleaned.replace(/\s+/g, ' ').trim();
@@ -51,7 +41,8 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
   const {
     ttsEngine = TTS_ENGINE.THIRD_PARTY,
     thirdPartyTtsVoice = 'zh-CN-XiaoxiaoMultilingualNeural',
-    systemTtsVoiceURI = ''
+    systemTtsVoiceURI = '',
+    ttsRate = 0, // [核心修正] 接收语速参数，默认为0 (正常语速)
   } = ttsSettings;
 
   useEffect(() => {
@@ -84,11 +75,9 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
         const utterance = new SpeechSynthesisUtterance(cleanedText);
         if (systemTtsVoiceURI) {
           const selectedVoice = window.speechSynthesis.getVoices().find(v => v.voiceURI === systemTtsVoiceURI);
-          if (selectedVoice) {
-            utterance.voice = selectedVoice;
-            utterance.lang = selectedVoice.lang;
-          }
+          if (selectedVoice) utterance.voice = selectedVoice;
         }
+        utterance.rate = Math.max(0.1, Math.min(2, 1 + (ttsRate / 100))); // 将百分比转换为0.1-2的范围
         utterance.onend = () => setPlaybackState('idle');
         utterance.onerror = (e) => { console.error('系统TTS错误:', e); setPlaybackState('idle'); };
         utterance.onpause = () => setPlaybackState('paused');
@@ -98,7 +87,8 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
         window.speechSynthesis.speak(utterance);
         setPlaybackState('playing');
       } else {
-        const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(cleanedText)}&v=${thirdPartyTtsVoice}&r=-20%&&p=0%o=audio-24khz-48kbitrate-mono-mp3`;
+        // [核心修正] 在URL中使用可配置的 ttsRate
+        const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(cleanedText)}&v=${thirdPartyTtsVoice}&r=${ttsRate}%&p=0%&o=audio-24khz-48kbitrate-mono-mp3`;
         const response = await fetch(url);
         if (!response.ok) throw new Error(`API错误 (状态码: ${response.status})`);
         
@@ -121,7 +111,7 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
       console.error('朗读失败:', err);
       setPlaybackState('idle');
     }
-  }, [ttsEngine, thirdPartyTtsVoice, systemTtsVoiceURI]);
+  }, [ttsEngine, thirdPartyTtsVoice, systemTtsVoiceURI, ttsRate]);
 
   const pause = () => {
     if (ttsEngine === TTS_ENGINE.SYSTEM) {
@@ -144,29 +134,17 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
   const handleTogglePlayback = (e) => {
     e.stopPropagation();
     switch (playbackState) {
-      case 'idle':
-        synthesizeSpeech(text);
-        break;
-      case 'playing':
-        pause();
-        break;
-      case 'paused':
-        resume();
-        break;
-      default:
-        break;
+      case 'idle': synthesizeSpeech(text); break;
+      case 'playing': pause(); break;
+      case 'paused': resume(); break;
+      default: break;
     }
   };
   
   const renderIcon = () => {
     switch (playbackState) {
       case 'loading':
-        return (
-          <svg className="animate-spin h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-        );
+        return <svg className="animate-spin h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>;
       case 'playing':
         return <i className="fas fa-volume-mute h-5 w-5 flex items-center justify-center"></i>;
       case 'paused':
