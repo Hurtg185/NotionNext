@@ -1,123 +1,122 @@
 // components/SplashScreen.js
-// 进站广告：视频版本，并添加了可点击链接
+// 进站广告：视频版本（优化版，最大化自动播放成功率）
 
 import { useState, useEffect, useRef } from 'react';
 import SmartLink from '@/components/SmartLink';
 
+// --- 配置区域 ---
+// 你的 Facebook 公共主页链接
+const FACEBOOK_PAGE_URL = 'https://www.facebook.com/share/16fpFsbhh2/';
+// 视频文件路径（确保在 public 目录下）
+const VIDEO_SRC = '/images/kaipingshiping.mp4';
+// 闪屏总持续时间（毫秒）
+const SPLASH_DURATION_MS = 3000;
+// -----------------
+
 const SplashScreen = () => {
   const [show, setShow] = useState(false);
-  const [countdown, setCountdown] = useState(3); // 初始倒计时时间设为 3 秒
-  const videoRef = useRef(null); // 用于控制视频播放
+  const [countdown, setCountdown] = useState(SPLASH_DURATION_MS / 1000);
+  const videoRef = useRef(null);
 
-  // --- 在这里定义您的 Facebook 公共主页链接 ---
-  const facebookPageUrl = 'https://www.facebook.com/share/16fpFsbhh2/'; // <-- 替换为您真实的 Facebook 公共主页链接
-  // --- 定义结束 ---
-
-  // 定义视频路径和闪屏持续时间
-  const videoSrc = '/images/kaipingshiping.mp4'; // <-- 确保您的视频在此路径，且命名为 kaipingshiping.mp4
-  const splashDuration = 3000; // 闪屏总持续时间设为 3 秒 (3000毫秒)
-
-  // 统一的隐藏闪屏逻辑
+  // 统一的隐藏闪屏逻辑，确保只执行一次
   const hideSplash = () => {
+    // 使用一个 ref 来防止重复调用
+    if (window.splashHasBeenHidden) return;
+    window.splashHasBeenHidden = true;
+
     setShow(false);
     sessionStorage.setItem('hasSeenSplashScreen', 'true');
   };
 
   useEffect(() => {
+    // 重置状态，防止在开发模式下的热重载导致逻辑错误
+    window.splashHasBeenHidden = false;
     const hasSeenSplash = sessionStorage.getItem('hasSeenSplashScreen');
-    let interval;
-    let timer;
 
-    if (!hasSeenSplash) {
-      setShow(true);
-      setCountdown(splashDuration / 1000); // 根据总时长设置倒计时初始值
-
-      const videoElement = videoRef.current;
-
-      // 确保在组件卸载时清理所有副作用
-      const cleanup = () => {
-        clearTimeout(timer);
-        clearInterval(interval);
-        if (videoElement) {
-          videoElement.onended = null;
-          // videoElement.oncanplay = null; // 移除 onCanPlay 监听，交给 autoplay 属性和用户交互
-        }
-      };
-
-      if (videoElement) {
-        // 如果视频已经准备好，尝试播放 (即使 autoplay 失败，这个也可以作为尝试)
-        // 主要是依赖 autoplay 属性和用户交互
-        if (videoElement.readyState >= 3 && videoElement.paused) { // 检查是否已准备好且暂停
-            videoElement.play().catch(error => {
-                console.warn("Initial video play attempt failed:", error);
-            });
-        }
-        
-        // 监听视频播放结束事件，如果视频比倒计时短，就提前关闭闪屏
-        videoElement.onended = hideSplash;
-      }
-
-      // 倒计时逻辑
-      interval = setInterval(() => {
-        setCountdown(prev => {
-          if (prev <= 1) {
-            clearInterval(interval);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-
-      // 确保闪屏在指定时间后关闭，无论视频是否播放完毕
-      timer = setTimeout(hideSplash, splashDuration);
-
-      return cleanup; // 返回清理函数
+    if (hasSeenSplash) {
+      return; // 如果已经看过，则直接退出
     }
-  }, []); // 空依赖数组表示只在组件首次挂载时运行一次
+
+    setShow(true);
+
+    const videoElement = videoRef.current;
+    if (!videoElement) return;
+
+    // --- 核心播放逻辑 ---
+    // 1. 尝试使用 video.play() 方法播放，它返回一个 Promise
+    const playPromise = videoElement.play();
+
+    if (playPromise !== undefined) {
+      playPromise.then(() => {
+        // 自动播放成功！
+        console.log("视频自动播放成功。");
+      }).catch(error => {
+        // 自动播放失败。这很常见。
+        // 浏览器通常会阻止它，直到用户与页面交互。
+        // 我们不需要在这里做什么，因为 `autoplay` 属性和用户的点击会作为后备。
+        console.warn("视频自动播放被浏览器阻止:", error);
+      });
+    }
+    // --------------------
+
+    // 监听视频播放结束事件，如果视频比倒计时短，就提前关闭闪屏
+    videoElement.addEventListener('ended', hideSplash);
+
+    // 设置倒计时
+    const interval = setInterval(() => {
+      setCountdown(prev => (prev > 1 ? prev - 1 : 0));
+    }, 1000);
+
+    // 设置一个最终的“保险”定时器，确保闪屏在指定时间后一定关闭
+    const fallbackTimer = setTimeout(hideSplash, SPLASH_DURATION_MS);
+
+    // --- 清理函数 ---
+    // 在组件卸载时，清除所有的定时器和事件监听器，防止内存泄漏
+    return () => {
+      clearInterval(interval);
+      clearTimeout(fallbackTimer);
+      if (videoElement) {
+        videoElement.removeEventListener('ended', hideSplash);
+      }
+    };
+  }, []); // 空依赖数组确保此 effect 只在组件首次挂载时运行一次
+
+  // 跳过按钮的点击处理
+  const handleSkip = (e) => {
+    e.stopPropagation(); // 阻止点击事件冒泡到外层的 SmartLink，防止页面跳转
+    hideSplash();
+  };
 
   if (!show) {
-    return null; // 如果不显示，则不渲染任何内容
+    return null;
   }
 
   return (
-    // 全屏覆盖的容器
     <div
       className={`fixed top-0 left-0 w-full h-full bg-black z-[9999] transition-opacity duration-500 ease-out ${
         show ? 'opacity-100' : 'opacity-0 pointer-events-none'
       }`}
     >
-      <SmartLink href={facebookPageUrl} className="block w-full h-full">
-        {/* 您的广告视频 */}
+      {/* 整个区域可点击跳转 */}
+      <SmartLink href={FACEBOOK_PAGE_URL} className="block w-full h-full cursor-pointer">
         <video
           ref={videoRef}
-          src={videoSrc}
-          alt="课程推广视频"
+          src={VIDEO_SRC}
           className="w-full h-full object-cover"
-          muted // 建议默认静音，避免突兀的声音
-          playsInline // iOS Safari 上的重要属性，允许内联播放
-          autoplay // <-- 新增：直接在标签上添加 autoplay 属性
-          preload="auto" // 预加载视频以加快播放
-          // 可以在这里添加 onPlay, onPause 事件进行调试
-          // onPlay={() => console.log('Video started playing')}
-          // onPause={() => console.log('Video paused')}
+          // --- 这是确保自动播放最关键的三个属性 ---
+          autoPlay  // 尝试自动播放
+          muted     // 必须静音
+          playsInline // 在 iOS 上必须内联播放
+          // -----------------------------------------
+          preload="auto" // 建议浏览器尽快加载视频数据
         />
       </SmartLink>
       
-      {/* 为“跳过”按钮的 onClick 添加 e.stopPropagation() */}
       <button
-        onClick={(e) => {
-          e.stopPropagation(); // 阻止点击事件冒泡到 SmartLink
-          // 在用户点击“跳过”时，尝试播放视频 (用户交互后通常允许播放)
-          if (videoRef.current && videoRef.current.paused) {
-            videoRef.current.play().catch(error => {
-              console.warn("Video play on skip failed:", error);
-            });
-          }
-          hideSplash(); // 使用统一的隐藏逻辑
-        }}
-        className="absolute top-4 right-4 bg-black/30 text-white text-sm px-3 py-1 rounded-full backdrop-blur-sm"
+        onClick={handleSkip}
+        className="absolute top-5 right-5 bg-black/40 text-white text-sm px-4 py-2 rounded-full backdrop-blur-sm transition-transform hover:scale-105 active:scale-95"
       >
-        跳过 {countdown > 0 && `(${countdown}s)`} {/* 显示倒计时 */}
+        跳过 {countdown > 0 ? `(${countdown})` : ''}
       </button>
     </div>
   );
