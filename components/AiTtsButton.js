@@ -42,7 +42,7 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
     ttsEngine = TTS_ENGINE.THIRD_PARTY,
     thirdPartyTtsVoice = 'zh-CN-XiaoxiaoMultilingualNeural',
     systemTtsVoiceURI = '',
-    ttsRate = 0, // [核心修正] 接收语速参数，默认为0 (正常语速)
+    ttsRate = -68, // [核心修正] 接收语速参数，默认为0 (正常语速)
   } = ttsSettings;
 
   useEffect(() => {
