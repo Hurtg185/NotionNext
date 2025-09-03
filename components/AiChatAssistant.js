@@ -40,7 +40,7 @@ const AiTtsButtonModified = ({ text, ttsSettings }) => {
 };
 
 const TypingEffect = ({ text, onComplete, onUpdate }) => {
-    const [displayedText, setDisplayedText] useState('');
+    const [displayedText, setDisplayedText] = useState('');
     useEffect(() => {
         if (!text) return; setDisplayedText(''); let index = 0;
         const intervalId = setInterval(() => {
