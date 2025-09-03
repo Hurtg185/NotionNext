@@ -41,7 +41,7 @@ const DEFAULT_SETTINGS = {
     ttsEngine: TTS_ENGINE.THIRD_PARTY, 
     thirdPartyTtsConfig: { provider: 'microsoft', microsoftVoice: 'zh-CN-XiaoxiaoMultilingualNeural', apiUrl: '', apiKey: '', model: 'tts-1', voice: 'alloy', }, 
     systemTtsVoiceURI: '', 
-    ttsRate: 0, // [新增] 语速设置，0为正常速度
+    ttsRate: -50, // [新增] 语速设置，0为正常速度
     speechLanguage: 'zh-CN', 
     chatBackgroundUrl: '/images/chat-bg-light.jpg', 
     backgroundOpacity: 70, // [修改] 背景图透明度默认值提高
