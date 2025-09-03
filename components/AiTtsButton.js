@@ -1,8 +1,9 @@
+// /components/AiTtsButton.js - v64 (现代化样式 + 精准朗读规则版)
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { TTS_ENGINE } from './AiChatAssistant'; // 从主组件导入引擎类型
 
 /**
- * 清理文本，移除不适合朗读的字符，包括Markdown、括号内的拼音和注释。
+ * [核心修改] 更新文本清理规则
  * @param {string} text - 原始文本
  * @returns {string} - 清理后的文本
  */
@@ -10,20 +11,23 @@ const cleanTextForSpeech = (text) => {
   if (!text) return '';
   // 移除 Markdown 格式
   let cleaned = text.replace(/\*\*/g, '').replace(/#{1,6}\s/g, '').replace(/[-*]\s/g, '');
-  // 移除括号里的拼音或英文注释（同时处理中英文括号）
-  cleaned = cleaned.replace(/（[^）]*）/g, '').replace(/\([^)]*\)/g, '');
-  // 移除一些可能被误读的符号，可以根据需要添加
-  cleaned = cleaned.replace(/[【】]/g, '');
+  
+  // [朗读规则] 移除【】及其内容、拼音
+  cleaned = cleaned.replace(/【.*?】|\[.*?\]/g, ''); 
+  cleaned = cleaned.replace(/\b[a-zA-ZüÜ]+[1-5]\b\s*/g, '');
+
+  // 移除 Emoji (保留，因为不希望朗读表情)
+  const emojiRegex = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/g;
+  cleaned = cleaned.replace(emojiRegex, '');
+
   return cleaned.trim();
 };
 
 const AiTtsButton = ({ text, ttsSettings = {} }) => {
-  // 使用一个更详细的状态机来管理播放状态：'idle', 'loading', 'playing', 'paused'
   const [playbackState, setPlaybackState] = useState('idle');
   const audioRef = useRef(null);
   const utteranceRef = useRef(null);
   
-  // 从 ttsSettings 中解构出引擎类型，方便在组件内使用
   const {
     ttsEngine = TTS_ENGINE.THIRD_PARTY,
     thirdPartyTtsVoice = 'zh-CN-XiaoxiaoMultilingualNeural',
@@ -33,13 +37,11 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
   // 组件卸载时的清理函数
   useEffect(() => {
     return () => {
-      // 停止所有语音活动
       if (window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
       if (audioRef.current) {
         audioRef.current.pause();
-        // 如果是 blob URL，需要释放以防内存泄漏
         if (audioRef.current.src && audioRef.current.src.startsWith('blob:')) {
           URL.revokeObjectURL(audioRef.current.src);
         }
@@ -52,8 +54,6 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
     if (!cleanedText) return;
 
     setPlaybackState('loading');
-
-    // 停止任何正在进行的朗读
     window.speechSynthesis.cancel();
     if (audioRef.current) audioRef.current.pause();
 
@@ -68,11 +68,7 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
           }
         }
         utterance.onend = () => setPlaybackState('idle');
-        utterance.onerror = (e) => {
-          console.error('系统TTS错误:', e);
-          setPlaybackState('idle');
-        };
-        // 监听暂停和恢复事件，以处理从浏览器开发者工具或其他地方触发的暂停/恢复
+        utterance.onerror = (e) => { console.error('系统TTS错误:', e); setPlaybackState('idle'); };
         utterance.onpause = () => setPlaybackState('paused');
         utterance.onresume = () => setPlaybackState('playing');
 
@@ -94,13 +90,10 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
         audio.onended = () => setPlaybackState('idle');
         audio.onpause = () => setPlaybackState('paused');
         audio.onplay = () => setPlaybackState('playing');
-        audio.onerror = () => {
-          console.error('音频播放错误');
-          setPlaybackState('idle');
-        };
+        audio.onerror = () => { console.error('音频播放错误'); setPlaybackState('idle'); };
         
         await audio.play();
-        setPlaybackState('playing'); // 成功开始播放后更新状态
+        setPlaybackState('playing');
       }
     } catch (err) {
       console.error('朗读失败:', err);
@@ -114,7 +107,6 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
     } else if (audioRef.current) {
       audioRef.current.pause();
     }
-    // 注意：状态会由 onpause 事件处理器更新，但为了立即响应UI，也可以在这里设置
     setPlaybackState('paused');
   };
 
@@ -124,7 +116,6 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
     } else if (audioRef.current) {
       audioRef.current.play();
     }
-    // 注意：状态会由 onplay/onresume 事件处理器更新
     setPlaybackState('playing');
   };
 
@@ -140,13 +131,11 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
       case 'paused':
         resume();
         break;
-      // 在 'loading' 状态下，按钮被禁用，不会触发点击
       default:
         break;
     }
   };
   
-  // 根据播放状态决定按钮图标
   const renderIcon = () => {
     switch (playbackState) {
       case 'loading':
@@ -157,13 +146,13 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
           </svg>
         );
       case 'playing':
-        // 使用暂停图标
+        // [核心修改] 使用更现代的暂停图标
         return <i className="fas fa-pause h-5 w-5 flex items-center justify-center"></i>;
       case 'paused':
       case 'idle':
       default:
-        // 使用播放图标
-        return <i className="fas fa-volume-up h-5 w-5 flex items-center justify-center"></i>;
+        // [核心修改] 使用更现代的播放图标
+        return <i className="fas fa-play h-5 w-5 flex items-center justify-center"></i>;
     }
   };
 
@@ -171,7 +160,17 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
     <button
       onClick={handleTogglePlayback}
       disabled={playbackState === 'loading'}
-      className={`p-2 rounded-full transition-colors ${playbackState === 'loading' ? 'text-gray-400 cursor-not-allowed' : 'hover:bg-black/10 dark:hover:bg-white/10'}`}
+      // [核心修改] 现代化的按钮样式
+      className={`p-2 rounded-full transition-all duration-200 transform active:scale-90
+        ${playbackState === 'loading' ? 'text-gray-400 cursor-not-allowed' : 'hover:bg-black/10 dark:hover:bg-white/10'}
+        
+        // --- 颜色方案选择 ---
+        // 方案一: 优雅蓝灰色 (默认)
+        text-sky-600
+        
+        // 方案二: 沉稳深灰色 (如需使用，请注释掉上面的颜色，并取消下面的注释)
+        // text-gray-600
+      `}
       title={playbackState === 'playing' ? "暂停" : "朗读"}
     >
       {renderIcon()}
