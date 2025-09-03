@@ -1,9 +1,9 @@
-// /components/AiTtsButton.js - v67 (恢复旧版图标 + 高级朗读规则)
+// /components/AiTtsButton.js - v68 (最终精准朗读规则修正版)
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { TTS_ENGINE } from './AiChatAssistant'; // 从主组件导入引擎类型
 
 /**
- * [核心修改] 更新文本清理规则
+ * [核心修正] 更新文本清理规则，精准移除各类拼音，保留()内非拼音内容
  * @param {string} text - 原始文本
  * @returns {string} - 清理后的文本
  */
@@ -12,11 +12,22 @@ const cleanTextForSpeech = (text) => {
   
   let cleaned = text;
 
-  // 规则 1: 移除【】或[]及其内部的所有内容
+  // 规则 1: 移除【】或[]及其内部的所有内容 (最高优先级)
   cleaned = cleaned.replace(/【.*?】|\[.*?\]/g, '');
 
-  // 规则 2: 移除独立的、带有声调数字的拼音
-  cleaned = cleaned.replace(/\b[a-zA-ZüÜ]+[1-5]\b\s*/g, '');
+  // 规则 2: [核心修正] 移除各类拼音 (带声调符号、带声调数字、不带声调)
+  // 这个正则表达式会匹配由小写字母、声调符号组成的独立单词，或带数字声调的单词
+  // 它不会错误地移除 "Hello" 或 "API" 这样的大写开头的英文单词
+  const pinyinRegex = /\b([a-zA-Z\u00FC\u00DC\u00E1\u00E9\u00ED\u00F3\u00FA\u0101\u0113\u012B\u014D\u016B\u01CE\u01D0\u01D2\u01D4\u01D6\u01D8\u01DA\u01DC\u00E0\u00E8\u00EC\u00F2\u00F9\u0103\u0115\u012D\u014F\u016D\u0105\u0117\u012F\u0151\u016F]+[1-5]?)\b\s*/g;
+  cleaned = cleaned.replace(pinyinRegex, (match, p1) => {
+      // 添加一个例外，如果匹配到的词是常见的英文小写单词，则不移除
+      const commonEnglishWords = new Set(['a', 'an', 'the', 'is', 'are', 'was', 'were', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'and', 'or', 'but', 'i']);
+      const wordOnly = p1.replace(/[1-5]/, '');
+      if (commonEnglishWords.has(wordOnly.toLowerCase())) {
+          return match; // 如果是常见英文小写单词，则保留
+      }
+      return ''; // 否则，移除拼音
+  });
 
   // 规则 3: 移除 Markdown 格式
   cleaned = cleaned.replace(/\*\*/g, '').replace(/#{1,6}\s/g, '').replace(/[-*]\s/g, '');
@@ -43,7 +54,6 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
     systemTtsVoiceURI = ''
   } = ttsSettings;
 
-  // 组件卸载时的清理函数
   useEffect(() => {
     return () => {
       if (window.speechSynthesis) {
@@ -60,7 +70,10 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
 
   const synthesizeSpeech = useCallback(async (textToSpeak) => {
     const cleanedText = cleanTextForSpeech(textToSpeak);
-    if (!cleanedText) return;
+    if (!cleanedText) {
+      console.log("没有可朗读的内容。");
+      return;
+    }
 
     setPlaybackState('loading');
     window.speechSynthesis.cancel();
@@ -155,12 +168,10 @@ const AiTtsButton = ({ text, ttsSettings = {} }) => {
           </svg>
         );
       case 'playing':
-        // 恢复以前的暂停图标 (音量+静音)
         return <i className="fas fa-volume-mute h-5 w-5 flex items-center justify-center"></i>;
       case 'paused':
       case 'idle':
       default:
-        // 恢复以前的播放图标 (音量)
         return <i className="fas fa-volume-up h-5 w-5 flex items-center justify-center"></i>;
     }
   };
