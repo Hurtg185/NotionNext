@@ -1,4 +1,4 @@
-// /components/AiChatAssistant.js - v60 (高端立体视觉效果 + 侧边栏修复版)
+// /components/AiChatAssistant.js - v61 (高端新拟物化 + 侧边栏交互修复版)
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import AiTtsButton from './AiTtsButton';
 import FingerprintJS from '@fingerprintjs/fingerprintjs';
@@ -60,7 +60,7 @@ const DEFAULT_SETTINGS = {
 
 // --- 子组件 ---
 
-// 修改：支持朗读括号里的文字, 不朗读表情 (无变化)
+// (无变化)
 const AiTtsButtonModified = ({ text, ttsSettings }) => {
     const emojiRegex = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/g;
     const modifiedText = text ? text.replace(emojiRegex, '') : '';
@@ -87,20 +87,21 @@ const TypingEffect = ({ text, onComplete, onUpdate }) => {
 };
 const SimpleMarkdown = ({ text }) => { if (!text) return null; const lines = text.split('\n').map((line, index) => { if (line.trim() === '') return <br key={index} />; if (line.match(/\*\*(.*?)\*\*/)) { const content = line.replace(/\*\*/g, ''); return <strong key={index} className="block mt-2 mb-1">{content}</strong>; } if (line.startsWith('* ') || line.startsWith('- ')) { return <li key={index} className="ml-5 list-disc">{line.substring(2)}</li>; } return <p key={index} className="my-1">{line}</p>; }); return <div>{lines}</div>; };
 
-// [核心修改] 1. MessageBubble: 聊天气泡立体化
+// [核心修改] 1. MessageBubble: 新拟物化聊天气泡
 const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate, onTypingComplete, onTypingUpdate }) => {
     const isUser = msg.role === 'user';
     
-    // 用户气泡样式：更柔和的蓝色阴影，增加立体感
-    const userBubbleClass = 'bg-blue-500 text-white rounded-br-lg shadow-[0_2px_5px_rgba(59,130,246,0.2),_0_8px_20px_rgba(59,130,246,0.1)] shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]';
+    // 新拟物化阴影 (右下深色, 左上亮色)
+    const neumorphicShadow = 'shadow-[8px_8px_16px_#d1d9e6,_-8px_-8px_16px_#ffffff]';
+    const userNeumorphicShadow = 'shadow-[6px_6px_12px_rgba(30,80,180,0.3),_-6px_-6px_12px_rgba(80,180,255,0.4)]';
     
-    // AI气泡样式：多层柔和阴影模拟浮动，内阴影模拟高光增加厚度
-    const aiBubbleClass = 'bg-white/80 backdrop-blur-md shadow-[0_2px_5px_rgba(0,0,0,0.08),_0_8px_20px_rgba(0,0,0,0.04)] shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]';
+    const userBubbleClass = `bg-primary text-white rounded-br-lg ${userNeumorphicShadow}`;
+    const aiBubbleClass = `bg-gray-100 ${neumorphicShadow}`;
 
     return (
         <div className={`flex items-end gap-2.5 my-4 ${isUser ? 'justify-end' : 'justify-start'}`}>
-            {!isUser && <img src={convertGitHubUrl(settings.aiAvatarUrl)} alt="AI Avatar" className="w-8 h-8 rounded-full shrink-0 shadow-sm" />}
-            <div className={`p-3 rounded-2xl text-left flex flex-col ${isUser ? userBubbleClass : aiBubbleClass}`} style={{ maxWidth: '85%' }}>
+            {!isUser && <img src={convertGitHubUrl(settings.aiAvatarUrl)} alt="AI Avatar" className="w-8 h-8 rounded-full shrink-0" />}
+            <div className={`p-3 rounded-2xl text-left flex flex-col transition-shadow duration-300 ${isUser ? userBubbleClass : aiBubbleClass}`} style={{ maxWidth: '85%' }}>
                 {msg.images && msg.images.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-2">
                         {msg.images.map((img, index) => <img key={index} src={img.previewUrl} alt={`附件 ${index + 1}`} className="w-24 h-24 object-cover rounded-md" />)}
@@ -120,18 +121,17 @@ const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate, onTypingC
                     </div>
                 )}
             </div>
-            {isUser && <img src={convertGitHubUrl(settings.userAvatarUrl)} alt="User Avatar" className="w-8 h-8 rounded-full shrink-0 shadow-sm" />}
+            {isUser && <img src={convertGitHubUrl(settings.userAvatarUrl)} alt="User Avatar" className="w-8 h-8 rounded-full shrink-0" />}
         </div>
     );
 };
 
-// [核心修改] 2. ChatSidebar: 修复“新对话”按钮并优化UI
+// [核心修改] 2. ChatSidebar: 修复交互并应用新拟物化风格
 const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDelete, onRename, prompts, settings }) => {
     const [editingId, setEditingId] = useState(null);
     const [newName, setNewName] = useState('');
     const handleRename = (id, oldName) => { setEditingId(id); setNewName(oldName); };
     const handleSaveRename = (id) => { if (newName.trim()) { onRename(id, newName.trim()); } setEditingId(null); };
-    
     const groupedConversations = useMemo(() => {
         const groups = new Map();
         const uncategorized = [];
@@ -142,36 +142,30 @@ const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDele
         });
         return { sortedGroups: Array.from(groups.values()), uncategorized };
     }, [conversations, prompts]);
-
+    
     const renderConversationItem = (conv) => (
-        <div key={conv.id} className={`group flex items-center p-2 rounded-md cursor-pointer ${currentId === conv.id ? 'bg-blue-500/10 text-blue-700 font-semibold' : 'hover:bg-gray-500/10'}`} onClick={() => onSelect(conv.id)}>
+        // 按下效果: shadow-inner, 选中时: bg-primary/10
+        <div key={conv.id} className={`group flex items-center p-2 rounded-md cursor-pointer transition-all duration-200 ${currentId === conv.id ? 'bg-primary/10 shadow-[inset_3px_3px_5px_#d1d9e6,_inset_-3px_-3px_5px_#ffffff]' : 'hover:bg-gray-200/50'}`} onClick={() => onSelect(conv.id)}>
             <div className="flex-grow truncate" onDoubleClick={(e) => { e.stopPropagation(); handleRename(conv.id, conv.title); }}>
-                {editingId === conv.id ? (
-                    <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} onBlur={() => handleSaveRename(conv.id)} onKeyDown={(e) => e.key === 'Enter' && handleSaveRename(conv.id)} className="w-full bg-transparent p-0 border-b border-gray-400 focus:outline-none" autoFocus />
-                ) : (
-                    <span className="text-sm">{conv.title}</span>
-                )}
+                {editingId === conv.id ? ( <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} onBlur={() => handleSaveRename(conv.id)} onKeyDown={(e) => e.key === 'Enter' && handleSaveRename(conv.id)} className="w-full bg-transparent p-0 border-b border-gray-400" autoFocus /> ) : ( <span className={`text-sm ${currentId === conv.id ? 'text-primary font-semibold' : ''}`}>{conv.title}</span> )}
             </div>
-            {/* 保留重命名和删除功能，优化交互 */}
             <div className={`flex items-center shrink-0 space-x-1 transition-opacity ${currentId === conv.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                <button onClick={(e) => { e.stopPropagation(); handleRename(conv.id, conv.title); }} className="p-2 rounded-full hover:bg-gray-500/20" title="重命名"><i className="fas fa-pen w-3 h-3"></i></button>
+                <button onClick={(e) => { e.stopPropagation(); handleRename(conv.id, conv.title); }} className="p-2 rounded-full hover:bg-gray-300" title="重命名"><i className="fas fa-pen w-3 h-3"></i></button>
                 <button onClick={(e) => { e.stopPropagation(); if (window.confirm('确定删除此对话吗？')) onDelete(conv.id); }} className="p-2 rounded-full text-red-500 hover:bg-red-500/10" title="删除"><i className="fas fa-trash w-3 h-3"></i></button>
             </div>
         </div>
     );
-
     return (
-        // 侧边栏升级为磨砂玻璃效果
-        <div className={`h-full bg-white/60 backdrop-blur-lg flex flex-col border-r border-white/20 transition-all duration-300 ${isOpen ? 'w-64 p-3 shadow-2xl' : 'w-0 p-0'} overflow-hidden`}>
-            {/* 新增：独立的、可正常点击的“新对话”按钮 */}
-            <button onClick={onNew} className="flex items-center justify-center w-full p-2 mb-3 text-sm font-semibold text-gray-700 bg-white/70 rounded-lg shadow-sm hover:bg-gray-200/50 border border-gray-200/80 transition-all">
+        // 应用新拟物化阴影, 增加 z-index 确保在最前
+        <div className={`h-full bg-gray-100 flex flex-col transition-all duration-300 z-30 ${isOpen ? 'w-60 p-3 shadow-[10px_0px_20px_rgba(0,0,0,0.1)]' : 'w-0 p-0'} overflow-hidden`}>
+             <button onClick={onNew} className="flex items-center justify-center w-full p-2 mb-3 text-sm font-semibold text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 shadow-[5px_5px_10px_#d1d9e6,_-5px_-5px_10px_#ffffff] active:shadow-[inset_5px_5px_10px_#d1d9e6,_inset_-5px_-5px_10px_#ffffff] transition-all">
                 <i className="fas fa-plus mr-2"></i>
                 新对话
             </button>
             <div className="flex-grow overflow-y-auto space-y-2 -mr-2 pr-2">
                 {groupedConversations.sortedGroups.map(({ prompt, conversations }) => (
                     <details key={prompt.id} className="group" open>
-                        <summary className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-gray-500/10 list-none">
+                        <summary className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-gray-200 list-none">
                             <img src={convertGitHubUrl(prompt.avatarUrl) || convertGitHubUrl(settings.aiAvatarUrl)} alt={prompt.name} className="w-5 h-5 rounded-full object-cover" />
                             <span className="text-xs font-semibold flex-grow">{prompt.name}</span>
                             <i className="fas fa-chevron-down text-xs text-gray-500 transition-transform group-open:rotate-180"></i>
@@ -183,7 +177,7 @@ const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDele
                 ))}
                 {groupedConversations.uncategorized.length > 0 && (
                     <details className="group" open>
-                        <summary className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-gray-500/10 list-none">
+                        <summary className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-gray-200 list-none">
                             <i className="fas fa-folder w-5 h-5 text-gray-500"></i>
                             <span className="text-xs font-semibold flex-grow">未分类对话</span>
                             <i className="fas fa-chevron-down text-xs text-gray-500 transition-transform group-open:rotate-180"></i>
@@ -197,6 +191,7 @@ const ChatSidebar = ({ isOpen, conversations, currentId, onSelect, onNew, onDele
         </div>
     );
 };
+
 // --- 其他子组件 (无核心逻辑修改，仅为保持完整性) ---
 const PromptManager = ({ prompts, onBack, onChange, onAdd, onDelete, settings, microsoftTtsVoices }) => { const swipeHandlers = useSimpleSwipe({ onSwipeLeft: onBack }); return ( <div {...swipeHandlers} className="fixed inset-0 bg-white p-6 flex flex-col z-[9999] animate-fade-in"> <div className="flex items-center justify-between mb-4 shrink-0"> <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-200"><i className="fas fa-arrow-left"></i></button> <h3 className="text-2xl font-bold">提示词工作室</h3> <div className="w-8"></div> </div> <div className="flex-grow overflow-y-auto pr-2 space-y-3"> {(prompts || []).map(p => ( <div key={p.id} className="p-3 bg-gray-50 rounded-md border border-gray-200"> <div className="flex items-center justify-between"> <label className="flex items-center flex-grow cursor-pointer gap-2"> <img src={convertGitHubUrl(p.avatarUrl) || convertGitHubUrl(settings.aiAvatarUrl)} alt={p.name} className="w-6 h-6 rounded-full object-cover"/> <input type="text" value={p.name} onChange={(e) => onChange(p.id, 'name', e.target.value)} className="font-semibold bg-transparent w-full text-lg" /> </label> <button onClick={() => onDelete(p.id)} className="p-2 ml-2 text-sm text-red-500 rounded-full hover:bg-red-500/10"><i className="fas fa-trash"></i></button> </div> {p.id.startsWith('default-') ? ( <div className="w-full mt-2 h-24 p-2 bg-gray-100 border rounded-md text-sm text-gray-500 italic flex items-center justify-center">[内置提示词，内容已隐藏]</div> ) : ( <textarea value={p.content} onChange={(e) => onChange(p.id, 'content', e.target.value)} placeholder="请输入提示词内容..." className="w-full mt-2 h-24 p-2 bg-white border rounded-md text-sm" /> )} <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2 text-sm"> <div><label className="text-xs font-medium">模型:</label><select value={p.model || settings.selectedModel} onChange={(e) => onChange(p.id, 'model', e.target.value)} className="w-full mt-1 px-2 py-1 bg-white border rounded-md text-xs">{(settings.chatModels || []).map(m => <option key={m.id} value={m.value}>{m.name}</option>)}</select></div> <div><label className="text-xs font-medium">声音:</label><select value={p.ttsVoice || settings.thirdPartyTtsVoice} onChange={(e) => onChange(p.id, 'ttsVoice', e.target.value)} className="w-full mt-1 px-2 py-1 bg-white border rounded-md text-xs">{(microsoftTtsVoices || []).map(voice => <option key={voice.value} value={voice.value}>{voice.name}</option>)}</select></div> <div><label className="text-xs font-medium">头像 URL:</label><input type="text" value={p.avatarUrl || ''} onChange={(e) => onChange(p.id, 'avatarUrl', e.target.value)} placeholder="输入头像图片URL" className="w-full mt-1 px-2 py-1 bg-white border rounded-md text-xs" /></div> </div> </div> ))} </div> <button onClick={onAdd} className="w-full mt-4 py-2 bg-green-500 text-white rounded-md shrink-0"><i className="fas fa-plus mr-2"></i>添加新提示词</button> </div> );}
 const ModelManager = ({ models, onBack, onChange, onAdd, onDelete }) => { const swipeHandlers = useSimpleSwipe({ onSwipeLeft: onBack }); return ( <div {...swipeHandlers} className="fixed inset-0 bg-white p-6 flex flex-col z-[9999] animate-fade-in"> <div className="flex items-center justify-between mb-4 shrink-0"> <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-200"><i className="fas fa-arrow-left"></i></button> <h3 className="text-2xl font-bold">模型管理</h3> <div className="w-8"></div> </div> <div className="flex-grow overflow-y-auto pr-2 space-y-3"> {(models || []).map(m => ( <div key={m.id} className="p-3 bg-gray-50 rounded-md border border-gray-200 space-y-2"> <div className="flex items-center justify-between"> <input type="text" value={m.name} onChange={(e) => onChange(m.id, 'name', e.target.value)} placeholder="模型显示名称" className="font-semibold bg-transparent w-full text-lg" /> <button onClick={() => onDelete(m.id)} className="p-2 ml-2 text-sm text-red-500 rounded-full hover:bg-red-500/10"><i className="fas fa-trash"></i></button> </div> <div className="grid grid-cols-2 gap-2 text-sm"> <div> <label className="text-xs font-medium">模型值 (Value)</label> <input type="text" value={m.value} onChange={(e) => onChange(m.id, 'value', e.target.value)} placeholder="例如: gemini-1.5-pro-latest" className="w-full mt-1 px-2 py-1 bg-white border rounded-md text-xs" /> </div> <div> <label className="text-xs font-medium">最大上下文 (Tokens)</label> <input type="number" value={m.maxContextTokens} onChange={(e) => onChange(m.id, 'maxContextTokens', parseInt(e.target.value, 10) || 0)} placeholder="例如: 8192" className="w-full mt-1 px-2 py-1 bg-white border rounded-md text-xs" /> </div> </div> </div> ))} </div> <button onClick={onAdd} className="w-full mt-4 py-2 bg-blue-500 text-white rounded-md shrink-0"><i className="fas fa-plus mr-2"></i>添加新模型</button> </div> ); };
@@ -276,28 +271,31 @@ const AiChatAssistant = ({ onClose }) => {
     const showSendButton = userInput.trim().length > 0 || selectedImages.length > 0;
     
     return (
-        <div {...swipeHandlers} className="w-full h-full flex flex-col bg-cover bg-center text-gray-800" style={{ backgroundImage: `url('${convertGitHubUrl(settings.chatBackgroundUrl)}')`}}>
-            {/* [核心修改] 背景层：使用更柔和的渐变蒙版 */}
-            <div className="absolute inset-0 bg-gradient-to-b from-white/10 via-white/5 to-white/0"></div>
+        // [核心修改] 整体背景色调整为浅灰，为新拟物化做铺垫
+        <div {...swipeHandlers} className="w-full h-full flex flex-col bg-gray-100 text-gray-800">
+            {/* 保留背景图，但覆盖一层浅灰色蒙版 */}
+            <div className="absolute inset-0 bg-cover bg-center opacity-30" style={{ backgroundImage: `url('${convertGitHubUrl(settings.chatBackgroundUrl)}')`}}></div>
+            <div className="absolute inset-0 bg-gray-100/60"></div>
             
-            <div className="relative z-10 flex flex-1 min-h-0">
+            <div className="relative flex flex-1 min-h-0">
                 <ChatSidebar 
                     isOpen={isSidebarOpen} 
                     conversations={conversations} 
                     currentId={currentConversationId} 
                     onSelect={handleSelectConversation} 
                     onDelete={handleDeleteConversation} 
-                    onRename={handleRenameConversation} 
-                    onNew={() => createNewConversation()} // 确保 onNew 被传递
+                    onRename={handleRenameConversation}
+                    onNew={() => createNewConversation()} // 传递 onNew 方法
                     prompts={settings.prompts} 
                     settings={settings} 
                 />
-
-                {isSidebarOpen && ( <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/20 z-10 md:hidden"></div> )}
                 
-                <div className="flex-1 flex flex-col h-full min-w-0">
-                    {/* [核心修改] 顶部导航栏: 应用磨砂玻璃效果 */}
-                    <header className="flex items-center justify-between py-1 px-2 border-b border-white/20 shrink-0 bg-white/60 backdrop-blur-lg shadow-sm">
+                {/* 修复侧边栏交互：为移动端遮罩层设置较低的 z-index */}
+                {isSidebarOpen && ( <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/20 z-20 md:hidden"></div> )}
+                
+                {/* 修复侧边栏交互：为主要内容区设置 z-index */}
+                <div className="flex-1 flex flex-col h-full min-w-0 z-10">
+                    <header className="flex items-center justify-between py-1 px-2 shrink-0 bg-gray-100/80 backdrop-blur-sm border-b border-gray-200/50">
                         <div className="w-10"> <button onClick={() => setIsSidebarOpen(s => !s)} className="p-2 rounded-full hover:bg-black/10" title="切换侧边栏"><i className="fas fa-bars"></i></button> </div>
                         <div className="text-center flex-grow"> <h2 className="text-lg font-semibold truncate">{currentConversation?.title || '聊天'}</h2> {trialExpiryInfo && <div className={`text-xs font-semibold ${keyType === 'trial' ? 'text-green-600' : 'text-yellow-600'}`}>{trialExpiryInfo}</div>} </div>
                         <div className="w-10 flex justify-end"> <button onClick={() => setShowSettings(true)} className="p-2 rounded-full hover:bg-black/10" title="设置"><i className="fas fa-cog"></i></button> </div>
@@ -314,26 +312,26 @@ const AiChatAssistant = ({ onClose }) => {
                         <div ref={messagesEndRef} />
                     </main>
 
-                    {/* [核心修改] 底部输入区域: 应用磨砂玻璃效果和浮动阴影 */}
-                    <footer className="flex-shrink-0 px-4 pt-2 pb-safe bg-white/60 backdrop-blur-lg shadow-[0_-5px_20px_rgba(0,0,0,0.05)] z-10">
+                    <footer className="flex-shrink-0 px-4 pt-2 pb-safe bg-gray-100/80 backdrop-blur-sm z-10 border-t border-gray-200/50">
                         {error && <div className="mb-2 p-2 bg-red-100 text-red-800 rounded-lg text-center text-sm" onClick={()=>setError('')}>{error} <span className='text-xs'>(点击关闭)</span></div>}
                         
+                        {/* [核心修改] 保留原有的三个按钮 */}
                         <div className="flex items-center justify-start gap-3 mb-2 max-w-2xl mx-auto">
-                             <button onClick={() => createNewConversation()} className="flex items-center gap-2 px-3 py-1 bg-white/50 border border-gray-300/80 rounded-full text-sm hover:bg-gray-100/80 shadow-sm" title="新对话">
+                             <button onClick={() => createNewConversation()} className="flex items-center gap-2 px-3 py-1 bg-white/50 border border-gray-300 rounded-full text-sm hover:bg-gray-100" title="新对话">
                                 <i className="fas fa-plus"></i>
-                                <span className="hidden sm:inline">新对话</span>
+                                <span>新对话</span>
                             </button>
-                            <button type="button" onClick={() => setShowModelSelector(true)} className="flex items-center gap-2 px-3 py-1 bg-white/50 border border-gray-300/80 rounded-full text-sm hover:bg-gray-100/80 shadow-sm" title="切换模型">
+                            <button type="button" onClick={() => setShowModelSelector(true)} className="flex items-center gap-2 px-3 py-1 bg-white/50 border border-gray-300 rounded-full text-sm hover:bg-gray-100" title="切换模型">
                                 <i className="fas fa-robot"></i>
                             </button>
-                            <button type="button" onClick={() => setShowAssistantSelector(true)} className="flex items-center gap-2 px-3 py-1 bg-white/50 border border-gray-300/80 rounded-full text-sm hover:bg-gray-100/80 shadow-sm" title="更换助理">
+                            <button type="button" onClick={() => setShowAssistantSelector(true)} className="flex items-center gap-2 px-3 py-1 bg-white/50 border border-gray-300 rounded-full text-sm hover:bg-gray-100" title="更换助理">
                                 <i className="fas fa-user-astronaut"></i>
                             </button>
                         </div>
 
                         {selectedImages.length > 0 && (
                             <div className="max-w-2xl mx-auto mb-2 px-2">
-                                <div className="flex items-center gap-2 overflow-x-auto p-1 bg-gray-100/50 rounded-lg">
+                                <div className="flex items-center gap-2 overflow-x-auto p-1 bg-gray-200/50 rounded-lg">
                                     {selectedImages.map((img, index) => (
                                         <div key={index} className="relative shrink-0">
                                             <img src={img.previewUrl} alt={`preview ${index}`} className="w-16 h-16 object-cover rounded-md" />
@@ -344,23 +342,23 @@ const AiChatAssistant = ({ onClose }) => {
                             </div>
                         )}
 
-                        {/* [核心修改] 输入框表单: 独立的浮动卡片效果 */}
-                        <form onSubmit={(e)=>{e.preventDefault();handleSubmit(false)}} className="flex items-end w-full max-w-2xl mx-auto p-2 bg-white/80 backdrop-blur-md rounded-2xl shadow-[0_4px_10px_rgba(0,0,0,0.1),_0_12px_30px_rgba(0,0,0,0.06)] shadow-[inset_0_1.5px_1px_rgba(255,255,255,0.7)] border border-white/50 transition-all duration-300 ease-in-out hover:shadow-xl focus-within:shadow-xl">
+                        {/* [核心修改] 新拟物化输入框面板 */}
+                        <form onSubmit={(e)=>{e.preventDefault();handleSubmit(false)}} className="flex items-end w-full max-w-2xl mx-auto p-2 bg-gray-100 rounded-2xl shadow-[10px_10px_20px_#bebebe,_-10px_-10px_20px_#ffffff]">
                             <input type="file" ref={imageInputRef} onChange={handleImageSelection} accept="image/*" multiple className="hidden" />
-                             <div className="flex items-center flex-shrink-0 mr-1">
-                                <button type="button" onClick={triggerImageInput} className="p-2 rounded-full hover:bg-gray-500/10" title="选择图片"><i className="fas fa-image text-xl text-gray-500"></i></button>
-                                <button type="button" onClick={triggerCameraInput} className="p-2 rounded-full hover:bg-gray-500/10" title="拍照"><i className="fas fa-camera text-xl text-gray-500"></i></button>
+                            <div className="flex items-center flex-shrink-0 mr-1">
+                                <button type="button" onClick={triggerImageInput} className="p-2 rounded-full hover:bg-gray-200 active:shadow-[inset_2px_2px_4px_#bebebe,_inset_-2px_-2px_4px_#ffffff]" title="选择图片"><i className="fas fa-image text-xl text-gray-500"></i></button>
+                                <button type="button" onClick={triggerCameraInput} className="p-2 rounded-full hover:bg-gray-200 active:shadow-[inset_2px_2px_4px_#bebebe,_inset_-2px_-2px_4px_#ffffff]" title="拍照"><i className="fas fa-camera text-xl text-gray-500"></i></button>
                             </div>
                             
-                            <textarea ref={textareaRef} value={userInput} onChange={(e) => setUserInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(false); } }} placeholder="与 AI 聊天..." className="flex-1 bg-transparent focus:outline-none text-gray-800 text-base resize-none overflow-hidden mx-2 py-1 leading-6 max-h-36 placeholder-gray-500" rows="1" style={{minHeight:'2.5rem'}} />
+                            {/* 内凹的输入框 */}
+                            <textarea ref={textareaRef} value={userInput} onChange={(e) => setUserInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(false); } }} placeholder="与 AI 聊天..." className="flex-1 bg-gray-100 focus:outline-none text-gray-800 text-base resize-none overflow-hidden mx-2 py-2 px-3 rounded-lg shadow-[inset_5px_5px_10px_#bebebe,_inset_-5px_-5px_10px_#ffffff] leading-6 max-h-36 placeholder-gray-500" rows="1" style={{minHeight:'2.5rem'}} />
                             
                             <div className="flex items-center flex-shrink-0 ml-1">
                                 {!showSendButton ? (
-                                    <button type="button" onClick={isListening ? stopListening : startListening} className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${isListening ? 'text-white bg-red-500 animate-pulse' : 'text-gray-500 hover:bg-gray-500/10'}`} title="语音输入">
+                                    <button type="button" onClick={isListening ? stopListening : startListening} className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${isListening ? 'text-white bg-red-500 animate-pulse' : 'text-gray-500 hover:bg-gray-200 active:shadow-[inset_2px_2px_4px_#bebebe,_inset_-2px_-2px_4px_#ffffff]'}`} title="语音输入">
                                         <i className="fas fa-microphone text-xl"></i>
                                     </button>
                                 ) : (
-                                    // [核心修改] 发送按钮: 添加浮动阴影
                                     <button type="submit" className="w-10 h-10 flex items-center justify-center bg-primary text-white rounded-full shadow-lg shadow-blue-500/30 hover:bg-blue-700 disabled:opacity-50 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95" disabled={isLoading}>
                                         <i className="fas fa-arrow-up text-xl"></i>
                                     </button>
