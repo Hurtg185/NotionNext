@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const AUTO_TRIAL_DURATION_SECONDS = 5 * 60; // 自动试用期：5分钟
+    const AUTO_TRIAL_DURATION_SECONDS = 259200; // 自动试用期：3天
     const MAX_AUTO_TRIAL_PER_IP = 1; // 每个IP地址只允许进行一次【自动】试用
 
     // --- 自动试用逻辑 ---
