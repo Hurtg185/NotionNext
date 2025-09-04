@@ -7,19 +7,19 @@ import SmartLink from '@/components/SmartLink';
 // --- 配置区域 ---
 const FACEBOOK_PAGE_URL = 'https://www.facebook.com/share/16fpFsbhh2/';
 const VIDEO_SRC = '/images/kaipingshiping.mp4';
-const SPLASH_DURATION_MS = 3000; // 闪屏总持续时间（毫秒）
+// 移除 SPLASH_DURATION_MS，因为时长应由视频决定
+// const SPLASH_DURATION_MS = 3000; // 导致问题的配置
 const SKIP_BUTTON_DELAY_MS = 3000; // 跳过按钮延迟显示时间（毫秒）
 // -----------------
 
 const SplashScreen = () => {
   const [show, setShow] = useState(false);
-  const [countdown, setCountdown] = useState(SPLASH_DURATION_MS / 1000);
+  const [countdown, setCountdown] = useState(0); // 初始倒计时设为0
   const [showSkipButton, setShowSkipButton] = useState(false);
   const videoRef = useRef(null);
-  const hideTimerRef = useRef(null);
   const animationFrameRef = useRef(null);
   const skipButtonTimerRef = useRef(null);
-  const videoEndTimerRef = useRef(null); // 视频结束检测定时器
+  const backupCloseTimerRef = useRef(null); // 重命名以明确其作用
   const isHidingRef = useRef(false);
 
   // 统一的关闭逻辑
@@ -27,10 +27,10 @@ const SplashScreen = () => {
     if (isHidingRef.current) return;
     isHidingRef.current = true;
     
-    clearTimeout(hideTimerRef.current);
+    // 清理所有定时器和动画帧
     cancelAnimationFrame(animationFrameRef.current);
     clearTimeout(skipButtonTimerRef.current);
-    clearTimeout(videoEndTimerRef.current);
+    clearTimeout(backupCloseTimerRef.current);
     
     setShow(false);
     sessionStorage.setItem('hasSeenSplashScreen', 'true');
@@ -53,32 +53,51 @@ const SplashScreen = () => {
     // 尝试播放视频
     videoElement.play().catch(error => {
       console.warn("视频自动播放被浏览器阻止:", error);
+      // 如果播放失败，立即关闭闪屏
+      hideSplash();
     });
 
-    // 视频播放结束事件处理
+    // 视频播放结束事件处理 (这是最主要的关闭方式)
     const handleVideoEnd = () => {
-      console.log("视频播放结束事件触发");
+      console.log("视频播放结束事件触发，关闭闪屏");
       hideSplash();
     };
 
     // 视频加载失败处理
-    const handleVideoError = () => {
-      console.error("视频加载失败");
+    const handleVideoError = (e) => {
+      console.error("视频加载或播放失败", e);
       hideSplash();
     };
 
-    // 视频元数据加载完成 - 获取视频时长
+    // 视频元数据加载完成 - 获取视频时长并启动倒计时
     const handleLoadedMetadata = () => {
-      console.log("视频元数据加载完成，时长:", videoElement.duration);
-      
-      // 设置一个比视频时长稍长的定时器作为备用
-      const videoDuration = videoElement.duration * 1000; // 转换为毫秒
-      const bufferTime = 500; // 缓冲时间500ms
-      
-      videoEndTimerRef.current = setTimeout(() => {
-        console.log("视频结束备用定时器触发");
+      const videoDuration = videoElement.duration;
+      console.log("视频元数据加载完成，时长:", videoDuration);
+
+      // 1. 设置备用关闭定时器（比视频时长稍长一点，作为保险）
+      const bufferTimeMs = 500; // 500ms 缓冲
+      backupCloseTimerRef.current = setTimeout(() => {
+        console.log("备用关闭定时器触发");
         hideSplash();
-      }, videoDuration + bufferTime);
+      }, (videoDuration * 1000) + bufferTimeMs);
+
+      // 2. 启动精确的倒计时显示
+      const startTime = Date.now();
+      const totalDurationMs = videoDuration * 1000;
+      
+      const updateCountdown = () => {
+        const elapsedTime = Date.now() - startTime;
+        const remainingTime = Math.max(0, totalDurationMs - elapsedTime);
+        const remainingSeconds = Math.ceil(remainingTime / 1000);
+        
+        setCountdown(remainingSeconds);
+        
+        if (remainingTime > 0) {
+          animationFrameRef.current = requestAnimationFrame(updateCountdown);
+        }
+      };
+      
+      animationFrameRef.current = requestAnimationFrame(updateCountdown);
     };
 
     // 添加事件监听
@@ -86,38 +105,17 @@ const SplashScreen = () => {
     videoElement.addEventListener('error', handleVideoError);
     videoElement.addEventListener('loadedmetadata', handleLoadedMetadata);
 
-    // 精确倒计时
-    const startTime = Date.now();
-    
-    const updateCountdown = () => {
-      const elapsedTime = Date.now() - startTime;
-      const remainingTime = Math.max(0, SPLASH_DURATION_MS - elapsedTime);
-      const remainingSeconds = Math.ceil(remainingTime / 1000);
-      
-      setCountdown(remainingSeconds);
-      
-      if (remainingTime > 0) {
-        animationFrameRef.current = requestAnimationFrame(updateCountdown);
-      }
-    };
-    
-    animationFrameRef.current = requestAnimationFrame(updateCountdown);
-
-    // 保险定时器
-    hideTimerRef.current = setTimeout(() => {
-      console.log("超时关闭闪屏");
-      hideSplash();
-    }, SPLASH_DURATION_MS);
-
     // 清理函数
     return () => {
+      // 确保在组件卸载时移除监听器
       videoElement.removeEventListener('ended', handleVideoEnd);
       videoElement.removeEventListener('error', handleVideoError);
       videoElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      clearTimeout(hideTimerRef.current);
+      
+      // 清理所有定时器和动画帧
       cancelAnimationFrame(animationFrameRef.current);
       clearTimeout(skipButtonTimerRef.current);
-      clearTimeout(videoEndTimerRef.current);
+      clearTimeout(backupCloseTimerRef.current);
     };
   }, [hideSplash]);
 
@@ -125,24 +123,22 @@ const SplashScreen = () => {
 
   return (
     <div className="fixed top-0 left-0 w-full h-full bg-black z-[9999] transition-opacity duration-500 ease-out">
-      {/* 视频区域可点击跳转Facebook */}
       <SmartLink href={FACEBOOK_PAGE_URL} className="block w-full h-full cursor-pointer">
         <video
           ref={videoRef}
           src={VIDEO_SRC}
           className="w-full h-full object-cover"
           autoPlay
-          muted
-          playsInline
+          muted // 自动播放通常需要静音
+          playsInline // 对移动端友好
           preload="auto"
         />
       </SmartLink>
       
-      {/* 跳过按钮 - 3秒后才显示 */}
       {showSkipButton && (
         <button
           onClick={(e) => {
-            e.stopPropagation(); // 阻止事件冒泡，避免触发视频区域的跳转
+            e.stopPropagation();
             hideSplash();
           }}
           className="absolute top-5 right-5 bg-black/40 text-white text-sm px-4 py-2 rounded-full backdrop-blur-sm transition-transform hover:scale-105 active:scale-95"
