@@ -1,58 +1,46 @@
-// /components/BeiDanCi.js - 终极代码版 v22 (修复拼音库加载时序问题)
+// /components/BeiDanCi.js - 终极代码版 v23 (修复点击区域 & 修复发音分析提前显示)
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TextToSpeechButton from './TextToSpeechButton';
 import JumpToCardModal from './JumpToCardModal';
 
-// --- 发音检查器子组件 (核心修正版) ---
+// --- 发音检查器子组件 (保持 v22 的稳定版本) ---
 const PronunciationChecker = ({ correctText, studentText }) => {
   const [result, setResult] = useState(null);
-  // --- 核心修正 1：增加一个状态来追踪拼音库是否已准备就绪 ---
   const [isPinyinLibReady, setIsPinyinLibReady] = useState(false);
 
-  // --- 核心修正 2：使用一个 Effect 来定时检查拼音库是否加载完成 ---
   useEffect(() => {
-    // 立即检查一次
     if (typeof window.pinyinPro !== 'undefined') {
       setIsPinyinLibReady(true);
       return;
     }
-    // 如果没加载，启动定时器，每 200 毫秒检查一次
     const intervalId = setInterval(() => {
       if (typeof window.pinyinPro !== 'undefined') {
         setIsPinyinLibReady(true);
-        clearInterval(intervalId); // 找到后，清除定时器，避免不必要的检查
+        clearInterval(intervalId);
       }
     }, 200);
-
-    // 组件卸载时，确保清除定时器
     return () => clearInterval(intervalId);
-  }, []); // 空依赖数组意味着这个 Effect 只在组件首次挂载时运行
+  }, []);
 
   useEffect(() => {
-    // --- 核心修正 3：只有当拼音库准备好之后，才执行分析逻辑 ---
     if (!isPinyinLibReady) {
       setResult({ message: '拼音库加载中，请稍候...' });
       return;
     }
-
     if (!studentText || !correctText) {
       setResult(null);
       return;
     }
-
     const correctPinyin = window.pinyinPro.pinyin(correctText, { toneType: 'symbol' });
     const studentPinyin = window.pinyinPro.pinyin(studentText, { toneType: 'symbol' });
-
     setResult({
       isCorrect: correctPinyin === studentPinyin,
       correctPinyin,
       studentPinyin,
     });
-  }, [correctText, studentText, isPinyinLibReady]); // 依赖 isPinyinLibReady，当它变为 true 时会重新运行
+  }, [correctText, studentText, isPinyinLibReady]);
 
-  if (!result) {
-    return null;
-  }
+  if (!result) return null;
 
   return (
     <div className="w-full p-4 mt-4 border rounded-xl bg-white dark:bg-gray-800 shadow-inner">
@@ -95,6 +83,7 @@ const BeiDanCi = ({
   // --- State (保持不变) ---
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showBack, setShowBack] = useState(false);
+  // ... 其他 state 保持不变
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [displayFlashcards, setDisplayFlashcards] = useState([]);
   const [parsedBackgroundImages, setParsedBackgroundImages] = useState([]);
@@ -185,8 +174,14 @@ const BeiDanCi = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, correctSoundUrl, incorrectSoundUrl, displayFlashcards, currentIndex]);
 
-  // --- 交互逻辑 (保持不变) ---
-  const handleToggleBack = useCallback(() => { if (!showBack) setShowBack(true); }, [showBack]);
+  // --- 交互逻辑 (核心修正) ---
+  const handleToggleBack = useCallback((e) => {
+    e.stopPropagation(); // 阻止事件冒泡到其他层
+    // 只有在正面时才允许翻转到背面
+    if (!showBack) {
+      setShowBack(true);
+    }
+  }, [showBack]);
 
   const changeCard = (newIndex) => {
     if (isTransitioning || displayFlashcards.length === 0) return;
@@ -204,10 +199,19 @@ const BeiDanCi = ({
     }, 300);
   };
 
-  const handleNext = useCallback(() => changeCard((currentIndex + 1) % displayFlashcards.length), [currentIndex, displayFlashcards.length, isTransitioning]);
-  const handlePrev = useCallback(() => changeCard((currentIndex - 1 + displayFlashcards.length) % displayFlashcards.length), [currentIndex, displayFlashcards.length, isTransitioning]);
+  const handleNext = useCallback((e) => {
+    // 允许不带事件参数的调用（例如自动切换时）
+    e?.stopPropagation();
+    changeCard((currentIndex + 1) % displayFlashcards.length);
+  }, [currentIndex, displayFlashcards.length, isTransitioning]);
+
+  const handlePrev = useCallback((e) => {
+    e.stopPropagation();
+    changeCard((currentIndex - 1 + displayFlashcards.length) % displayFlashcards.length);
+  }, [currentIndex, displayFlashcards.length, isTransitioning]);
   
-  const handleListen = useCallback(() => {
+  const handleListen = useCallback((e) => {
+    e.stopPropagation();
     if (isListening || !speechRecognitionRef.current) return;
     setRecognizedText('');
     speechRecognitionRef.current.start();
@@ -218,7 +222,7 @@ const BeiDanCi = ({
     setIsModalOpen(false);
   }, [changeCard]);
 
-  // --- 渲染部分 (保持不变) ---
+  // --- 渲染部分 (核心修正) ---
   const currentCard = displayFlashcards[currentIndex];
   const currentBackgroundImage = parsedBackgroundImages[currentIndex % parsedBackgroundImages.length] || '';
 
@@ -265,16 +269,23 @@ const BeiDanCi = ({
           </div>
         </div>
 
+        {/* 核心修正：恢复你设计的精确点击区域 */}
         <div className="absolute inset-0 z-30 grid grid-cols-4 grid-rows-3 pointer-events-none">
-          {/* ... 点击区域代码保持不变 ... */}
+          {/* 中间区域，用于翻面 */}
+          <div className="col-start-2 col-span-2 row-start-3 pointer-events-auto cursor-pointer" onClick={handleToggleBack}></div>
+          {/* 左侧区域，用于上一张 */}
+          <div className="col-start-1 row-start-3 pointer-events-auto cursor-pointer" onClick={handlePrev}></div>
+          {/* 右侧区域，用于下一张 */}
+          <div className="col-start-4 row-start-3 pointer-events-auto cursor-pointer" onClick={handleNext}></div>
         </div>
         
-        <button onClick={(e) => { e.stopPropagation(); handleListen(); }} disabled={isListening} className={`absolute bottom-5 left-1/2 -translate-x-1/2 z-40 w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 text-white text-2xl shadow-lg ${isListening ? 'bg-red-500 animate-pulse' : 'bg-blue-500/80 hover:bg-blue-600'}`}>
+        <button onClick={handleListen} disabled={isListening} className={`absolute bottom-5 left-1/2 -translate-x-1/2 z-40 w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 text-white text-2xl shadow-lg ${isListening ? 'bg-red-500 animate-pulse' : 'bg-blue-500/80 hover:bg-blue-600'}`}>
             <i className="fas fa-microphone"></i>
         </button>
       </div>
       
-      <PronunciationChecker correctText={currentCard?.word} studentText={recognizedText} />
+      {/* 核心修正：只有在识别到文本后才渲染发音分析器 */}
+      {recognizedText && <PronunciationChecker correctText={currentCard?.word} studentText={recognizedText} />}
 
     </div>
   );
