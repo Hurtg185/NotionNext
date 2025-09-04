@@ -15,9 +15,10 @@ import ExternalPlugins from '@/components/ExternalPlugins'
 import SEO from '@/components/SEO'
 import { zhCN } from '@clerk/localizations'
 import dynamic from 'next/dynamic'
+import Script from 'next/script' // 1. 导入 Next.js 的 Script 组件
 
 import { GlobalStyle } from '@/components/GlobalStyle'
-import SplashScreen from '@/components/SplashScreen' // <-- 1. 导入 SplashScreen 组件
+import SplashScreen from '@/components/SplashScreen'
 
 const ClerkProvider = dynamic(() =>
   import('@clerk/nextjs').then(m => m.ClerkProvider)
@@ -55,7 +56,17 @@ const MyApp = ({ Component, pageProps }) => {
   )
   return (
     <>
-      <SplashScreen /> {/* <-- 2. 在这里渲染 SplashScreen */}
+      <SplashScreen />
+      
+      {/* 2. 在这里添加拼音库的 Script 标签，确保它在所有页面都能被加载 */}
+      <Script
+        src="https://cdn.jsdelivr.net/npm/pinyin-pro/dist/pinyin-pro.iife.js"
+        strategy="afterInteractive"
+        onLoad={() => {
+          console.log('拼音库 (pinyin-pro) 已成功加载！现在可以在组件中通过 window.pinyinPro 使用。');
+        }}
+      />
+
       {enableClerk ? (
         <ClerkProvider localization={zhCN}>{content}</ClerkProvider>
       ) : (
