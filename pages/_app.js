@@ -58,12 +58,12 @@ const MyApp = ({ Component, pageProps }) => {
     <>
       <SplashScreen />
       
-      {/* --- 核心修改：使用 githack 提供的可靠 CDN 链接 --- */}
+      {/* --- 核心修改：使用 Script 标签加载 public 文件夹下的本地文件 --- */}
       <Script
-        src="https://raw.githack.com/zh-lx/pinyin-pro/master/dist/pinyin-pro.iife.js"
+        src="/js/pinyin-pro.js"
         strategy="afterInteractive"
         onLoad={() => {
-          console.log('Githack 拼音库 (pinyin-pro) 已成功加载！');
+          console.log('本地拼音库 (pinyin-pro) 已成功加载！');
         }}
       />
 
