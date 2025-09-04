@@ -1,5 +1,5 @@
 // components/SplashScreen.js
-// 进站广告：视频版本（最终修复版）
+// 进站广告：视频版本（支持视频跳转+延迟跳过按钮）
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import SmartLink from '@/components/SmartLink';
@@ -8,36 +8,42 @@ import SmartLink from '@/components/SmartLink';
 const FACEBOOK_PAGE_URL = 'https://www.facebook.com/share/16fpFsbhh2/';
 const VIDEO_SRC = '/images/kaipingshiping.mp4';
 const SPLASH_DURATION_MS = 3000; // 闪屏总持续时间（毫秒）
+const SKIP_BUTTON_DELAY_MS = 3000; // 跳过按钮延迟显示时间（毫秒）
 // -----------------
 
 const SplashScreen = () => {
   const [show, setShow] = useState(false);
   const [countdown, setCountdown] = useState(SPLASH_DURATION_MS / 1000);
+  const [showSkipButton, setShowSkipButton] = useState(false); // 控制跳过按钮显示
   const videoRef = useRef(null);
-  const hideTimerRef = useRef(null); // Ref 来存储 setTimeout 的 ID
-  const intervalRef = useRef(null); // Ref 来存储 setInterval 的 ID
-  const isHidingRef = useRef(false); // Ref 来防止 hideSplash 重复执行
+  const hideTimerRef = useRef(null);
+  const animationFrameRef = useRef(null);
+  const skipButtonTimerRef = useRef(null); // 跳过按钮定时器
+  const isHidingRef = useRef(false);
 
-  // 使用 useCallback 包装 hideSplash，确保其引用稳定
-  // 这是最核心的关闭逻辑
+  // 统一的关闭逻辑
   const hideSplash = useCallback(() => {
-    // 防止重复执行
     if (isHidingRef.current) return;
     isHidingRef.current = true;
-
-    // 清理所有的定时器，确保万无一失
+    
     clearTimeout(hideTimerRef.current);
-    clearInterval(intervalRef.current);
-
+    cancelAnimationFrame(animationFrameRef.current);
+    clearTimeout(skipButtonTimerRef.current); // 清理跳过按钮定时器
+    
     setShow(false);
     sessionStorage.setItem('hasSeenSplashScreen', 'true');
-  }, []); // 空依赖数组，因为函数不依赖外部变量
+  }, []);
 
   useEffect(() => {
     const hasSeenSplash = sessionStorage.getItem('hasSeenSplashScreen');
     if (hasSeenSplash) return;
 
     setShow(true);
+
+    // 设置跳过按钮延迟显示
+    skipButtonTimerRef.current = setTimeout(() => {
+      setShowSkipButton(true);
+    }, SKIP_BUTTON_DELAY_MS);
 
     const videoElement = videoRef.current;
     if (!videoElement) return;
@@ -47,44 +53,60 @@ const SplashScreen = () => {
       console.warn("视频自动播放被浏览器阻止:", error);
     });
 
-    // 监听视频播放结束事件，一旦结束就调用 hideSplash
-    videoElement.addEventListener('ended', hideSplash);
+    // 视频播放结束事件处理
+    const handleVideoEnd = () => {
+      console.log("视频播放结束，关闭闪屏");
+      hideSplash();
+    };
 
-    // --- 修复倒计时不准的问题 ---
-    // 记录开始时间
+    // 视频加载失败处理
+    const handleVideoError = () => {
+      console.error("视频加载失败，关闭闪屏");
+      hideSplash();
+    };
+
+    // 添加事件监听
+    videoElement.addEventListener('ended', handleVideoEnd);
+    videoElement.addEventListener('error', handleVideoError);
+
+    // 精确倒计时
     const startTime = Date.now();
     
-    // 启动一个每 100 毫秒检查一次的 interval，用于更新 UI
-    intervalRef.current = setInterval(() => {
+    const updateCountdown = () => {
       const elapsedTime = Date.now() - startTime;
       const remainingTime = Math.max(0, SPLASH_DURATION_MS - elapsedTime);
       const remainingSeconds = Math.ceil(remainingTime / 1000);
       
       setCountdown(remainingSeconds);
-    }, 100); // 检查频率更高，UI 更新更平滑
-
-    // 设置一个最终的“保险”定时器，确保闪屏在指定时间后一定关闭
-    hideTimerRef.current = setTimeout(hideSplash, SPLASH_DURATION_MS);
-
-    // --- 清理函数 ---
-    return () => {
-      // 在组件卸载时，清除所有副作用
-      videoElement.removeEventListener('ended', hideSplash);
-      clearTimeout(hideTimerRef.current);
-      clearInterval(intervalRef.current);
+      
+      if (remainingTime > 0) {
+        animationFrameRef.current = requestAnimationFrame(updateCountdown);
+      }
     };
-  }, [hideSplash]); // 将 hideSplash 加入依赖数组
+    
+    animationFrameRef.current = requestAnimationFrame(updateCountdown);
 
-  if (!show) {
-    return null;
-  }
+    // 保险定时器
+    hideTimerRef.current = setTimeout(() => {
+      console.log("超时关闭闪屏");
+      hideSplash();
+    }, SPLASH_DURATION_MS);
+
+    // 清理函数
+    return () => {
+      videoElement.removeEventListener('ended', handleVideoEnd);
+      videoElement.removeEventListener('error', handleVideoError);
+      clearTimeout(hideTimerRef.current);
+      cancelAnimationFrame(animationFrameRef.current);
+      clearTimeout(skipButtonTimerRef.current);
+    };
+  }, [hideSplash]);
+
+  if (!show) return null;
 
   return (
-    <div
-      className={`fixed top-0 left-0 w-full h-full bg-black z-[9999] transition-opacity duration-500 ease-out ${
-        show ? 'opacity-100' : 'opacity-0 pointer-events-none'
-      }`}
-    >
+    <div className="fixed top-0 left-0 w-full h-full bg-black z-[9999] transition-opacity duration-500 ease-out">
+      {/* 恢复视频区域的点击跳转功能 */}
       <SmartLink href={FACEBOOK_PAGE_URL} className="block w-full h-full cursor-pointer">
         <video
           ref={videoRef}
@@ -97,15 +119,18 @@ const SplashScreen = () => {
         />
       </SmartLink>
       
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          hideSplash(); // 用户点击跳过，也调用统一的关闭逻辑
-        }}
-        className="absolute top-5 right-5 bg-black/40 text-white text-sm px-4 py-2 rounded-full backdrop-blur-sm transition-transform hover:scale-105 active:scale-95"
-      >
-        跳过 {countdown > 0 ? `(${countdown})` : ''}
-      </button>
+      {/* 跳过按钮 - 3秒后才显示 */}
+      {showSkipButton && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation(); // 阻止事件冒泡，避免触发视频区域的跳转
+            hideSplash();
+          }}
+          className="absolute top-5 right-5 bg-black/40 text-white text-sm px-4 py-2 rounded-full backdrop-blur-sm transition-transform hover:scale-105 active:scale-95"
+        >
+          跳过 {countdown > 0 ? `(${countdown})` : ''}
+        </button>
+      )}
     </div>
   );
 };
