@@ -1,27 +1,45 @@
-// /components/BeiDanCi.js - 终极代码版 v21 (解除宽度限制，集成拼音发音检查器)
+// /components/BeiDanCi.js - 终极代码版 v22 (修复拼音库加载时序问题)
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TextToSpeechButton from './TextToSpeechButton';
 import JumpToCardModal from './JumpToCardModal';
 
-// --- 新增：发音检查器子组件 ---
-// 这个组件专门负责显示拼音对比的结果
+// --- 发音检查器子组件 (核心修正版) ---
 const PronunciationChecker = ({ correctText, studentText }) => {
   const [result, setResult] = useState(null);
+  // --- 核心修正 1：增加一个状态来追踪拼音库是否已准备就绪 ---
+  const [isPinyinLibReady, setIsPinyinLibReady] = useState(false);
 
+  // --- 核心修正 2：使用一个 Effect 来定时检查拼音库是否加载完成 ---
   useEffect(() => {
-    // 只有当学生有发音输入时才进行检查
-    if (!studentText || !correctText) {
-      setResult(null); // 如果没有学生输入，则不显示任何结果
+    // 立即检查一次
+    if (typeof window.pinyinPro !== 'undefined') {
+      setIsPinyinLibReady(true);
       return;
     }
+    // 如果没加载，启动定时器，每 200 毫秒检查一次
+    const intervalId = setInterval(() => {
+      if (typeof window.pinyinPro !== 'undefined') {
+        setIsPinyinLibReady(true);
+        clearInterval(intervalId); // 找到后，清除定时器，避免不必要的检查
+      }
+    }, 200);
 
-    // 检查 pinyin-pro 库是否已经通过 CDN 加载完成
-    if (typeof window.pinyinPro === 'undefined') {
+    // 组件卸载时，确保清除定时器
+    return () => clearInterval(intervalId);
+  }, []); // 空依赖数组意味着这个 Effect 只在组件首次挂载时运行
+
+  useEffect(() => {
+    // --- 核心修正 3：只有当拼音库准备好之后，才执行分析逻辑 ---
+    if (!isPinyinLibReady) {
       setResult({ message: '拼音库加载中，请稍候...' });
       return;
     }
 
-    // 使用 pinyin-pro 库将文本转换为带声调的拼音
+    if (!studentText || !correctText) {
+      setResult(null);
+      return;
+    }
+
     const correctPinyin = window.pinyinPro.pinyin(correctText, { toneType: 'symbol' });
     const studentPinyin = window.pinyinPro.pinyin(studentText, { toneType: 'symbol' });
 
@@ -30,10 +48,10 @@ const PronunciationChecker = ({ correctText, studentText }) => {
       correctPinyin,
       studentPinyin,
     });
-  }, [correctText, studentText]);
+  }, [correctText, studentText, isPinyinLibReady]); // 依赖 isPinyinLibReady，当它变为 true 时会重新运行
 
   if (!result) {
-    return null; // 如果没有结果，不渲染任何内容
+    return null;
   }
 
   return (
@@ -83,7 +101,7 @@ const BeiDanCi = ({
   const [internalIsShuffle, setInternalIsShuffle] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [recognizedText, setRecognizedText] = useState(''); // 这个 state 现在是 PronunciationChecker 的输入
+  const [recognizedText, setRecognizedText] = useState('');
   const [cardFeedbackClass, setCardFeedbackClass] = useState('');
   const autoAdvanceTimeoutRef = useRef(null);
   
@@ -115,7 +133,7 @@ const BeiDanCi = ({
     setInternalIsShuffle(String(isShuffleProp) === 'true');
   }, [isShuffleProp]);
   
-  // --- 语音识别和音频初始化 (核心逻辑修改) ---
+  // --- 语音识别和音频初始化 (保持不变) ---
   useEffect(() => {
     if (typeof window !== 'undefined') {
       correctAudioRef.current = new Audio(correctSoundUrl);
@@ -126,11 +144,10 @@ const BeiDanCi = ({
         recognition.lang = lang;
         recognition.onresult = (event) => {
           const transcript = event.results[0][0].transcript.trim().replace(/[.,。，]/g, '');
-          setRecognizedText(transcript); // 更新识别文本，触发 PronunciationChecker
+          setRecognizedText(transcript);
           
           const currentWord = displayFlashcards[currentIndex]?.word.trim();
 
-          // --- 核心修改：使用拼音进行判断 ---
           if (typeof window.pinyinPro !== 'undefined') {
             const correctPinyin = window.pinyinPro.pinyin(currentWord, { toneType: 'symbol' });
             const studentPinyin = window.pinyinPro.pinyin(transcript, { toneType: 'symbol' });
@@ -145,8 +162,7 @@ const BeiDanCi = ({
               setCardFeedbackClass('border-red-500');
             }
           } else {
-            // 如果拼音库未加载，可以进行提示或降级为文字匹配
-            console.error("拼音库未加载，无法进行精准发音判断！");
+            console.error("拼音库未加载，降级为文字匹配！");
             if (transcript === currentWord) {
                 correctAudioRef.current?.play();
                 setCardFeedbackClass('border-green-500');
@@ -178,7 +194,7 @@ const BeiDanCi = ({
     
     setIsTransitioning(true);
     setShowBack(false);
-    setRecognizedText(''); // 清空识别文本
+    setRecognizedText('');
     setCardFeedbackClass('');
     if (speechRecognitionRef.current && isListening) speechRecognitionRef.current.stop();
     
@@ -202,13 +218,12 @@ const BeiDanCi = ({
     setIsModalOpen(false);
   }, [changeCard]);
 
-  // --- 渲染部分 (核心修改) ---
+  // --- 渲染部分 (保持不变) ---
   const currentCard = displayFlashcards[currentIndex];
   const currentBackgroundImage = parsedBackgroundImages[currentIndex % parsedBackgroundImages.length] || '';
 
   if (!currentCard) {
     return (
-      // 宽度限制已解除
       <div className="w-full mx-auto my-8 p-6 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border dark:border-gray-700">
         <p className="text-lg font-semibold text-center text-gray-600 dark:text-gray-300">没有卡片数据。请检查 Notion 代码块。</p>
       </div>
@@ -216,7 +231,6 @@ const BeiDanCi = ({
   }
 
   return (
-    // 核心修改：移除 max-w-4xl，让组件充满父容器宽度
     <div className="w-full mx-auto my-8 p-4 bg-transparent">
       {isModalOpen && <JumpToCardModal total={displayFlashcards.length} current={currentIndex} onJump={handleJump} onClose={() => setIsModalOpen(false)} />}
       <h3 className="text-2xl sm:text-3xl font-extrabold mb-6 text-gray-800 dark:text-gray-100 text-center">{questionTitle}</h3>
@@ -236,19 +250,16 @@ const BeiDanCi = ({
         </div>
         
         <div className={`absolute inset-0 z-20 transition-opacity duration-300 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
-          {/* 正面 */}
           <div className={`w-full h-full p-6 flex flex-col items-center justify-center text-center transition-opacity duration-300 ${showBack ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
             <div className="flex-grow"></div>
             <p className="text-6xl sm:text-8xl font-bold text-white select-none flex items-center drop-shadow-lg">
               {currentCard.word}
               <TextToSpeechButton text={currentCard.word} lang={lang} className="w-12 h-12 text-3xl" />
             </p>
-            {/* 核心修改：移除旧的简单反馈文本 */}
             <div className="h-8 mt-4"></div>
             <div className="flex-grow"></div>
           </div>
 
-          {/* 背面 (保持不变) */}
           <div className={`absolute inset-0 p-6 flex flex-col items-center justify-center transition-opacity duration-300 ${showBack ? 'opacity-100' : 'opacity-0 pointer-events-none'} text-white`}>
             {/* ... 背面代码保持不变 ... */}
           </div>
@@ -263,7 +274,6 @@ const BeiDanCi = ({
         </button>
       </div>
       
-      {/* 核心修改：在卡片下方添加新的发音检查器组件 */}
       <PronunciationChecker correctText={currentCard?.word} studentText={recognizedText} />
 
     </div>
