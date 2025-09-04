@@ -58,12 +58,12 @@ const MyApp = ({ Component, pageProps }) => {
     <>
       <SplashScreen />
       
-      {/* --- 核心修改：使用官方推荐的 unpkg CDN 链接 --- */}
+      {/* --- 核心修改：使用 githack 提供的可靠 CDN 链接 --- */}
       <Script
-        src="https://unpkg.com/pinyin-pro/dist/pinyin-pro.iife.js"
+        src="https://raw.githack.com/zh-lx/pinyin-pro/master/dist/pinyin-pro.iife.js"
         strategy="afterInteractive"
         onLoad={() => {
-          console.log('官方拼音库 (pinyin-pro) 已成功加载！');
+          console.log('Githack 拼音库 (pinyin-pro) 已成功加载！');
         }}
       />
 
