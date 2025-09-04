@@ -15,7 +15,7 @@ import ExternalPlugins from '@/components/ExternalPlugins'
 import SEO from '@/components/SEO'
 import { zhCN } from '@clerk/localizations'
 import dynamic from 'next/dynamic'
-import Script from 'next/script' // 1. 导入 Next.js 的 Script 组件
+import Script from 'next/script' // 确保 Script 组件已导入
 
 import { GlobalStyle } from '@/components/GlobalStyle'
 import SplashScreen from '@/components/SplashScreen'
@@ -58,12 +58,12 @@ const MyApp = ({ Component, pageProps }) => {
     <>
       <SplashScreen />
       
-      {/* 2. 在这里添加拼音库的 Script 标签，确保它在所有页面都能被加载 */}
+      {/* --- 核心修改：使用官方推荐的 unpkg CDN 链接 --- */}
       <Script
-        src="https://cdn.jsdelivr.net/npm/pinyin-pro/dist/pinyin-pro.iife.js"
+        src="https://unpkg.com/pinyin-pro/dist/pinyin-pro.iife.js"
         strategy="afterInteractive"
         onLoad={() => {
-          console.log('拼音库 (pinyin-pro) 已成功加载！现在可以在组件中通过 window.pinyinPro 使用。');
+          console.log('官方拼音库 (pinyin-pro) 已成功加载！');
         }}
       />
 
