@@ -1,9 +1,9 @@
-// /components/BeiDanCi.js - 终极代码版 v23 (修复点击区域 & 修复发音分析提前显示)
+// /components/BeiDanCi.js - 终极代码版 v26 (修复背面不显示问题，并使用官方CDN)
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TextToSpeechButton from './TextToSpeechButton';
 import JumpToCardModal from './JumpToCardModal';
 
-// --- 发音检查器子组件 (保持 v22 的稳定版本) ---
+// --- 发音检查器子组件 (保持稳定版本，包含加载检查) ---
 const PronunciationChecker = ({ correctText, studentText }) => {
   const [result, setResult] = useState(null);
   const [isPinyinLibReady, setIsPinyinLibReady] = useState(false);
@@ -80,10 +80,9 @@ const BeiDanCi = ({
   correctSoundUrl = '/sounds/correct.mp3',
   incorrectSoundUrl = '/sounds/wrong.mp3'
 }) => {
-  // --- State (保持不变) ---
+  // --- State 和 Refs 保持不变 ---
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showBack, setShowBack] = useState(false);
-  // ... 其他 state 保持不变
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [displayFlashcards, setDisplayFlashcards] = useState([]);
   const [parsedBackgroundImages, setParsedBackgroundImages] = useState([]);
@@ -93,7 +92,6 @@ const BeiDanCi = ({
   const [recognizedText, setRecognizedText] = useState('');
   const [cardFeedbackClass, setCardFeedbackClass] = useState('');
   const autoAdvanceTimeoutRef = useRef(null);
-  
   const speechRecognitionRef = useRef(null);
   const correctAudioRef = useRef(null);
   const incorrectAudioRef = useRef(null);
@@ -134,13 +132,10 @@ const BeiDanCi = ({
         recognition.onresult = (event) => {
           const transcript = event.results[0][0].transcript.trim().replace(/[.,。，]/g, '');
           setRecognizedText(transcript);
-          
           const currentWord = displayFlashcards[currentIndex]?.word.trim();
-
           if (typeof window.pinyinPro !== 'undefined') {
             const correctPinyin = window.pinyinPro.pinyin(currentWord, { toneType: 'symbol' });
             const studentPinyin = window.pinyinPro.pinyin(transcript, { toneType: 'symbol' });
-
             if (correctPinyin === studentPinyin) {
               correctAudioRef.current?.play();
               setCardFeedbackClass('border-green-500');
@@ -174,25 +169,20 @@ const BeiDanCi = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, correctSoundUrl, incorrectSoundUrl, displayFlashcards, currentIndex]);
 
-  // --- 交互逻辑 (核心修正) ---
+  // --- 交互逻辑 (保持不变) ---
   const handleToggleBack = useCallback((e) => {
-    e.stopPropagation(); // 阻止事件冒泡到其他层
-    // 只有在正面时才允许翻转到背面
-    if (!showBack) {
-      setShowBack(true);
-    }
+    e.stopPropagation();
+    if (!showBack) setShowBack(true);
   }, [showBack]);
 
   const changeCard = (newIndex) => {
     if (isTransitioning || displayFlashcards.length === 0) return;
     if (autoAdvanceTimeoutRef.current) clearTimeout(autoAdvanceTimeoutRef.current);
-    
     setIsTransitioning(true);
     setShowBack(false);
     setRecognizedText('');
     setCardFeedbackClass('');
     if (speechRecognitionRef.current && isListening) speechRecognitionRef.current.stop();
-    
     setTimeout(() => {
       setCurrentIndex(newIndex);
       setIsTransitioning(false);
@@ -200,7 +190,6 @@ const BeiDanCi = ({
   };
 
   const handleNext = useCallback((e) => {
-    // 允许不带事件参数的调用（例如自动切换时）
     e?.stopPropagation();
     changeCard((currentIndex + 1) % displayFlashcards.length);
   }, [currentIndex, displayFlashcards.length, isTransitioning]);
@@ -253,7 +242,9 @@ const BeiDanCi = ({
           {currentIndex + 1}<span className="text-white/50"> / {displayFlashcards.length}</span>
         </div>
         
+        {/* --- 核心修正：将正面和背面作为兄弟元素 --- */}
         <div className={`absolute inset-0 z-20 transition-opacity duration-300 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
+          {/* 正面 */}
           <div className={`w-full h-full p-6 flex flex-col items-center justify-center text-center transition-opacity duration-300 ${showBack ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
             <div className="flex-grow"></div>
             <p className="text-6xl sm:text-8xl font-bold text-white select-none flex items-center drop-shadow-lg">
@@ -264,29 +255,36 @@ const BeiDanCi = ({
             <div className="flex-grow"></div>
           </div>
 
+          {/* 背面 */}
           <div className={`absolute inset-0 p-6 flex flex-col items-center justify-center transition-opacity duration-300 ${showBack ? 'opacity-100' : 'opacity-0 pointer-events-none'} text-white`}>
-            {/* ... 背面代码保持不变 ... */}
+            <div className="w-full h-full max-h-full p-6 bg-black/30 rounded-2xl border border-white/10 backdrop-blur-sm overflow-y-auto">
+              <div className="w-full max-w-sm mx-auto text-left">
+                <div className="space-y-3">
+                  <h4 className="text-4xl font-bold flex items-center">{currentCard.word}<TextToSpeechButton text={currentCard.word} lang={lang} className="w-9 h-9 text-2xl ml-3" /></h4>
+                  {currentCard.pinyin && <p className="text-xl text-yellow-300">{currentCard.pinyin}</p>}
+                  {currentCard.meaning && <p className="text-xl font-semibold">{currentCard.meaning}</p>}
+                  {/* 你可以继续添加其他背面信息 */}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* 核心修正：恢复你设计的精确点击区域 */}
+        {/* 点击区域层 */}
         <div className="absolute inset-0 z-30 grid grid-cols-4 grid-rows-3 pointer-events-none">
-          {/* 中间区域，用于翻面 */}
           <div className="col-start-2 col-span-2 row-start-3 pointer-events-auto cursor-pointer" onClick={handleToggleBack}></div>
-          {/* 左侧区域，用于上一张 */}
           <div className="col-start-1 row-start-3 pointer-events-auto cursor-pointer" onClick={handlePrev}></div>
-          {/* 右侧区域，用于下一张 */}
           <div className="col-start-4 row-start-3 pointer-events-auto cursor-pointer" onClick={handleNext}></div>
         </div>
         
+        {/* 麦克风按钮 */}
         <button onClick={handleListen} disabled={isListening} className={`absolute bottom-5 left-1/2 -translate-x-1/2 z-40 w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 text-white text-2xl shadow-lg ${isListening ? 'bg-red-500 animate-pulse' : 'bg-blue-500/80 hover:bg-blue-600'}`}>
             <i className="fas fa-microphone"></i>
         </button>
       </div>
       
-      {/* 核心修正：只有在识别到文本后才渲染发音分析器 */}
+      {/* 发音分析器 */}
       {recognizedText && <PronunciationChecker correctText={currentCard?.word} studentText={recognizedText} />}
-
     </div>
   );
 };
