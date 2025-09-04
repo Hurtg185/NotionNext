@@ -1,9 +1,9 @@
-// /components/BeiDanCi.js - 终极代码版 v26 (修复背面不显示问题，并使用官方CDN)
+// /components/BeiDanCi.js - 终极代码版 v26 (本地化加载 + 修复所有已知Bug)
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TextToSpeechButton from './TextToSpeechButton';
 import JumpToCardModal from './JumpToCardModal';
 
-// --- 发音检查器子组件 (保持稳定版本，包含加载检查) ---
+// --- 发音检查器子组件 (包含可靠的加载检查逻辑) ---
 const PronunciationChecker = ({ correctText, studentText }) => {
   const [result, setResult] = useState(null);
   const [isPinyinLibReady, setIsPinyinLibReady] = useState(false);
@@ -242,14 +242,13 @@ const BeiDanCi = ({
           {currentIndex + 1}<span className="text-white/50"> / {displayFlashcards.length}</span>
         </div>
         
-        {/* --- 核心修正：将正面和背面作为兄弟元素 --- */}
         <div className={`absolute inset-0 z-20 transition-opacity duration-300 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
           {/* 正面 */}
           <div className={`w-full h-full p-6 flex flex-col items-center justify-center text-center transition-opacity duration-300 ${showBack ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
             <div className="flex-grow"></div>
             <p className="text-6xl sm:text-8xl font-bold text-white select-none flex items-center drop-shadow-lg">
               {currentCard.word}
-              <TextToSpeechButton text={currentCard.word} lang={lang} className="w-12 h-12 text-3xl" />
+              <TextToSpeechButton text={currentCard.word} lang={lang} className="ml-4 w-12 h-12 text-3xl" />
             </p>
             <div className="h-8 mt-4"></div>
             <div className="flex-grow"></div>
@@ -260,7 +259,7 @@ const BeiDanCi = ({
             <div className="w-full h-full max-h-full p-6 bg-black/30 rounded-2xl border border-white/10 backdrop-blur-sm overflow-y-auto">
               <div className="w-full max-w-sm mx-auto text-left">
                 <div className="space-y-3">
-                  <h4 className="text-4xl font-bold flex items-center">{currentCard.word}<TextToSpeechButton text={currentCard.word} lang={lang} className="w-9 h-9 text-2xl ml-3" /></h4>
+                  <h4 className="text-4xl font-bold flex items-center">{currentCard.word}<TextToSpeechButton text={currentCard.word} lang={lang} className="ml-3 w-9 h-9 text-2xl" /></h4>
                   {currentCard.pinyin && <p className="text-xl text-yellow-300">{currentCard.pinyin}</p>}
                   {currentCard.meaning && <p className="text-xl font-semibold">{currentCard.meaning}</p>}
                   {/* 你可以继续添加其他背面信息 */}
