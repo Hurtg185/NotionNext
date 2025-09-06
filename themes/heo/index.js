@@ -1,4 +1,4 @@
-// themes/heo/index.js (最终稳定版 - 已移除所有全屏API，保证可靠性)
+// themes/heo/index.js (最终纯 UI 改造版 - 完整代码)
 import Comment from '@/components/Comment'
 import { AdSlot } from '@/components/GoogleAdsense'
 import { HashTag } from '@/components/HeroIcons'
@@ -40,17 +40,16 @@ import ArticleExpirationNotice from '@/components/ArticleExpirationNotice'
 import GlosbeSearchCard from '@/components/GlosbeSearchCard'
 import AiChatAssistant from '@/components/AiChatAssistant'
 
+// --- 新增导入 ---
+import BottomNavBar from '@/components/BottomNavBar'
+
 const XUANCHUAN_BANNERS = ['/images/xuanchuan3.jpg', '/images/xuanchuan4.jpg', '/images/xuanchuan5.jpg']
 
 // --- 使用Portal的Modal组件，确保在顶层渲染 ---
 const Modal = ({ isOpen, onClose, title, intro, children }) => {
   const [isMounted, setIsMounted] = useState(false)
   useEffect(() => { setIsMounted(true) }, [])
-
-  if (!isOpen || !isMounted) {
-    return null
-  }
-
+  if (!isOpen || !isMounted) return null
   return createPortal(
     <div className='fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[1000] p-4' onClick={onClose}>
       <div className='bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-sm w-full mx-auto animate-modal-pop' onClick={(e) => e.stopPropagation()}>
@@ -70,11 +69,7 @@ const Modal = ({ isOpen, onClose, title, intro, children }) => {
 const AIAssistantPortal = ({ onClose }) => {
   const [isMounted, setIsMounted] = useState(false)
   useEffect(() => { setIsMounted(true) }, [])
-
-  if (!isMounted) {
-    return null
-  }
-
+  if (!isMounted) return null
   return createPortal(
     <div className="fixed inset-0 z-[1000] bg-white dark:bg-gray-900">
       <AiChatAssistant onClose={onClose} />
@@ -87,51 +82,58 @@ const AIAssistantPortal = ({ onClose }) => {
  * 基础布局
  */
 const LayoutBase = props => {
-  const { children, slotTop, className, post } = props
-  const { fullWidth, isDarkMode } = useGlobal()
+  const { children, slotTop, className, post, onAIAssistantClick } = props // 接收 onAIAssistantClick
+  const { fullWidth } = useGlobal()
   const router = useRouter()
   const isIndex = router.pathname === '/'
   const isSlugPage = post && post.slug
+  
+  // --- 修改 headerSlot，移除 sticky 样式 ---
   const headerSlot = (
-    <header>
+    <header> {/* 这里不再有 sticky 或 fixed 样式 */}
       <Header {...props} />
       {isIndex ? (<><NoticeBar /><Hero {...props} /></>) : null}
-      {isSlugPage && !fullWidth ? <PostHeader {...props} isDarkMode={isDarkMode} /> : null}
+      {isSlugPage && !fullWidth ? <PostHeader {...props} /> : null}
     </header>
   )
+  
   const slotRight = router.route === '/404' || fullWidth ? null : <SideRight {...props} />
   const maxWidth = fullWidth ? 'max-w-[96rem] mx-auto' : 'max-w-[86rem]'
-  const HEO_HERO_BODY_REVERSE = siteConfig('HEO_HERO_BODY_REVERSE', false, CONFIG)
+  
   useEffect(() => { loadWowJS() }, [])
+  
   return (
     <div id='theme-heo' className={`${siteConfig('FONT_STYLE')} bg-[#f7f9fe] dark:bg-[#18171d] h-full min-h-screen flex flex-col scroll-smooth`}>
       <Style />
       {headerSlot}
-      <main id='wrapper-outer' className={`w-full ${maxWidth} mx-auto relative md:px-5`}>
-        <div id='container-inner' className={`${HEO_HERO_BODY_REVERSE ? 'flex-row-reverse' : ''} w-full mx-auto lg:flex justify-center relative z-10`}>
+      <main id='wrapper-outer' className={`w-full ${maxWidth} mx-auto relative md:px-5 flex-grow`}> {/* 添加 flex-grow */}
+        <div id='container-inner' className={`${siteConfig('HEO_HERO_BODY_REVERSE', false, CONFIG) ? 'flex-row-reverse' : ''} w-full mx-auto lg:flex justify-center relative z-10`}>
           <div className={`w-full h-auto ${className || ''}`}>{slotTop}{children}</div>
           <div className='lg:px-2'></div>
           <div className='hidden xl:block'>{slotRight}</div>
         </div>
       </main>
+      <BottomNavBar onAIAssistantClick={onAIAssistantClick} /> {/* 新增：添加底部导航栏 */}
       <Footer />
+      {/* 底部导航栏会占用空间，添加一个占位符，防止内容被遮挡 */}
+      <div className='h-16 md:hidden'></div> 
     </div>
   )
 }
 
 const FunctionButton = ({ title, icon, onClick, href, img, target }) => {
-  const style = img ? { backgroundImage: `url(${img})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}
-  const iconColorClass = img ? 'text-white' : 'text-gray-500 dark:text-gray-300 group-hover:text-indigo-500 dark:group-hover:text-yellow-500'
-  const textColorClass = img ? 'text-white' : 'text-gray-700 dark:text-gray-200'
-  const content = (<>{img && <div className="absolute inset-0 bg-black bg-opacity-40 rounded-xl"></div>}<div className='relative z-10 flex flex-col items-center justify-center'><div className={`text-3xl ${iconColorClass} transition-colors duration-200`}><i className={icon} /></div><div className={`mt-2 text-sm font-semibold ${textColorClass}`}>{title}</div></div></>)
-  if (href) { return (<SmartLink href={href} target={target} className='group relative flex flex-col justify-center items-center w-full h-24 bg-white dark:bg-[#1e1e1e] border dark:border-gray-700 rounded-xl shadow-md transform hover:scale-105 transition-transform duration-200 overflow-hidden' style={style}>{content}</SmartLink>)}
-  return (<button onClick={onClick} className='group relative flex flex-col justify-center items-center w-full h-24 bg-white dark:bg-[#1e1e1e] border dark:border-gray-700 rounded-xl shadow-md transform hover:scale-105 transition-transform duration-200 overflow-hidden' style={style}>{content}</button>)
-}
-
+    const style = img ? { backgroundImage: `url(${img})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}
+    const iconColorClass = img ? 'text-white' : 'text-gray-500 dark:text-gray-300 group-hover:text-indigo-500 dark:group-hover:text-yellow-500'
+    const textColorClass = img ? 'text-white' : 'text-gray-700 dark:text-gray-200'
+    const content = (<>{img && <div className="absolute inset-0 bg-black bg-opacity-40 rounded-xl"></div>}<div className='relative z-10 flex flex-col items-center justify-center'><div className={`text-3xl ${iconColorClass} transition-colors duration-200`}><i className={icon} /></div><div className={`mt-2 text-sm font-semibold ${textColorClass}`}>{title}</div></div></>)
+    if (href) { return (<SmartLink href={href} target={target} className='group relative flex flex-col justify-center items-center w-full h-24 bg-white dark:bg-[#1e1e1e] border dark:border-gray-700 rounded-xl shadow-md transform hover:scale-105 transition-transform duration-200 overflow-hidden' style={style}>{content}</SmartLink>)}
+    return (<button onClick={onClick} className='group relative flex flex-col justify-center items-center w-full h-24 bg-white dark:bg-[#1e1e1e] border dark:border-gray-700 rounded-xl shadow-md transform hover:scale-105 transition-transform duration-200 overflow-hidden' style={style}>{content}</button>)
+  }
+  
 const AIAssistantButton = ({ onClick }) => {
   return (<div className='px-5 md:px-0 my-4'><button onClick={onClick} className='w-full flex items-center justify-center p-4 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg transform hover:scale-105 transition-transform duration-300'><i className='fas fa-robot text-2xl mr-3'></i><span className='text-lg font-bold'>与 AI 助手对话</span></button></div>)
 }
-
+  
 const QuickAccessGrid = ({ setActiveModal }) => {
   const functions = [{ title: '报名课程', icon: 'fa-solid fa-graduation-cap', modal: 'enroll' }, { title: '找工作', icon: 'fa-solid fa-briefcase', modal: 'jobs' }, { title: '试看课程', icon: 'fa-solid fa-video', modal: 'trial' }]
   return (<div className='py-2'><div className='grid grid-cols-3 gap-4'>{functions.map(func => <FunctionButton key={func.title} title={func.title} icon={func.icon} onClick={() => setActiveModal(func.modal)} />)}</div></div>)
@@ -159,6 +161,9 @@ const LayoutIndex = props => {
   const handleOpenAssistant = useCallback(() => setIsAiAssistantOpen(true), [])
   const handleCloseAssistant = useCallback(() => setIsAiAssistantOpen(false), [])
 
+  // 将打开 AI 助手的函数传递给 LayoutBase，以便底部导航栏可以调用
+  props = { ...props, onAIAssistantClick: handleOpenAssistant }
+  
   const modalContent = {
     enroll: { title: '报名课程', intro: '结合中缅教学方案，高效学习中文，价格比大部分缅甸机构更优惠！请通过以下方式联系我们，获取专属学习方案：', children: (<><SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200'><i className='fab fa-telegram-plane text-xl mr-3'></i> <span className='font-semibold'>Telegram 联系</span></SmartLink><SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-green-400 text-white hover:bg-green-500 transition-all duration-200'><i className='fab fa-line text-xl mr-3'></i> <span className='font-semibold'>Line 联系</span></SmartLink><SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-all duration-200'><i className='fab fa-viber text-xl mr-3'></i> <span className='font-semibold'>Viber 联系</span></SmartLink><SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-all duration-200'><i className='fab fa-facebook-f text-xl mr-3'></i> <span className='font-semibold'>Facebook 个人主页</span></SmartLink></>) },
     jobs: { title: '找工作', intro: '我们培训机构与上百家工厂长期合作，为您提供仰光、泰国、新加坡、马来西亚、中国等地的中文相关工作岗位！', children: (<><SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>仰光地区招聘</SmartLink><SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>泰国地区招聘</SmartLink><SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>新加坡地区招聘</SmartLink><SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>马来西亚地区招聘</SmartLink><SmartLink href='#' className='block p-2 text-center rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'>中国地区招聘</SmartLink><SmartLink href='#' className='block p-2 text-center rounded bg-green-500 text-white hover:bg-green-600 mt-2'>发布简历/咨询</SmartLink></>) },
@@ -194,18 +199,38 @@ const LayoutIndex = props => {
   )
 }
 
-/**博客列表*/
-const LayoutPostList = props => {
+/**
+ * 其他所有布局组件 (LayoutPostList, LayoutSearch, LayoutArchive, LayoutSlug, 等)
+ * 也需要能够通过底部导航栏打开 AI 助手
+ */
+const addAIAssistantHandling = (Component) => {
+  return (props) => {
+    const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
+    const handleOpenAssistant = useCallback(() => setIsAiAssistantOpen(true), []);
+    const handleCloseAssistant = useCallback(() => setIsAiAssistantOpen(false), []);
+    
+    // 将打开 AI 助手的函数注入到 props 中
+    const newProps = { ...props, onAIAssistantClick: handleOpenAssistant };
+
+    return (
+      <>
+        <Component {...newProps} />
+        {isAiAssistantOpen && <AIAssistantPortal onClose={handleCloseAssistant} />}
+      </>
+    );
+  };
+};
+
+const LayoutPostList = addAIAssistantHandling(props => {
   return (
     <div id='post-outer-wrapper' className='px-5  md:px-0'>
       <CategoryBar {...props} />
       {siteConfig('POST_LIST_STYLE') === 'page' ? (<BlogPostListPage {...props} />) : (<BlogPostListScroll {...props} />)}
     </div>
   )
-}
+})
 
-/**搜索*/
-const LayoutSearch = props => {
+const LayoutSearch = addAIAssistantHandling(props => {
   const { keyword } = props
   const router = useRouter()
   const currentSearch = keyword || router?.query?.s
@@ -231,10 +256,9 @@ const LayoutSearch = props => {
       </div>
     </div>
   )
-}
+})
 
-/**归档*/
-const LayoutArchive = props => {
+const LayoutArchive = addAIAssistantHandling(props => {
   const { archivePosts } = props
   return (
     <div className='p-5 rounded-xl border dark:border-gray-600 max-w-6xl w-full bg-white dark:bg-[#1e1e1e]'>
@@ -246,10 +270,9 @@ const LayoutArchive = props => {
       </div>
     </div>
   )
-}
+})
 
-/**文章详情*/
-const LayoutSlug = props => {
+const LayoutSlug = addAIAssistantHandling(props => {
   const { post, lock, validPassword } = props
   const { locale, fullWidth } = useGlobal()
   const [hasCode, setHasCode] = useState(false)
@@ -337,6 +360,8 @@ const LayoutSlug = props => {
 /**404*/
 const Layout404 = props => {
   const { onLoading, fullWidth } = useGlobal()
+  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false)
+  props = { ...props, onAIAssistantClick: () => setIsAiAssistantOpen(true) }
   return (
     <>
       <main id='wrapper-outer' className={`flex-grow ${fullWidth ? '' : 'max-w-4xl'} w-screen mx-auto px-5`}>
@@ -354,6 +379,7 @@ const Layout404 = props => {
           </Transition>
         </div>
       </main>
+      {isAiAssistantOpen && <AIAssistantPortal onClose={() => setIsAiAssistantOpen(false)} />}
     </>
   )
 }
@@ -362,7 +388,10 @@ const Layout404 = props => {
 const LayoutCategoryIndex = props => {
   const { categoryOptions } = props
   const { locale } = useGlobal()
+  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false)
+  props = { ...props, onAIAssistantClick: () => setIsAiAssistantOpen(true) }
   return (
+    <>
     <div id='category-outer-wrapper' className='mt-8 px-5 md:px-0'>
       <div className='text-4xl font-extrabold dark:text-gray-200 mb-5'>{locale.COMMON.CATEGORY}</div>
       <div id='category-list' className='duration-200 flex flex-wrap m-10 justify-center'>
@@ -378,6 +407,8 @@ const LayoutCategoryIndex = props => {
         })}
       </div>
     </div>
+    {isAiAssistantOpen && <AIAssistantPortal onClose={() => setIsAiAssistantOpen(false)} />}
+    </>
   )
 }
 
@@ -385,7 +416,10 @@ const LayoutCategoryIndex = props => {
 const LayoutTagIndex = props => {
   const { tagOptions } = props
   const { locale } = useGlobal()
+  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false)
+  props = { ...props, onAIAssistantClick: () => setIsAiAssistantOpen(true) }
   return (
+    <>
     <div id='tag-outer-wrapper' className='px-5 mt-8 md:px-0'>
       <div className='text-4xl font-extrabold dark:text-gray-200 mb-5'>{locale.COMMON.TAGS}</div>
       <div id='tag-list' className='duration-200 flex flex-wrap space-x-5 space-y-5 m-10 justify-center'>
@@ -401,6 +435,8 @@ const LayoutTagIndex = props => {
         })}
       </div>
     </div>
+    {isAiAssistantOpen && <AIAssistantPortal onClose={() => setIsAiAssistantOpen(false)} />}
+    </>
   )
 }
 
