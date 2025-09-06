@@ -43,6 +43,16 @@ class MyDocument extends Document {
     return (
       <Html lang={BLOG.LANG}>
         <Head>
+          {/* --- 新增 PWA 相关标签 --- */}
+          <link rel='manifest' href='/manifest.json' />
+          <meta name='theme-color' content='#ffffff' />
+          <meta name="apple-mobile-web-app-capable" content="yes" />
+          <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+          <meta name="apple-mobile-web-app-title" content="中文培训中心" />
+          <meta name="format-detection" content="telephone=no" />
+          <meta name="mobile-web-app-capable" content="yes" />
+          {/* ------------------------- */}
+        
           {/* 预加载字体 */}
           {BLOG.FONT_AWESOME && (
             <>
