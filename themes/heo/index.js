@@ -1,4 +1,4 @@
-// themes/heo/index.js (最终修复版 - 简化 AI 逻辑)
+// themes/heo/index.js (最终纯 UI 改造版 - 完整代码)
 import Comment from '@/components/Comment'
 import { AdSlot } from '@/components/GoogleAdsense'
 import { HashTag } from '@/components/HeroIcons'
@@ -82,7 +82,7 @@ const AIAssistantPortal = ({ onClose }) => {
  * 基础布局
  */
 const LayoutBase = props => {
-  const { children, slotTop, className, post, onAIAssistantClick } = props // 接收 onAIAssistantClick
+  const { children, slotTop, className, post, onAIAssistantClick, isAiAssistantOpen } = props // 接收 onAIAssistantClick 和 isAiAssistantOpen
   const { fullWidth } = useGlobal()
   const router = useRouter()
   const isIndex = router.pathname === '/'
@@ -113,7 +113,7 @@ const LayoutBase = props => {
           <div className='hidden xl:block'>{slotRight}</div>
         </div>
       </main>
-      <BottomNavBar onAIAssistantClick={onAIAssistantClick} /> {/* 新增：添加底部导航栏 */}
+      <BottomNavBar onAIAssistantClick={onAIAssistantClick} isHidden={isAiAssistantOpen} /> {/* 传递 isHidden 状态 */}
       <Footer />
       {/* 底部导航栏会占用空间，添加一个占位符，防止内容被遮挡 */}
       <div className='h-16 md:hidden'></div> 
@@ -161,8 +161,8 @@ const LayoutIndex = props => {
   const handleOpenAssistant = useCallback(() => setIsAiAssistantOpen(true), [])
   const handleCloseAssistant = useCallback(() => setIsAiAssistantOpen(false), [])
 
-  // 将打开 AI 助手的函数传递给 LayoutBase，以便底部导航栏可以调用
-  props = { ...props, onAIAssistantClick: handleOpenAssistant }
+  // 将打开 AI 助手的函数和状态传递给 LayoutBase
+  props = { ...props, onAIAssistantClick: handleOpenAssistant, isAiAssistantOpen }
   
   const modalContent = {
     enroll: { title: '报名课程', intro: '结合中缅教学方案，高效学习中文，价格比大部分缅甸机构更优惠！请通过以下方式联系我们，获取专属学习方案：', children: (<><SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200'><i className='fab fa-telegram-plane text-xl mr-3'></i> <span className='font-semibold'>Telegram 联系</span></SmartLink><SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-green-400 text-white hover:bg-green-500 transition-all duration-200'><i className='fab fa-line text-xl mr-3'></i> <span className='font-semibold'>Line 联系</span></SmartLink><SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-all duration-200'><i className='fab fa-viber text-xl mr-3'></i> <span className='font-semibold'>Viber 联系</span></SmartLink><SmartLink href='#' target='_blank' rel='noopener noreferrer' className='flex items-center p-3 rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-all duration-200'><i className='fab fa-facebook-f text-xl mr-3'></i> <span className='font-semibold'>Facebook 个人主页</span></SmartLink></>) },
@@ -199,23 +199,37 @@ const LayoutIndex = props => {
   )
 }
 
-/**博客列表*/
-const LayoutPostList = props => {
-  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false)
-  props = { ...props, onAIAssistantClick: () => setIsAiAssistantOpen(true) }
+/**
+ * 其他所有布局组件
+ */
+const addAIAssistantHandling = (Component) => {
+  return (props) => {
+    const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
+    const handleOpenAssistant = useCallback(() => setIsAiAssistantOpen(true), []);
+    const handleCloseAssistant = useCallback(() => setIsAiAssistantOpen(false), []);
+    
+    // 将打开 AI 助手的函数和状态注入到 props 中
+    const newProps = { ...props, onAIAssistantClick: handleOpenAssistant, isAiAssistantOpen };
+
+    return (
+      <>
+        <Component {...newProps} />
+        {isAiAssistantOpen && <AIAssistantPortal onClose={handleCloseAssistant} />}
+      </>
+    );
+  };
+};
+
+const LayoutPostList = addAIAssistantHandling(props => {
   return (
-    <>
     <div id='post-outer-wrapper' className='px-5  md:px-0'>
       <CategoryBar {...props} />
       {siteConfig('POST_LIST_STYLE') === 'page' ? (<BlogPostListPage {...props} />) : (<BlogPostListScroll {...props} />)}
     </div>
-    {isAiAssistantOpen && <AIAssistantPortal onClose={() => setIsAiAssistantOpen(false)} />}
-    </>
   )
-}
+})
 
-/**搜索*/
-const LayoutSearch = props => {
+const LayoutSearch = addAIAssistantHandling(props => {
   const { keyword } = props
   const router = useRouter()
   const currentSearch = keyword || router?.query?.s
@@ -230,12 +244,7 @@ const LayoutSearch = props => {
       }, 100)
     }
   }, [currentSearch])
-  
-  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false)
-  props = { ...props, onAIAssistantClick: () => setIsAiAssistantOpen(true) }
-
   return (
-    <>
     <div currentSearch={currentSearch}>
       <div id='post-outer-wrapper' className='px-5  md:px-0'>
         {!currentSearch ? (<SearchNav {...props} />) : (
@@ -245,39 +254,28 @@ const LayoutSearch = props => {
         )}
       </div>
     </div>
-    {isAiAssistantOpen && <AIAssistantPortal onClose={() => setIsAiAssistantOpen(false)} />}
-    </>
   )
-}
+})
 
-/**归档*/
-const LayoutArchive = props => {
-    const { archivePosts } = props
-    const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false)
-    props = { ...props, onAIAssistantClick: () => setIsAiAssistantOpen(true) }
-    return (
-      <>
-      <div className='p-5 rounded-xl border dark:border-gray-600 max-w-6xl w-full bg-white dark:bg-[#1e1e1e]'>
-        <CategoryBar {...props} border={false} />
-        <div className='px-3'>
-          {Object.keys(archivePosts).map(archiveTitle => (
-            <BlogPostArchive key={archiveTitle} posts={archivePosts[archiveTitle]} archiveTitle={archiveTitle}/>
-          ))}
-        </div>
+const LayoutArchive = addAIAssistantHandling(props => {
+  const { archivePosts } = props
+  return (
+    <div className='p-5 rounded-xl border dark:border-gray-600 max-w-6xl w-full bg-white dark:bg-[#1e1e1e]'>
+      <CategoryBar {...props} border={false} />
+      <div className='px-3'>
+        {Object.keys(archivePosts).map(archiveTitle => (
+          <BlogPostArchive key={archiveTitle} posts={archivePosts[archiveTitle]} archiveTitle={archiveTitle}/>
+        ))}
       </div>
-      {isAiAssistantOpen && <AIAssistantPortal onClose={() => setIsAiAssistantOpen(false)} />}
-      </>
-    )
-  }
+    </div>
+  )
+})
 
-/**文章详情*/
-const LayoutSlug = props => {
+const LayoutSlug = addAIAssistantHandling(props => {
   const { post, lock, validPassword } = props
   const { locale, fullWidth } = useGlobal()
   const [hasCode, setHasCode] = useState(false)
   const [activeModal, setActiveModal] = useState(null)
-  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false)
-  props = { ...props, onAIAssistantClick: () => setIsAiAssistantOpen(true) }
   
   useEffect(() => {
     const hasCode = document.querySelectorAll('[class^="language-"]').length > 0
@@ -355,16 +353,12 @@ const LayoutSlug = props => {
         {currentModal?.children}
       </Modal>
       <FloatTocButton {...props} />
-      {isAiAssistantOpen && <AIAssistantPortal onClose={() => setIsAiAssistantOpen(false)} />}
     </>
   )
 }
 
-/**404*/
-const Layout404 = props => {
+const Layout404 = addAIAssistantHandling(props => {
   const { onLoading, fullWidth } = useGlobal()
-  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false)
-  props = { ...props, onAIAssistantClick: () => setIsAiAssistantOpen(true) }
   return (
     <>
       <main id='wrapper-outer' className={`flex-grow ${fullWidth ? '' : 'max-w-4xl'} w-screen mx-auto px-5`}>
@@ -382,19 +376,14 @@ const Layout404 = props => {
           </Transition>
         </div>
       </main>
-      {isAiAssistantOpen && <AIAssistantPortal onClose={() => setIsAiAssistantOpen(false)} />}
     </>
   )
-}
+})
 
-/**分类列表*/
-const LayoutCategoryIndex = props => {
+const LayoutCategoryIndex = addAIAssistantHandling(props => {
   const { categoryOptions } = props
   const { locale } = useGlobal()
-  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false)
-  props = { ...props, onAIAssistantClick: () => setIsAiAssistantOpen(true) }
   return (
-    <>
     <div id='category-outer-wrapper' className='mt-8 px-5 md:px-0'>
       <div className='text-4xl font-extrabold dark:text-gray-200 mb-5'>{locale.COMMON.CATEGORY}</div>
       <div id='category-list' className='duration-200 flex flex-wrap m-10 justify-center'>
@@ -410,19 +399,13 @@ const LayoutCategoryIndex = props => {
         })}
       </div>
     </div>
-    {isAiAssistantOpen && <AIAssistantPortal onClose={() => setIsAiAssistantOpen(false)} />}
-    </>
   )
-}
+})
 
-/**标签列表*/
-const LayoutTagIndex = props => {
+const LayoutTagIndex = addAIAssistantHandling(props => {
   const { tagOptions } = props
   const { locale } = useGlobal()
-  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false)
-  props = { ...props, onAIAssistantClick: () => setIsAiAssistantOpen(true) }
   return (
-    <>
     <div id='tag-outer-wrapper' className='px-5 mt-8 md:px-0'>
       <div className='text-4xl font-extrabold dark:text-gray-200 mb-5'>{locale.COMMON.TAGS}</div>
       <div id='tag-list' className='duration-200 flex flex-wrap space-x-5 space-y-5 m-10 justify-center'>
@@ -438,10 +421,8 @@ const LayoutTagIndex = props => {
         })}
       </div>
     </div>
-    {isAiAssistantOpen && <AIAssistantPortal onClose={() => setIsAiAssistantOpen(false)} />}
-    </>
   )
-}
+})
 
 export {
   Layout404,
