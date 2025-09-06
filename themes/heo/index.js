@@ -1,4 +1,4 @@
-// themes/heo/index.js (最终纯 UI 改造版 - 完整代码)
+// themes/heo/index.js (最终修复版 - 纯 UI 改造, 完整代码)
 import Comment from '@/components/Comment'
 import { AdSlot } from '@/components/GoogleAdsense'
 import { HashTag } from '@/components/HeroIcons'
@@ -106,7 +106,7 @@ const LayoutBase = props => {
     <div id='theme-heo' className={`${siteConfig('FONT_STYLE')} bg-[#f7f9fe] dark:bg-[#18171d] h-full min-h-screen flex flex-col scroll-smooth`}>
       <Style />
       {headerSlot}
-      <main id='wrapper-outer' className={`w-full ${maxWidth} mx-auto relative md:px-5 flex-grow`}> {/* 添加 flex-grow */}
+      <main id='wrapper-outer' className={`w-full ${maxWidth} mx-auto relative md:px-5 flex-grow`}>
         <div id='container-inner' className={`${siteConfig('HEO_HERO_BODY_REVERSE', false, CONFIG) ? 'flex-row-reverse' : ''} w-full mx-auto lg:flex justify-center relative z-10`}>
           <div className={`w-full h-auto ${className || ''}`}>{slotTop}{children}</div>
           <div className='lg:px-2'></div>
@@ -358,10 +358,8 @@ const LayoutSlug = addAIAssistantHandling(props => {
 }
 
 /**404*/
-const Layout404 = props => {
+const Layout404 = addAIAssistantHandling(props => {
   const { onLoading, fullWidth } = useGlobal()
-  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false)
-  props = { ...props, onAIAssistantClick: () => setIsAiAssistantOpen(true) }
   return (
     <>
       <main id='wrapper-outer' className={`flex-grow ${fullWidth ? '' : 'max-w-4xl'} w-screen mx-auto px-5`}>
@@ -379,19 +377,15 @@ const Layout404 = props => {
           </Transition>
         </div>
       </main>
-      {isAiAssistantOpen && <AIAssistantPortal onClose={() => setIsAiAssistantOpen(false)} />}
     </>
   )
-}
+})
 
 /**分类列表*/
-const LayoutCategoryIndex = props => {
+const LayoutCategoryIndex = addAIAssistantHandling(props => {
   const { categoryOptions } = props
   const { locale } = useGlobal()
-  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false)
-  props = { ...props, onAIAssistantClick: () => setIsAiAssistantOpen(true) }
   return (
-    <>
     <div id='category-outer-wrapper' className='mt-8 px-5 md:px-0'>
       <div className='text-4xl font-extrabold dark:text-gray-200 mb-5'>{locale.COMMON.CATEGORY}</div>
       <div id='category-list' className='duration-200 flex flex-wrap m-10 justify-center'>
@@ -407,19 +401,14 @@ const LayoutCategoryIndex = props => {
         })}
       </div>
     </div>
-    {isAiAssistantOpen && <AIAssistantPortal onClose={() => setIsAiAssistantOpen(false)} />}
-    </>
   )
-}
+})
 
 /**标签列表*/
-const LayoutTagIndex = props => {
+const LayoutTagIndex = addAIAssistantHandling(props => {
   const { tagOptions } = props
   const { locale } = useGlobal()
-  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false)
-  props = { ...props, onAIAssistantClick: () => setIsAiAssistantOpen(true) }
   return (
-    <>
     <div id='tag-outer-wrapper' className='px-5 mt-8 md:px-0'>
       <div className='text-4xl font-extrabold dark:text-gray-200 mb-5'>{locale.COMMON.TAGS}</div>
       <div id='tag-list' className='duration-200 flex flex-wrap space-x-5 space-y-5 m-10 justify-center'>
@@ -435,10 +424,8 @@ const LayoutTagIndex = props => {
         })}
       </div>
     </div>
-    {isAiAssistantOpen && <AIAssistantPortal onClose={() => setIsAiAssistantOpen(false)} />}
-    </>
   )
-}
+})
 
 export {
   Layout404,
