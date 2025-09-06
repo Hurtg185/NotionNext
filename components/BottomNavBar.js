@@ -1,9 +1,9 @@
 // components/BottomNavBar.js
 import { useRouter } from 'next/router'
 import SmartLink from '@/components/SmartLink'
-import { motion } from 'framer-motion'
+import { motion } from 'framer-motion' // 假设 framer-motion 存在
 
-const BottomNavBar = ({ onAIAssistantClick }) => {
+const BottomNavBar = ({ className, onAIAssistantClick, isHidden }) => {
   const router = useRouter()
   const currentPath = router.pathname
 
@@ -14,13 +14,13 @@ const BottomNavBar = ({ onAIAssistantClick }) => {
   ]
 
   const hideOnRoutes = ['/posts/']
-  if (hideOnRoutes.some(route => currentPath.startsWith(route))) {
+  if (isHidden || hideOnRoutes.some(route => currentPath.startsWith(route))) {
     return null
   }
 
   return (
     <motion.nav
-      className="fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-gray-800 border-t dark:border-gray-700 flex justify-around items-center z-50 md:hidden"
+      className={`fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-gray-800 border-t dark:border-gray-700 flex justify-around items-center z-50 md:hidden ${className || ''}`}
       initial={{ y: '100%' }}
       animate={{ y: '0%' }}
       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
@@ -38,7 +38,7 @@ const BottomNavBar = ({ onAIAssistantClick }) => {
           </SmartLink>
         )
       ))}
-    </nav>
+    </motion.nav> // <--- 这里是修复的地方，我添加了关闭标签
   )
 }
 
