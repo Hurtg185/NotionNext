@@ -28,10 +28,11 @@
   "dependencies": {
     "@clerk/localizations": "^3.0.4",
     "@clerk/nextjs": "^5.1.5",
+    "@fingerprintjs/fingerprintjs": "^4.2.2",
     "@headlessui/react": "^1.7.15",
     "@next/bundle-analyzer": "^12.1.1",
     "@vercel/analytics": "^1.0.0",
-    "@vercel/kv": "^1.0.1",           
+    "@vercel/kv": "^1.0.1",
     "algoliasearch": "^4.18.0",
     "axios": "^1.7.2",
     "feed": "^4.2.2",
@@ -49,12 +50,12 @@
     "react-hotkeys-hook": "^4.5.0",
     "react-notion-x": "7.3.0",
     "react-share": "^5.2.2",
-    "twikoo": "^1.6.36",
     "react-tweet-embed": "~2.0.0",
-    "uuid": "^9.0.1",                  
-    "@fingerprintjs/fingerprintjs": "^4.2.2" 
+    "twikoo": "^1.6.36",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
+    "@types/minimatch": "^6.0.0",
     "@types/node": "22.15.3",
     "@types/react": "18.3.10",
     "@typescript-eslint/eslint-plugin": "^7.16.0",
