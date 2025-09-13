@@ -42,7 +42,7 @@ const TextToSpeechButton = ({ text, className = '' }) => {
     setPlaybackState('loading');
     
     const encodedText = encodeURIComponent(cleanedText);
-    const url = `https://t.leftsite.cn/tts?t=${encodedText}&v=zh-CN-XiaochenMultilingualNeural&r=-20%&p=0%&o=audio-24khz-48kbitrate-mono-mp3`;
+    const url = `https://t.leftsite.cn/tts?t=${encodedText}&v=zh-CN-XiaochenMultilingualNeural&r=-20&p=0&o=audio-24khz-48kbitrate-mono-mp3`;
     
     try {
       const response = await fetch(url);
