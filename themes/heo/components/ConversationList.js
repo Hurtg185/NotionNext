@@ -1,4 +1,4 @@
-// themes/heo/components/ConversationList.js (最终防闪烁版)
+// themes/heo/components/ConversationList.js (最终防闪烁 + 功能完整版)
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/lib/AuthContext'
@@ -25,7 +25,7 @@ const ConversationList = () => {
 
   // 使用最标准、最简单的 useEffect 数据获取模式
   useEffect(() => {
-    // 如果用户不存在，则不加载
+    // 如果用户不存在，则不加载，并清空列表
     if (!user) {
       setLoading(false);
       setConversations([]);
@@ -51,10 +51,10 @@ const ConversationList = () => {
 
   return (
     <div className="h-full overflow-y-auto bg-white dark:bg-gray-800">
-      {/* 消息标题和搜索框现在由父页面管理 */}
+      {/* 消息标题和搜索框现在由父页面 pages/forum/messages/index.js 管理 */}
 
       {loading ? (
-        // 加载时，始终渲染固定数量的骨架屏
+        // 加载时，始终渲染固定数量的骨架屏，避免布局跳动
         <div>
           {[...Array(8)].map((_, i) => <ConversationSkeleton key={i} />)}
         </div>
@@ -64,7 +64,7 @@ const ConversationList = () => {
           <ConversationItem key={conv.id} conversation={conv} onClick={() => handleSelectChat(conv)} />
         ))
       ) : (
-        // 如果没有对话，显示提示
+        // 如果没有对话，显示友好的提示
         <div className="p-6 text-center text-gray-500 dark:text-gray-400 mt-10">
           <i className="fas fa-comments text-4xl text-gray-300 dark:text-gray-600 mb-4"></i>
           <p className="font-semibold">还没有对话</p>
