@@ -1,4 +1,4 @@
-// themes/heo/components/ConversationList.js (加载速度优化版)
+// themes/heo/components/ConversationList.js (最终防闪烁版)
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/lib/AuthContext'
@@ -6,46 +6,70 @@ import { getConversationsForUser } from '@/lib/chat'
 import ConversationItem from './ConversationItem'
 import { useDrawer } from '@/lib/DrawerContext';
 
+// 独立的骨架屏组件，确保样式稳定
+const ConversationSkeleton = () => (
+  <div className="flex items-center p-3 animate-pulse border-b border-gray-200 dark:border-gray-700">
+    <div className="w-14 h-14 bg-gray-300 dark:bg-gray-700 rounded-full flex-shrink-0"></div>
+    <div className="flex-1 ml-3 space-y-2">
+      <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded w-3/4"></div>
+      <div className="h-3 bg-gray-200 dark:bg-gray-600 rounded w-1/2"></div>
+    </div>
+  </div>
+);
+
 const ConversationList = () => {
   const { user } = useAuth()
   const [conversations, setConversations] = useState([])
-  // 【核心修复】: loading 状态由 getConversationsForUser 回调控制
   const [loading, setLoading] = useState(true) 
   const { openDrawer } = useDrawer();
 
+  // 使用最标准、最简单的 useEffect 数据获取模式
   useEffect(() => {
-    if (!user) return;
-    setLoading(true); // 开始监听时，设置为加载中
-    const unsubscribe = getConversationsForUser(user.uid, (convs, isLoading) => {
+    // 如果用户不存在，则不加载
+    if (!user) {
+      setLoading(false);
+      setConversations([]);
+      return;
+    }
+
+    // 用户存在，开始订阅数据
+    setLoading(true); // 立即显示骨架屏
+    const unsubscribe = getConversationsForUser(user.uid, (convs) => {
       setConversations(convs);
-      setLoading(isLoading); // 使用回调返回的加载状态
+      setLoading(false); // 数据已到达（即使是空列表），停止加载
     });
-    return () => unsubscribe();
-  }, [user]);
+
+    // 组件卸载时，取消订阅
+    return () => {
+      unsubscribe();
+    };
+  }, [user]); // 依赖项只有 user
 
   const handleSelectChat = (conversation) => {
     openDrawer('chat', { conversation });
   };
 
-  // 在加载时显示骨架屏，提升体验
-  if (loading) {
-    return (
-        <div>
-            <div className="p-4 border-b"><h2 className="text-xl font-bold">消息</h2></div>
-            {[...Array(5)].map((_, i) => <div key={i} className="h-[76px] bg-gray-100 dark:bg-gray-800 animate-pulse border-b border-gray-200 dark:border-gray-700"></div>)}
-        </div>
-    )
-  }
-
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="p-4 border-b"> <h2 className="text-xl font-bold">消息</h2> </div>
-      {conversations.length > 0 ? (
+    <div className="h-full overflow-y-auto bg-white dark:bg-gray-800">
+      {/* 消息标题和搜索框现在由父页面管理 */}
+
+      {loading ? (
+        // 加载时，始终渲染固定数量的骨架屏
+        <div>
+          {[...Array(8)].map((_, i) => <ConversationSkeleton key={i} />)}
+        </div>
+      ) : conversations.length > 0 ? (
+        // 数据加载完成后，渲染真实列表
         conversations.map(conv => (
           <ConversationItem key={conv.id} conversation={conv} onClick={() => handleSelectChat(conv)} />
         ))
       ) : (
-        <div className="p-6 text-center text-gray-500"> <p>还没有对话。</p> </div>
+        // 如果没有对话，显示提示
+        <div className="p-6 text-center text-gray-500 dark:text-gray-400 mt-10">
+          <i className="fas fa-comments text-4xl text-gray-300 dark:text-gray-600 mb-4"></i>
+          <p className="font-semibold">还没有对话</p>
+          <p className="text-sm">去社区里开启第一次交流吧！</p>
+        </div>
       )}
     </div>
   )
