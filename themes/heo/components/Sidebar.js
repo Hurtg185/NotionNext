@@ -1,4 +1,4 @@
-// themes/heo/components/Sidebar.js (最终版本)
+// themes/heo/components/Sidebar.js (最终本)
 
 import { useAuth } from '@/lib/AuthContext';
 import Link from 'next/link';
