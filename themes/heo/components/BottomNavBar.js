@@ -1,4 +1,4 @@
-// themes/heo/components/BottomNavBar.js (最终强制CSS修复 V2.0)
+// themes/heo/components/BottomNavBar.js (最终强CSS修复 V2.0)
 
 import Link from 'next/link';
 import { useRouter } from 'next/router';
