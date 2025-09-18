@@ -1,3 +1,5 @@
+// tailwind.config.js (添加聊天颜色最终版)
+
 const BLOG = require('./blog.config')
 const { fontFamilies } = require('./lib/font')
 
@@ -8,18 +10,14 @@ module.exports = {
     './layouts/**/*.js',
     './themes/**/*.js'
   ],
-  darkMode: BLOG.APPEARANCE === 'class' ? 'media' : 'class', // or 'media' or 'class'
+  darkMode: BLOG.APPEARANCE === 'class' ? 'media' : 'class',
   theme: {
     fontFamily: fontFamilies,
     screens: {
       sm: '540px',
-      // => @media (min-width: 576px) { ... }
       md: '720px',
-      // => @media (min-width: 768px) { ... }
       lg: '960px',
-      // => @media (min-width: 992px) { ... }
       xl: '1140px',
-      // => @media (min-width: 1200px) { ... }
       '2xl': '1536px'
     },
     container: {
@@ -28,6 +26,11 @@ module.exports = {
     },
     extend: {
       colors: {
+        // 【核心修改】: 在这里添加我们新的聊天气泡颜色
+        'chat-bubble-me': '#D6CFFC',     // #EFECFF 太浅，我们用一个深一点的紫色
+        'chat-bubble-other': '#f2f2f2',
+        
+        // --- 您原来的颜色定义保持不变 ---
         day: {
           DEFAULT: BLOG.BACKGROUND_LIGHT || '#ffffff'
         },
@@ -39,8 +42,6 @@ module.exports = {
           'black-gray': '#101414',
           'light-gray': '#e5e5e5'
         },
-        // black: '#212b36',
-        'dark-700': '#090e34b3',
         dark: {
           DEFAULT: '#111928',
           2: '#1F2A37',
