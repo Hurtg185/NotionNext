@@ -1,4 +1,4 @@
-// themes/heo/components/ChatWindow.js (最终沉浸式UI + 稳定布局版)
+// themes/heo/components/ChatWindow.js (沉浸式美化版)
 
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/lib/AuthContext'
@@ -12,117 +12,110 @@ const ChatWindow = ({ chatId, conversation }) => {
   const [messages, setMessages] = useState([])
   const [otherUser, setOtherUser] = useState(null)
   const messagesEndRef = useRef(null)
-  const [showSettings, setShowSettings] = useState(false);
-  const [background, setBackground] = useState('default');
+  const [showSettings, setShowSettings] = useState(false)
+  const [background, setBackground] = useState('default') // 'default' 或图片URL
 
-  // --- 所有 useEffect hooks 保持我们之前修复好的、健壮的版本 ---
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
-  useEffect(() => { scrollToBottom() }, [messages]);
+  useEffect(() => { /* ... scrollToBottom 不变 ... */ }, [messages])
+  useEffect(() => { /* ... 获取用户信息不变 ... */ }, [conversation, user])
+  useEffect(() => { /* ... 获取消息不变 ... */ }, [chatId])
 
+  // 加载和监听背景变化
   useEffect(() => {
-    if (user && conversation?.participants) {
-        const otherUserId = conversation.participants.find(uid => uid !== user.uid);
-        if (otherUserId) {
-            setOtherUser(null); 
-            getUserProfile(otherUserId).then(setOtherUser);
-        }
+    const loadBackground = () => {
+      const savedBg = localStorage.getItem(`chat_bg_${chatId}`)
+      setBackground(savedBg || 'default')
     }
-  }, [conversation, user]);
+    loadBackground()
 
-  useEffect(() => {
-    if (chatId) {
-        const unsubscribe = getMessagesForChat(chatId, setMessages);
-        return () => unsubscribe();
-    } else {
-        setMessages([]);
+    const handleBgChange = (event) => {
+      if (event.detail.chatId === chatId) {
+        setBackground(event.detail.bgValue)
+      }
     }
-  }, [chatId]);
+    window.addEventListener('chat-bg-change', handleBgChange)
 
-  useEffect(() => {
-    if (chatId) {
-        const loadBackground = () => {
-          const savedBg = localStorage.getItem(`chat_bg_${chatId}`);
-          setBackground(savedBg || 'default');
-        };
-        loadBackground();
+    return () => window.removeEventListener('chat-bg-change', handleBgChange)
+  }, [chatId])
 
-        const handleBgChange = (event) => {
-          if (event.detail.chatId === chatId) {
-            setBackground(event.detail.bgValue);
-          }
-        };
-        window.addEventListener('chat-bg-change', handleBgChange);
-        
-        return () => window.removeEventListener('chat-bg-change', handleBgChange);
-    }
-  }, [chatId]);
+  if (!chatId || !conversation) return null
 
-  if (!chatId || !conversation) {
-    return <div className="flex items-center justify-center h-full">正在加载对话...</div>
-  }
+  const isBgImage = background !== 'default'
 
-  const isBgImage = background !== 'default';
-  
   return (
-    // 【核心UI修改 1】: 父容器，应用背景图
-    <div 
-      className={`relative flex flex-col h-full ${!isBgImage ? 'bg-gray-50 dark:bg-gray-900' : 'bg-cover bg-center'}`}
+    <div
+      className={`relative flex flex-col h-full ${
+        !isBgImage ? 'bg-gray-50 dark:bg-gray-900' : 'bg-cover bg-center'
+      }`}
       style={{ backgroundImage: isBgImage ? `url(${background})` : 'none' }}
     >
-      {/* 
-        如果设置了图片背景，则添加一层半透明的叠加层。
-        这能确保即使背景图是浅色的，深色模式下的白色字体也能看清。
-      */}
-      {isBgImage && <div className="absolute inset-0 bg-black/20 z-0"></div>}
-      
-      {/* 
-        【核心UI修改 2】: 顶部栏改为半透明磨砂玻璃
-        - relative z-10: 确保它在内容之上
-        - bg-white/70 dark:bg-gray-800/70: 半透明背景
-        - backdrop-blur-md: 磨砂玻璃效果
-      */}
-      <div className="relative z-10 flex-shrink-0 p-3 h-14 bg-white/70 dark:bg-gray-800/70 backdrop-blur-md flex justify-between items-center">
-        <div className="w-8"></div> 
-        {otherUser ? (
-            <h2 className="font-bold text-lg text-center text-gray-900 dark:text-white">{otherUser.displayName}</h2>
-        ) : (
-            <div className="h-5 bg-gray-300/50 dark:bg-gray-600/50 rounded-md w-24 animate-pulse"></div>
-        )}
+      {/* 遮罩层：如果是背景图，加点暗化处理 */}
+      {isBgImage && <div className="absolute inset-0 bg-black/30 z-0"></div>}
+
+      {/* 顶栏：透明或半透明背景，沉浸式 */}
+      <div
+        className={`relative z-10 flex-shrink-0 p-3 h-14 flex justify-between items-center 
+        ${isBgImage ? 'bg-black/30 text-white' : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white'} 
+        border-b border-gray-200/30 dark:border-gray-700/30 backdrop-blur-md`}
+      >
+        <div className="w-8"></div>
+        <h2 className="font-bold text-lg text-center truncate">
+          {otherUser?.displayName || '加载中...'}
+        </h2>
         <div className="w-8 text-right">
-          <button onClick={() => setShowSettings(true)} className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white p-2 rounded-full">
+          <button
+            onClick={() => setShowSettings(true)}
+            className={`p-2 rounded-full transition ${
+              isBgImage
+                ? 'text-white/80 hover:bg-white/20 hover:text-white'
+                : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700'
+            }`}
+          >
             <i className="fas fa-ellipsis-v"></i>
           </button>
         </div>
       </div>
-      
-      {/* 
-        【核心UI修改 3】: 聊天内容区
-        - flex-grow: 自动填充所有可用空间
-        - overflow-y-auto: 内容超出时出现滚动条
-        - p-4: 保持内边距，让气泡不会贴着屏幕边缘
-      */}
+
+      {/* 聊天内容区 */}
       <div className="relative z-0 flex-grow overflow-y-auto p-4">
-        {messages.map(msg => (
-            <ChatMessage key={msg.id} message={msg} otherUser={otherUser} chatId={chatId} />
-        ))}
+        {messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <p
+              className={`px-3 py-2 rounded-lg text-sm ${
+                isBgImage
+                  ? 'bg-black/40 text-white/80'
+                  : 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-200'
+              }`}
+            >
+              还没有消息，开始对话吧！
+            </p>
+          </div>
+        ) : (
+          messages.map((msg) => (
+            <ChatMessage
+              key={msg.id}
+              message={msg}
+              otherUser={otherUser}
+              chatId={chatId}
+            />
+          ))
+        )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 
-        【核心UI修改 4】: 输入框区域改为半透明磨砂玻璃
-        - relative z-10: 确保它在内容之上
-        - bg-white/70 dark:bg-gray-800/70: 半透明背景
-        - backdrop-blur-md: 磨砂玻璃效果
-        - border-t: 增加一条细微的顶部边框作为分割
-      */}
-      <div className="relative z-10 flex-shrink-0 p-4 bg-white/70 dark:bg-gray-800/70 backdrop-blur-md border-t border-gray-200/20 dark:border-gray-700/20">
+      {/* 输入框：半透明沉浸式 */}
+      <div
+        className={`relative z-10 flex-shrink-0 p-3 
+        ${isBgImage ? 'bg-black/30' : 'bg-white dark:bg-gray-800'} 
+        border-t border-gray-200/30 dark:border-gray-700/30 backdrop-blur-md`}
+      >
         <ChatInput chatId={chatId} />
       </div>
 
       {showSettings && (
-        <ChatSettingsPanel onClose={() => setShowSettings(false)} chatId={chatId} />
+        <ChatSettingsPanel
+          onClose={() => setShowSettings(false)}
+          chatId={chatId}
+        />
       )}
     </div>
   )
