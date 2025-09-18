@@ -20,7 +20,7 @@ const ChatDrawer = ({ isOpen, onClose, conversation }) => {
         }`}
         // 【核心CSS修复】: 使用 h-[85dvh] 来强制抽屉的高度
         // 85dvh = 85% 的动态视口高度，这是一个非常适合抽屉的高度
-        style={{ height: '85dvh' }} 
+        style={{ height: '100dvh' }} 
       >
         {/*
           确保内部的 ChatWindow 能填满这个容器。
