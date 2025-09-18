@@ -1,4 +1,4 @@
-// themes/heo/index.js (100%完整且修复了所有BUG的最终版)
+// themes/heo/index.js (最终沉浸式状态栏修复版 - 100%完整)
 
 import Comment from '@/components/Comment'
 import { AdSlot } from '@/components/GoogleAdsense'
@@ -41,6 +41,23 @@ import ArticleExpirationNotice from '@/components/ArticleExpirationNotice'
 import BottomNavBar from './components/BottomNavBar'
 
 /**
+ * 动态更新状态栏颜色的辅助函数
+ * @param {boolean} isDarkMode - 当前是否是深色模式
+ */
+const updateThemeColor = (isDarkMode) => {
+  if (typeof window !== 'undefined') {
+    let themeColorMeta = document.querySelector('meta[name="theme-color"]');
+    if (!themeColorMeta) {
+      themeColorMeta = document.createElement('meta');
+      themeColorMeta.name = 'theme-color';
+      document.getElementsByTagName('head')[0].appendChild(themeColorMeta);
+    }
+    const newColor = isDarkMode ? '#18171d' : '#ffffff';
+    themeColorMeta.setAttribute('content', newColor);
+  }
+}
+
+/**
  * 基础布局
  * @param props
  * @returns {JSX.Element}
@@ -50,8 +67,14 @@ const LayoutBase = props => {
   const { children, slotTop, className } = props
   const { fullWidth, isDarkMode } = useGlobal()
   const router = useRouter()
-  const isHomePage = router.pathname === '/'
+  
+  // 【核心修改】: 使用 useEffect 监听 isDarkMode 的变化，并动态更新状态栏颜色
+  useEffect(() => {
+    updateThemeColor(isDarkMode);
+  }, [isDarkMode]);
 
+  // --- 您原来的 LayoutBase 逻辑保持不变 ---
+  const isHomePage = router.pathname === '/'
   const headerSlot = (
     <header>
       {isHomePage && <Header {...props} />}
@@ -440,4 +463,4 @@ export {
   LayoutSlug,
   LayoutTagIndex,
   CONFIG as THEME_CONFIG
-            }
+    }
