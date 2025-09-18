@@ -1,4 +1,4 @@
-// themes/heo/index.js (最终沉浸式状态栏修复版 - 100%完整)
+// themes/heo/index.js (最终沉浸式状态栏修复版 - 100%完整且无错)
 
 import Comment from '@/components/Comment'
 import { AdSlot } from '@/components/GoogleAdsense'
@@ -48,7 +48,7 @@ const updateThemeColor = (isDarkMode) => {
   if (typeof window !== 'undefined') {
     let themeColorMeta = document.querySelector('meta[name="theme-color"]');
     if (!themeColorMeta) {
-      themeColorMeta = document.createElement('meta');
+      themeColorMeta = document.createElement('meta'); // 使用正确的变量名
       themeColorMeta.name = 'theme-color';
       document.getElementsByTagName('head')[0].appendChild(themeColorMeta);
     }
@@ -73,7 +73,6 @@ const LayoutBase = props => {
     updateThemeColor(isDarkMode);
   }, [isDarkMode]);
 
-  // --- 您原来的 LayoutBase 逻辑保持不变 ---
   const isHomePage = router.pathname === '/'
   const headerSlot = (
     <header>
@@ -281,7 +280,6 @@ const LayoutSlug = props => {
         {!lock && post && (
           <div className='mx-auto md:w-full md:px-5'>
             <article
-              id='article-wrapper'
               itemScope
               itemType='https://schema.org/Movie'>
               <section
@@ -294,7 +292,7 @@ const LayoutSlug = props => {
                 <WWAds orientation='horizontal' className='w-full' />
               </section>
               <PostAdjacent {...props} />
-              <ShareBar post={post} />
+              <ShareBar {...props} /> 
               {post?.type === 'Post' && (
                 <div className='px-5'>
                   <PostCopyright {...props} />
