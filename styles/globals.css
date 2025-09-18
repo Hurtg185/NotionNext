@@ -1,3 +1,5 @@
+/* styles/globals.css (最终完整版) */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -118,7 +120,6 @@ nav {
 
 .medium-zoom-overlay {
   background: none !important;
-  /* background: rgba(0, 0, 0, 0.01) none repeat scroll 0% 0% !important; */
 }
 
 .shadow-text {
@@ -209,9 +210,6 @@ nav {
   margin-right: 0.2rem;
 }
 
-/* .webmention-counts .counts > span {
-  margin-right: .8rem;
-} */
 .webmention-counts .counts > span:not(:last-child):after {
   content: ' • ';
 }
@@ -310,3 +308,45 @@ img {
     background-color: rgba(30, 41, 55, 0.8); /* 深色模式下的背景色 */
   }
 }
+
+
+/* --- 【最终方案】: 全局美化滚动条 START --- */
+
+/* 适用于 Chrome, Edge, Safari */
+::-webkit-scrollbar {
+  width: 6px; 
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+/* 深色模式适配 */
+html.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* 适用于 Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+html.dark * {
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+/* --- 全局美化滚动条 END --- */
