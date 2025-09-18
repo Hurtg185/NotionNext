@@ -1,4 +1,4 @@
-// themes/heo/components/BottomNavBar.js (最终CSS修复 + 全局Context版)
+// themes/heo/components/BottomNavBar.js (最终强制CSS修复版)
 
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -11,6 +11,7 @@ const BottomNavBar = () => {
   const router = useRouter();
   const { activeDrawer, drawerData, openDrawer, closeDrawer } = useDrawer();
 
+  // 恢复您原始的、正确的导航项定义
   const navItems = [
     { name: '主页', path: '/', icon: 'fas fa-home', type: 'link' },
     { name: 'AI助手', type: 'ai', icon: 'fas fa-robot' },
@@ -24,8 +25,7 @@ const BottomNavBar = () => {
       <style jsx global>{`
         @media (max-width: 767px) {
           body {
-            /* 确保这个值和 h-16 匹配 */
-            padding-bottom: 4rem; 
+            padding-bottom: 4rem; /* h-16 */
           }
         }
       `}</style>
@@ -36,8 +36,8 @@ const BottomNavBar = () => {
             const isActive = router.pathname === item.path;
             return (
               <Link key={item.name} href={item.path} passHref>
-                {/* 【核心CSS修复】: a 标签需要 flex-1 才能撑开空间 */}
-                <a className={`flex flex-col items-center justify-center flex-1 h-full px-2 py-1 transition-colors duration-200 ${isActive ? 'text-blue-500' : 'text-gray-600 dark:text-gray-300'}`}>
+                {/* 【核心CSS修复】: 使用 w-1/5 (20%宽度) 强制均分空间 */}
+                <a className={`flex flex-col items-center justify-center h-full w-1/5 px-1 py-1 transition-colors duration-200 ${isActive ? 'text-blue-500' : 'text-gray-600 dark:text-gray-300'}`}>
                   <i className={`${item.icon} text-xl mb-1`}></i>
                   <span className='text-xs'>{item.name}</span>
                 </a>
@@ -46,7 +46,7 @@ const BottomNavBar = () => {
           }
           // 渲染触发器按钮
           return (
-            <button key={item.name} onClick={() => openDrawer(item.type)} className='flex flex-col items-center justify-center flex-1 h-full px-2 py-1 text-gray-600 dark:text-gray-300'>
+            <button key={item.name} onClick={() => openDrawer(item.type)} className='flex flex-col items-center justify-center h-full w-1/5 px-1 py-1 text-gray-600 dark:text-gray-300'>
               <i className={`${item.icon} text-xl mb-1`}></i>
               <span className='text-xs'>{item.name}</span>
             </button>
