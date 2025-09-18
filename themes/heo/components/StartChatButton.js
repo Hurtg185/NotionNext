@@ -1,22 +1,20 @@
-// themes/heo/components/StartChatButton.js (抽屉模式最终版 - 最终清理)
+// themes/heo/components/StartChatButton.js (连接全局Context版)
 
 import { useAuth } from '@/lib/AuthContext'
 import { startChat } from '@/lib/chat'
-// 不再需要 useDrawer
+import { useDrawer } from '@/lib/DrawerContext'
 
-const StartChatButton = ({ targetUserId, onClick }) => { // 接收一个 onClick
+const StartChatButton = ({ targetUserId }) => {
   const { user } = useAuth()
+  const { openDrawer } = useDrawer();
 
   const handleStartChat = async () => {
-    if (!user) {
-      alert('请先登录！')
-      return
-    }
+    if (!user) { alert('请先登录！'); return; }
+    
     const conversation = await startChat(user.uid, targetUserId);
-    if (conversation && onClick) {
-      // 调用从外部传入的 onClick 函数，并把对话数据传出去
-      onClick(conversation); 
-    } else if (!conversation) {
+    if (conversation) {
+      openDrawer({ type: 'chat', conversation: conversation });
+    } else {
       alert('无法开启对话，请稍后再试。');
     }
   }
