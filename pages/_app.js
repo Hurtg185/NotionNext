@@ -5,7 +5,7 @@ import '@/styles/utility-patterns.css'
 import '@/styles/notion.css'
 import 'react-notion-x/src/styles.css'
 import { AuthProvider } from '../lib/AuthContext'
-import { DrawerProvider } from '../lib/DrawerContext' // 1. 导入全局管理器
+import { DrawerProvider } from '../lib/DrawerContext' 
 
 import useAdjustStyle from '@/hooks/useAdjustStyle'
 import { GlobalContextProvider } from '@/lib/global'
@@ -13,6 +13,7 @@ import { getBaseLayoutByTheme } from '@/themes/theme'
 import { useRouter } from 'next/router'
 import { useCallback, useMemo } from 'react'
 import { getQueryParam } from '../lib/utils'
+
 import BLOG from '@/blog.config'
 import ExternalPlugins from '@/components/ExternalPlugins'
 import SEO from '@/components/SEO'
@@ -48,7 +49,6 @@ const MyApp = ({ Component, pageProps }) => {
   
   return (
     <AuthProvider>
-      {/* 2. 用 DrawerProvider 包裹所有内容 */}
       <DrawerProvider>
         {content}
       </DrawerProvider>
