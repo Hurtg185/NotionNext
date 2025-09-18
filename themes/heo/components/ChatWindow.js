@@ -1,4 +1,5 @@
-// themes/heo/components/ChatWindow.js (UI优化版)
+// themes/heo/components/ChatWindow.js (最终高度修复版)
+
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/lib/AuthContext'
 import { getMessagesForChat, getUserProfile } from '@/lib/chat'
@@ -12,11 +13,11 @@ const ChatWindow = ({ chatId, conversation }) => {
   const messagesEndRef = useRef(null)
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' })
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
   useEffect(() => {
-    setTimeout(scrollToBottom, 100);
+    scrollToBottom()
   }, [messages])
 
   useEffect(() => {
@@ -38,16 +39,18 @@ const ChatWindow = ({ chatId, conversation }) => {
   if (!chatId) {
     return (
       <div className="flex items-center justify-center h-full text-gray-400 bg-gray-50 dark:bg-gray-900">
-        <p>从左侧选择一个对话开始聊天</p>
+        <p>请选择一个对话</p>
       </div>
     )
   }
 
   return (
+    // 【核心CSS修复】: 确保这个容器是 flex 布局且高度为 100%
     <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900">
-      <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm text-center">
-        <h2 className="font-bold text-lg text-gray-900 dark:text-white">{otherUser?.displayName || '加载中...'}</h2>
+      <div className="flex-shrink-0 p-4 border-b text-center">
+        <h2 className="font-bold text-lg">{otherUser?.displayName || '加载中...'}</h2>
       </div>
+
       <div className="flex-grow overflow-y-auto p-4">
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full text-gray-400">
@@ -60,7 +63,8 @@ const ChatWindow = ({ chatId, conversation }) => {
         )}
         <div ref={messagesEndRef} />
       </div>
-      <div className="flex-shrink-0 p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+
+      <div className="flex-shrink-0 p-4 border-t bg-white dark:bg-gray-800">
         <ChatInput chatId={chatId} />
       </div>
     </div>
