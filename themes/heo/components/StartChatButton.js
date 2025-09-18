@@ -1,4 +1,4 @@
-// themes/heo/components/StartChatButton.js (连接全局Context版)
+// themes/heo/components/StartChatButton.js (连接全Context版)
 
 import { useAuth } from '@/lib/AuthContext'
 import { startChat } from '@/lib/chat'
