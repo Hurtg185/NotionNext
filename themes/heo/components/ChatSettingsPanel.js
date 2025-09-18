@@ -1,9 +1,7 @@
-// themes/heo/components/ChatSettingsPanel.js (100%完整修复版)
+// themes/heo/components/ChatSettingsPanel.js (语法100%修正版)
 
-import React, 'react'
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'; // 【核心修复】: 修复了这里致命的语法错误
 
-// 【核心修复】: 恢复 SettingsItem 组件的完整实现代码
 const SettingsItem = ({ icon, label, onClick, isDestructive = false }) => (
   <button
     onClick={onClick}
@@ -19,22 +17,22 @@ const SettingsItem = ({ icon, label, onClick, isDestructive = false }) => (
 );
 
 const ChatSettingsPanel = ({ onClose, chatId }) => {
-  const handlePanelClick = e => e.stopPropagation()
-  const fileInputRef = React.useRef(null)
+  const handlePanelClick = e => e.stopPropagation();
+  const fileInputRef = React.useRef(null);
   
   const handleBackgroundChange = event => {
-    const file = event.target.files[0]
-    if (!file) return
+    const file = event.target.files[0];
+    if (!file) return;
 
-    const reader = new FileReader()
+    const reader = new FileReader();
     reader.onload = e => {
-      const imageUrl = e.target.result
-      localStorage.setItem(`chat_bg_${chatId}`, imageUrl)
-      window.dispatchEvent(new CustomEvent('chat-bg-change', { detail: { chatId, imageUrl } }))
-      onClose()
-    }
-    reader.readAsDataURL(file)
-  }
+      const imageUrl = e.target.result;
+      localStorage.setItem(`chat_bg_${chatId}`, imageUrl);
+      window.dispatchEvent(new CustomEvent('chat-bg-change', { detail: { chatId, imageUrl } }));
+      onClose();
+    };
+    reader.readAsDataURL(file);
+  };
 
   return (
     <div className="fixed inset-0 bg-black/30 z-50 flex items-end" onClick={onClose}>
@@ -66,32 +64,32 @@ const ChatSettingsPanel = ({ onClose, chatId }) => {
         .animate-slide-up { animation: slide-up 0.3s ease-out forwards; }
       `}</style>
     </div>
-  )
-}
+  );
+};
 
 const BubbleStyleSettings = ({ chatId }) => {
-    const [currentTheme, setCurrentTheme] = useState(null)
+    const [currentTheme, setCurrentTheme] = useState(null);
 
     useEffect(() => {
-        const savedTheme = localStorage.getItem(`chat_theme_${chatId}`)
-        setCurrentTheme(savedTheme || 'default')
-    }, [chatId])
+        const savedTheme = localStorage.getItem(`chat_theme_${chatId}`);
+        setCurrentTheme(savedTheme || 'default');
+    }, [chatId]);
 
     const themes = {
         default: { name: '默认', me: 'bg-blue-500 text-white', other: 'bg-gray-200 text-black' },
         purple: { name: '雅紫', me: 'bg-purple-500 text-white', other: 'bg-purple-100 text-purple-900' },
         green: { name: '清新', me: 'bg-green-500 text-white', other: 'bg-green-100 text-green-900' },
         dark: { name: '酷黑', me: 'bg-gray-700 text-white', other: 'bg-gray-300 text-black' }
-    }
+    };
 
     const applyTheme = (themeKey) => {
-        setCurrentTheme(themeKey)
-        localStorage.setItem(`chat_theme_${chatId}`, themeKey)
-        window.dispatchEvent(new CustomEvent('chat-style-change', { detail: { theme: themes[themeKey] } }))
-    }
+        setCurrentTheme(themeKey);
+        localStorage.setItem(`chat_theme_${chatId}`, themeKey);
+        window.dispatchEvent(new CustomEvent('chat-style-change', { detail: { theme: themes[themeKey] } }));
+    };
 
     if (!currentTheme) {
-        return <div className="h-[120px] animate-pulse"></div>
+        return <div className="h-[120px] animate-pulse"></div>;
     }
 
     return (
@@ -110,7 +108,7 @@ const BubbleStyleSettings = ({ chatId }) => {
                 ))}
             </div>
         </div>
-    )
-}
+    );
+};
 
-export default ChatSettingsPanel
+export default ChatSettingsPanel;
