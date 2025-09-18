@@ -1,95 +1,77 @@
-// themes/heo/components/ChatWindow.js (已添加设置入口的完整版)
+// themes/heo/components/ChatMessage.js (动态样式版)
 
-import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/lib/AuthContext'
-import { getMessagesForChat, getUserProfile } from '@/lib/chat'
-import ChatMessage from './ChatMessage'
-import ChatInput from './ChatInput'
-import ChatSettingsPanel from './ChatSettingsPanel' // 1. 导入我们新的设置面板
+import { useState, useEffect } from 'react';
 
-const ChatWindow = ({ chatId, conversation }) => {
+const ChatMessage = ({ message, otherUser, chatId }) => { // 1. 接收 chatId
   const { user } = useAuth()
-  const [messages, setMessages] = useState([])
-  const [otherUser, setOtherUser] = useState(null)
-  const messagesEndRef = useRef(null)
-  
-  // 2. 添加一个状态来控制设置面板的显示/隐藏
-  const [showSettings, setShowSettings] = useState(false);
+  const isMe = message.senderId === user.uid
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
+  // 2. 创建一个 state 来存储当前对话的样式
+  const [styles, setStyles] = useState({
+    bubbleColor: 'bg-blue-500',
+    textColor: 'text-white',
+    fontSize: 'text-base',
+    fontWeight: 'font-normal'
+  });
 
+  // 3. 使用 useEffect 来读取 localStorage 和监听自定义事件
   useEffect(() => {
-    scrollToBottom()
-  }, [messages])
+    // 组件加载时，从 localStorage 读取保存的样式
+    const loadStyles = () => {
+        const savedStyles = localStorage.getItem(`chat_styles_${chatId}`);
+        if (savedStyles) {
+            setStyles(JSON.parse(savedStyles));
+        }
+    };
+    loadStyles();
 
-  useEffect(() => {
-    if (!chatId || !conversation) {
-      setMessages([])
-      setOtherUser(null)
-      return
-    }
+    // 监听 'chat-style-change' 事件
+    const handleStyleChange = (event) => {
+        setStyles(event.detail);
+    };
+    window.addEventListener('chat-style-change', handleStyleChange);
 
-    const otherUserId = conversation.participants.find(uid => uid !== user.uid)
-    if (otherUserId) {
-      getUserProfile(otherUserId).then(setOtherUser)
-    }
-
-    const unsubscribe = getMessagesForChat(chatId, setMessages)
-    return () => unsubscribe()
-  }, [chatId, conversation, user.uid])
-
-  if (!chatId) {
-    return (
-      <div className="flex items-center justify-center h-full text-gray-400 bg-gray-50 dark:bg-gray-900">
-        <p>请选择一个对话</p>
-      </div>
-    )
-  }
+    // 组件卸载时，移除事件监听器
+    return () => {
+        window.removeEventListener('chat-style-change', handleStyleChange);
+    };
+  }, [chatId]); // 依赖 chatId，确保切换对话时能重新加载样式
 
   return (
-    <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900">
-      {/* 头部区域 */}
-      <div className="flex-shrink-0 p-4 border-b flex justify-between items-center">
-        {/* 左侧占位符，确保标题居中 */}
-        <div className="w-8"></div> 
-        
-        <h2 className="font-bold text-lg text-center">{otherUser?.displayName || '加载中...'}</h2>
-        
-        {/* 3. 在这里添加“三个点”按钮 */}
-        <div className="w-8 text-right">
-          <button onClick={() => setShowSettings(true)} className="text-gray-500 hover:text-gray-800 p-2 rounded-full">
-            <i className="fas fa-ellipsis-v"></i>
-          </button>
+    <div className={`flex items-end gap-2 my-2 w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
+      {!isMe && (
+        <div className="flex-shrink-0">
+          <img
+            src={otherUser?.photoURL || 'https://www.gravatar.com/avatar?d=mp'}
+            alt={otherUser?.displayName}
+            className="rounded-full w-10 h-10 object-cover"
+          />
         </div>
+      )}
+      
+      {/* 4. 应用动态样式 */}
+      <div
+        className={`max-w-xs md:max-w-md px-4 py-2 rounded-lg break-words ${
+          isMe 
+            ? `${styles.bubbleColor} ${styles.textColor} rounded-br-none` // 我方气泡应用动态样式
+            : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none' // 对方气泡保持默认
+        } ${styles.fontSize} ${styles.fontWeight}`} // 字体大小和粗细对双方都生效
+      >
+        <p>{message.text}</p>
       </div>
 
-      {/* 聊天内容区域 */}
-      <div className="flex-grow overflow-y-auto p-4">
-        {messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-gray-400">
-            <p>还没有消息，开始对话吧！</p>
-          </div>
-        ) : (
-          messages.map(msg => (
-            <ChatMessage key={msg.id} message={msg} otherUser={otherUser} />
-          ))
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* 输入框区域 */}
-      <div className="flex-shrink-0 p-4 border-t bg-white dark:bg-gray-800">
-        <ChatInput chatId={chatId} />
-      </div>
-
-      {/* 4. 条件渲染设置面板 */}
-      {showSettings && (
-        <ChatSettingsPanel onClose={() => setShowSettings(false)} />
+       {isMe && (
+        <div className="flex-shrink-0">
+          <img
+            src={user?.photoURL || 'https://www.gravatar.com/avatar?d=mp'}
+            alt={user?.displayName}
+            className="rounded-full w-10 h-10 object-cover"
+          />
+        </div>
       )}
     </div>
   )
 }
 
-export default ChatWindow
+export default ChatMessage
