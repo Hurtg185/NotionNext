@@ -1,77 +1,105 @@
-// themes/heo/components/ChatMessage.js (动态样式版)
+// themes/heo/components/ChatWindow.js (最终UI美化版)
 
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/lib/AuthContext'
-import { useState, useEffect } from 'react';
+import { getMessagesForChat, getUserProfile } from '@/lib/chat'
+import ChatMessage from './ChatMessage'
+import ChatInput from './ChatInput'
+import ChatSettingsPanel from './ChatSettingsPanel'
 
-const ChatMessage = ({ message, otherUser, chatId }) => { // 1. 接收 chatId
+const ChatWindow = ({ chatId, conversation }) => {
   const { user } = useAuth()
-  const isMe = message.senderId === user.uid
+  const [messages, setMessages] = useState([])
+  const [otherUser, setOtherUser] = useState(null)
+  const messagesEndRef = useRef(null)
+  const [showSettings, setShowSettings] = useState(false);
 
-  // 2. 创建一个 state 来存储当前对话的样式
-  const [styles, setStyles] = useState({
-    bubbleColor: 'bg-blue-500',
-    textColor: 'text-white',
-    fontSize: 'text-base',
-    fontWeight: 'font-normal'
-  });
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
 
-  // 3. 使用 useEffect 来读取 localStorage 和监听自定义事件
   useEffect(() => {
-    // 组件加载时，从 localStorage 读取保存的样式
-    const loadStyles = () => {
-        const savedStyles = localStorage.getItem(`chat_styles_${chatId}`);
-        if (savedStyles) {
-            setStyles(JSON.parse(savedStyles));
-        }
-    };
-    loadStyles();
+    scrollToBottom()
+  }, [messages])
 
-    // 监听 'chat-style-change' 事件
-    const handleStyleChange = (event) => {
-        setStyles(event.detail);
-    };
-    window.addEventListener('chat-style-change', handleStyleChange);
+  useEffect(() => {
+    if (!chatId || !conversation) {
+      setMessages([])
+      setOtherUser(null)
+      return
+    }
 
-    // 组件卸载时，移除事件监听器
-    return () => {
-        window.removeEventListener('chat-style-change', handleStyleChange);
-    };
-  }, [chatId]); // 依赖 chatId，确保切换对话时能重新加载样式
+    const otherUserId = conversation.participants.find(uid => uid !== user.uid)
+    if (otherUserId) {
+      getUserProfile(otherUserId).then(setOtherUser)
+    }
+
+    const unsubscribe = getMessagesForChat(chatId, setMessages)
+    return () => unsubscribe()
+  }, [chatId, conversation, user.uid])
+
+  if (!chatId) {
+    return (
+      <div className="flex items-center justify-center h-full text-gray-400">
+        <p>请选择一个对话</p>
+      </div>
+    )
+  }
 
   return (
-    <div className={`flex items-end gap-2 my-2 w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
-      {!isMe && (
-        <div className="flex-shrink-0">
-          <img
-            src={otherUser?.photoURL || 'https://www.gravatar.com/avatar?d=mp'}
-            alt={otherUser?.displayName}
-            className="rounded-full w-10 h-10 object-cover"
-          />
-        </div>
-      )}
+    // 【UI修改】: 添加 relative 定位，为绝对定位的头部和底部提供基准
+    <div className="relative flex flex-col h-full bg-gray-50 dark:bg-gray-900">
       
-      {/* 4. 应用动态样式 */}
-      <div
-        className={`max-w-xs md:max-w-md px-4 py-2 rounded-lg break-words ${
-          isMe 
-            ? `${styles.bubbleColor} ${styles.textColor} rounded-br-none` // 我方气泡应用动态样式
-            : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none' // 对方气泡保持默认
-        } ${styles.fontSize} ${styles.fontWeight}`} // 字体大小和粗细对双方都生效
-      >
-        <p>{message.text}</p>
+      {/* 
+        【UI修改】: 头部改为绝对定位、透明磨砂玻璃效果 
+        - `absolute top-0 left-0 right-0 z-10`: 绝对定位并置于顶层
+        - `bg-white/50 dark:bg-gray-800/50`: 半透明背景
+        - `backdrop-blur-lg`: 磨砂玻璃效果
+        - `border-b-0`: 移除底部边框，让分割线更细
+      */}
+      <div className="absolute top-0 left-0 right-0 z-10 flex-shrink-0 p-4 bg-white/50 dark:bg-gray-800/50 backdrop-blur-lg flex justify-between items-center">
+        <div className="w-8"></div> 
+        <h2 className="font-bold text-lg text-center">{otherUser?.displayName || '加载中...'}</h2>
+        <div className="w-8 text-right">
+          <button onClick={() => setShowSettings(true)} className="text-gray-500 hover:text-gray-800 p-2 rounded-full">
+            <i className="fas fa-ellipsis-v"></i>
+          </button>
+        </div>
+      </div>
+      
+      {/* 
+        【UI修改】: 聊天内容区域
+        - 添加 `pt-20 pb-24` (padding-top/bottom) 为浮动的头部和底部留出空间
+      */}
+      <div className="flex-grow overflow-y-auto p-4 pt-20 pb-24">
+        {messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-gray-400">
+            <p>还没有消息，开始对话吧！</p>
+          </div>
+        ) : (
+          messages.map(msg => (
+            <ChatMessage key={msg.id} message={msg} otherUser={otherUser} chatId={chatId} />
+          ))
+        )}
+        <div ref={messagesEndRef} />
       </div>
 
-       {isMe && (
-        <div className="flex-shrink-0">
-          <img
-            src={user?.photoURL || 'https://www.gravatar.com/avatar?d=mp'}
-            alt={user?.displayName}
-            className="rounded-full w-10 h-10 object-cover"
-          />
-        </div>
+      {/* 
+        【UI修改】: 输入框区域
+        - `absolute bottom-0 left-0 right-0`: 同样使用绝对定位
+        - `bg-transparent`: 背景完全透明
+        - `border-t`: 使用边框代替背景来创建分割线
+      */}
+      <div className="absolute bottom-0 left-0 right-0 z-10 flex-shrink-0 p-4 bg-transparent border-t border-gray-200/50 dark:border-gray-700/50">
+        <ChatInput chatId={chatId} />
+      </div>
+
+      {showSettings && (
+        // 传递 chatId 给设置面板
+        <ChatSettingsPanel onClose={() => setShowSettings(false)} chatId={chatId} />
       )}
     </div>
   )
 }
 
-export default ChatMessage
+export default ChatWindow
