@@ -1,4 +1,4 @@
-// themes/heo/components/StartChatButton.js (连接全Context版)
+// themes/heo/components/StartChatButton.js (连接全局Context版)
 
 import { useAuth } from '@/lib/AuthContext'
 import { startChat } from '@/lib/chat'
@@ -11,9 +11,11 @@ const StartChatButton = ({ targetUserId }) => {
   const handleStartChat = async () => {
     if (!user) { alert('请先登录！'); return; }
     
+    // 调用 startChat 获取对话数据
     const conversation = await startChat(user.uid, targetUserId);
     if (conversation) {
-      openDrawer({ type: 'chat', conversation: conversation });
+      // 使用全局的 openDrawer 打开抽屉
+      openDrawer('chat', { conversation: conversation });
     } else {
       alert('无法开启对话，请稍后再试。');
     }
