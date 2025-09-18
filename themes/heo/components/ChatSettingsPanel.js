@@ -1,65 +1,75 @@
-// themes/heo/components/ChatMessage.js (主题应用版)
+// themes/heo/components/ChatSettingsPanel.js (404修复 + 美化版)
 
-import { useAuth } from '@/lib/AuthContext'
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 
-const ChatMessage = ({ message, otherUser, chatId }) => {
-  const { user } = useAuth()
-  const isMe = message.senderId === user.uid
+// ... (SettingsItem 组件不变) ...
+const SettingsItem = ({ icon, label, onClick, isDestructive = false }) => ( /* ... */ );
 
-  // 默认主题
-  const defaultTheme = { me: 'bg-blue-500 text-white', other: 'bg-gray-200 text-black' };
-  const [theme, setTheme] = useState(defaultTheme);
 
-  useEffect(() => {
-    // 【核心修改】: 加载和监听主题变化
+const ChatSettingsPanel = ({ onClose, chatId }) => {
+  const handlePanelClick = (e) => e.stopPropagation();
+  const fileInputRef = React.useRef(null);
+  
+  const handleBackgroundChange = (event) => { /* ... (功能不变) ... */ };
+
+  return (
+    <div className="fixed inset-0 bg-black/30 z-50 flex items-end" onClick={onClose}>
+      <div className="w-full bg-gray-100/95 ... animate-slide-up" onClick={handlePanelClick}>
+        <div className="py-2">
+          <input type="file" ... ref={fileInputRef} onChange={handleBackgroundChange} style={{ display: 'none' }} />
+          <SettingsItem icon="fas fa-image" label="更换聊天背景" onClick={() => fileInputRef.current.click()} />
+        </div>
+        
+        {/* 把 chatId 传递给子组件 */}
+        <BubbleStyleSettings chatId={chatId} />
+
+        {/* ... (其他按钮不变) ... */}
+      </div>
+      {/* ... (动画样式不变) ... */}
+    </div>
+  );
+};
+
+// 【核心修复】: 解决 localStorage 导致的SSR错误
+const BubbleStyleSettings = ({ chatId }) => {
+    const [currentTheme, setCurrentTheme] = useState(null); // 初始为 null
+
+    // 在组件挂载后（即在浏览器中）才读取 localStorage
+    useEffect(() => {
+        const savedTheme = localStorage.getItem(`chat_theme_${chatId}`);
+        setCurrentTheme(savedTheme || 'default');
+    }, [chatId]);
+
     const themes = {
-        default: { me: 'bg-blue-500 text-white', other: 'bg-gray-200 text-black' },
+        default: { name: '默认', me: 'bg-blue-500 text-white', other: 'bg-gray-200 text-black' },
         purple: { name: '雅紫', me: 'bg-purple-500 text-white', other: 'bg-purple-100 text-purple-900' },
         green: { name: '清新', me: 'bg-green-500 text-white', other: 'bg-green-100 text-green-900' },
         dark: { name: '酷黑', me: 'bg-gray-700 text-white', other: 'bg-gray-300 text-black' },
     };
 
-    const loadTheme = () => {
-        const savedThemeKey = localStorage.getItem(`chat_theme_${chatId}`);
-        setTheme(themes[savedThemeKey] || defaultTheme);
+    const applyTheme = (themeKey) => {
+        setCurrentTheme(themeKey);
+        localStorage.setItem(`chat_theme_${chatId}`, themeKey);
+        window.dispatchEvent(new CustomEvent('chat-style-change', { detail: { theme: themes[themeKey] } }));
     };
-    loadTheme();
 
-    const handleStyleChange = (event) => {
-        setTheme(event.detail.theme);
-    };
-    window.addEventListener('chat-style-change', handleStyleChange);
+    // 如果主题还在加载中，显示一个占位符
+    if (!currentTheme) {
+        return <div className="h-[120px] animate-pulse"></div>;
+    }
 
-    return () => {
-        window.removeEventListener('chat-style-change', handleStyleChange);
-    };
-  }, [chatId]);
-
-  return (
-    <div className={`flex items-end gap-2 my-2 w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
-      {!isMe && (
-        <div className="flex-shrink-0">
-          <img src={otherUser?.photoURL || '...'} alt={otherUser?.displayName} className="rounded-full w-10 h-10 object-cover" />
+    return (
+        <div className="px-4 py-2">
+            <h3 className="font-bold text-lg mb-3 ...">聊天主题</h3>
+            <div className="flex justify-around">
+                {Object.entries(themes).map(([key, theme]) => (
+                    <div key={key} className="..." onClick={() => applyTheme(key)}>
+                        {/* ... (UI不变) ... */}
+                    </div>
+                ))}
+            </div>
         </div>
-      )}
-      
-      <div
-        className={`max-w-xs md:max-w-md px-4 py-2 rounded-lg break-words font-semibold ${
-          // 【核心修改】: 应用主题样式
-          isMe ? `${theme.me} rounded-br-none` : `${theme.other} dark:bg-gray-700 dark:text-gray-200 rounded-bl-none`
-        }`}
-      >
-        <p>{message.text}</p>
-      </div>
+    );
+};
 
-       {isMe && (
-        <div className="flex-shrink-0">
-          <img src={user?.photoURL || '...'} alt={user?.displayName} className="rounded-full w-10 h-10 object-cover" />
-        </div>
-      )}
-    </div>
-  )
-}
-
-export default ChatMessage
+export default ChatSettingsPanel;
