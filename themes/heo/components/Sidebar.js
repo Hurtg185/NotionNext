@@ -1,14 +1,13 @@
-// themes/heo/components/Sidebar.js (最终本)
+// themes/heo/components/Sidebar.js (修复“我的消息”入口)
 
 import { useAuth } from '@/lib/AuthContext';
 import Link from 'next/link';
-import { useSidebar } from '@/lib/SidebarContext'; // 1. 导入 SidebarContext (全局大脑)
-import { useDrawer } from '@/lib/DrawerContext'; // 2. 导入 DrawerContext (用于打开消息抽屉)
-
+// 1. 移除 useDrawer 的导入，因为 Sidebar 不直接管理抽屉
+// import { useDrawer } from '@/lib/DrawerContext'; 
+import { useRouter } from 'next/router'; // 2. 引入 useRouter
 
 // 可复用的侧边栏菜单项
 const MenuItem = ({ path, icon, label, onClick }) => (
-  // 核心修改: 如果有 path，用 Link；如果没有 path (如“我的消息”)，就用 button
   path ? (
     <Link href={path} passHref>
       <a onClick={onClick} className="flex items-center space-x-4 px-6 py-3 text-lg text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200">
@@ -17,6 +16,7 @@ const MenuItem = ({ path, icon, label, onClick }) => (
       </a>
     </Link>
   ) : (
+    // 如果没有 path，则是一个普通的按钮，执行 onClick
     <button onClick={onClick} className="w-full flex items-center space-x-4 px-6 py-3 text-lg text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200">
       <i className={`${icon} w-6 text-center text-gray-500 dark:text-gray-400`}></i>
       <span>{label}</span>
@@ -24,15 +24,14 @@ const MenuItem = ({ path, icon, label, onClick }) => (
   )
 );
 
-const Sidebar = () => { // 移除 props，直接使用 Context
+const Sidebar = () => {
   const { user } = useAuth();
-  const { isOpen, closeSidebar } = useSidebar(); // 3. 从全局获取侧边栏状态和方法
-  const { openDrawer } = useDrawer(); // 4. 从全局获取打开抽屉的方法
+  const { isOpen, closeSidebar } = useSidebar();
+  const router = useRouter(); // 3. 获取 router 实例
 
   const handleOpenMessages = () => {
     closeSidebar(); // 先关闭侧边栏
-    // 5. 调用全局 openDrawer 打开消息列表（作为抽屉）
-    openDrawer('messages_list'); // 'messages_list' 是一个新的抽屉类型
+    router.push('/forum/messages'); // 4. 【核心修复】: 直接跳转到消息列表页面
   };
 
   return (
@@ -71,7 +70,7 @@ const Sidebar = () => { // 移除 props，直接使用 Context
 
           {/* 菜单列表 */}
           <nav className="flex-grow p-4 space-y-2">
-            {/* 【核心修改】: 我的消息，点击打开抽屉 */}
+            {/* 【核心修改】: “我的消息”现在是一个普通的按钮，点击执行 handleOpenMessages */}
             <MenuItem icon="fas fa-inbox" label="我的消息" onClick={handleOpenMessages} /> 
             <MenuItem path="/#my-dynamics" icon="fas fa-bolt" label="我的动态" onClick={closeSidebar} />
             <MenuItem path="/bookshelf" icon="fas fa-book-open" label="我的书柜" onClick={closeSidebar} />
