@@ -5,7 +5,7 @@ import MenuGroupCard from './MenuGroupCard'
 import { MenuListSide } from './MenuListSide'
 
 /**
- * 侧边抽屉
+ * 侧边抽
  * @param tags
  * @param currentTag
  * @returns {JSX.Element}
