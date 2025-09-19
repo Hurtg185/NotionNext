@@ -1,4 +1,4 @@
-// themes/heo/components/ChatWindow.js (完整最终版)
+// themes/heo/components/ChatWindow.js (完整且已修复)
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
@@ -65,7 +65,6 @@ const ChatWindow = ({ chatId, conversation }) => {
     return () => window.removeEventListener('chat-background-change', handleBackgroundChange);
   }, [chatId]);
 
-  // 辅助函数，用于在顶栏显示角色标记
   const getTopBarRoleTag = (profile) => {
     if (!profile) return null;
     if (profile.isAdmin) {
@@ -84,7 +83,6 @@ const ChatWindow = ({ chatId, conversation }) => {
     return null;
   };
 
-  // 处理顶栏点击跳转
   const handleTopBarClick = () => {
     if (otherUser?.id) {
       closeDrawer();
@@ -115,18 +113,16 @@ const ChatWindow = ({ chatId, conversation }) => {
   const isBgImage = background !== 'default';
 
   return (
-    // 【核心修复】构建稳健的 Flexbox 布局
     <div
       className="relative flex flex-col h-full w-full overflow-hidden bg-cover bg-center"
       style={{ backgroundImage: isBgImage ? `url(${background})` : 'none' }}
     >
-      {/* 如果没有背景图，使用这个 div 作为纯色背景 */}
       {!isBgImage && <div className="absolute inset-0 bg-gray-50 dark:bg-gray-900 z-0"></div>}
-      {/* 如果有背景图，使用这个 div 作为半透明遮罩 */}
       {isBgImage && <div className="absolute inset-0 bg-black/30 z-0"></div>}
 
       <header 
-        className="relative z-10 flex-shrink-0 p-3 h-14 flex justify-between items-center ${isBgImage ? 'bg-black/20 text-white' : 'bg-white/50 dark:bg-gray-800/50 text-gray-900 dark:text-white'} border-b border-gray-200/20 dark:border-gray-700/20 backdrop-blur-lg"
+        // 【核心修复】将 className 用反引号 `` ` `` 包裹
+        className={`relative z-20 flex-shrink-0 p-3 h-14 flex justify-between items-center ${isBgImage ? 'bg-black/20 text-white' : 'bg-white/50 dark:bg-gray-800/50 text-gray-900 dark:text-white'} border-b border-gray-200/20 dark:border-gray-700/20 backdrop-blur-lg`}
       >
         <div 
           className="flex-grow flex justify-center items-center relative cursor-pointer"
@@ -143,8 +139,7 @@ const ChatWindow = ({ chatId, conversation }) => {
         </button>
       </header>
       
-      {/* 【核心修复】main 区域负责滚动 */}
-      <main className="relative z-10 flex-1 w-full overflow-y-auto p-4">
+      <main className="relative z-10 flex-1 w-full overflow-y-auto overflow-x-hidden p-4">
         {messages.map(msg => (
           <ChatMessage 
             key={msg.id} 
@@ -158,7 +153,8 @@ const ChatWindow = ({ chatId, conversation }) => {
       </main>
 
       <footer 
-        className="relative z-10 flex-shrink-0 p-3 ${isBgImage ? 'bg-black/20' : 'bg-white/50 dark:bg-gray-800/50'} border-t border-gray-200/20 dark:border-gray-700/20 backdrop-blur-lg"
+        // 【核心修复】将 className 用反引号 `` ` `` 包裹
+        className={`relative z-20 flex-shrink-0 p-3 ${isBgImage ? 'bg-black/20' : 'bg-white/50 dark:bg-gray-800/50'} border-t border-gray-200/20 dark:border-gray-700/20 backdrop-blur-lg`}
       >
         <ChatInput chatId={chatId} conversation={conversation} />
       </footer>
