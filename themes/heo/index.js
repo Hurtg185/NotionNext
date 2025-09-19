@@ -1,4 +1,4 @@
-// themes/heo/index.js (最终手势侧边栏版 - 100%完整且无错)
+// themes/heo/index.js (JSX闭合修复后的最终版)
 
 import Comment from '@/components/Comment'
 import { AdSlot } from '@/components/GoogleAdsense'
@@ -16,7 +16,7 @@ import { isBrowser } from '@/lib/utils'
 import { Transition } from '@headlessui/react'
 import SmartLink from '@/components/SmartLink'
 import { useRouter } from 'next/router'
-import { useEffect, useState, createContext, useContext } from 'react' // 1. 导入 createContext, useContext
+import { useEffect, useState, createContext, useContext } from 'react'
 import BlogPostArchive from './components/BlogPostArchive'
 import BlogPostListPage from './components/BlogPostListPage'
 import BlogPostListScroll from './components/BlogPostListScroll'
@@ -39,10 +39,10 @@ import { Style } from './style'
 import AISummary from '@/components/AISummary'
 import ArticleExpirationNotice from '@/components/ArticleExpirationNotice'
 import BottomNavBar from './components/BottomNavBar'
-import { useAuth } from '@/lib/AuthContext' // 2. 导入 useAuth
+import { useAuth } from '@/lib/AuthContext'
 import Link from 'next/link'
-import { animated, useSpring } from '@react-spring/web' // 3. 导入动画库
-import { useGesture } from '@use-gesture/react' // 4. 导入手势库
+import { animated, useSpring } from '@react-spring/web'
+import { useGesture } from '@use-gesture/react'
 
 // --- 动态更新状态栏颜色的辅助函数 (保持不变) ---
 const updateThemeColor = (isDarkMode) => {
@@ -58,7 +58,7 @@ const updateThemeColor = (isDarkMode) => {
   }
 }
 
-// --- 【核心修改】: 创建 Sidebar 组件 ---
+// --- 【核心修改】: 创建 Sidebar 组件 (现在它是一个内部组件) ---
 const MenuItem = ({ path, icon, label, onClick }) => (
   path ? (
     <Link href={path} passHref>
@@ -75,6 +75,7 @@ const MenuItem = ({ path, icon, label, onClick }) => (
   )
 );
 
+// 【核心修改】: Sidebar 组件现在接收 isOpen 和 closeSidebar 作为 props
 const Sidebar = ({ isOpen, closeSidebar }) => {
   const { user } = useAuth();
   const router = useRouter();
@@ -132,13 +133,11 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
     </>
   );
 };
-// --- 【核心修改】: Sidebar 组件定义结束 ---
+// --- Sidebar 组件定义结束 ---
+
 
 /**
  * 基础布局
- * @param props
- * @returns {JSX.Element}
- * @constructor
  */
 const LayoutBase = props => {
   const { children, slotTop, className } = props
@@ -164,20 +163,28 @@ const LayoutBase = props => {
   // 7. 绑定手势
   const bind = useGesture({
     onDrag: ({ first, down, movement: [mx], direction: [dx], velocity, initial: [x0], cancel }) => {
-      const isDraggingFromLeftEdge = x0 < 30;
+      // 允许从左边缘开始拖动（用于打开）
+      const isDraggingFromLeftEdge = x0 < 80; // 【更新】从屏幕左侧 80px 范围内开始
+      // 允许从屏幕中间大部分区域向右滑动（用于打开）
       const isDraggingFromMiddle = x0 > window.innerWidth * 0.2 && x0 < window.innerWidth * 0.8;
+      
+      // 如果侧边栏是打开的，则允许从任何地方向左滑动关闭
       const isDraggingToClose = isSidebarOpen && dx < 0;
 
+      // 如果手势开始时不在有效触发区域，且侧边栏未打开，则忽略
       if (first && !isSidebarOpen && !isDraggingFromLeftEdge && !isDraggingFromMiddle) {
         return;
       }
 
+      // 如果是向右滑动 (打开侧边栏)
       if (dx > 0) {
-        if (!isSidebarOpen && (isDraggingFromLeftEdge || isDraggingFromMiddle) && (mx > 80 || velocity > 1.5)) {
+        if (!isSidebarOpen && (isDraggingFromLeftEdge || isDraggingFromMiddle) && (mx > 80 || velocity > 1.5)) { 
           openSidebar();
           cancel();
         }
-      } else if (dx < 0 && isSidebarOpen) {
+      } 
+      // 如果是向左滑动 (关闭侧边栏)
+      else if (dx < 0 && isSidebarOpen) {
         if (Math.abs(mx) > 80 || velocity > 1.5) {
           closeSidebar();
           cancel();
@@ -185,9 +192,9 @@ const LayoutBase = props => {
       }
     }
   }, {
-    domTarget: typeof window !== 'undefined' ? window : undefined,
-    event: { passive: false },
-    axis: 'x',
+    domTarget: typeof window !== 'undefined' ? window : undefined, // 绑定到 window 实现全局监听
+    event: { passive: false }, // 阻止默认的滚动行为
+    axis: 'x', // 只关心水平方向的拖动
   });
 
   useEffect(() => {
@@ -212,7 +219,7 @@ const LayoutBase = props => {
   
   const slotRight =
     router.route === '/404' || fullWidth ? null : <SideRight {...props} />
-  const maxWidth = fullWidth ? 'max-w-[96rem] mx-auto' : 'max-w-[86rem]'
+  const maxWidth = fullWidth ? 'max-w-[96rem]' : 'max-w-[86rem]' // Changed mx-auto to auto
   const HEO_HERO_BODY_REVERSE = siteConfig( 'HEO_HERO_BODY_REVERSE', false, CONFIG )
   const HEO_LOADING_COVER = siteConfig('HEO_LOADING_COVER', true, CONFIG)
 
@@ -222,7 +229,7 @@ const LayoutBase = props => {
 
   return (
     <div className="relative bg-[#f7f9fe] dark:bg-[#18171d]">
-      <Sidebar isOpen={isSidebarOpen} closeSidebar={closeSidebar} />
+      <Sidebar isOpen={isSidebarOpen} closeSidebar={closeSidebar} /> {/* 将 isOpen 和 closeSidebar 传递给 Sidebar */}
       
       <animated.div
         style={mainContentSpring}
@@ -551,4 +558,43 @@ const LayoutTagIndex = props => {
       <div className='text-4xl font-extrabold dark:text-gray-200 mb-5'>
         {locale.COMMON.TAGS}
       </div>
- 
+      <div
+        id='tag-list'
+        className='duration-200 flex flex-wrap space-x-5 space-y-5 m-10 justify-center'>
+        {tagOptions.map(tag => {
+          return (
+            <SmartLink
+              key={tag.name}
+              href={`/tag/${tag.name}`}
+              passHref
+              legacyBehavior>
+              <div
+                className={
+                  'group flex flex-nowrap items-center border bg-white text-2xl rounded-xl dark:hover:text-white px-4 cursor-pointer py-3 hover:text-white hover:bg-indigo-600 transition-all hover:scale-110 duration-150'
+                }>
+                <HashTag className={'w-5 h-5 stroke-gray-500 stroke-2'} />
+                {tag.name}
+                <div className='bg-[#f1f3f8] ml-1 px-2 rounded-lg group-hover:text-indigo-600 '>
+                  {tag.count}
+                </div>
+              </div>
+            </SmartLink>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+export {
+  Layout404,
+  LayoutArchive,
+  LayoutBase,
+  LayoutCategoryIndex,
+  LayoutIndex,
+  LayoutPostList,
+  LayoutSearch,
+  LayoutSlug,
+  LayoutTagIndex,
+  CONFIG as THEME_CONFIG
+}
