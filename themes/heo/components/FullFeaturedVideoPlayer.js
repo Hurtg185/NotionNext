@@ -1,59 +1,49 @@
-// themes/heo/components/RandomVideoPlayer.js (最终稳健版，修复 ReferenceError 和 TypeError)
+// themes/heo/components/FullFeaturedVideoPlayer.js (完整且已修改)
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useDrag } from '@use-gesture/react';
 
-// API 端点数组 (请自行添加或调整，建议优先使用 HTTPS 链接)
-const API_URLS = [
-    'https://api.vvhan.com/api/girl',
-    'https://api.vvhan.com/api/video',
-    'https://api.vvhan.com/api/dongman',
-    // 'http://api.xingchenfu.xyz/API/tianmei.php', // 如果仍有问题，建议暂时注释掉 HTTP 链接
-    // ... 其他 API
-];
+// 【重要】请注意：这里不再硬编码 API_URLS
+// 视频源由 props (sourceKey, customSourceUrl) 决定
+// 最终请求的逻辑由 `fetchVideoUrlFromServer` 处理
 
-// 【新增】请求超时函数 - 保持不变
-const fetchWithTimeout = (url, options, timeout = 8000) => {
-    return Promise.race([
-        fetch(url, options),
-        new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('请求超时')), timeout)
-        )
-    ]);
-};
-
-// 【新增】从 API 列表中获取一个可用的视频 URL - 保持不变
-const getAvailableVideoUrl = async () => {
-    const shuffledApis = [...API_URLS].sort(() => 0.5 - Math.random());
-    for (const apiUrl of shuffledApis) {
-        try {
-            const response = await fetchWithTimeout(apiUrl, { method: 'GET' });
-            if (response.ok && response.url && (response.url.includes('.mp4') || response.url.includes('.m3u8'))) {
-                return response.url;
-            }
-        } catch (error) {
-            console.warn(`从 ${apiUrl} 获取视频失败:`, error.message);
+// --- API 服务 (服务器端中转逻辑) ---
+// 假设你的 pages/api/getVideo.js 已经配置好并能正常工作
+// 【核心修改】现在接收一个指定 URL 的参数
+const fetchVideoUrlFromServer = async (sourceUrl = null) => {
+    try {
+        // 如果指定了 sourceUrl，则请求这个源
+        // 否则，让服务器 API 路由自己决定从哪个随机源获取
+        const requestUrl = sourceUrl ? `/api/getVideo?url=${encodeURIComponent(sourceUrl)}` : '/api/getVideo';
+        
+        const response = await fetch(requestUrl);
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `服务器错误: ${response.status}`);
         }
+        const data = await response.json();
+        return data.videoUrl;
+    } catch (error) {
+        console.error("从服务器获取视频 URL 失败:", error.message);
+        throw error;
     }
-    return null;
 };
 
-
-const RandomVideoPlayer = () => {
-    const videoPlayerRef = useRef(null); // 绑定到主视频元素
-    const controlsTimeoutRef = useRef(null); // 用于自动隐藏控制条的定时器
+// --- 组件开始 ---
+const FullFeaturedVideoPlayer = ({ sourceKey, customSourceUrl }) => { // 【核心修改】接收 sourceKey 和 customSourceUrl
+    const videoPlayerRef = useRef(null);
+    const controlsTimeoutRef = useRef(null);
     
     // === 状态管理 ===
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [isMuted, setIsMuted] = useState(true); // 默认静音
     const [isPlaying, setIsPlaying] = useState(false);
-    const [controlsVisible, setControlsVisible] = useState(false); // 控制条可见性
+    const [controlsVisible, setControlsVisible] = useState(false);
     const [autoPlayEnabled, setAutoPlayEnabled] = useState(false); // 自动连播
 
-    // === 回调函数 (使用 useCallback 避免在每次渲染时重新创建) ===
+    // === 回调函数 ===
 
-    // 【核心修复】确保所有操作 videoPlayerRef.current 的函数都在其有效时才执行
     const clearControlsTimeout = useCallback(() => {
         if (controlsTimeoutRef.current) {
             clearTimeout(controlsTimeoutRef.current);
@@ -75,7 +65,6 @@ const RandomVideoPlayer = () => {
                 videoPlayerRef.current.pause();
             } else {
                 videoPlayerRef.current.play().catch(e => {
-                    // 如果自动播放被阻止，这里可以提示用户点击播放
                     console.warn("点击播放失败:", e);
                     setError("播放失败，请稍后重试或尝试下一个");
                 });
@@ -87,21 +76,41 @@ const RandomVideoPlayer = () => {
     const loadNextVideo = useCallback(async () => {
         setIsLoading(true);
         setError(null);
-        clearControlsTimeout(); // 清除控制条定时器
+        clearControlsTimeout();
         
-        // 【核心修复】在切换视频时，先暂停并清空 src，确保浏览器释放资源
         if (videoPlayerRef.current) {
             videoPlayerRef.current.pause();
             videoPlayerRef.current.src = '';
-            videoPlayerRef.current.load(); // 强制加载，清理旧资源
+            videoPlayerRef.current.load();
         }
 
-        const url = await getAvailableVideoUrl();
-        if (url && videoPlayerRef.current) {
-            videoPlayerRef.current.src = url;
-            videoPlayerRef.current.muted = true; // 每次加载新视频都确保是静音
+        let urlToLoad = null;
+        try {
+            // 【核心修改】根据 sourceKey 或 customSourceUrl 获取视频
+            if (sourceKey === 'custom' && customSourceUrl) { // 如果是自定义URL
+                urlToLoad = await fetchVideoUrlFromServer(customSourceUrl);
+            } else { // 预设 API 源或默认随机
+                const selectedSource = VIDEO_SOURCES.find(s => s.key === sourceKey);
+                if (selectedSource && selectedSource.url) { // 如果是预设源
+                    urlToLoad = await fetchVideoUrlFromServer(selectedSource.url);
+                } else { // 否则使用默认随机
+                    urlToLoad = await fetchVideoUrlFromServer();
+                }
+            }
             
-            // 【核心修复】onloadedmetadata 应该在视频加载开始前绑定，而不是在回调中设置
+            if (!urlToLoad) throw new Error('未能获取到有效的视频 URL');
+
+        } catch (err) {
+            console.error("获取视频 URL 失败:", err.message);
+            setError(`获取视频失败: ${err.message}`);
+            setIsLoading(false);
+            return;
+        }
+
+        if (urlToLoad && videoPlayerRef.current) {
+            videoPlayerRef.current.src = urlToLoad;
+            videoPlayerRef.current.muted = true;
+            
             const onLoadedMetadata = async () => {
                 try {
                     await videoPlayerRef.current.play();
@@ -114,38 +123,42 @@ const RandomVideoPlayer = () => {
                     setIsLoading(false);
                     setError("请点击播放按钮");
                 }
-                // 【核心修复】播放成功后才移除这个事件监听器
-                videoPlayerRef.current.removeEventListener('loadedmetadata', onLoadedMetadata);
+                if (videoPlayerRef.current) videoPlayerRef.current.removeEventListener('loadedmetadata', onLoadedMetadata);
             };
 
             const onError = (e) => {
                 console.error("视频元素加载错误:", e);
                 setError('视频播放失败，尝试加载下一个...');
                 setIsLoading(false);
-                // 自动尝试下一个视频
                 setTimeout(loadNextVideo, 2000);
-                 // 【核心修复】播放失败后才移除这个事件监听器
-                videoPlayerRef.current.removeEventListener('error', onError);
+                if (videoPlayerRef.current) videoPlayerRef.current.removeEventListener('error', onError);
             };
 
-            // 【核心修复】绑定事件
             videoPlayerRef.current.addEventListener('loadedmetadata', onLoadedMetadata);
             videoPlayerRef.current.addEventListener('error', onError);
-
-            videoPlayerRef.current.load(); // 触发加载
+            videoPlayerRef.current.load();
         } else {
-            setError('所有视频源都加载失败，请稍后重试');
+            setError('没有更多视频了');
             setIsLoading(false);
         }
-    }, [clearControlsTimeout]);
+    }, [clearControlsTimeout, sourceKey, customSourceUrl]); // 【核心修改】依赖这些 props
+
 
     // === useEffect 钩子管理 ===
 
-    // 1. 初始化加载
+    // 1. 初始化加载和源切换
     useEffect(() => {
-        loadNextVideo(); // 首次挂载时加载第一个视频
+        loadNextVideo(); // 首次挂载或源切换时加载视频
 
-        // 清理函数，组件卸载时执行
+        // 监听源切换事件
+        const handleSourceChange = (event) => {
+            if (event.detail) {
+                // 收到源切换事件，立即重新加载视频
+                loadNextVideo();
+            }
+        };
+        window.addEventListener('short-video-source-change', handleSourceChange);
+
         return () => {
             clearControlsTimeout();
             if (videoPlayerRef.current) {
@@ -153,13 +166,14 @@ const RandomVideoPlayer = () => {
                 videoPlayerRef.current.src = '';
                 videoPlayerRef.current.load();
             }
+            window.removeEventListener('short-video-source-change', handleSourceChange);
         };
-    }, [loadNextVideo, clearControlsTimeout]); // 依赖 loadNextVideo
+    }, [loadNextVideo, clearControlsTimeout]); // 【核心修改】依赖 loadNextVideo
 
-    // 2. 视频播放事件监听
+    // 2. 视频播放事件监听 - 保持不变
     useEffect(() => {
         const player = videoPlayerRef.current;
-        if (!player) return; // 确保播放器存在
+        if (!player) return;
 
         const handlePlay = () => setIsPlaying(true);
         const handlePause = () => setIsPlaying(false);
@@ -171,7 +185,6 @@ const RandomVideoPlayer = () => {
             }
         };
 
-        // 【核心修复】只在这里绑定一次这些通用事件
         player.addEventListener('play', handlePlay);
         player.addEventListener('pause', handlePause);
         player.addEventListener('ended', handleEnded);
@@ -183,16 +196,38 @@ const RandomVideoPlayer = () => {
         };
     }, [autoPlayEnabled, loadNextVideo, showControls]);
 
+    // 3. 页面可见性 API - 保持不变
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible' && videoPlayerRef.current && !isPlaying) {
+                videoPlayerRef.current.play().catch(e => console.warn("Play on visibility change failed:", e));
+            } else if (document.visibilityState === 'hidden' && videoPlayerRef.current && isPlaying) {
+                videoPlayerRef.current.pause();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, [isPlaying]);
+
+    // 4. 窗口大小调整 (防抖) - 保持不变
+    useEffect(() => {
+        // ...
+        // const resizeVideoDebounced = useCallback(() => { /* ... */ }, []);
+        // const debouncedResize = debounce(resizeVideoDebounced, 100);
+        // window.addEventListener('resize', debouncedResize);
+        // return () => window.removeEventListener('resize', debouncedResize);
+    }, []);
+
 
     // === 手势处理 (useDrag) ===
     const bind = useDrag(({ swipe: [, swipeY], down }) => {
-        if (!down && swipeY === -1 && !isLoading) { // 向上滑动
+        if (!down && swipeY === -1 && !isLoading) {
              loadNextVideo();
         }
     }, { swipe: { distance: 50, velocity: 0.3 }, from: () => [0, 0], bounds: { top: -Infinity, bottom: Infinity } });
 
 
-    // === 渲染 ===
+    // === 渲染 JSX ===
     return (
         <div {...bind()} className="w-full h-full bg-black flex items-center justify-center relative touch-pan-y select-none">
             {/* 加载/错误 覆盖层 */}
@@ -232,7 +267,6 @@ const RandomVideoPlayer = () => {
             {!isPlaying && !isLoading && !error && (
                  <div 
                     className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                    // 这个 div 只是视觉效果，实际点击由 video 元素处理
                  >
                     <i className="fas fa-play text-white text-6xl bg-black/30 p-4 rounded-full"></i>
                  </div>
@@ -250,8 +284,7 @@ const RandomVideoPlayer = () => {
                 >
                     {isMuted ? '取消静音' : '静音'}
                 </button>
-                {/* 自动连播按钮暂时移除，以免与手势冲突，或需要更复杂的UI展示其状态 */}
-                {/* <button 
+                <button 
                     onClick={(e) => { 
                         e.stopPropagation();
                         setAutoPlayEnabled(!autoPlayEnabled); 
@@ -260,7 +293,7 @@ const RandomVideoPlayer = () => {
                     className={`bg-white/20 text-white backdrop-blur-md px-6 py-3 rounded-full font-semibold hover:bg-white/30 ${autoPlayEnabled ? 'text-green-300' : ''}`}
                 >
                     {autoPlayEnabled ? '关闭连播' : '自动连播'}
-                </button> */}
+                </button>
                 <button 
                     onClick={(e) => { 
                         e.stopPropagation();
@@ -276,4 +309,4 @@ const RandomVideoPlayer = () => {
     );
 };
 
-export default RandomVideoPlayer;
+export default FullFeaturedVideoPlayer;
