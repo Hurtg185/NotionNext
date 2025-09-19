@@ -357,3 +357,44 @@ html.dark * {
     @apply mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500;
   }
 }
+
+/* --- 【新增】当模态框打开时的全局样式 --- */
+body.modal-open {
+  /* 禁止背景页面滚动 */
+  overflow: hidden;
+}
+
+/* 
+  你需要找到你的底部导航栏组件，给它一个唯一的 class 名，比如 .bottom-nav
+  然后用那个 class 名替换下面的 .bottom-nav
+  这个规则会让底部导航栏在弹窗出现时消失
+*/
+body.modal-open .bottom-nav {
+  display: none !important;
+}
+
+
+/* --- 【新增】自定义网页元素屏蔽规则 --- */
+
+/* 1. 隐藏文章页顶部的背景大图 */
+#post-bg {
+    display: none !important;
+}
+
+/* 2. 隐藏文章末尾的相关推荐/评论区之前的区域 (通常是标签、版权声明等) */
+/* 这个选择器更通用，适用于大多数文章页的末尾部分 */
+#article-end,
+.article-end-wrapper { /* 增加一个备用选择器 */
+    display: none !important;
+}
+
+/* 3. 彻底隐藏整个网站页脚 */
+/* 选择器简化，直接针对 footer 元素，更稳定 */
+#theme-heo > footer {
+    display: none !important;
+}
+
+/* 4. 隐藏颜色切换过渡动画的覆盖层 (如果存在) */
+#color-transition {
+    display: none !important;
+  }
