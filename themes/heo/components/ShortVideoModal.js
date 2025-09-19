@@ -3,16 +3,15 @@
 import React, { useState, useEffect } from 'react';
 import FullFeaturedVideoPlayer from './FullFeaturedVideoPlayer'; // 引入完整播放器
 
-// 【新增】视频源列表，与 `pages/api/getVideo.js` 中的 API_URLS 对应
+// 【新增】视频源列表，与你 Hiker 规则和 `pages/api/getVideo.js` 中的 API_URLS 对应
 const VIDEO_SOURCES = [
     { key: 'default', name: '默认随机', url: null }, // null 表示让服务器随机选择
     { key: 'xjj', name: '随机姐姐', url: 'http://119.91.196.247:7778/xjj' },
     { key: 'xxgeek', name: '极客美女', url: 'https://t.xxgeek.com/tools/mmvod/m.php' },
     { key: 'cnmcom', name: '随机美女', url: 'https://api.cnmcom.com/dsp/' },
-    // ... 添加其他 API 源，如果它们有特定的名称
+    // ... 添加其他你希望用户直接选择的 API 源
     { key: 'vvhan_girl', name: 'Vvhan-小姐姐', url: 'https://api.vvhan.com/api/girl' },
     { key: 'vvhan_video', name: 'Vvhan-视频', url: 'https://api.vvhan.com/api/video' },
-    // 根据你的 `API_URLS_INTERNAL` 列表，可以添加更多自定义源
     { key: 'tianmei', name: '天美 (xingchenfu)', url: 'http://api.xingchenfu.xyz/API/tianmei.php' },
     { key: 'hssp', name: '火烧视频 (xingchenfu)', url: 'http://api.xingchenfu.xyz/API/hssp.php' },
 ];
