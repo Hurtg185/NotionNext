@@ -1,8 +1,9 @@
-// themes/heo/components/ChatWindow.js (最终BUG修复 + UI微调版)
+// themes/heo/components/ChatWindow.js (完整且已修改)
 
 import { useState, useEffect, useRef } from 'react'
+import Link from 'next/link'; // 【新增】引入 Link 组件
 import { useAuth } from '@/lib/AuthContext'
-import { getMessagesForChat, getUserProfile } from '@/lib/chat'
+import { getMessagesForChat, getUserProfile, markChatAsRead } from '@/lib/chat' // 【新增】引入 markChatAsRead
 import ChatMessage from './ChatMessage'
 import ChatInput from './ChatInput'
 import ChatSettingsPanel from './ChatSettingsPanel'
@@ -15,7 +16,6 @@ const ChatWindow = ({ chatId, conversation }) => {
   const [showSettings, setShowSettings] = useState(false)
   const [background, setBackground] = useState('default')
   
-  // 【核心BUG修复】: 增加一个明确的 loading 状态
   const [isLoading, setIsLoading] = useState(true);
 
   const scrollToBottom = () => {
@@ -23,13 +23,12 @@ const ChatWindow = ({ chatId, conversation }) => {
   }
   useEffect(() => { scrollToBottom() }, [messages])
 
-  // --- 拆分 useEffect，确保依赖项绝对正确 ---
-  
   // 负责获取对方用户信息
   useEffect(() => {
     if (user && conversation?.participants) {
         const otherUserId = conversation.participants.find(uid => uid !== user.uid);
         if (otherUserId) {
+            // 在开始获取新用户信息前，可以先清空旧的，防止显示错误
             setOtherUser(null); 
             getUserProfile(otherUserId).then(setOtherUser);
         }
@@ -38,41 +37,46 @@ const ChatWindow = ({ chatId, conversation }) => {
 
   // 负责监听消息列表
   useEffect(() => {
-    // 【核心BUG修复】: 在开始监听前，设置 isLoading 为 true
     setIsLoading(true);
     if (chatId) {
         const unsubscribe = getMessagesForChat(chatId, (loadedMessages) => {
           setMessages(loadedMessages);
-          setIsLoading(false); // 第一次获取到数据后（即使是空数组），就停止 loading
+          setIsLoading(false);
+          // 【新增】标记消息为已读
+          if (user && loadedMessages.length > 0) {
+            markChatAsRead(chatId, user.uid);
+          }
         });
         return () => unsubscribe();
     } else {
         setMessages([]);
-        setIsLoading(false); // 如果没有 chatId，也停止 loading
+        setIsLoading(false);
     }
-  }, [chatId]);
+  }, [chatId, user]); // 【新增】依赖 user
 
   // 负责加载和监听背景变化
   useEffect(() => {
     if (chatId) {
+        // 【修复】统一 LocalStorage 的 key
         const loadBackground = () => {
-          const savedBg = localStorage.getItem(`chat_bg_${chatId}`);
+          const savedBg = localStorage.getItem(`chat_background_${chatId}`);
           setBackground(savedBg || 'default');
         };
         loadBackground();
 
         const handleBgChange = (event) => {
-          if (event.detail.chatId === chatId) {
-            setBackground(event.detail.bgValue);
+          // 确保事件是从 ChatSettingsPanel 正确派发的
+          if (event.detail && typeof event.detail.background !== 'undefined') {
+            setBackground(event.detail.background);
           }
         };
-        window.addEventListener('chat-bg-change', handleBgChange);
+        // 【修复】统一事件名称
+        window.addEventListener('chat-background-change', handleBgChange);
         
-        return () => window.removeEventListener('chat-bg-change', handleBgChange);
+        return () => window.removeEventListener('chat-background-change', handleBgChange);
     }
   }, [chatId]);
 
-  // 安全保障，如果核心数据不存在，直接返回 null 或一个加载占位符
   if (!chatId || !conversation) {
       return (
         <div className="flex items-center justify-center h-full bg-gray-50 dark:bg-gray-900">
@@ -92,19 +96,23 @@ const ChatWindow = ({ chatId, conversation }) => {
     >
       {isBgImage && <div className="absolute inset-0 bg-black/30 z-0"></div>}
 
-      {/* 
-        【UI微调】: 提高透明度
-        - bg-white/50 dark:bg-gray-800/50: 从70%不透明度改为50%
-      */}
       <div
         className={`relative z-10 flex-shrink-0 p-3 h-14 flex justify-between items-center 
         ${isBgImage ? 'bg-black/20 text-white' : 'bg-white/50 dark:bg-gray-800/50 text-gray-900 dark:text-white'} 
         border-b border-gray-200/20 dark:border-gray-700/20 backdrop-blur-lg`}
       >
         <div className="w-8"></div>
-        <h2 className="font-bold text-lg text-center truncate">
-          {otherUser?.displayName || '加载中...'}
-        </h2>
+        
+        {/* 【核心修改】将顶栏用户名用 Link 包裹起来 */}
+        <Link href={`/profile/${otherUser?.id}`} passHref>
+            <a className="flex items-center gap-2 group cursor-pointer">
+                <h2 className="font-bold text-lg text-center truncate group-hover:text-blue-400">
+                    {otherUser?.displayName || '加载中...'}
+                </h2>
+                {/* 你可以在这里添加角色标记 */}
+            </a>
+        </Link>
+
         <div className="w-8 text-right">
           <button
             onClick={() => setShowSettings(true)}
@@ -120,7 +128,6 @@ const ChatWindow = ({ chatId, conversation }) => {
       </div>
 
       <div className="relative z-0 flex-grow overflow-y-auto p-4">
-        {/* 【核心BUG修复】: 使用 isLoading 状态来决定显示内容 */}
         {isLoading ? (
             <div className="flex items-center justify-center h-full text-white/80">
                 <p className="bg-black/20 p-2 rounded-lg">正在加载消息...</p>
@@ -142,7 +149,8 @@ const ChatWindow = ({ chatId, conversation }) => {
             <ChatMessage
               key={msg.id}
               message={msg}
-              otherUser={otherUser}
+              // 【重要】将 otherUser 传递给子组件
+              otherUser={otherUser} 
               chatId={chatId}
             />
           ))
@@ -150,16 +158,12 @@ const ChatWindow = ({ chatId, conversation }) => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 
-        【UI微调】: 提高透明度
-        - bg-white/50 dark:bg-gray-800/50: 从70%不透明度改为50%
-      */}
       <div
         className={`relative z-10 flex-shrink-0 p-3 
         ${isBgImage ? 'bg-black/20' : 'bg-white/50 dark:bg-gray-800/50'} 
         border-t border-gray-200/20 dark:border-gray-700/20 backdrop-blur-lg`}
       >
-        <ChatInput chatId={chatId} />
+        <ChatInput chatId={chatId} conversation={conversation} />
       </div>
 
       {showSettings && (
