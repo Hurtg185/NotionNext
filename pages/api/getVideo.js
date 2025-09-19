@@ -1,4 +1,4 @@
-// pages/api/getVideo.js (最终修复版，处理 HTTP -> HTTPS 转换)
+// pages/api/getVideo.js (完整且已修改，用于处理特定源请求和 HTTP -> HTTPS)
 
 // API 端点数组
 // 【重要】请将你所有有效的、想用的 API 源都放在这里
@@ -51,7 +51,7 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
-    const { url: requestedUrl } = req.query; // 允许前端指定 URL
+    const { url: requestedUrl } = req.query; // 从前端接收的指定 URL 参数
 
     // 根据是否有指定 URL 来决定 API 列表
     let currentApiUrls = requestedUrl ? [decodeURIComponent(requestedUrl)] : API_URLS_INTERNAL;
@@ -105,4 +105,4 @@ export default async function handler(req, res) {
 
     console.error("[Server] 所有 API 都获取视频失败");
     return res.status(500).json({ error: '所有视频源都加载失败，请稍后重试' });
-                    }
+        }
