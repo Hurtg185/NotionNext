@@ -1,10 +1,10 @@
-// themes/heo/components/ChatMessage.js (完整且已修复 - 修正 className 语法)
+// themes/heo/components/ChatMessage.js (完整且已修复)
 
-import React, { useState, useEffect } from 'react';
+import React, a_isRightct, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Image from 'next/image';
 import { useDrawer } from '@/lib/DrawerContext';
-import { useAuth } from '@/lib/AuthContext'; // 确保 useAuth 引入，用于获取 currentUser
+// 【优化】不再需要从 useAuth 获取 user，由父组件传入
 
 // === 与 ChatSettingsPanel.js 保持一致的主题定义 ===
 const THEMES = [
@@ -18,44 +18,36 @@ const THEMES = [
     { id: 'mono-line', name: '线条风', incoming: { className: 'bg-white text-indigo-700 border', style: { borderLeft: '4px solid #6366F1' } }, outgoing: { className: 'bg-indigo-600 text-white', style: {} } }
 ];
 
-// 【新增】辅助函数，根据 key 获取气泡样式类
+// 辅助函数，根据 key 获取气泡样式类
 const getBubbleShapeClasses = (shapeKey, isMe) => {
     switch (shapeKey) {
-        case 'squircle': // 方圆
-            return 'rounded-lg';
-        case 'pill': // 胶囊
-            return 'rounded-full';
-        case 'sharp': // 直角
-            return 'rounded-none';
-        case 'soft': // 圆润
-            return 'rounded-3xl';
-        case 'top-tail': // 顶角
-            return isMe ? 'rounded-2xl rounded-tr-md' : 'rounded-2xl rounded-tl-md';
-        case 'default': // 默认 (带尖角)
-        default:
-            return isMe ? 'rounded-2xl rounded-br-md' : 'rounded-2xl rounded-bl-md';
+        case 'squircle': return 'rounded-lg';
+        case 'pill': return 'rounded-full';
+        case 'sharp': return 'rounded-none';
+        case 'soft': return 'rounded-3xl';
+        case 'top-tail': return isMe ? 'rounded-2xl rounded-tr-md' : 'rounded-2xl rounded-tl-md';
+        case 'default': default: return isMe ? 'rounded-2xl rounded-br-md' : 'rounded-2xl rounded-bl-md';
     }
 };
 
-const ChatMessage = ({ message, chatId, otherUser }) => { // 移除 currentUserProfile，直接从 useAuth 获取
-  const { user: currentUser } = useAuth(); // 【修复】重新获取 currentUser
+const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) => {
   const router = useRouter();
   const { closeDrawer } = useDrawer();
 
   const [chatStyles, setChatStyles] = useState({
       theme: THEMES[0],
       fontSize: 'text-base',
-      fontWeight: 'font-normal', // 确保 fontWeight 初始化
-      bubbleShapeKey: 'default' // 确保 bubbleShapeKey 初始化
+      fontWeight: 'font-normal',
+      bubbleShapeKey: 'default'
   });
 
-  const isMe = currentUser && message.senderId === currentUser.uid;
-  const senderProfile = isMe ? currentUser : otherUser; // 【修复】使用重新获取的 currentUser
+  // 【修复】正确判断是否是自己的消息
+  const isMe = currentUserProfile && message.senderId === currentUserProfile.uid;
+  
+  // 【修复】从传入的 props 中确定发送者资料
+  const senderProfile = isMe ? currentUserProfile : otherUserProfile;
 
   useEffect(() => {
-    // 确保 currentUser 存在才能加载样式，否则可能导致默认主题加载失败
-    if (!currentUser) return;
-
     const loadAndListenStyles = () => {
         const savedThemeId = localStorage.getItem(`chat_theme_id_${chatId}`) || 'classic-blue';
         const savedBubbleShapeKey = localStorage.getItem(`chat_bubble_shape_key_${chatId}`) || 'default';
@@ -87,13 +79,19 @@ const ChatMessage = ({ message, chatId, otherUser }) => { // 移除 currentUserP
     return () => {
         window.removeEventListener('chat-style-change', handleStyleChange);
     };
-  }, [chatId, currentUser]); // 【修复】依赖 currentUser
+  }, [chatId]);
 
   const handleAvatarClick = () => {
     if (senderProfile?.id) {
       closeDrawer();
       setTimeout(() => router.push(`/profile/${senderProfile.id}`), 100);
     }
+  };
+
+  const getFlagEmoji = (countryCode) => {
+    if (!countryCode) return null;
+    const codePoints = countryCode.toUpperCase().split('').map(char => 0x1F1E6 + char.charCodeAt(0) - 'A'.charCodeAt(0));
+    return String.fromCodePoint(...codePoints);
   };
 
   if (!senderProfile) {
@@ -103,7 +101,6 @@ const ChatMessage = ({ message, chatId, otherUser }) => { // 移除 currentUserP
   const bubbleTheme = isMe ? chatStyles.theme.outgoing : chatStyles.theme.incoming;
   const bubbleBaseClasses = 'inline-block px-4 py-2';
   
-  // 【修复】应用所有样式，包括气泡形状
   const bubbleShapeClasses = getBubbleShapeClasses(chatStyles.bubbleShapeKey, isMe);
   const bubbleColorAndFontClasses = `${bubbleTheme.className} ${chatStyles.fontSize} ${chatStyles.fontWeight}`;
 
@@ -112,13 +109,14 @@ const ChatMessage = ({ message, chatId, otherUser }) => { // 移除 currentUserP
       {!isMe && (
         <div className="flex-shrink-0 relative cursor-pointer" onClick={handleAvatarClick}>
           <Image src={senderProfile.photoURL || 'https://www.gravatar.com/avatar?d=mp'} alt={senderProfile.displayName} width={40} height={40} className="rounded-full object-cover"/>
+          {senderProfile.country && (<span className="absolute bottom-0 right-0 text-lg leading-none">{getFlagEmoji(senderProfile.country)}</span>)}
         </div>
       )}
 
       <div className={`max-w-[65%] sm:max-w-[70%]`}>
         <div 
           className={`${bubbleBaseClasses} ${bubbleShapeClasses} ${bubbleColorAndFontClasses}`} 
-          style={bubbleTheme.style} // 将 style 属性也传递过去
+          style={bubbleTheme.style}
         >
           <p className="break-words">{message.text}</p>
         </div>
@@ -127,6 +125,7 @@ const ChatMessage = ({ message, chatId, otherUser }) => { // 移除 currentUserP
       {isMe && (
         <div className="flex-shrink-0 relative cursor-pointer" onClick={handleAvatarClick}>
           <Image src={senderProfile.photoURL || 'https://www.gravatar.com/avatar?d=mp'} alt={senderProfile.displayName} width={40} height={40} className="rounded-full object-cover"/>
+          {senderProfile.country && (<span className="absolute bottom-0 right-0 text-lg leading-none">{getFlagEmoji(senderProfile.country)}</span>)}
         </div>
       )}
     </div>
