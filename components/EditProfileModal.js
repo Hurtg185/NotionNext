@@ -1,4 +1,4 @@
-// components/EditProfileModal.js
+// components/EditProfileModal.js (修改后，功能增强)
 import { useState, useEffect, useRef } from 'react';
 import { updateUserProfile, uploadProfilePicture } from '@/lib/user';
 
@@ -27,6 +27,17 @@ const EditProfileModal = ({ user, onClose, onProfileUpdate }) => {
     }
   }, [user]);
 
+  // 【新增】useEffect 来控制 body 样式，实现背景滚动锁定和隐藏导航栏
+  useEffect(() => {
+    // 组件挂载时 (模态框显示)
+    document.body.classList.add('modal-open');
+
+    // 组件卸载时 (模态框关闭)
+    return () => {
+      document.body.classList.remove('modal-open');
+    };
+  }, []); // 空依赖数组确保这个 effect 只在挂载和卸载时运行一次
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -35,14 +46,13 @@ const EditProfileModal = ({ user, onClose, onProfileUpdate }) => {
   const handleImageChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      // 基本的大小检查 (例如: 5MB)
       if (file.size > 5 * 1024 * 1024) {
           setError("图片文件不能超过 5MB");
           return;
       }
       setImageFile(file);
       setImagePreview(URL.createObjectURL(file));
-      setError(''); // 清除旧的错误信息
+      setError('');
     }
   };
 
@@ -54,22 +64,19 @@ const EditProfileModal = ({ user, onClose, onProfileUpdate }) => {
     try {
       let newPhotoURL = user.photoURL;
 
-      // 1. 如果有新图片，先上传图片
       if (imageFile) {
         newPhotoURL = await uploadProfilePicture(user.uid, imageFile);
       }
 
-      // 2. 准备要更新的文本数据
       const profileData = {
         ...formData,
-        photoURL: newPhotoURL // 使用新的或旧的头像URL
+        photoURL: newPhotoURL
       };
       
-      // 3. 更新 Firestore 文档
       await updateUserProfile(user.uid, profileData);
       
-      onProfileUpdate(); // 通知父组件更新成功
-      onClose(); // 关闭模态框
+      onProfileUpdate();
+      onClose();
     } catch (err) {
       setError('更新失败，请稍后再试。');
       console.error(err);
@@ -81,8 +88,9 @@ const EditProfileModal = ({ user, onClose, onProfileUpdate }) => {
   if (!user) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-start overflow-y-auto py-10" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl m-4" onClick={(e) => e.stopPropagation()}>
+    // 【修改】为最外层 div 添加磨砂玻璃效果
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex justify-center items-start overflow-y-auto py-10" onClick={onClose}>
+      <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-lg shadow-xl p-6 w-full max-w-2xl m-4" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">编辑个人资料</h2>
         
         <form onSubmit={handleSubmit} className="space-y-4">
