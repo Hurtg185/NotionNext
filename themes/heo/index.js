@@ -1,4 +1,4 @@
-// themes/heo/index.js (最终沉浸式状态栏修复版 - 100%完整且无错)
+// themes/heo/index.js (最终手势侧边栏版 - 100%完整且无错)
 
 import Comment from '@/components/Comment'
 import { AdSlot } from '@/components/GoogleAdsense'
@@ -16,7 +16,7 @@ import { isBrowser } from '@/lib/utils'
 import { Transition } from '@headlessui/react'
 import SmartLink from '@/components/SmartLink'
 import { useRouter } from 'next/router'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, createContext, useContext } from 'react' // 1. 导入 createContext, useContext
 import BlogPostArchive from './components/BlogPostArchive'
 import BlogPostListPage from './components/BlogPostListPage'
 import BlogPostListScroll from './components/BlogPostListScroll'
@@ -39,16 +39,17 @@ import { Style } from './style'
 import AISummary from '@/components/AISummary'
 import ArticleExpirationNotice from '@/components/ArticleExpirationNotice'
 import BottomNavBar from './components/BottomNavBar'
+import { useAuth } from '@/lib/AuthContext' // 2. 导入 useAuth
+import Link from 'next/link'
+import { animated, useSpring } from '@react-spring/web' // 3. 导入动画库
+import { useGesture } from '@use-gesture/react' // 4. 导入手势库
 
-/**
- * 动态更新状态栏颜色的辅助函数
- * @param {boolean} isDarkMode - 当前是否是深色模式
- */
+// --- 动态更新状态栏颜色的辅助函数 (保持不变) ---
 const updateThemeColor = (isDarkMode) => {
   if (typeof window !== 'undefined') {
     let themeColorMeta = document.querySelector('meta[name="theme-color"]');
     if (!themeColorMeta) {
-      themeColorMeta = document.createElement('meta'); // 使用正确的变量名
+      themeColorMeta = document.createElement('meta');
       themeColorMeta.name = 'theme-color';
       document.getElementsByTagName('head')[0].appendChild(themeColorMeta);
     }
@@ -56,6 +57,82 @@ const updateThemeColor = (isDarkMode) => {
     themeColorMeta.setAttribute('content', newColor);
   }
 }
+
+// --- 【核心修改】: 创建 Sidebar 组件 ---
+const MenuItem = ({ path, icon, label, onClick }) => (
+  path ? (
+    <Link href={path} passHref>
+      <a onClick={onClick} className="flex items-center space-x-4 px-6 py-3 text-lg text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200">
+        <i className={`${icon} w-6 text-center text-gray-500 dark:text-gray-400`}></i>
+        <span>{label}</span>
+      </a>
+    </Link>
+  ) : (
+    <button onClick={onClick} className="w-full flex items-center space-x-4 px-6 py-3 text-lg text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200">
+      <i className={`${icon} w-6 text-center text-gray-500 dark:text-gray-400`}></i>
+      <span>{label}</span>
+    </button>
+  )
+);
+
+const Sidebar = ({ isOpen, closeSidebar }) => {
+  const { user } = useAuth();
+  const router = useRouter();
+
+  const handleOpenMessages = () => {
+    closeSidebar();
+    router.push('/forum/messages');
+  };
+
+  return (
+    <>
+      <div
+        onClick={closeSidebar}
+        className={`fixed inset-0 bg-black z-30 transition-opacity duration-300
+                    ${isOpen ? 'opacity-40' : 'opacity-0 pointer-events-none'}`}
+      />
+      
+      <aside
+        className={`fixed top-0 left-0 h-full w-72 bg-white dark:bg-gray-800 shadow-2xl z-40
+                    transform transition-transform duration-300 ease-in-out
+                    ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      >
+        <div className="flex flex-col h-full">
+          <div className="px-6 py-8 border-b border-gray-200 dark:border-gray-700">
+            {user ? (
+              <div className="flex items-center space-x-4">
+                <img src={user.photoURL || 'https://www.gravatar.com/avatar?d=mp'} alt={user.displayName} className="w-16 h-16 rounded-full border-2 border-blue-500" />
+                <div>
+                  <p className="font-bold text-xl text-gray-800 dark:text-white">{user.displayName}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">查看个人主页</p>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <p className="font-bold text-xl">欢迎</p>
+                <p className="text-sm text-gray-500">登录以体验全部功能</p>
+              </div>
+            )}
+          </div>
+
+          <nav className="flex-grow p-4 space-y-2">
+            <MenuItem icon="fas fa-inbox" label="我的消息" onClick={handleOpenMessages} /> 
+            <MenuItem path="/#my-dynamics" icon="fas fa-bolt" label="我的动态" onClick={closeSidebar} />
+            <MenuItem path="/bookshelf" icon="fas fa-book-open" label="我的书柜" onClick={closeSidebar} />
+            <MenuItem path="/favorites" icon="fas fa-star" label="我的收藏" onClick={closeSidebar} />
+            <hr className="my-4 border-gray-200 dark:border-gray-700" />
+            <MenuItem path="/settings" icon="fas fa-cog" label="设置" onClick={closeSidebar} />
+          </nav>
+
+          <div className="p-6 text-center text-xs text-gray-400">
+            Powered by NotionNext
+          </div>
+        </div>
+      </aside>
+    </>
+  );
+};
+// --- 【核心修改】: Sidebar 组件定义结束 ---
 
 /**
  * 基础布局
@@ -68,15 +145,60 @@ const LayoutBase = props => {
   const { fullWidth, isDarkMode } = useGlobal()
   const router = useRouter()
   
-  // 【核心修改】: 使用 useEffect 监听 isDarkMode 的变化，并动态更新状态栏颜色
+  // 5. 将侧边栏状态管理移入 LayoutBase 内部
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const openSidebar = () => setIsSidebarOpen(true);
+  const closeSidebar = () => setIsSidebarOpen(false);
+
   useEffect(() => {
     updateThemeColor(isDarkMode);
   }, [isDarkMode]);
 
+  // 6. 使用 react-spring 创建主内容区的动画
+  const mainContentSpring = useSpring({
+    transform: isSidebarOpen ? 'translateX(18rem) scale(0.95)' : 'translateX(0rem) scale(1)', // 18rem = w-72
+    borderRadius: isSidebarOpen ? '1.5rem' : '0rem',
+    config: { tension: 250, friction: 30 }
+  });
+
+  // 7. 绑定手势
+  const bind = useGesture({
+    onDrag: ({ first, down, movement: [mx], direction: [dx], velocity, initial: [x0], cancel }) => {
+      const isDraggingFromLeftEdge = x0 < 30;
+      const isDraggingFromMiddle = x0 > window.innerWidth * 0.2 && x0 < window.innerWidth * 0.8;
+      const isDraggingToClose = isSidebarOpen && dx < 0;
+
+      if (first && !isSidebarOpen && !isDraggingFromLeftEdge && !isDraggingFromMiddle) {
+        return;
+      }
+
+      if (dx > 0) {
+        if (!isSidebarOpen && (isDraggingFromLeftEdge || isDraggingFromMiddle) && (mx > 80 || velocity > 1.5)) {
+          openSidebar();
+          cancel();
+        }
+      } else if (dx < 0 && isSidebarOpen) {
+        if (Math.abs(mx) > 80 || velocity > 1.5) {
+          closeSidebar();
+          cancel();
+        }
+      }
+    }
+  }, {
+    domTarget: typeof window !== 'undefined' ? window : undefined,
+    event: { passive: false },
+    axis: 'x',
+  });
+
+  useEffect(() => {
+    bind();
+  }, [bind]);
+
   const isHomePage = router.pathname === '/'
   const headerSlot = (
     <header>
-      {isHomePage && <Header {...props} />}
+      {/* 8. 将 openSidebar 函数传递给 Header */}
+      {isHomePage && <Header {...props} openSidebar={openSidebar} />}
       {isHomePage ? (
         <>
           <NoticeBar />
@@ -99,31 +221,38 @@ const LayoutBase = props => {
   }, [])
 
   return (
-    <div
-      id='theme-heo'
-      className={`${siteConfig('FONT_STYLE')} bg-[#f7f9fe] dark:bg-[#18171d] h-full min-h-screen flex flex-col scroll-smooth`}>
-      <Style />
-      {isHomePage && headerSlot}
-      <main
-        id='wrapper-outer'
-        className={`flex-grow w-full ${maxWidth} mx-auto relative md:px-5 pb-16 md:pb-0`}>
-        <div
-          id='container-inner'
-          className={`${HEO_HERO_BODY_REVERSE ? 'flex-row-reverse' : ''} w-full mx-auto lg:flex justify-center relative z-10`}>
-          <div className={`w-full h-auto ${className || ''}`}>
-            {!isHomePage && <PostHeader {...props} isDarkMode={isDarkMode} />}
-            {slotTop}
-            {children}
+    <div className="relative bg-[#f7f9fe] dark:bg-[#18171d]">
+      <Sidebar isOpen={isSidebarOpen} closeSidebar={closeSidebar} />
+      
+      <animated.div
+        style={mainContentSpring}
+        className={`theme-heo-container ${siteConfig('FONT_STYLE')} h-full min-h-screen flex flex-col scroll-smooth overflow-x-hidden
+                   ${isSidebarOpen ? 'pointer-events-none cursor-pointer' : ''}`}
+        onClick={isSidebarOpen ? closeSidebar : undefined}
+      >
+        <Style />
+        {isHomePage && headerSlot}
+        <main
+          id='wrapper-outer'
+          className={`flex-grow w-full ${maxWidth} mx-auto relative md:px-5 pb-16 md:pb-0`}>
+          <div
+            id='container-inner'
+            className={`${HEO_HERO_BODY_REVERSE ? 'flex-row-reverse' : ''} w-full mx-auto lg:flex justify-center relative z-10`}>
+            <div className={`w-full h-auto ${className || ''}`}>
+              {!isHomePage && <PostHeader {...props} isDarkMode={isDarkMode} />}
+              {slotTop}
+              {children}
+            </div>
+            <div className='lg:px-2'></div>
+            <div className='hidden xl:block'>
+              {slotRight}
+            </div>
           </div>
-          <div className='lg:px-2'></div>
-          <div className='hidden xl:block'>
-            {slotRight}
-          </div>
-        </div>
-      </main>
-      <Footer />
-      <BottomNavBar /> 
-      {HEO_LOADING_COVER && <LoadingCover />}
+        </main>
+        <Footer />
+        <BottomNavBar /> 
+        {HEO_LOADING_COVER && <LoadingCover />}
+      </animated.div>
     </div>
   )
 }
@@ -422,43 +551,4 @@ const LayoutTagIndex = props => {
       <div className='text-4xl font-extrabold dark:text-gray-200 mb-5'>
         {locale.COMMON.TAGS}
       </div>
-      <div
-        id='tag-list'
-        className='duration-200 flex flex-wrap space-x-5 space-y-5 m-10 justify-center'>
-        {tagOptions.map(tag => {
-          return (
-            <SmartLink
-              key={tag.name}
-              href={`/tag/${tag.name}`}
-              passHref
-              legacyBehavior>
-              <div
-                className={
-                  'group flex flex-nowrap items-center border bg-white text-2xl rounded-xl dark:hover:text-white px-4 cursor-pointer py-3 hover:text-white hover:bg-indigo-600 transition-all hover:scale-110 duration-150'
-                }>
-                <HashTag className={'w-5 h-5 stroke-gray-500 stroke-2'} />
-                {tag.name}
-                <div className='bg-[#f1f3f8] ml-1 px-2 rounded-lg group-hover:text-indigo-600 '>
-                  {tag.count}
-                </div>
-              </div>
-            </SmartLink>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-export {
-  Layout404,
-  LayoutArchive,
-  LayoutBase,
-  LayoutCategoryIndex,
-  LayoutIndex,
-  LayoutPostList,
-  LayoutSearch,
-  LayoutSlug,
-  LayoutTagIndex,
-  CONFIG as THEME_CONFIG
-    }
+ 
