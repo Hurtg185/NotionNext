@@ -1,10 +1,9 @@
-// themes/heo/components/ChatMessage.js (完整且已修复)
+// themes/heo/components/ChatMessage.js (已修复语法错误)
 
-import React, a_isRightct, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'; // 【核心修复】移除了无效的 "a_isRightct,"
 import { useRouter } from 'next/router';
 import Image from 'next/image';
 import { useDrawer } from '@/lib/DrawerContext';
-// 【优化】不再需要从 useAuth 获取 user，由父组件传入
 
 // === 与 ChatSettingsPanel.js 保持一致的主题定义 ===
 const THEMES = [
@@ -41,10 +40,7 @@ const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) 
       bubbleShapeKey: 'default'
   });
 
-  // 【修复】正确判断是否是自己的消息
   const isMe = currentUserProfile && message.senderId === currentUserProfile.uid;
-  
-  // 【修复】从传入的 props 中确定发送者资料
   const senderProfile = isMe ? currentUserProfile : otherUserProfile;
 
   useEffect(() => {
