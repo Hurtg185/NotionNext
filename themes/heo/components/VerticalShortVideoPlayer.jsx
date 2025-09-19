@@ -1,5 +1,4 @@
-// themes/heo/components/VerticalShortVideoPlayer.jsx
-// 功能：全屏竖版短视频流（上下文整页切换）+ 边播边缓存
+// themes/heo/components/VerticalShortVideoPlayer.jsx (完整且带调试日志)
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useDrag } from '@use-gesture/react';
@@ -40,69 +39,105 @@ export default function VerticalShortVideoPlayer({
 
   const getRandomAPI = useCallback(() => {
     const raw = apiList[Math.floor(Math.random() * apiList.length)];
-    return `${raw}${raw.includes('?') ? '&' : '?'}t=${Date.now()}`;
+    const url = `${raw}${raw.includes('?') ? '&' : '?'}t=${Date.now()}`;
+    console.log("getRandomAPI selected:", url); // 【调试日志】
+    return url;
   }, [apiList]);
 
   const buildSrc = useCallback((url) => {
-    if (!useProxy) return url;
-    return `${proxyPath}?url=${encodeURIComponent(url)}`;
+    if (!url) return ''; // 避免 url 为空时报错
+    const src = useProxy ? `${proxyPath}?url=${encodeURIComponent(url)}` : url;
+    console.log("buildSrc output:", src); // 【调试日志】
+    return src;
   }, [useProxy, proxyPath]);
 
   const fillVideoQueue = useCallback(async () => {
+    console.log("fillVideoQueue called. Current queue size:", videos.length); // 【调试日志】
     const newVideos = [];
     for (let i = 0; i < cacheSize; i++) {
       newVideos.push({ id: Date.now() + i, url: getRandomAPI() });
     }
-    setVideos(prev => [...prev, ...newVideos]);
-  }, [cacheSize, getRandomAPI]);
+    setVideos(prev => {
+        const updatedVideos = [...prev, ...newVideos];
+        console.log("Videos updated to:", updatedVideos); // 【调试日志】
+        return updatedVideos;
+    });
+  }, [cacheSize, getRandomAPI, videos.length]); // 【修复】添加 videos.length 依赖
 
   useEffect(() => {
+    console.log("Initial useEffect: fillVideoQueue"); // 【调试日志】
     fillVideoQueue();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
   useEffect(() => {
+    console.log("useEffect [index, videos] triggered. Current index:", index, "Total videos:", videos.length); // 【调试日志】
     videoRefs.current.forEach((video, i) => {
       if (video) {
         if (i === index) {
-          setIsLoading(true);
-          video.play().catch(e => console.warn('自动播放被阻止:', e));
+          setIsLoading(true); // 【调试日志】
+          console.log(`Attempting to play video at index ${i}:`, video.src);
+          video.play().then(() => {
+            console.log(`Video at index ${i} playing.`);
+            setIsLoading(false);
+          }).catch(e => {
+            console.warn(`自动播放被阻止或失败 for index ${i}:`, e);
+            setIsLoading(false); // 播放失败也停止加载
+          });
         } else {
           video.pause();
           video.currentTime = 0;
         }
       }
     });
-    if (videos.length > 0 && videos.length - index <= preloadThreshold) {
+    if (videos.length > 0 && videos.length - 1 - index <= preloadThreshold) { // 【修复】确保判断正确
+      console.log("Preload threshold reached, calling fillVideoQueue."); // 【调试日志】
       fillVideoQueue();
     }
-  }, [index, videos, fillVideoQueue, preloadThreshold]);
+  }, [index, videos, fillVideoQueue, preloadThreshold]); // 【修复】添加 fillVideoQueue 依赖
 
   const bind = useDrag(({ last, movement: [, my], velocity: [, vy], direction: [, dy] }) => {
     if (!last) return;
     if (my < -80 || (vy > 0.6 && dy < 0)) {
+      console.log("Swiping up: next video."); // 【调试日志】
       setIndex(i => Math.min(i + 1, videos.length - 1));
     } else if (my > 80 || (vy > 0.6 && dy > 0)) {
+      console.log("Swiping down: previous video."); // 【调试日志】
       setIndex(i => Math.max(0, i - 1));
     }
   }, { axis: 'y', pointer: { touch: true } });
 
+  console.log("VerticalShortVideoPlayer rendered. Videos state:", videos); // 【调试日志】
+  if (videos.length === 0 && isLoading) {
+    console.log("No videos and isLoading is true. Showing initial loading screen."); // 【调试日志】
+    return (
+        <div className="w-full h-[100vh] bg-black relative flex items-center justify-center text-white text-xl">
+            初次加载视频中...
+        </div>
+    );
+  } else if (videos.length === 0 && !isLoading) {
+      console.log("No videos and isLoading is false. Showing no videos message."); // 【调试日志】
+      return (
+        <div className="w-full h-[100vh] bg-black relative flex items-center justify-center text-white text-xl">
+            暂无视频可播放
+        </div>
+      );
+  }
+
+
   return (
-    // 【核心修复】使用 h-[100vh] 来确保在移动端也能占满全屏
     <div className="w-full h-[100vh] bg-black relative overflow-hidden touch-action-pan-y" {...bind()}>
       <AnimatePresence initial={false}>
-        {/* 【核心修复】将 motion.div 作为滚动容器，而不是 key={index} 的切换容器 */}
         <motion.div
           className="w-full h-full"
           animate={{ y: `-${index * 100}%` }}
           transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         >
           {videos.map((video, i) => (
-            <div key={video.id} className="w-full h-full absolute flex items-center justify-center" style={{ top: `${i * 100}%` }}>
+            <div key={video.id} className="w-full h-full absolute flex items-center justify-center" style={{ transform: `translateY(${i * 100}%)` }}>
               <video
                 ref={el => videoRefs.current[i] = el}
                 src={buildSrc(video.url)}
-                // 【核心修复】确保视频本身也占满容器，并使用 object-cover
                 className="w-full h-full object-cover bg-black"
                 playsInline
                 muted={isMuted}
@@ -112,8 +147,7 @@ export default function VerticalShortVideoPlayer({
                 onWaiting={() => { if (i === index) setIsLoading(true); }}
                 onEnded={() => { if (autoPlayNext) setIndex(i => i + 1); }}
               />
-              {/* UI 覆盖层 */}
-              {index === i && (
+              {index === i && ( // 只在当前播放的视频上显示加载状态
                 <div className="absolute inset-0 flex flex-col justify-between p-4 z-10 pointer-events-none">
                   <div className="text-white/80 text-sm">
                     {isLoading && '加载中...'}
