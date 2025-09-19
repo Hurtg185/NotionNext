@@ -1,4 +1,4 @@
-// themes/heo/index.js (最终沉浸式状态栏修复版 - 100%完整且无错)
+// themes/heo/index.js (最终沉浸式状态栏修复版 - 100%完且无错)
 
 import Comment from '@/components/Comment'
 import { AdSlot } from '@/components/GoogleAdsense'
