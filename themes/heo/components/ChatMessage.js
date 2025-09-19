@@ -102,7 +102,7 @@ const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) 
         </div>
       )}
 
-      <div className={`max-w-[65%] sm:max-w-[70%]`}>
+      <div className={`max-w-[80%] sm:max-w-[75%]`}>
         <div 
           className={`${bubbleBaseClasses} ${bubbleShapeClasses} ${bubbleColorAndFontClasses}`} 
           style={bubbleTheme.style}
