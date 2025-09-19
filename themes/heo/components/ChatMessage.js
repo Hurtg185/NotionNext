@@ -1,11 +1,15 @@
-// themes/heo/components/ChatMessage.js (最终主题+字体应用版)
+// themes/heo/components/ChatMessage.js (完整且已修改)
 
 import { useAuth } from '@/lib/AuthContext'
 import { useState, useEffect } from 'react';
+import Link from 'next/link'; // 【新增】引入 Link 组件
 
 const ChatMessage = ({ message, otherUser, chatId }) => {
   const { user } = useAuth()
   const isMe = message.senderId === user.uid
+
+  // 【优化】senderProfile 现在直接从 props 判断，不再需要自己获取
+  const senderProfile = isMe ? user : otherUser;
 
   const [themeClasses, setThemeClasses] = useState({
       bubbleMe: 'bg-blue-500 text-white',
@@ -15,7 +19,7 @@ const ChatMessage = ({ message, otherUser, chatId }) => {
   });
 
   useEffect(() => {
-    // 【核心修改】: 加载和监听主题和字体变化
+    // 主题和字体加载逻辑保持不变
     const themes = {
         default: { me: 'bg-blue-500 text-white', other: 'bg-gray-200 text-black' },
         purple: { name: '雅紫', me: 'bg-purple-500 text-white', other: 'bg-purple-100 text-purple-900' },
@@ -29,10 +33,11 @@ const ChatMessage = ({ message, otherUser, chatId }) => {
         const savedThemeKey = localStorage.getItem(`chat_theme_${chatId}`);
         const savedFontSize = localStorage.getItem(`chat_font_size_${chatId}`);
         const savedFontWeight = localStorage.getItem(`chat_font_weight_${chatId}`);
+        const currentTheme = themes[savedThemeKey] || themes.default;
 
         setThemeClasses({
-            bubbleMe: (themes[savedThemeKey] || themes.default).me,
-            bubbleOther: (themes[savedThemeKey] || themes.default).other,
+            bubbleMe: currentTheme.me,
+            bubbleOther: currentTheme.other,
             fontSize: savedFontSize || 'text-base',
             fontWeight: savedFontWeight || 'font-normal'
         });
@@ -40,7 +45,7 @@ const ChatMessage = ({ message, otherUser, chatId }) => {
     loadStyles();
 
     const handleStyleChange = (event) => {
-        const { theme, fontSize, fontWeight } = event.detail;
+        const { theme, fontSize, fontWeight } = event.detail; // 假设 event.detail.theme 是 {me: ..., other: ...}
         setThemeClasses({
             bubbleMe: theme.me,
             bubbleOther: theme.other,
@@ -55,37 +60,47 @@ const ChatMessage = ({ message, otherUser, chatId }) => {
     };
   }, [chatId]);
 
+  // 如果 senderProfile 还没准备好，可以显示一个简单的占位符
+  if (!senderProfile) {
+      return <div className="h-14"></div>; // 返回一个固定高度的空 div，防止布局跳动
+  }
+
   return (
     <div className={`flex items-end gap-2 my-2 w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
       {!isMe && (
-        <div className="flex-shrink-0">
-          <img
-            src={otherUser?.photoURL || 'https://www.gravatar.com/avatar?d=mp'}
-            alt={otherUser?.displayName}
-            className="rounded-full w-10 h-10 object-cover"
-          />
-        </div>
+        // 【核心修改】将对方头像用 Link 包裹
+        <Link href={`/profile/${senderProfile.id}`} passHref>
+          <a className="flex-shrink-0 cursor-pointer">
+            <img
+              src={senderProfile.photoURL || 'https://www.gravatar.com/avatar?d=mp'}
+              alt={senderProfile.displayName}
+              className="rounded-full w-10 h-10 object-cover"
+            />
+          </a>
+        </Link>
       )}
       
       <div
         className={`max-w-xs md:max-w-md px-4 py-2 rounded-lg break-words ${
-          // 【核心修改】: 应用主题和字体样式
           isMe 
             ? `${themeClasses.bubbleMe} rounded-br-none` 
-            : `${themeClasses.bubbleOther} dark:bg-gray-700 dark:text-gray-200 rounded-bl-none` // 确保对方气泡在深色模式下颜色正常
+            : `${themeClasses.bubbleOther} dark:bg-gray-700 dark:text-gray-200 rounded-bl-none`
         } ${themeClasses.fontSize} ${themeClasses.fontWeight}`}
       >
         <p>{message.text}</p>
       </div>
 
        {isMe && (
-        <div className="flex-shrink-0">
-          <img
-            src={user?.photoURL || 'https://www.gravatar.com/avatar?d=mp'}
-            alt={user?.displayName}
-            className="rounded-full w-10 h-10 object-cover"
-          />
-        </div>
+        // 【核心修改】将自己的头像用 Link 包裹
+        <Link href={`/profile/${senderProfile.id}`} passHref>
+          <a className="flex-shrink-0 cursor-pointer">
+            <img
+              src={senderProfile.photoURL || 'https://www.gravatar.com/avatar?d=mp'}
+              alt={senderProfile.displayName}
+              className="rounded-full w-10 h-10 object-cover"
+            />
+          </a>
+        </Link>
       )}
     </div>
   )
