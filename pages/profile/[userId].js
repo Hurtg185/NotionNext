@@ -1,16 +1,18 @@
-// pages/profile/[userId].js (个人主-页核心页面 - 最终版)
+// pages/profile/[userId].js
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '@/lib/AuthContext';
 import { LayoutBase } from '@/themes/heo'; // 确保导入的是您主题的正确布局组件
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { getUserProfile, startChat } from '@/lib/chat'; // 引入 getUserProfile 和 startChat
+// 假设你有一个全局的抽屉上下文，用于打开聊天窗口
+// import { useDrawer } from '@/lib/DrawerContext'; 
 
 const ProfilePage = () => {
   const router = useRouter();
   const { userId } = router.query;
   const { user: currentUser } = useAuth();
+  // const { openDrawer } = useDrawer(); // 从上下文中获取打开抽屉的函数
   const [profileUser, setProfileUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dynamics');
@@ -19,30 +21,39 @@ const ProfilePage = () => {
     const fetchUserProfile = async () => {
       if (!userId) return;
       setLoading(true);
-      try {
-        const userDocRef = doc(db, 'users', userId);
-        const userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
-          setProfileUser({ id: userDoc.id, ...userDoc.data() });
-        } else {
-          console.error("未找到用户:", userId);
-          setProfileUser(null);
-        }
-      } catch (error) {
-        console.error("获取用户资料失败:", error);
-      } finally {
-        setLoading(false);
-      }
+      const profileData = await getUserProfile(userId);
+      setProfileUser(profileData);
+      setLoading(false);
     };
     fetchUserProfile();
   }, [userId]);
+
+  const handleStartChat = async () => {
+    if (!currentUser) {
+      alert('请先登录再发送私信！');
+      return;
+    }
+    if (!profileUser) return;
+    
+    console.log(`正在尝试与 ${profileUser.displayName} (${profileUser.id}) 开始聊天...`);
+    const conversation = await startChat(currentUser.uid, profileUser.id);
+    if (conversation) {
+      console.log('成功获取或创建对话:', conversation);
+      // 在这里调用全局函数打开聊天抽屉
+      // openDrawer('chat', { conversation });
+      alert(`已与 ${profileUser.displayName} 开启对话，请在消息列表中查看！(UI待接入)`);
+    } else {
+      console.error('无法开启对话');
+      alert('开启对话失败，请稍后再试。');
+    }
+  };
 
   if (loading) {
     return <LayoutBase><div className="p-10 text-center">正在加载用户资料...</div></LayoutBase>;
   }
 
-  if (!profileUser) {
-    return <LayoutBase><div className="p-10 text-center text-red-500">无法加载该用户的信息。</div></LayoutBase>;
+  if (!profileUser || profileUser.displayName === '未知用户') {
+    return <LayoutBase><div className="p-10 text-center text-red-500">无法加载该用户的信息或用户不存在。</div></LayoutBase>;
   }
 
   const isMyProfile = currentUser && currentUser.uid === profileUser.id;
@@ -77,7 +88,12 @@ const ProfilePage = () => {
             ) : (
               <>
                 <button className="px-6 py-3 bg-blue-500 text-white rounded-full font-semibold hover:bg-blue-600">关注</button>
-                <button className="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-full font-semibold hover:bg-gray-300 dark:hover:bg-gray-600">私信</button>
+                <button 
+                  onClick={handleStartChat}
+                  className="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-full font-semibold hover:bg-gray-300 dark:hover:bg-gray-600"
+                >
+                  私信
+                </button>
               </>
             )}
           </div>
@@ -96,9 +112,9 @@ const ProfilePage = () => {
         </div>
 
         <div className="p-4 flex-grow">
-          {activeTab === 'dynamics' && ( <p>用户动态加载中...</p> )}
-          {activeTab === 'posts' && ( <p>用户帖子列表...</p> )}
-          {activeTab === 'bookmarks' && ( <p>用户收藏列表...</p> )}
+          {activeTab === 'dynamics' && ( <p className="text-center text-gray-500">用户的动态将会在这里展示...</p> )}
+          {activeTab === 'posts' && ( <p className="text-center text-gray-500">用户发布的帖子列表...</p> )}
+          {activeTab === 'bookmarks' && ( <p className="text-center text-gray-500">用户收藏的内容...</p> )}
         </div>
       </div>
     </LayoutBase>
