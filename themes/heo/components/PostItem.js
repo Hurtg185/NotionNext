@@ -1,3 +1,5 @@
+// themes/heo/components/PostItem.js
+
 import { useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/AuthContext';
@@ -45,38 +47,60 @@ const PostItem = ({ post }) => {
     <>
       <div className="bg-white dark:bg-gray-800 p-4 border-b border-gray-200 dark:border-gray-700 shadow-md hover:shadow-xl transition-shadow duration-300">
         <div className="flex items-center mb-3">
-          {post.authorAvatar && (
-            <img 
-              src={post.authorAvatar} 
-              alt={post.authorName} 
-              className="w-12 h-12 rounded-lg border-2 border-gray-100 dark:border-gray-600"
-            />
-          )}
-          <div className="ml-3 flex-grow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-semibold text-gray-800 dark:text-gray-200">{post.authorName || '匿名用户'}</p>
-                {post.authorIsAdmin && (
-                  <span className="ml-2 text-xs bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300 px-2 py-0.5 rounded-full font-semibold">
-                    管理员
-                  </span>
+          
+          {/* 【核心修改】用 Link 组件包裹头像和作者信息 */}
+          {post.authorId ? (
+            <Link href={`/profile/${post.authorId}`} passHref>
+              <a className="flex items-center cursor-pointer group">
+                {post.authorAvatar && (
+                  <img 
+                    src={post.authorAvatar} 
+                    alt={post.authorName} 
+                    className="w-12 h-12 rounded-lg border-2 border-gray-100 dark:border-gray-600"
+                  />
                 )}
+                <div className="ml-3 flex-grow">
+                  <div className="flex items-center">
+                    <p className="font-semibold text-gray-800 dark:text-gray-200 group-hover:text-blue-500 transition-colors">{post.authorName || '匿名用户'}</p>
+                    {post.authorIsAdmin && (
+                      <span className="ml-2 text-xs bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300 px-2 py-0.5 rounded-full font-semibold">
+                        管理员
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {post.createdAt ? new Date(post.createdAt.toDate()).toLocaleString() : '不久前'}
+                    {post.city && ` · ${post.city}`}
+                  </p>
+                </div>
+              </a>
+            </Link>
+          ) : (
+            // 如果没有作者ID，则显示为不可点击的静态信息
+            <div className="flex items-center">
+              {post.authorAvatar && <img src={post.authorAvatar} alt="avatar" className="w-12 h-12 rounded-lg border-2 border-gray-100 dark:border-gray-600"/>}
+              <div className="ml-3 flex-grow">
+                 <p className="font-semibold text-gray-800 dark:text-gray-200">{post.authorName || '匿名用户'}</p>
+                 <p className="text-xs text-gray-500 dark:text-gray-400">时间地点信息...</p>
               </div>
-              {/* 这里添加了私信按钮 */}
-              {post.authorId && <StartChatButton targetUserId={post.authorId} />}
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {post.createdAt ? new Date(post.createdAt.toDate()).toLocaleString() : '不久前'}
-              {post.city && ` · ${post.city}`}
-            </p>
+          )}
+
+          {/* 将私信按钮移到 Link 区域之外，确保点击区域不冲突 */}
+          <div className="ml-auto">
+            {post.authorId && user && user.uid !== post.authorId && <StartChatButton targetUserId={post.authorId} />}
           </div>
         </div>
+
+        {/* 帖子内容链接保持不变 */}
         <Link href={`/forum/post/${post.id}`}>
           <a className="space-y-2 block my-3">
             <h2 className="text-lg font-bold hover:text-blue-500 dark:text-gray-100">{post.title}</h2>
             <p className="text-gray-800 dark:text-gray-200 text-base line-clamp-2">{post.content}</p>
           </a>
         </Link>
+
+        {/* 底部操作栏保持不变 */}
         <div className="flex justify-center items-center space-x-8 mt-4 text-gray-600 dark:text-gray-400">
           <button 
             onClick={handleLike} 
@@ -102,19 +126,18 @@ const PostItem = ({ post }) => {
           </button>
         </div>
       </div>
+      
+      {/* 分享模态框保持不变 */}
       {showShareModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowShareModal(false)}>
           <div className="bg-white p-6 rounded-lg flex space-x-6" onClick={(e) => e.stopPropagation()}>
-            <FacebookShareButton url={postUrl} quote={post.title}>
-              <i className="fab fa-facebook text-4xl text-blue-600 hover:opacity-80"></i>
-            </FacebookShareButton>
-            <TelegramShareButton url={postUrl} title={post.title}>
-              <i className="fab fa-telegram text-4xl text-blue-400 hover:opacity-80"></i>
-            </TelegramShareButton>
+            <FacebookShareButton url={postUrl} quote={post.title}><i className="fab fa-facebook text-4xl text-blue-600 hover:opacity-80"></i></FacebookShareButton>
+            <TelegramShareButton url={postUrl} title={post.title}><i className="fab fa-telegram text-4xl text-blue-400 hover:opacity-80"></i></TelegramShareButton>
           </div>
         </div>
       )}
     </>
   );
 };
+
 export default PostItem;
