@@ -1,7 +1,7 @@
-// themes/heo/components/ConversationItem.js (完美最终版)
+// themes/heo/components/ConversationItem.js (终极修复版)
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link' // 1. 引入 Link 组件用于跳转
+import Link from 'next/link'
 import { useAuth } from '@/lib/AuthContext'
 import { getUserProfile } from '@/lib/chat'
 
@@ -13,21 +13,25 @@ const ConversationItem = ({ conversation, onClick }) => {
     if (user && conversation?.participants) {
       const otherUserId = conversation.participants.find(uid => uid !== user.uid)
       if (otherUserId) {
-        // 清空旧用户数据，确保在切换用户时显示加载状态
         setOtherUser(null); 
         getUserProfile(otherUserId).then(setOtherUser)
       }
     }
   }, [conversation, user])
 
-  // 阻止点击头像时，触发整个item的onClick事件（即打开聊天）
   const handleAvatarClick = (e) => {
     e.stopPropagation();
   };
   
-  // 2. 创建一个完美的骨架屏，它和最终UI结构完全一致
-  // 这能从根本上解决“黑粗线”问题，因为它在加载时根本不渲染 <img> 标签
-  if (!otherUser) {
+  /**
+   * 【核心修改】: 使用更严格的加载状态检查
+   * 只有在 otherUser 对象存在，并且其 photoURL 属性也已定义时 (即使是 null),
+   * 才认为加载完成。这可以 100% 避免渲染一个不完整的用户数据。
+   */
+  const isLoading = !otherUser || typeof otherUser.photoURL === 'undefined';
+
+  if (isLoading) {
+    // 骨架屏保持不变，它本身是完美的
     return (
       <div className="flex items-center p-3">
         <div className="w-16 h-16 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse"></div>
@@ -42,16 +46,22 @@ const ConversationItem = ({ conversation, onClick }) => {
   const lastMessage = conversation.lastMessage || '...'
   const timestamp = conversation.lastMessageTimestamp?.toDate().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) || ''
   
+  /**
+   * 【核心修改】: 创建一个绝对安全的头像 URL
+   * 这里的 otherUser.photoURL 可能是 URL 字符串，也可能是 null (来自我们改好的 getUserProfile)
+   * `||` 操作符可以完美处理这两种情况。
+   */
+  const avatarSrc = otherUser.photoURL || 'https://www.gravatar.com/avatar?d=mp';
+
   return (
     <div
       onClick={onClick}
       className="flex items-center p-3 cursor-pointer transition-colors duration-200 hover:bg-gray-100 dark:hover:bg-gray-700"
     >
-      {/* 3. 实现可点击的头像，点击后进入对方个人主页 */}
       <Link href={`/profile/${otherUser.id}`} passHref>
         <a onClick={handleAvatarClick} className="flex-shrink-0">
           <img
-            src={otherUser.photoURL || 'https://www.gravatar.com/avatar?d=mp'}
+            src={avatarSrc} // 使用我们预先计算好的安全 src
             alt={otherUser.displayName}
             className="rounded-full object-cover w-16 h-16"
           />
@@ -69,4 +79,4 @@ const ConversationItem = ({ conversation, onClick }) => {
   )
 }
 
-export default ConversationItem
+export default ConversationItem;
