@@ -1,18 +1,17 @@
-// pages/profile/[userId].js
+// pages/profile/[userId].js (正确且独立的文件)
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '@/lib/AuthContext';
-import { LayoutBase } from '@/themes/heo'; // 确保导入的是您主题的正确布局组件
-import { getUserProfile, startChat } from '@/lib/chat'; // 引入 getUserProfile 和 startChat
-// 假设你有一个全局的抽屉上下文，用于打开聊天窗口
-// import { useDrawer } from '@/lib/DrawerContext'; 
+import { LayoutBase } from '@/themes/heo';
+import { getUserProfile, startChat } from '@/lib/chat';
+import { useDrawer } from '@/lib/DrawerContext'; // 引入 useDrawer
 
 const ProfilePage = () => {
   const router = useRouter();
   const { userId } = router.query;
   const { user: currentUser } = useAuth();
-  // const { openDrawer } = useDrawer(); // 从上下文中获取打开抽屉的函数
+  const { openDrawer } = useDrawer(); // 获取 openDrawer
   const [profileUser, setProfileUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dynamics');
@@ -33,17 +32,13 @@ const ProfilePage = () => {
       alert('请先登录再发送私信！');
       return;
     }
-    if (!profileUser) return;
+    if (!profileUser || profileUser.id === currentUser.uid) return;
     
-    console.log(`正在尝试与 ${profileUser.displayName} (${profileUser.id}) 开始聊天...`);
     const conversation = await startChat(currentUser.uid, profileUser.id);
     if (conversation) {
-      console.log('成功获取或创建对话:', conversation);
-      // 在这里调用全局函数打开聊天抽屉
-      // openDrawer('chat', { conversation });
-      alert(`已与 ${profileUser.displayName} 开启对话，请在消息列表中查看！(UI待接入)`);
+      // 使用抽屉打开聊天窗口
+      openDrawer('chat', { conversation });
     } else {
-      console.error('无法开启对话');
       alert('开启对话失败，请稍后再试。');
     }
   };
@@ -52,7 +47,7 @@ const ProfilePage = () => {
     return <LayoutBase><div className="p-10 text-center">正在加载用户资料...</div></LayoutBase>;
   }
 
-  if (!profileUser || profileUser.displayName === '未知用户') {
+  if (!profileUser) {
     return <LayoutBase><div className="p-10 text-center text-red-500">无法加载该用户的信息或用户不存在。</div></LayoutBase>;
   }
 
