@@ -1,4 +1,4 @@
-// themes/heo/components/ChatMessage.js (完整且已加固)
+// themes/heo/components/ChatMessage.js (最终的、唯一的修改)
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
@@ -33,9 +33,8 @@ const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) 
   const router = useRouter();
   const { closeDrawer } = useDrawer();
 
-  // 【核心修复】为 chatStyles 提供一个绝对安全、永不为 undefined 的初始值
   const [chatStyles, setChatStyles] = useState({
-      theme: THEMES[0], // 直接使用第一个主题作为默认值
+      theme: THEMES[0],
       fontSize: 'text-base',
       fontWeight: 'font-normal',
       bubbleShapeKey: 'default'
@@ -50,8 +49,6 @@ const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) 
         const savedBubbleShapeKey = localStorage.getItem(`chat_bubble_shape_key_${chatId}`) || 'default';
         const savedFontSize = localStorage.getItem(`chat_font_size_${chatId}`) || 'text-base';
         const savedFontWeight = localStorage.getItem(`chat_font_weight_${chatId}`) || 'font-normal';
-        
-        // 【核心修复】确保 currentTheme 永远有值
         const currentTheme = THEMES.find(t => t.id === savedThemeId) || THEMES[0];
         
         setChatStyles({ 
@@ -65,15 +62,12 @@ const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) 
 
     const handleStyleChange = (event) => {
         const { themeId, bubbleShapeKey, fontSize, fontWeight } = event.detail;
-        
-        // 【核心修复】确保 currentTheme 永远有值
         const currentTheme = THEMES.find(t => t.id === themeId) || THEMES[0];
-
         setChatStyles({ 
             theme: currentTheme, 
-            bubbleShapeKey: bubbleShapeKey || 'default',
-            fontSize: fontSize || 'text-base', 
-            fontWeight: fontWeight || 'font-normal'
+            bubbleShapeKey: bubbleShapeKey,
+            fontSize: fontSize, 
+            fontWeight: fontWeight 
         });
     };
     window.addEventListener('chat-style-change', handleStyleChange);
@@ -94,9 +88,8 @@ const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) 
     return <div className="h-[52px]"></div>;
   }
   
-  // 【核心修复】在访问 .outgoing 和 .incoming 之前，先确保 chatStyles.theme 是存在的
-  const bubbleTheme = chatStyles.theme ? (isMe ? chatStyles.theme.outgoing : chatStyles.theme.incoming) : THEMES[0].incoming;
-  const bubbleBaseClasses = 'inline-block px-4 py-2';
+  const bubbleTheme = isMe ? chatStyles.theme.outgoing : chatStyles.theme.incoming;
+  const bubbleBaseClasses = 'inline-block max-w-full px-4 py-2';
   
   const bubbleShapeClasses = getBubbleShapeClasses(chatStyles.bubbleShapeKey, isMe);
   const bubbleColorAndFontClasses = `${bubbleTheme.className} ${chatStyles.fontSize} ${chatStyles.fontWeight}`;
@@ -114,7 +107,8 @@ const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) 
           className={`${bubbleBaseClasses} ${bubbleShapeClasses} ${bubbleColorAndFontClasses}`} 
           style={bubbleTheme.style}
         >
-          <p className="break-words whitespace-pre-wrap">{message.text}</p>
+          {/* 【核心修复】使用 break-all 强制在任何字符处换行 */}
+          <p className="break-all whitespace-pre-wrap">{message.text}</p>
         </div>
       </div>
 
