@@ -1,4 +1,4 @@
-// themes/heo/components/ConversationItem.js (终极修复版)
+// themes/heo/components/ConversationItem.js (应用头像动画)
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -60,11 +60,14 @@ const ConversationItem = ({ conversation, onClick }) => {
     >
       <Link href={`/profile/${otherUser.id}`} passHref>
         <a onClick={handleAvatarClick} className="flex-shrink-0">
-          <img
-            src={avatarSrc} // 使用我们预先计算好的安全 src
-            alt={otherUser.displayName}
-            className="rounded-full object-cover w-16 h-16"
-          />
+          {/* 【核心修改】给头像的容器添加 avatar-glow 类 */}
+          <div className="avatar-glow"> 
+            <img
+              src={avatarSrc} // 使用我们预先计算好的安全 src
+              alt={otherUser.displayName}
+              className="rounded-full object-cover w-16 h-16"
+            />
+          </div>
         </a>
       </Link>
 
