@@ -17,7 +17,7 @@ const speakText = (text, lang = 'zh-CN') => {
     utterance.lang = lang;
     window.speechSynthesis.speak(utterance);
   } else {
-    console.warn('您的浏览器不支持语音合成API。');
+    console.warn('您的浏览不支持语音合成API。');
   }
 };
 
