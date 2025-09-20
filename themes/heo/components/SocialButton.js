@@ -1,16 +1,17 @@
-// themes/heo/components/ConversationList.js (抽屉模式最终版 - 彻底清理)
+// themes/heo/components/ConversationList.js (最终修复版 - 纠正 useDrawer 导入)
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/lib/AuthContext'
 import { getConversationsForUser } from '@/lib/chat'
 import ConversationItem from './ConversationItem'
-import { useDrawer } from '@/themes/heo/components/BottomNavBar'; // 【核心修改】: 从 BottomNavBar 导入 openDrawer
+// 【核心修复】: 从正确的路径导入 useDrawer
+import { useDrawer } from '@/lib/DrawerContext'; // 导入 useDrawer 应该从 lib/DrawerContext
 
-const ConversationList = () => { // 不再需要 activeChatId prop
+const ConversationList = () => {
   const { user } = useAuth()
   const [conversations, setConversations] = useState([])
   const [loading, setLoading] = useState(true)
-  const { openDrawer } = useDrawer(); // 【核心修改】: 获取 openDrawer
+  const { openDrawer } = useDrawer();
 
   useEffect(() => {
     if (!user) return
@@ -23,7 +24,7 @@ const ConversationList = () => { // 不再需要 activeChatId prop
   }, [user])
 
   const handleSelectChat = (conversation) => {
-    openDrawer('chat', { conversation }); // 【核心修改】: 调用 openDrawer 打开聊天抽屉
+    openDrawer('chat', { conversation });
   };
 
   if (loading) {
@@ -40,7 +41,7 @@ const ConversationList = () => { // 不再需要 activeChatId prop
           <ConversationItem
             key={conv.id}
             conversation={conv}
-            onClick={() => handleSelectChat(conv)} // 【核心修改】: 调用 handleSelectChat
+            onClick={() => handleSelectChat(conv)}
           />
         ))
       ) : (
