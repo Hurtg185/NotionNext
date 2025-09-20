@@ -1,4 +1,4 @@
-// next.config.js (最终修复版 - 结合了 CSP, Webpack 别名, 和服务器模块 fallback)
+// next.config.js (最终修复版 - 修复语法错误)
 
 const { THEME } = require('./blog.config')
 const fs = require('fs')
@@ -203,9 +203,7 @@ const nextConfig = {
           }
         ]
       },
-  // --- 【核心修改】将服务器模块 fallback 配置添加到你现有的 webpack 配置中 ---
   webpack: (config, { dev, isServer }) => {
-    // 动态主题：添加 resolve.alias 配置
     config.resolve.alias['@'] = path.resolve(__dirname)
     
     const currentTheme = THEME || 'heo';
@@ -218,9 +216,7 @@ const nextConfig = {
       currentTheme
     )
 
-    // 【新增】只在服务器端打包 Node.js 模块
     if (!isServer) {
-      // 在客户端打包时，将这些模块设置为空对象，防止 Webpack 报错
       config.resolve.fallback = {
         ...config.resolve.fallback,
         net: false,
@@ -231,7 +227,6 @@ const nextConfig = {
       };
     }
 
-    // 性能优化配置
     if (!dev) {
       config.optimization = {
         ...config.optimization,
@@ -284,4 +279,5 @@ const nextConfig = {
 }
 
 module.exports = process.env.ANALYZE
-  ? withBundleAnal
+  ? withBundleAnalyzer(nextConfig)
+  : nextConfig
