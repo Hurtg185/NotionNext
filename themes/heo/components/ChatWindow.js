@@ -1,4 +1,4 @@
-// themes/heo/components/ChatWindow.js (优化键盘避让逻辑)
+// themes/heo/components/ChatWindow.js (进一步优化键盘避让逻辑)
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
@@ -11,9 +11,8 @@ import { useDrawer } from '@/lib/DrawerContext';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
 import TextareaAutosize from 'react-textarea-autosize';
 
-// 【新增】一个全局变量来存储页面没有键盘时的真实高度
-// 这有助于在各种 resize 事件中保持高度基准的稳定
-let windowHeightWithoutKeyboard = window.innerHeight;
+// 【修改】不再使用全局变量直接记录 window.innerHeight
+// let windowHeightWithoutKeyboard = 0; // 删除或注释掉这行
 
 const ChatWindow = ({ chatId, conversation }) => {
   const { user: currentUser } = useAuth();
@@ -33,7 +32,9 @@ const ChatWindow = ({ chatId, conversation }) => {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const footerRef = useRef(null);
 
-  // ... (useEffect for fetchData, getMessagesForChat, scrollToEnd, loadBackground, handleClickOutside 保持不变) ...
+  // 【新增】保存初始视口高度，确保准确
+  const initialViewportHeightRef = useRef(0);
+
   // 1. 获取对方用户信息
   useEffect(() => {
     const fetchData = async () => {
@@ -73,17 +74,23 @@ const ChatWindow = ({ chatId, conversation }) => {
   // 4. 加载和监听聊天背景变化
   useEffect(() => {
     const loadBackground = () => {
-      const savedBackground = localStorage.getItem(`chat_background_${chatId}`);
-      setBackground(savedBackground || 'default');
+      if (typeof window !== 'undefined') {
+        const savedBackground = localStorage.getItem(`chat_background_${chatId}`);
+        setBackground(savedBackground || 'default');
+      }
     };
     loadBackground();
-    const handleBackgroundChange = (event) => setBackground(event.detail.background);
-    window.addEventListener('chat-background-change', handleBackgroundChange);
-    return () => window.removeEventListener('chat-background-change', handleBackgroundChange);
+    if (typeof window !== 'undefined') {
+      const handleBackgroundChange = (event) => setBackground(event.detail.background);
+      window.addEventListener('chat-background-change', handleBackgroundChange);
+      return () => window.removeEventListener('chat-background-change', handleBackgroundChange);
+    }
   }, [chatId]);
   
   // 5. 点击外部关闭表情选择器
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     function handleClickOutside(event) {
       if (emojiPickerRef.current && emojiPickerRef.current.contains(event.target)) return;
       const emojiButton = document.querySelector('[aria-label="选择表情"]');
@@ -94,36 +101,53 @@ const ChatWindow = ({ chatId, conversation }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [emojiPickerRef]);
 
-  // 【核心修改】优化键盘避让逻辑
+  // 【核心修改】优化键盘避让逻辑，采用 visualViewport 或更精确的 resize 处理
   useEffect(() => {
-    // 首次加载时，记录没有键盘时的视口高度
-    // 假设在页面加载完成且没有键盘弹起时，这个高度是正确的
-    if (window.innerHeight > 0 && windowHeightWithoutKeyboard === window.innerHeight) {
-        windowHeightWithoutKeyboard = window.innerHeight; // 确保取到首次无键盘高度
+    if (typeof window === 'undefined') return;
+
+    // 首次挂载时，记录初始视口高度 (假设此时键盘未弹起)
+    // 并且只记录一次，作为基准
+    if (initialViewportHeightRef.current === 0) {
+      initialViewportHeightRef.current = window.innerHeight;
     }
 
-    const handleResize = () => {
+    const handleViewportChange = () => {
       const currentViewportHeight = window.innerHeight;
       let calculatedKeyboardHeight = 0;
 
-      // 如果当前视口高度小于初始记录的无键盘高度，则认为键盘弹起了
-      if (currentViewportHeight < windowHeightWithoutKeyboard) {
-        calculatedKeyboardHeight = windowHeightWithoutKeyboard - currentViewportHeight;
+      // 优先使用 visualViewport.height (更精确)
+      if (window.visualViewport) {
+        calculatedKeyboardHeight = initialViewportHeightRef.current - window.visualViewport.height;
+      } else {
+        // Fallback 到 window.innerHeight
+        // 只有当当前视口高度小于初始高度时，才认为是键盘弹起
+        if (currentViewportHeight < initialViewportHeightRef.current) {
+          calculatedKeyboardHeight = initialViewportHeightRef.current - currentViewportHeight;
+        }
       }
       
-      // 设置一个最小阈值，防止一些微小的视口变化被误判为键盘
-      if (calculatedKeyboardHeight < 60) { // 键盘通常至少有100-200px高，这里设一个安全值
+      // 设置一个最小阈值，防止微小变化被误判为键盘
+      if (calculatedKeyboardHeight < 80) { // 提高阈值，键盘通常在80px以上
         setKeyboardHeight(0);
       } else {
         setKeyboardHeight(calculatedKeyboardHeight);
       }
     };
 
-    window.addEventListener('resize', handleResize);
+    // 监听 resize 事件 (window.innerHeight 变化)
+    window.addEventListener('resize', handleViewportChange);
+    // 监听 visualViewport resize 事件 (更精确的可见视口变化)
+    // 优先使用 visualViewport 的事件
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewportChange);
+    }
     
     // 组件卸载时，移除事件监听
     return () => {
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('resize', handleViewportChange);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleViewportChange);
+      }
     };
   }, []); // 空数组确保只在挂载时设置事件监听
 
@@ -223,10 +247,9 @@ const ChatWindow = ({ chatId, conversation }) => {
         </button>
       </header>
       
-      {/* 【修改】main 区域的 padding-bottom 动态调整 */}
       <main 
         className="relative z-10 flex-1 w-full overflow-y-auto overflow-x-hidden p-4"
-        style={{ paddingBottom: `calc(1rem + ${keyboardHeight}px)` }} // 底部留出键盘空间
+        style={{ paddingBottom: `calc(1rem + ${keyboardHeight}px)` }}
       >
         {messages.map(msg => (
           <ChatMessage 
@@ -240,11 +263,10 @@ const ChatWindow = ({ chatId, conversation }) => {
         <div ref={messagesEndRef} />
       </main>
 
-      {/* --- 【修改】Footer 区域，直接包含输入框和表情功能 --- */}
       <footer 
-        ref={footerRef} // 【新增】引用 footer 元素
+        ref={footerRef}
         className={`relative z-20 flex-shrink-0 p-3 ${isBgImage ? 'bg-black/20' : 'bg-white/50 dark:bg-gray-800/50'} border-t border-gray-200/20 dark:border-gray-700/20 backdrop-blur-lg transition-transform duration-200 ease-in-out`}
-        style={{ transform: `translateY(${-keyboardHeight}px)` }} // 【修改】整个 footer 上移
+        style={{ transform: `translateY(${-keyboardHeight}px)` }}
       >
         <div className="relative">
           {showEmojiPicker && (
@@ -257,15 +279,14 @@ const ChatWindow = ({ chatId, conversation }) => {
               ref={textareaRef}
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
-              onKeyDown={handleKeyPress} // 【新增】处理 Enter 键发送和 Shift+Enter 换行
+              onKeyDown={handleKeyPress}
               placeholder="输入消息..."
-              minRows={1} // 最小一行
-              maxRows={5} // 最大五行，防止无限增高
+              minRows={1}
+              maxRows={5}
               className={`flex-grow px-4 py-2 resize-none overflow-hidden rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 ${isBgImage ? 'bg-black/30 text-white placeholder-gray-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'}`}
-              style={{ lineHeight: '1.5rem' }} // 确保行高一致
+              style={{ lineHeight: '1.5rem' }}
             />
             
-            {/* 【核心修改】表情按钮和发送按钮放在右边 */}
             <button
               onClick={() => setShowEmojiPicker(prev => !prev)}
               className={`flex-shrink-0 p-2 rounded-full transition ${isBgImage ? 'text-white/80 hover:bg-white/20' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
