@@ -1,4 +1,4 @@
-// next.config.js (最终修复版 - 修复语法错误)
+// next.config.js (修复 ioredis 的 dns 模块打包错误)
 
 const { THEME } = require('./blog.config')
 const fs = require('fs')
@@ -217,13 +217,15 @@ const nextConfig = {
     )
 
     if (!isServer) {
+      // 在客户端打包时，将这些模块设置为空对象，防止 Webpack 报错
       config.resolve.fallback = {
         ...config.resolve.fallback,
         net: false,
         tls: false,
         fs: false,
         child_process: false,
-        'react-native-sqlite-storage': false
+        'react-native-sqlite-storage': false,
+        dns: false // 【核心修复】将 dns 添加到 fallback 列表
       };
     }
 
