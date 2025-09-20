@@ -1,4 +1,4 @@
-// pages/forum/messages.js (私信列表)
+// pages/forum/messages.js (私信列2表)
 
 import React from 'react';
 import { LayoutBase } from '@/themes/heo';
