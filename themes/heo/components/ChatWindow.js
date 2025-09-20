@@ -1,4 +1,4 @@
-// themes/heo/components/ChatWindow.js (表情放右边 + 键盘避让 + 自适应高度 - 最终修复版)
+// themes/heo/components/ChatWindow.js (最终修复版 - 键盘避让优化 + 所有功能整合)
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
@@ -7,8 +7,12 @@ import { getUserProfile, getMessagesForChat, markChatAsRead, sendMessage } from 
 import ChatMessage from './ChatMessage';
 import ChatSettingsPanel from './ChatSettingsPanel';
 import { useDrawer } from '@/lib/DrawerContext';
+
 import EmojiPicker, { Theme } from 'emoji-picker-react';
 import TextareaAutosize from 'react-textarea-autosize';
+
+// 【修改】不再使用全局变量直接记录 window.innerHeight，改为在组件内部 useRef
+// let windowHeightWithoutKeyboard = 0; // 删除或注释掉这行
 
 const ChatWindow = ({ chatId, conversation }) => {
   const { user: currentUser } = useAuth();
@@ -21,13 +25,15 @@ const ChatWindow = ({ chatId, conversation }) => {
   const [background, setBackground] = useState('default');
   const messagesEndRef = useRef(null);
 
-  // --- 输入框和键盘相关 State ---
   const [newMessage, setNewMessage] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const emojiPickerRef = useRef(null);
   const textareaRef = useRef(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const footerRef = useRef(null);
+
+  // 【修改】使用 useRef 存储初始视口高度，并在客户端初始化
+  const initialViewportHeightRef = useRef(0); 
 
   // 1. 获取对方用户信息
   useEffect(() => {
@@ -67,12 +73,24 @@ const ChatWindow = ({ chatId, conversation }) => {
 
   // 4. 加载和监听聊天背景变化
   useEffect(() => {
-    const savedBackground = localStorage.getItem(`chat_background_${chatId}`);
-    setBackground(savedBackground || 'default');
+    const loadBackground = () => {
+      if (typeof window !== 'undefined') {
+        const savedBackground = localStorage.getItem(`chat_background_${chatId}`);
+        setBackground(savedBackground || 'default');
+      }
+    };
+    loadBackground();
+    if (typeof window !== 'undefined') {
+      const handleBackgroundChange = (event) => setBackground(event.detail.background);
+      window.addEventListener('chat-background-change', handleBackgroundChange);
+      return () => window.removeEventListener('chat-background-change', handleBackgroundChange);
+    }
   }, [chatId]);
   
   // 5. 点击外部关闭表情选择器
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     function handleClickOutside(event) {
       if (emojiPickerRef.current && emojiPickerRef.current.contains(event.target)) return;
       const emojiButton = document.querySelector('[aria-label="选择表情"]');
@@ -83,32 +101,82 @@ const ChatWindow = ({ chatId, conversation }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [emojiPickerRef]);
 
-  // 6. 键盘避让逻辑
+  // 【核心修改】优化键盘避让逻辑，采用 visualViewport 或更精确的 resize 处理
   useEffect(() => {
-    let initialViewportHeight = window.innerHeight;
-    const handleResize = () => {
+    if (typeof window === 'undefined') return;
+
+    // 首次挂载时，记录初始视口高度 (假设此时键盘未弹起)
+    // 并且只记录一次，作为基准
+    if (initialViewportHeightRef.current === 0) {
+      initialViewportHeightRef.current = window.innerHeight;
+    }
+
+    const handleViewportChange = () => {
       const currentViewportHeight = window.innerHeight;
-      const keyboardOpen = initialViewportHeight > currentViewportHeight;
-      const diff = initialViewportHeight - currentViewportHeight;
-      if (Math.abs(diff) > 50) {
-        setKeyboardHeight(keyboardOpen ? diff : 0);
-        if (!keyboardOpen) {
-          initialViewportHeight = window.innerHeight;
+      let calculatedKeyboardHeight = 0;
+
+      // 优先使用 visualViewport.height (更精确)
+      if (window.visualViewport) {
+        calculatedKeyboardHeight = initialViewportHeightRef.current - window.visualViewport.height;
+      } else {
+        // Fallback 到 window.innerHeight
+        // 只有当当前视口高度小于初始高度时，才认为是键盘弹起
+        if (currentViewportHeight < initialViewportHeightRef.current) {
+          calculatedKeyboardHeight = initialViewportHeightRef.current - currentViewportHeight;
         }
-      } else if (!keyboardOpen && diff < 50) {
+      }
+      
+      // 设置一个最小阈值，防止微小变化被误判为键盘
+      if (calculatedKeyboardHeight < 80) { // 提高阈值，键盘通常在80px以上
         setKeyboardHeight(0);
-        initialViewportHeight = window.innerHeight;
+      } else {
+        setKeyboardHeight(calculatedKeyboardHeight);
       }
     };
-    window.addEventListener('resize', handleResize);
-    initialViewportHeight = window.innerHeight;
-    setKeyboardHeight(0);
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
 
-  // --- 处理输入和发送 ---
+    // 监听 resize 事件 (window.innerHeight 变化)
+    window.addEventListener('resize', handleViewportChange);
+    // 监听 visualViewport resize 事件 (更精确的可见视口变化)
+    // 优先使用 visualViewport 的事件
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewportChange);
+    }
+    
+    // 组件卸载时，移除事件监听
+    return () => {
+      window.removeEventListener('resize', handleViewportChange);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleViewportChange);
+      }
+    };
+  }, []); // 空数组确保只在挂载时设置事件监听
+
+
+  const getTopBarRoleTag = (profile) => {
+    if (!profile) return null;
+    if (profile.isAdmin) {
+      return (
+        <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full ml-2 font-bold flex items-center">
+          <i className="fas fa-crown text-xs mr-1"></i> 站长
+        </span>
+      );
+    } else if (profile.isModerator) {
+      return (
+        <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full ml-2 font-bold flex items-center">
+          <i className="fas fa-shield-alt text-xs mr-1"></i> 管理员
+        </span>
+      );
+    }
+    return null;
+  };
+
+  const handleTopBarClick = () => {
+    if (otherUser?.id) {
+      closeDrawer();
+      setTimeout(() => router.push(`/profile/${otherUser.id}`), 100);
+    }
+  };
+
   const onEmojiClick = (emojiObject) => {
     setNewMessage(prevMsg => prevMsg + emojiObject.emoji);
     textareaRef.current?.focus();
@@ -132,7 +200,6 @@ const ChatWindow = ({ chatId, conversation }) => {
     }
   };
 
-  // 【核心修复】将骨架屏代码放回 return 语句中
   if (isLoading || !otherUser) {
     return (
       <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900 animate-pulse">
@@ -165,12 +232,25 @@ const ChatWindow = ({ chatId, conversation }) => {
       <header 
         className={`relative z-20 flex-shrink-0 p-3 h-14 flex justify-between items-center ${isBgImage ? 'bg-black/20 text-white' : 'bg-white/50 dark:bg-gray-800/50 text-gray-900 dark:text-white'} border-b border-gray-200/20 dark:border-gray-700/20 backdrop-blur-lg`}
       >
-        {/* ... (你的 header 内容不变) ... */}
+        <div 
+          className="flex-grow flex justify-center items-center relative cursor-pointer"
+          onClick={handleTopBarClick}
+        >
+          <h2 className="font-bold text-lg text-center truncate">{otherUser?.displayName || '未知用户'}</h2>
+          {getTopBarRoleTag(otherUser)}
+        </div>
+        <button 
+          onClick={() => setShowSettings(true)} 
+          className={`p-2 rounded-full transition ${isBgImage ? 'text-white/80 hover:bg-white/10' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+        >
+          <i className="fas fa-ellipsis-v"></i>
+        </button>
       </header>
       
+      {/* 【核心修改】main 区域的 padding-bottom 动态调整 */}
       <main 
         className="relative z-10 flex-1 w-full overflow-y-auto overflow-x-hidden p-4"
-        style={{ paddingBottom: `calc(1rem + ${keyboardHeight}px)` }}
+        style={{ paddingBottom: `calc(1rem + ${keyboardHeight}px)` }} // 底部留出键盘空间
       >
         {messages.map(msg => (
           <ChatMessage 
@@ -184,10 +264,11 @@ const ChatWindow = ({ chatId, conversation }) => {
         <div ref={messagesEndRef} />
       </main>
 
+      {/* --- 【核心修改】Footer 区域，只保留 fixed 定位，不进行 transform 移动 --- */}
       <footer 
-        ref={footerRef}
-        className={`relative z-20 flex-shrink-0 p-3 ${isBgImage ? 'bg-black/20' : 'bg-white/50 dark:bg-gray-800/50'} border-t border-gray-200/20 dark:border-gray-700/20 backdrop-blur-lg transition-transform duration-200 ease-in-out`}
-        style={{ transform: `translateY(${-keyboardHeight}px)` }}
+        ref={footerRef} 
+        className={`fixed bottom-0 left-0 right-0 z-20 flex-shrink-0 p-3 ${isBgImage ? 'bg-black/20' : 'bg-white/50 dark:bg-gray-800/50'} border-t border-gray-200/20 dark:border-gray-700/20 backdrop-blur-lg transition-transform duration-200 ease-in-out`}
+        // 【删除】 style={{ transform: `translateY(${-keyboardHeight}px)` }} // 移除 footer 的 translateY 移动
       >
         <div className="relative">
           {showEmojiPicker && (
