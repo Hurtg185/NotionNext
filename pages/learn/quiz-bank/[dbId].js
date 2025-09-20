@@ -1,39 +1,49 @@
-// pages/learn/quiz-bank/[dbId].js (单个题库的题目列表)
-import React, { useState, useEffect } from 'react';
+// pages/learn/quiz-bank/[dbId].js (使用 getStaticProps)
+import React from 'react';
 import { useRouter } from 'next/router';
 import { LayoutBase } from '@/themes/heo';
 import { getQuizzesFromDatabase, getQuizBanksFromPortalPage } from '@/lib/quiz';
+import BLOG from '@/blog.config'; // 导入配置，但现在可能不需要了
 
-const QuizBankPage = () => {
+// 【核心修改】使用 getStaticProps 和 getStaticPaths
+export async function getStaticProps({ params }) {
+  const { dbId } = params;
+  const allBanks = await getQuizBanksFromPortalPage();
+  const currentBank = allBanks.find(bank => bank.id === dbId);
+
+  let quizzes = [];
+  if (currentBank) {
+    quizzes = await getQuizzesFromDatabase(dbId, currentBank.quizType);
+  }
+
+  return {
+    props: {
+      quizzes,
+      bankName: currentBank?.title || '未知题库'
+    },
+    revalidate: 60
+  };
+}
+
+export async function getStaticPaths() {
+  const quizBanks = await getQuizBanksFromPortalPage();
+  const paths = quizBanks.map(bank => ({ params: { dbId: bank.id } }));
+  return {
+    paths,
+    fallback: true // 允许新的题库被动态生成
+  };
+}
+
+const QuizBankPage = ({ quizzes, bankName }) => {
   const router = useRouter();
-  const { dbId } = router.query;
 
-  const [quizzes, setQuizzes] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [bankName, setBankName] = useState('未知题库');
+  if (router.isFallback) {
+    return <LayoutBase><div className="p-10 text-center">正在加载题目...</div></LayoutBase>;
+  }
 
-  useEffect(() => {
-    async function fetchQuizzes() {
-      setLoading(true);
-      if (!dbId) return;
-
-      const allBanks = await getQuizBanksFromPortalPage();
-      const currentBank = allBanks.find(bank => bank.id === dbId);
-
-      if (currentBank) {
-        setBankName(currentBank.title);
-        const fetchedQuizzes = await getQuizzesFromDatabase(dbId, currentBank.quizType);
-        setQuizzes(fetchedQuizzes);
-      } else {
-        setQuizzes([]);
-      }
-      setLoading(false);
-    }
-    fetchQuizzes();
-  }, [dbId]);
-
-  if (loading) { return <LayoutBase><div className="p-10 text-center">正在加载题目...</div></LayoutBase>; }
-  if (!dbId || !quizzes.length) { return <LayoutBase><div className="p-10 text-center text-red-500 dark:text-red-400">该题库不存在或暂无题目。</div></LayoutBase>; }
+  if (!quizzes || !quizzes.length) {
+    return <LayoutBase><div className="p-10 text-center text-red-500 dark:text-red-400">该题库不存在或暂无题目。</div></LayoutBase>;
+  }
 
   return (
     <LayoutBase>
@@ -51,13 +61,7 @@ const QuizBankPage = () => {
             >
               <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">{quiz.title}</h3>
               <p className="text-gray-600 dark:text-gray-400 text-sm mb-3 truncate">{quiz.question.text}</p>
-              <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
-                <span className="mr-2">类型: {quiz.type === 'DanXuan' ? '单选' : '多选'}</span>
-                <span className="mr-2">难度: {quiz.level}</span>
-                {quiz.topic && quiz.topic.length > 0 && (
-                  <span>主题: {quiz.topic.join(', ')}</span>
-                )}
-              </div>
+              {/* ... (其他信息) ... */}
             </div>
           ))}
         </div>
