@@ -48,6 +48,7 @@
   ],
   "exclude": [
     "node_modules",
-    "public"
+    "public",
+    "node_modules/minimatch" // 【关键修改：再次添加这一行！】
   ]
 }
