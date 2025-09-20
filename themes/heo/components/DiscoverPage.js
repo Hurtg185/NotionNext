@@ -1,26 +1,24 @@
-// themes/heo/components/DiscoverPage.js (新增漂流瓶 + 背景色)
-
+// themes/heo/components/DiscoverPage.js
 import React, { useState } from 'react';
 import { HiOutlineUsers, HiOutlineSparkles } from 'react-icons/hi2';
-import { GiBottleVapors } from 'react-icons/gi'; // 漂流瓶图标
+import { GiBottleVapors } from 'react-icons/gi';
 
-// 引入子组件
-import PartnerFinder from './discover/PartnerFinder'; // 语伴广场
-import ShakeMatch from './discover/ShakeMatch'; // 摇一摇
-import BottleFeatures from './discover/BottleFeatures'; // 【新增】漂流瓶
+// 引入子组件 (你需要创建这些占位符文件)
+const PartnerFinder = () => <div className="p-4 text-center">语伴广场功能待开发</div>;
+const ShakeMatch = () => <div className="p-4 text-center">摇一摇功能待开发</div>;
+const BottleFeatures = () => <div className="p-4 text-center">漂流瓶功能待开发</div>;
 
 const DiscoverPage = () => {
-  const [activeSubTab, setActiveSubTab] = useState('finder'); // 默认显示语伴广场
+  const [activeSubTab, setActiveSubTab] = useState('finder');
 
   const subTabs = [
     { key: 'finder', name: '语伴广场', icon: <HiOutlineUsers className="w-5 h-5" /> },
     { key: 'shake', name: '摇一摇', icon: <HiOutlineSparkles className="w-5 h-5" /> },
-    { key: 'bottles', name: '漂流瓶', icon: <GiBottleVapors className="w-5 h-5" /> }, // 【新增】漂流瓶标签
+    { key: 'bottles', name: '漂流瓶', icon: <GiBottleVapors className="w-5 h-5" /> },
   ];
 
   return (
     <div className="flex flex-col h-full">
-      {/* 次级标签导航 */}
       <div className="flex justify-around border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 z-10 sticky top-0">
         {subTabs.map(tab => (
           <button
@@ -33,12 +31,10 @@ const DiscoverPage = () => {
           </button>
         ))}
       </div>
-
-      {/* 【核心修改】内容区域添加背景色 */}
       <div className="flex-grow overflow-y-auto bg-gray-50 dark:bg-gray-900">
         {activeSubTab === 'finder' && <PartnerFinder />}
         {activeSubTab === 'shake' && <ShakeMatch />}
-        {activeSubTab === 'bottles' && <BottleFeatures />} {/* 【新增】渲染漂流瓶组件 */}
+        {activeSubTab === 'bottles' && <BottleFeatures />}
       </div>
     </div>
   );
