@@ -1,4 +1,4 @@
-// next.config.js (已添加更宽松的 CSP 规以支持 YouTube 嵌入)
+// next.config.js (最终修复版 - 结合了 CSP 规则和 Webpack 别名)
 
 const { THEME } = require('./blog.config')
 const fs = require('fs')
@@ -113,7 +113,7 @@ const nextConfig = {
     loader: 'default',
     minimumCacheTTL: 60 * 60 * 24 * 7,
     dangerouslyAllowSVG: true,
-    // 【核心修改】移除这里的 CSP，因为它太严格且会与 headers 中的 CSP 冲突
+    // 【核心修复】移除这里的 CSP，因为它太严格且会与 headers 中的 CSP 冲突
     // contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;"
   },
 
@@ -166,12 +166,12 @@ const nextConfig = {
           }
         ]
       },
-  // --- 【核心修改】替换为更宽松的 headers 配置 ---
+  // --- 【核心修复】保留 headers 配置，并添加 YouTube CSP 规则 ---
   headers: process.env.EXPORT
     ? undefined
     : () => {
         return [
-          // 【修改】为帖子详情页设置更宽松的 CSP，以允许 YouTube 嵌入
+          // 【为帖子详情页设置更宽松的 CSP，以允许 YouTube 嵌入】
           {
             source: '/forum/post/:path*', // 匹配所有帖子详情页
             headers: [
@@ -179,11 +179,11 @@ const nextConfig = {
                 key: 'Content-Security-Policy',
                 value: [
                   "default-src 'self'",
-                  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.youtube.com https://*.ytimg.com https://*.googlevideo.com https://www.google.com https://apis.google.com", // 允许 YouTube 及其相关服务的脚本
+                  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.youtube.com https://*.ytimg.com https://*.googlevideo.com https://www.google.com https://apis.google.com",
                   "style-src 'self' 'unsafe-inline'",
-                  "img-src 'self' data: https://i.ytimg.com https://*.ytimg.com", // 允许 YouTube 缩略图
-                  "frame-src 'self' https://www.youtube.com", // 【关键】允许 YouTube iframe
-                  "connect-src 'self' https://*.youtube.com https://*.googlevideo.com https://www.google-analytics.com", // 允许连接到 YouTube API
+                  "img-src 'self' data: https://i.ytimg.com https://*.ytimg.com",
+                  "frame-src 'self' https://www.youtube.com",
+                  "connect-src 'self' https://*.youtube.com https://*.googlevideo.com https://www.google-analytics.com",
                   "font-src 'self' data:",
                 ].join('; '),
               }
@@ -208,16 +208,24 @@ const nextConfig = {
           }
         ]
       },
+  // --- 【核心修复】保留你原始的 webpack 配置 ---
   webpack: (config, { dev, isServer }) => {
+    // 动态主题：添加 resolve.alias 配置，将动态路径映射到实际路径
     config.resolve.alias['@'] = path.resolve(__dirname)
+
+    // 【为 THEME 提供一个默认值，增加鲁棒性】
+    const currentTheme = THEME || 'heo'; 
+
     if (!isServer) {
-      console.log('[默认主题]', path.resolve(__dirname, 'themes', THEME))
+      console.log('[当前主题]', path.resolve(__dirname, 'themes', currentTheme))
     }
     config.resolve.alias['@theme-components'] = path.resolve(
       __dirname,
       'themes',
-      THEME
+      currentTheme // 使用带有默认值的变量
     )
+
+    // 性能优化配置
     if (!dev) {
       config.optimization = {
         ...config.optimization,
@@ -239,13 +247,16 @@ const nextConfig = {
         },
       }
     }
+
     if (dev || process.env.NODE_ENV_API === 'development') {
       config.devtool = 'eval-source-map'
     }
+
     config.resolve.modules = [
       path.resolve(__dirname, 'node_modules'),
       'node_modules'
     ]
+
     return config
   },
   experimental: {
@@ -266,4 +277,6 @@ const nextConfig = {
   }
 }
 
-module.exports = process.env
+module.exports = process.env.ANALYZE
+  ? withBundleAnalyzer(nextConfig)
+  : nextConfig
