@@ -1,37 +1,31 @@
-// themes/heo/components/ConversationItem.js (应用头像动画)
+// themes/heo/components/ConversationItem.js (添加在线状态指示器)
 
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
-import { useAuth } from '@/lib/AuthContext'
-import { getUserProfile } from '@/lib/chat'
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useAuth } from '@/lib/AuthContext';
+import { getUserProfile } from '@/lib/chat';
 
 const ConversationItem = ({ conversation, onClick }) => {
-  const { user } = useAuth()
-  const [otherUser, setOtherUser] = useState(null)
+  const { user } = useAuth();
+  const [otherUser, setOtherUser] = useState(null);
 
   useEffect(() => {
     if (user && conversation?.participants) {
-      const otherUserId = conversation.participants.find(uid => uid !== user.uid)
+      const otherUserId = conversation.participants.find(uid => uid !== user.uid);
       if (otherUserId) {
-        setOtherUser(null); 
-        getUserProfile(otherUserId).then(setOtherUser)
+        setOtherUser(null);
+        getUserProfile(otherUserId).then(setOtherUser);
       }
     }
-  }, [conversation, user])
+  }, [conversation, user]);
 
   const handleAvatarClick = (e) => {
     e.stopPropagation();
   };
   
-  /**
-   * 【核心修改】: 使用更严格的加载状态检查
-   * 只有在 otherUser 对象存在，并且其 photoURL 属性也已定义时 (即使是 null),
-   * 才认为加载完成。这可以 100% 避免渲染一个不完整的用户数据。
-   */
   const isLoading = !otherUser || typeof otherUser.photoURL === 'undefined';
 
   if (isLoading) {
-    // 骨架屏保持不变，它本身是完美的
     return (
       <div className="flex items-center p-3">
         <div className="w-16 h-16 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse"></div>
@@ -43,14 +37,9 @@ const ConversationItem = ({ conversation, onClick }) => {
     );
   }
   
-  const lastMessage = conversation.lastMessage || '...'
-  const timestamp = conversation.lastMessageTimestamp?.toDate().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) || ''
+  const lastMessage = conversation.lastMessage || '...';
+  const timestamp = conversation.lastMessageTimestamp?.toDate().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) || '';
   
-  /**
-   * 【核心修改】: 创建一个绝对安全的头像 URL
-   * 这里的 otherUser.photoURL 可能是 URL 字符串，也可能是 null (来自我们改好的 getUserProfile)
-   * `||` 操作符可以完美处理这两种情况。
-   */
   const avatarSrc = otherUser.photoURL || 'https://www.gravatar.com/avatar?d=mp';
 
   return (
@@ -59,15 +48,21 @@ const ConversationItem = ({ conversation, onClick }) => {
       className="flex items-center p-3 cursor-pointer transition-colors duration-200 hover:bg-gray-100 dark:hover:bg-gray-700"
     >
       <Link href={`/profile/${otherUser.id}`} passHref>
-        <a onClick={handleAvatarClick} className="flex-shrink-0">
-          {/* 【核心修改】给头像的容器添加 avatar-glow 类 */}
-          <div className="avatar-glow"> 
+        <a onClick={handleAvatarClick} className="flex-shrink-0 relative"> {/* 【修改】添加 relative */}
+          {/* 【修改】给头像的容器添加 avatar-glow 类 */}
+          <div className="avatar-glow">
             <img
-              src={avatarSrc} // 使用我们预先计算好的安全 src
+              src={avatarSrc}
               alt={otherUser.displayName}
               className="rounded-full object-cover w-16 h-16"
             />
           </div>
+          {/* 【新增】在线状态指示器 */}
+          <span
+            className={`absolute bottom-0 right-0 block h-4 w-4 rounded-full border-2 border-white dark:border-gray-800 ${
+              otherUser.isOnline ? 'bg-green-500' : 'bg-gray-400'
+            }`}
+          />
         </a>
       </Link>
 
@@ -79,7 +74,7 @@ const ConversationItem = ({ conversation, onClick }) => {
         <p className="text-sm text-gray-600 dark:text-gray-300 truncate">{lastMessage}</p>
       </div>
     </div>
-  )
-}
+  );
+};
 
 export default ConversationItem;
