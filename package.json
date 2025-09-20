@@ -60,6 +60,7 @@
     "algoliasearch": "^4.25.2",
     "axios": "^1.7.2",
     "critters": "^0.0.23",
+    "emoji-picker-react": "^4.13.3",
     "feed": "^4.2.2",
     "firebase": "^12.2.1",
     "framer-motion": "^12.23.12",
