@@ -1,4 +1,4 @@
-// components/EditProfileModal.js (修改后，功能增强)
+// components/EditProfileModal.js (添加详细日志)
 import { useState, useEffect, useRef } from 'react';
 import { updateUserProfile, uploadProfilePicture } from '@/lib/user';
 
@@ -25,18 +25,19 @@ const EditProfileModal = ({ user, onClose, onProfileUpdate }) => {
       });
       setImagePreview(user.photoURL || null);
     }
+    // 【新增调试】当 user prop 变化时，打印 user 对象
+    console.log('DEBUG [EditProfileModal]: user prop updated:', JSON.stringify(user, null, 2));
   }, [user]);
 
-  // 【新增】useEffect 来控制 body 样式，实现背景滚动锁定和隐藏导航栏
+  // 【新增】useEffect 来控制 body 样式
   useEffect(() => {
-    // 组件挂载时 (模态框显示)
-    document.body.classList.add('modal-open');
-
-    // 组件卸载时 (模态框关闭)
-    return () => {
-      document.body.classList.remove('modal-open');
-    };
-  }, []); // 空依赖数组确保这个 effect 只在挂载和卸载时运行一次
+    if (typeof document !== 'undefined') {
+      document.body.classList.add('modal-open');
+      return () => {
+        document.body.classList.remove('modal-open');
+      };
+    }
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -58,6 +59,16 @@ const EditProfileModal = ({ user, onClose, onProfileUpdate }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // 【新增调试】
+    console.log('DEBUG [EditProfileModal]: handleSubmit triggered.');
+    console.log('DEBUG [EditProfileModal]: User object at submit:', JSON.stringify(user, null, 2));
+    console.log('DEBUG [EditProfileModal]: user.uid at submit:', user?.uid);
+    
+    if (!user || !user.uid) {
+      setError('用户信息无效，无法保存。请尝试重新登录。');
+      return;
+    }
+
     setIsLoading(true);
     setError('');
 
@@ -73,13 +84,15 @@ const EditProfileModal = ({ user, onClose, onProfileUpdate }) => {
         photoURL: newPhotoURL
       };
       
+      console.log('DEBUG [EditProfileModal]: Calling updateUserProfile with uid:', user.uid);
       await updateUserProfile(user.uid, profileData);
       
+      console.log('DEBUG [EditProfileModal]: updateUserProfile succeeded. Calling onProfileUpdate...');
       onProfileUpdate();
       onClose();
     } catch (err) {
-      setError('更新失败，请稍后再试。');
-      console.error(err);
+      setError('更新失败，请稍后再试。' + err.message); // 显示更多错误信息
+      console.error("ERROR [EditProfileModal]: handleSubmit failed:", err); // 打印从 updateUserProfile 抛出的错误
     } finally {
       setIsLoading(false);
     }
@@ -88,13 +101,11 @@ const EditProfileModal = ({ user, onClose, onProfileUpdate }) => {
   if (!user) return null;
 
   return (
-    // 【修改】为最外层 div 添加磨砂玻璃效果
     <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex justify-center items-start overflow-y-auto py-10" onClick={onClose}>
       <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-lg shadow-xl p-6 w-full max-w-2xl m-4" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">编辑个人资料</h2>
         
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* 头像上传 */}
           <div className="flex items-center space-x-4">
             <img src={imagePreview || 'https://www.gravatar.com/avatar?d=mp'} alt="头像预览" className="w-20 h-20 rounded-full object-cover"/>
             <button type="button" onClick={() => fileInputRef.current.click()} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">
@@ -103,7 +114,6 @@ const EditProfileModal = ({ user, onClose, onProfileUpdate }) => {
             <input type="file" ref={fileInputRef} onChange={handleImageChange} accept="image/png, image/jpeg, image/gif" className="hidden"/>
           </div>
 
-          {/* 表单字段 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">昵称</label>
@@ -143,7 +153,6 @@ const EditProfileModal = ({ user, onClose, onProfileUpdate }) => {
             </div>
           </div>
 
-          {/* 自我介绍 */}
           <div>
             <label htmlFor="bio" className="block text-sm font-medium text-gray-700 dark:text-gray-300">自我介绍</label>
             <textarea name="bio" rows="4" placeholder="介绍一下自己吧..." value={formData.bio} onChange={handleChange} className="mt-1 block w-full input-style" />
@@ -151,7 +160,6 @@ const EditProfileModal = ({ user, onClose, onProfileUpdate }) => {
 
           {error && <p className="text-red-500 text-sm">{error}</p>}
 
-          {/* 操作按钮 */}
           <div className="flex justify-end space-x-3 pt-4">
             <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500" disabled={isLoading}>
               取消
