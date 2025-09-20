@@ -1,4 +1,4 @@
-// next.config.js (已添加 CSP 规则以支持 YouTube 嵌入)
+// next.config.js (已添加更宽松的 CSP 规则以支持 YouTube 嵌入)
 
 const { THEME } = require('./blog.config')
 const fs = require('fs')
@@ -108,8 +108,7 @@ const nextConfig = {
       'ko-fi.com',
       'lh3.googleusercontent.com',
       'graph.facebook.com',
-      // 【新增】允许加载 YouTube 缩略图
-      'i.ytimg.com'
+      'i.ytimg.com' // 允许加载 YouTube 缩略图
     ],
     loader: 'default',
     minimumCacheTTL: 60 * 60 * 24 * 7,
@@ -167,11 +166,12 @@ const nextConfig = {
           }
         ]
       },
+  // --- 【核心修改】替换为更宽松的 headers 配置 ---
   headers: process.env.EXPORT
     ? undefined
     : () => {
         return [
-          // 【新增】为帖子详情页设置更宽松的 CSP，以允许 YouTube 嵌入
+          // 【修改】为帖子详情页设置更宽松的 CSP，以允许 YouTube 嵌入
           {
             source: '/forum/post/:path*', // 匹配所有帖子详情页
             headers: [
@@ -179,11 +179,11 @@ const nextConfig = {
                 key: 'Content-Security-Policy',
                 value: [
                   "default-src 'self'",
-                  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://s.ytimg.com", // 允许 YouTube 脚本
+                  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.youtube.com https://*.ytimg.com https://*.googlevideo.com https://www.google.com https://apis.google.com", // 允许 YouTube 及其相关服务的脚本
                   "style-src 'self' 'unsafe-inline'",
-                  "img-src 'self' data: https://i.ytimg.com", // 允许 YouTube 缩略图
+                  "img-src 'self' data: https://i.ytimg.com https://*.ytimg.com", // 允许 YouTube 缩略图
                   "frame-src 'self' https://www.youtube.com", // 【关键】允许 YouTube iframe
-                  "connect-src 'self' https://www.google-analytics.com",
+                  "connect-src 'self' https://*.youtube.com https://*.googlevideo.com https://www.google-analytics.com", // 允许连接到 YouTube API
                   "font-src 'self' data:",
                 ].join('; '),
               }
@@ -266,6 +266,4 @@ const nextConfig = {
   }
 }
 
-module.exports = process.env.ANALYZE
-  ? withBundleAnalyzer(nextConfig)
-  : nextConfig
+module.exports = process.env
