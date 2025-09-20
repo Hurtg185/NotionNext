@@ -1,21 +1,34 @@
-// pages/forum/messages/index.js (连接全局Context版)
+// pages/forum/messages/index.js (最终整合版)
+import React, { useState } from 'react';
+import { LayoutBase } from '@/themes/heo';
+import dynamic from 'next/dynamic';
 
-import { useAuth } from '@/lib/AuthContext'
-import { LayoutBase } from '@/themes/heo'
-import ConversationList from '@/themes/heo/components/ConversationList'
+import MessageHeader from '@/themes/heo/components/MessageHeader';
+
+const ConversationList = dynamic(() => import('@/themes/heo/components/ConversationList'), {
+  ssr: false,
+  loading: () => <div className="p-4 text-center text-gray-500">加载私信列表...</div>
+});
+const NotificationList = dynamic(() => import('@/themes/heo/components/NotificationList'), { ssr: false, loading: () => <div className="p-4 text-center text-gray-500">加载通知...</div> });
+const DiscoverPage = dynamic(() => import('@/themes/heo/components/DiscoverPage'), { ssr: false, loading: () => <div className="p-4 text-center text-gray-500">加载发现...</div> });
+const ContactList = dynamic(() => import('@/themes/heo/components/ContactList'), { ssr: false, loading: () => <div className="p-4 text-center text-gray-500">加载联系人...</div> });
 
 const MessagesPage = () => {
-  const { user, loading } = useAuth()
+  const [activeTab, setActiveTab] = useState('messages');
 
   return (
     <LayoutBase>
-      {loading && <div className="p-10 text-center">加载中...</div>}
-      {!loading && !user && <div className="p-10 text-center">请先登录以查看消息。</div>}
-      {!loading && user && (
-        <ConversationList />
-      )}
+      <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
+        <MessageHeader activeTab={activeTab} setActiveTab={setActiveTab} />
+        <div className="flex-grow">
+          {activeTab === 'messages' && <ConversationList />}
+          {activeTab === 'notifications' && <NotificationList />}
+          {activeTab === 'discover' && <DiscoverPage />}
+          {activeTab === 'contacts' && <ContactList />}
+        </div>
+      </div>
     </LayoutBase>
-  )
-}
+  );
+};
 
-export default MessagesPage
+export default MessagesPage;
