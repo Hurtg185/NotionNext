@@ -1,4 +1,4 @@
-// pages/forum/post/[id].js (修复视频播放器集成)
+// pages/forum/post/[id].js (最终修复版 - 逐行解析内容)
 import { useState, useEffect } from 'react';
 import { doc, getDoc, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
@@ -7,7 +7,7 @@ import { useRouter } from 'next/router';
 
 // 【新增】导入 PostContent 组件
 import PostContent from '@/themes/heo/components/PostContent'; 
-import { LayoutBase } from '@/themes/heo'; // 假设你的页面需要一个 LayoutBase
+import { LayoutBase } from '@/themes/heo';
 
 const PostDetailPage = () => {
   const router = useRouter();
@@ -26,7 +26,6 @@ const PostDetailPage = () => {
     getDoc(postRef).then((docSnap) => {
       if (docSnap.exists()) {
         const postData = docSnap.data();
-        // 假设 post.createdAt 是 Firebase Timestamp 对象
         setPost({ id: docSnap.id, ...postData });
       } else {
         console.log("找不到该帖子!");
@@ -44,8 +43,7 @@ const PostDetailPage = () => {
       const commentsData = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-        // 假设 createdAt 是 Firebase Timestamp
-        createdAt: doc.data().createdAt?.toDate().toLocaleString() || '刚刚' // 格式化时间
+        createdAt: doc.data().createdAt?.toDate().toLocaleString() || '刚刚'
       }));
       setComments(commentsData);
     });
@@ -61,8 +59,8 @@ const PostDetailPage = () => {
       await addDoc(commentsRef, {
         text: newComment,
         authorId: user.uid,
-        authorName: user.displayName || '匿名用户', // 提供一个默认名
-        authorAvatar: user.photoURL || 'https://www.gravatar.com/avatar?d=mp', // 提供一个默认头像
+        authorName: user.displayName || '匿名用户',
+        authorAvatar: user.photoURL || 'https://www.gravatar.com/avatar?d=mp',
         createdAt: serverTimestamp(),
       });
       setNewComment('');
@@ -75,7 +73,7 @@ const PostDetailPage = () => {
   if (!post) return <LayoutBase><p className="p-4 text-center text-red-500">帖子不存在。</p></LayoutBase>;
 
   return (
-    <LayoutBase> {/* 假设你的页面需要一个基础布局 */}
+    <LayoutBase>
       <div className="container mx-auto p-4 max-w-3xl">
         {/* 帖子内容 */}
         <div className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
@@ -89,9 +87,10 @@ const PostDetailPage = () => {
             <span>由 {post.authorName || '匿名用户'} 发布于 {post.createdAt?.toDate().toLocaleString() || '未知时间'}</span>
           </div>
           <div className="prose dark:prose-invert max-w-none">
-            {/* 【核心修改】将 post.content 传递给 PostContent 组件 */}
-            {/* 假设 post.content 是纯文本，其中可能包含链接 */}
-            <PostContent content={post.content} />
+            {/* 【核心修复】逐行解析 post.content，并对每一行都应用 PostContent 组件 */}
+            {post.content && typeof post.content === 'string' && post.content.split('\n').map((paragraph, index) => (
+              <PostContent key={index} content={paragraph} />
+            ))}
           </div>
         </div>
 
