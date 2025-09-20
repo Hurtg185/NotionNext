@@ -1,11 +1,10 @@
-// pages/learn/quiz-bank/[dbId].js (使用 getStaticProps)
+// pages/learn/quiz-bank/[dbId].js (修复 getStaticPaths)
 import React from 'react';
 import { useRouter } from 'next/router';
 import { LayoutBase } from '@/themes/heo';
 import { getQuizzesFromDatabase, getQuizBanksFromPortalPage } from '@/lib/quiz';
-import BLOG from '@/blog.config'; // 导入配置，但现在可能不需要了
 
-// 【核心修改】使用 getStaticProps 和 getStaticPaths
+// 【核心修改】getStaticProps 保持不变，但 getStaticPaths 改变
 export async function getStaticProps({ params }) {
   const { dbId } = params;
   const allBanks = await getQuizBanksFromPortalPage();
@@ -16,21 +15,27 @@ export async function getStaticProps({ params }) {
     quizzes = await getQuizzesFromDatabase(dbId, currentBank.quizType);
   }
 
+  // 如果找不到题库或题目，返回 notFound
+  if (!currentBank) {
+    return { notFound: true };
+  }
+
   return {
     props: {
       quizzes,
-      bankName: currentBank?.title || '未知题库'
+      bankName: currentBank.title
     },
     revalidate: 60
   };
 }
 
+// 【核心修改】getStaticPaths 使用 fallback: 'blocking'
+// 这意味着在构建时不生成任何路径
+// 当用户首次访问一个新 dbId 时，服务器会先生成页面，然后再返回给用户
 export async function getStaticPaths() {
-  const quizBanks = await getQuizBanksFromPortalPage();
-  const paths = quizBanks.map(bank => ({ params: { dbId: bank.id } }));
   return {
-    paths,
-    fallback: true // 允许新的题库被动态生成
+    paths: [], // 不预渲染任何路径
+    fallback: 'blocking'
   };
 }
 
@@ -38,7 +43,7 @@ const QuizBankPage = ({ quizzes, bankName }) => {
   const router = useRouter();
 
   if (router.isFallback) {
-    return <LayoutBase><div className="p-10 text-center">正在加载题目...</div></LayoutBase>;
+    return <LayoutBase><div className="p-10 text-center">正在为您生成题库...</div></LayoutBase>;
   }
 
   if (!quizzes || !quizzes.length) {
