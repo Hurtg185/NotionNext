@@ -1,4 +1,4 @@
-// next.config.js (已添加更宽松的 CSP 规则以支持 YouTube 嵌入)
+// next.config.js (已添加更宽松的 CSP 规以支持 YouTube 嵌入)
 
 const { THEME } = require('./blog.config')
 const fs = require('fs')
