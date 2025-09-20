@@ -1,12 +1,40 @@
-// pages/profile/[userId].js (修改后，功能完整)
+// pages/profile/[userId].js (最终功能完整版)
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '@/lib/AuthContext';
 import { LayoutBase } from '@/themes/heo';
 import { getUserProfile, startChat } from '@/lib/chat';
+import { 
+  followUser, unfollowUser, checkFollowing, 
+  blockUser, unblockUser, checkBlocked,
+  getPostsByUser, getFavoritesByUser, getViewHistoryByUser
+} from '@/lib/user'; // 导入所有新的用户相关函数
 import { useDrawer } from '@/lib/DrawerContext';
-import EditProfileModal from '@/components/EditProfileModal'; // 【新增】导入模态框组件
+import EditProfileModal from '@/components/EditProfileModal';
+
+// 帖子列表组件 (示例)
+const PostList = ({ posts }) => {
+  const router = useRouter();
+  if (!posts || posts.length === 0) {
+    return <p className="text-center text-gray-500">还没有发布任何帖子。</p>;
+  }
+  return (
+    <div className="grid grid-cols-1 gap-4">
+      {posts.map(post => (
+        <div 
+          key={post.id} 
+          className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow"
+          onClick={() => router.push(`/forum/post/${post.id}`)}
+        >
+          <h3 className="font-bold text-lg text-gray-900 dark:text-white">{post.title}</h3>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">{post.content.substring(0, 100)}...</p>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 
 const ProfilePage = () => {
   const router = useRouter();
@@ -15,20 +43,72 @@ const ProfilePage = () => {
   const { openDrawer } = useDrawer();
   const [profileUser, setProfileUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('dynamics');
-  const [isEditing, setIsEditing] = useState(false); // 【新增】控制模态框的 state
+  const [activeTab, setActiveTab] = useState('posts'); // 默认显示帖子
+  const [isEditing, setIsEditing] = useState(false);
+  
+  // --- 【新增】管理关注/拉黑/标签页内容的状态 ---
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [tabContent, setTabContent] = useState([]);
 
+  const isMyProfile = currentUser && currentUser.uid === userId;
+
+  // --- 【修改】获取用户资料，并检查关注/拉黑状态 ---
   const fetchUserProfile = async () => {
     if (!userId) return;
     setLoading(true);
     const profileData = await getUserProfile(userId);
     setProfileUser(profileData);
+    if (currentUser && currentUser.uid !== userId) { // 只有在看别人主页时才检查
+      setIsFollowing(await checkFollowing(currentUser.uid, userId));
+      setIsBlocked(await checkBlocked(currentUser.uid, userId));
+    }
     setLoading(false);
   };
 
   useEffect(() => {
     fetchUserProfile();
-  }, [userId]);
+  }, [userId, currentUser]); // currentUser 变化时也重新获取，以更新按钮状态
+
+  // --- 【新增】根据 activeTab 获取内容 ---
+  useEffect(() => {
+    if (!userId) return;
+    let unsubscribe;
+    if (activeTab === 'posts') {
+      unsubscribe = getPostsByUser(userId, setTabContent);
+    } else if (activeTab === 'favorites' && isMyProfile) {
+      unsubscribe = getFavoritesByUser(userId, setTabContent);
+    } else if (activeTab === 'history' && isMyProfile) {
+      unsubscribe = getViewHistoryByUser(userId, setTabContent);
+    } else {
+      setTabContent([]); // 'dynamics' 暂时为空
+    }
+    return () => unsubscribe && unsubscribe();
+  }, [activeTab, userId, isMyProfile]);
+
+  
+  // --- 【新增】关注/拉黑操作函数 ---
+  const handleFollow = async () => {
+    if (!currentUser) return;
+    if (isFollowing) {
+      await unfollowUser(currentUser.uid, userId);
+    } else {
+      await followUser(currentUser.uid, userId);
+    }
+    fetchUserProfile(); // 重新获取数据以更新关注状态和计数
+  };
+  
+  const handleBlock = async () => {
+    if (!currentUser) return;
+    if (isBlocked) {
+      await unblockUser(currentUser.uid, userId);
+    } else {
+      if (window.confirm('确定要拉黑该用户吗？拉黑后将互相取关且无法看到对方动态。')) {
+        await blockUser(currentUser.uid, userId);
+      }
+    }
+    fetchUserProfile(); // 重新获取数据
+  };
 
   const handleStartChat = async () => {
     if (!currentUser) {
@@ -36,30 +116,25 @@ const ProfilePage = () => {
       return;
     }
     if (!profileUser || profileUser.id === currentUser.uid) return;
-    
     const conversation = await startChat(currentUser.uid, profileUser.id);
     if (conversation) {
-      openDrawer('chat', { conversation });
+      openDrawer('chat', { conversation, chatId: conversation.id });
     } else {
       alert('开启对话失败，请稍后再试。');
     }
   };
   
-  // 【新增】当资料更新成功后的回调函数
   const handleProfileUpdate = () => {
-    console.log("Profile updated, refreshing data...");
-    fetchUserProfile(); // 重新获取最新的用户数据来刷新页面
+    fetchUserProfile();
   };
 
   if (loading) {
     return <LayoutBase><div className="p-10 text-center">正在加载用户资料...</div></LayoutBase>;
   }
-
   if (!profileUser) {
     return <LayoutBase><div className="p-10 text-center text-red-500">无法加载该用户的信息或用户不存在。</div></LayoutBase>;
   }
 
-  const isMyProfile = currentUser && currentUser.uid === profileUser.id;
 
   return (
     <LayoutBase>
@@ -75,7 +150,6 @@ const ProfilePage = () => {
           <p className="text-gray-500 dark:text-gray-400">@{profileUser.id?.substring(0, 8)}</p>
           <p className="text-gray-700 dark:text-gray-300 text-center mt-2 px-6 max-w-xl">{profileUser.bio || '这个人很懒，什么都没写...'}</p>
           
-          {/* 【修改后】显示更丰富的个人信息 */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 mt-4 text-gray-600 dark:text-gray-400 text-sm">
             {profileUser.currentCity && <span className="flex items-center"><i className="fas fa-map-marker-alt mr-2 w-4 text-center text-gray-400"></i><span className="font-bold mr-1">常住:</span> {profileUser.currentCity}</span>}
             {profileUser.hometown && <span className="flex items-center"><i className="fas fa-home mr-2 w-4 text-center text-gray-400"></i><span className="font-bold mr-1">家乡:</span> {profileUser.hometown}</span>}
@@ -83,43 +157,61 @@ const ProfilePage = () => {
             {profileUser.learningLanguage && <span className="flex items-center"><i className="fas fa-language mr-2 w-4 text-center text-gray-400"></i><span className="font-bold mr-1">在学:</span> {profileUser.learningLanguage}</span>}
           </div>
 
+          {/* 【修改】关注/粉丝 */}
           <div className="flex space-x-6 mt-4 text-gray-800 dark:text-white">
-            <div><span className="font-bold">{profileUser.followerCount || 0}</span> 关注者</div>
+            <div><span className="font-bold">{profileUser.followersCount || 0}</span> 粉丝</div>
             <div><span className="font-bold">{profileUser.followingCount || 0}</span> 关注</div>
           </div>
 
-          <div className="flex space-x-4 mt-6">
+          {/* 【修改】操作按钮 */}
+          <div className="flex items-center space-x-4 mt-6">
             {isMyProfile ? (
-              <button 
-                onClick={() => setIsEditing(true)} // 【修改】添加 onClick 事件
-                className="px-6 py-3 bg-blue-500 text-white rounded-full font-semibold hover:bg-blue-600 transition-colors"
-              >
-                编辑资料
-              </button>
+              <button onClick={() => setIsEditing(true)} className="px-6 py-3 bg-blue-500 text-white rounded-full font-semibold hover:bg-blue-600 transition-colors">编辑资料</button>
             ) : (
               <>
-                <button className="px-6 py-3 bg-blue-500 text-white rounded-full font-semibold hover:bg-blue-600 transition-colors">关注</button>
-                <button 
-                  onClick={handleStartChat}
-                  className="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-full font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                >
+                <button onClick={handleFollow} className={`px-6 py-3 rounded-full font-semibold transition-colors ${isFollowing ? 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-white' : 'bg-blue-500 text-white hover:bg-blue-600'}`}>
+                  {isFollowing ? '已关注' : '关注'}
+                </button>
+                <button onClick={handleStartChat} className="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-full font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
                   私信
+                </button>
+                <button onClick={handleBlock} className="text-gray-500 text-xs hover:text-red-500">
+                  {isBlocked ? '取消拉黑' : '拉黑'}
                 </button>
               </>
             )}
           </div>
         </div>
 
+        {/* 【修改】标签页 */}
         <div className="flex justify-around border-b border-gray-200 dark:border-gray-700 mt-8 sticky top-0 bg-white dark:bg-gray-800 z-10">
-           {/* ... tabs a ... */}
+          <button onClick={() => setActiveTab('dynamics')} className={`py-3 px-6 font-semibold ${activeTab === 'dynamics' ? 'text-blue-500 border-b-2 border-blue-500' : 'text-gray-600 dark:text-gray-400'}`}>
+            动态
+          </button>
+          <button onClick={() => setActiveTab('posts')} className={`py-3 px-6 font-semibold ${activeTab === 'posts' ? 'text-blue-500 border-b-2 border-blue-500' : 'text-gray-600 dark:text-gray-400'}`}>
+            帖子 ({profileUser.postsCount || 0})
+          </button>
+          {isMyProfile && (
+            <>
+              <button onClick={() => setActiveTab('favorites')} className={`py-3 px-6 font-semibold ${activeTab === 'favorites' ? 'text-blue-500 border-b-2 border-blue-500' : 'text-gray-600 dark:text-gray-400'}`}>
+                收藏
+              </button>
+              <button onClick={() => setActiveTab('history')} className={`py-3 px-6 font-semibold ${activeTab === 'history' ? 'text-blue-500 border-b-2 border-blue-500' : 'text-gray-600 dark:text-gray-400'}`}>
+                历史
+              </button>
+            </>
+          )}
         </div>
 
+        {/* 【修改】标签页内容 */}
         <div className="p-4 flex-grow">
-          {/* ... tabs content ... */}
+          {activeTab === 'dynamics' && ( <p className="text-center text-gray-500">用户的动态将会在这里展示...</p> )}
+          {activeTab === 'posts' && ( <PostList posts={tabContent} /> )}
+          {activeTab === 'favorites' && isMyProfile && ( <p className="text-center text-gray-500">你的收藏列表...</p> )}
+          {activeTab === 'history' && isMyProfile && ( <p className="text-center text-gray-500">你的浏览历史...</p> )}
         </div>
       </div>
       
-      {/* 【新增】在页面逻辑顶部渲染模态框 */}
       {isEditing && (
         <EditProfileModal
           user={currentUser}
