@@ -1,4 +1,4 @@
-// pages/forum/messages/index.js (最终整合版)
+// pages/forum/messages/index.js (最终合版)
 import React, { useState } from 'react';
 import { LayoutBase } from '@/themes/heo';
 import dynamic from 'next/dynamic';
