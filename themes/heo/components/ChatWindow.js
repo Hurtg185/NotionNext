@@ -1,4 +1,4 @@
-// themes/heo/components/ChatWindow.js (表情放右边 + 键盘避让 + 自适应高度)
+// themes/heo/components/ChatWindow.js (表情放右边 + 键盘避让 + 自适应高度 - 最终修复版)
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
@@ -132,8 +132,25 @@ const ChatWindow = ({ chatId, conversation }) => {
     }
   };
 
-  // 骨架屏 (保持不变)
-  if (isLoading || !otherUser) { return ( /* ... */ ); }
+  // 【核心修复】将骨架屏代码放回 return 语句中
+  if (isLoading || !otherUser) {
+    return (
+      <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900 animate-pulse">
+        <header className="flex-shrink-0 p-3 h-14 flex justify-between items-center bg-white/50 dark:bg-gray-800/50 backdrop-blur-lg border-b border-gray-200/20 dark:border-gray-700/20">
+          <div className="flex-grow flex justify-center items-center">
+            <div className="h-5 w-24 bg-gray-300 dark:bg-gray-600 rounded"></div>
+          </div>
+          <div className="w-8 h-8 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
+        </header>
+        <main className="flex-1 overflow-y-auto p-4 flex items-center justify-center text-gray-500 dark:text-gray-400">
+          加载中...
+        </main>
+        <footer className="flex-shrink-0 p-3 bg-white/50 dark:bg-gray-800/50 backdrop-blur-lg border-t border-gray-200/20 dark:border-gray-700/20">
+          <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+        </footer>
+      </div>
+    );
+  }
 
   const isBgImage = background !== 'default';
 
@@ -167,21 +184,18 @@ const ChatWindow = ({ chatId, conversation }) => {
         <div ref={messagesEndRef} />
       </main>
 
-      {/* --- 修改后的 Footer，表情放右边 --- */}
       <footer 
         ref={footerRef}
         className={`relative z-20 flex-shrink-0 p-3 ${isBgImage ? 'bg-black/20' : 'bg-white/50 dark:bg-gray-800/50'} border-t border-gray-200/20 dark:border-gray-700/20 backdrop-blur-lg transition-transform duration-200 ease-in-out`}
         style={{ transform: `translateY(${-keyboardHeight}px)` }}
       >
         <div className="relative">
-          {/* 表情选择器，定位到右边 */}
           {showEmojiPicker && (
             <div ref={emojiPickerRef} className="absolute bottom-full right-0 mb-2 z-30">
               <EmojiPicker onEmojiClick={onEmojiClick} theme={Theme.AUTO} />
             </div>
           )}
           <div className="flex items-end space-x-2">
-            {/* 【核心修改】自适应 Textarea 放在最左边 */}
             <TextareaAutosize
               ref={textareaRef}
               value={newMessage}
@@ -194,7 +208,6 @@ const ChatWindow = ({ chatId, conversation }) => {
               style={{ lineHeight: '1.5rem' }}
             />
             
-            {/* 【核心修改】表情按钮和发送按钮放在右边 */}
             <button
               onClick={() => setShowEmojiPicker(prev => !prev)}
               className={`flex-shrink-0 p-2 rounded-full transition ${isBgImage ? 'text-white/80 hover:bg-white/20' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
@@ -213,7 +226,6 @@ const ChatWindow = ({ chatId, conversation }) => {
           </div>
         </div>
       </footer>
-      {/* --- Footer 修改结束 --- */}
 
       {showSettings && <ChatSettingsPanel onClose={() => setShowSettings(false)} chatId={chatId} />}
     </div>
