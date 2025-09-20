@@ -1,4 +1,4 @@
-// themes/heo/components/ChatWindow.js (进一步优化键盘避让逻辑)
+// themes/heo/components/ChatWindow.js (最终修复版 - 键盘避让优化 + 所有功能整合)
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
@@ -11,7 +11,7 @@ import { useDrawer } from '@/lib/DrawerContext';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
 import TextareaAutosize from 'react-textarea-autosize';
 
-// 【修改】不再使用全局变量直接记录 window.innerHeight
+// 【修改】不再使用全局变量直接记录 window.innerHeight，改为在组件内部 useRef
 // let windowHeightWithoutKeyboard = 0; // 删除或注释掉这行
 
 const ChatWindow = ({ chatId, conversation }) => {
@@ -32,8 +32,8 @@ const ChatWindow = ({ chatId, conversation }) => {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const footerRef = useRef(null);
 
-  // 【新增】保存初始视口高度，确保准确
-  const initialViewportHeightRef = useRef(0);
+  // 【修改】使用 useRef 存储初始视口高度，并在客户端初始化
+  const initialViewportHeightRef = useRef(0); 
 
   // 1. 获取对方用户信息
   useEffect(() => {
@@ -247,9 +247,10 @@ const ChatWindow = ({ chatId, conversation }) => {
         </button>
       </header>
       
+      {/* 【核心修改】main 区域的 padding-bottom 动态调整 */}
       <main 
         className="relative z-10 flex-1 w-full overflow-y-auto overflow-x-hidden p-4"
-        style={{ paddingBottom: `calc(1rem + ${keyboardHeight}px)` }}
+        style={{ paddingBottom: `calc(1rem + ${keyboardHeight}px)` }} // 底部留出键盘空间
       >
         {messages.map(msg => (
           <ChatMessage 
@@ -263,10 +264,11 @@ const ChatWindow = ({ chatId, conversation }) => {
         <div ref={messagesEndRef} />
       </main>
 
+      {/* --- 【核心修改】Footer 区域，只保留 fixed 定位，不进行 transform 移动 --- */}
       <footer 
-        ref={footerRef}
-        className={`relative z-20 flex-shrink-0 p-3 ${isBgImage ? 'bg-black/20' : 'bg-white/50 dark:bg-gray-800/50'} border-t border-gray-200/20 dark:border-gray-700/20 backdrop-blur-lg transition-transform duration-200 ease-in-out`}
-        style={{ transform: `translateY(${-keyboardHeight}px)` }}
+        ref={footerRef} 
+        className={`fixed bottom-0 left-0 right-0 z-20 flex-shrink-0 p-3 ${isBgImage ? 'bg-black/20' : 'bg-white/50 dark:bg-gray-800/50'} border-t border-gray-200/20 dark:border-gray-700/20 backdrop-blur-lg transition-transform duration-200 ease-in-out`}
+        // 【删除】 style={{ transform: `translateY(${-keyboardHeight}px)` }} // 移除 footer 的 translateY 移动
       >
         <div className="relative">
           {showEmojiPicker && (
