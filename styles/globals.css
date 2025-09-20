@@ -1,4 +1,4 @@
-/* styles/globals.css (修改后，包含了所有隐藏规则) */
+/* styles/globals.css (修改后，包含了头像动画样式) */
 
 @tailwind base;
 @tailwind components;
@@ -365,8 +365,9 @@ body.modal-open {
 }
 
 /* 
+  你需要找到你的底部导航栏组件，给它一个唯一的 class 名，比如 .bottom-nav
+  然后用那个 class 名替换下面的 .bottom-nav
   这个规则会让底部导航栏在弹窗出现时消失
-  它会找到 class 名为 .bottom-nav 的元素并隐藏它
 */
 body.modal-open .bottom-nav {
   display: none !important;
@@ -394,4 +395,35 @@ body.modal-open .bottom-nav {
 /* 4. 隐藏颜色切换过渡动画的覆盖层 (如果存在) */
 #color-transition {
     display: none !important;
-         }
+}
+
+/* --- 【新增】头像发光动画 --- */
+@keyframes pulse-border {
+  0% {
+    box-shadow: 0 0 0 0 rgba(192, 219, 254, 0.7); /* 初始颜色 */
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(192, 219, 254, 0); /* 扩散到 10px */
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(192, 219, 254, 0); /* 最终透明 */
+  }
+}
+
+.avatar-glow {
+  position: relative;
+}
+
+.avatar-glow::before {
+  content: '';
+  position: absolute;
+  top: -6px; /* 稍微向外延伸，避免遮挡头像 */
+  left: -6px;
+  right: -6px;
+  bottom: -6px;
+  border-radius: 9999px; /* 圆形 */
+  background-color: rgba(192, 219, 254, 0.3); /* 浅蓝色背景 */
+  z-index: -1; /* 放在头像后面 */
+  pointer-events: none; /* 穿透点击 */
+  animation: pulse-border 2s linear infinite; /* 应用动画 */
+  }
