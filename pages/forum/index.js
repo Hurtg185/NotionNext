@@ -1,4 +1,4 @@
-// pages/forum/index.js (已修复“一直加载中”问题)
+// pages/forum/index.js (优化版 - 避免 N+1 查询)
 
 import { useState, useEffect } from 'react';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
@@ -8,9 +8,10 @@ import Link from 'next/link';
 import ForumCategoryTabs from '../../themes/heo/components/ForumCategoryTabs';
 import PostItem from '../../themes/heo/components/PostItem';
 import LoginModal from '@/components/LoginModal';
+import { LayoutBase } from '@/themes/heo'; // 【新增】导入 LayoutBase 以保持页面结构统一
 
 const ForumHomePage = () => {
-  const { user } = useAuth();
+  const { user } from useAuth();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
@@ -18,44 +19,44 @@ const ForumHomePage = () => {
   const [currentSort, setCurrentSort] = useState('最新');
 
   useEffect(() => {
-    setLoading(true); // 开始获取数据前，设置加载状态
+    setLoading(true);
 
-    let q; // 声明一个查询变量
+    let q;
     const postsRef = collection(db, 'posts');
 
-    // --- 构建动态查询 ---
-    // 1. 分类筛选 (我们先假设'推荐'是获取所有帖子)
-    if (currentCategory === '推荐') {
-      // 2. 排序逻辑
-      if (currentSort === '最热') {
-        q = query(postsRef, orderBy('likesCount', 'desc')); // 假设有点赞数字段 likesCount
-      } else { // 默认和最新都按创建时间
-        q = query(postsRef, orderBy('createdAt', 'desc'));
-      }
+    // --- 构建查询 ---
+    // 排序逻辑
+    const orderClause = currentSort === '最热'
+      ? orderBy('likesCount', 'desc') // 按点赞数降序
+      : orderBy('createdAt', 'desc'); // 默认按创建时间降序
+
+    // 分类筛选逻辑
+    if (currentCategory === '推荐' || !currentCategory) {
+      q = query(postsRef, orderClause);
     } else {
-      // 3. 其他分类的筛选
-      if (currentSort === '最热') {
-        q = query(postsRef, where('category', '==', currentCategory), orderBy('likesCount', 'desc'));
-      } else {
-        q = query(postsRef, where('category', '==', currentCategory), orderBy('createdAt', 'desc'));
-      }
+      q = query(postsRef, where('category', '==', currentCategory), orderClause);
     }
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const postsData = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
+        // 确保关键字段存在，避免渲染错误
+        title: doc.data().title || '无标题',
+        authorName: doc.data().authorName || '匿名用户',
+        commentsCount: doc.data().commentsCount || 0,
+        likesCount: doc.data().likesCount || 0,
       }));
       setPosts(postsData);
-      setLoading(false); // 成功获取数据后，关闭加载状态
+      setLoading(false);
     }, (error) => {
-      console.error("获取帖子失败:", error);
-      setLoading(false); // 获取数据失败后，也要关闭加载状态
+      console.error("获取帖子列表失败:", error);
+      setPosts([]); // 出错时清空帖子列表
+      setLoading(false);
     });
 
-    // 组件卸载时，取消对数据库的监听
     return () => unsubscribe();
-  }, [currentCategory, currentSort]); // 当分类或排序改变时，重新执行这个 effect
+  }, [currentCategory, currentSort]);
 
   const handleCategoryChange = (category) => setCurrentCategory(category);
   const handleSortChange = (sort) => setCurrentSort(sort);
@@ -68,7 +69,8 @@ const ForumHomePage = () => {
   };
 
   return (
-    <>
+    // 【修改】使用 LayoutBase 包裹，保持页面头部和底部一致
+    <LayoutBase> 
       <div className="bg-stone-50 dark:bg-black min-h-screen">
         <div 
           className="relative h-48 bg-cover bg-center" 
@@ -79,32 +81,38 @@ const ForumHomePage = () => {
           </div>
         </div>
 
-        <div className="container mx-auto px-2 md:px-4 -mt-20 relative">
+        <div className="container mx-auto px-2 md:px-4 -mt-20 relative z-10">
           <ForumCategoryTabs onCategoryChange={handleCategoryChange} onSortChange={handleSortChange} />
           
-          <div className="mt-4 bg-white dark:bg-gray-800 rounded-lg shadow">
+          <div className="mt-4 bg-white dark:bg-gray-800 rounded-lg shadow-md divide-y divide-gray-200 dark:divide-gray-700">
             {loading ? (
-              <p className="p-8 text-center text-gray-500">正在加载帖子...</p>
+              <div className="p-8 text-center text-gray-500 text-lg">
+                <i className="fas fa-spinner fa-spin mr-2"></i>
+                正在加载帖子...
+              </div>
             ) : posts.length > 0 ? (
               posts.map(post => <PostItem key={post.id} post={post} />)
             ) : (
-              <p className="p-8 text-center text-gray-500">该分类下还没有帖子哦，快来发布第一篇吧！</p>
+              <div className="p-8 text-center text-gray-500 text-lg">
+                <p>该分类下还没有帖子哦，快来发布第一篇吧！</p>
+              </div>
             )}
           </div>
         </div>
 
-        <Link href="/forum/new-post">
+        <Link href="/forum/new-post" passHref>
           <a 
             onClick={handlePostButtonClick}
-            className="fixed bottom-20 right-5 z-40 h-12 w-12 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-blue-600 transition-all transform hover:scale-110"
+            className="fixed bottom-20 right-5 z-40 h-14 w-14 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-blue-600 transition-all transform hover:scale-110 active:scale-100"
+            aria-label="发布新帖"
           >
-            <i className="fas fa-pen text-lg"></i>
+            <i className="fas fa-pen text-xl"></i>
           </a>
         </Link>
       </div>
       
       <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
-    </>
+    </LayoutBase>
   );
 };
 
