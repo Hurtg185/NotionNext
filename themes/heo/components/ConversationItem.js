@@ -1,4 +1,4 @@
-// themes/heo/components/ConversationItem.js (添加在线状态指示器)
+// themes/heo/components/ConversationItem.js (优化在线状态显示)
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -48,8 +48,7 @@ const ConversationItem = ({ conversation, onClick }) => {
       className="flex items-center p-3 cursor-pointer transition-colors duration-200 hover:bg-gray-100 dark:hover:bg-gray-700"
     >
       <Link href={`/profile/${otherUser.id}`} passHref>
-        <a onClick={handleAvatarClick} className="flex-shrink-0 relative"> {/* 【修改】添加 relative */}
-          {/* 【修改】给头像的容器添加 avatar-glow 类 */}
+        <a onClick={handleAvatarClick} className="flex-shrink-0 relative">
           <div className="avatar-glow">
             <img
               src={avatarSrc}
@@ -57,12 +56,13 @@ const ConversationItem = ({ conversation, onClick }) => {
               className="rounded-full object-cover w-16 h-16"
             />
           </div>
-          {/* 【新增】在线状态指示器 */}
-          <span
-            className={`absolute bottom-0 right-0 block h-4 w-4 rounded-full border-2 border-white dark:border-gray-800 ${
-              otherUser.isOnline ? 'bg-green-500' : 'bg-gray-400'
-            }`}
-          />
+          {/* 【核心修改】只在 otherUser.isOnline 为 true 时渲染绿点 */}
+          {otherUser.isOnline && (
+            <span
+              className="absolute bottom-0 right-0 block h-4 w-4 rounded-full border-2 border-white dark:border-gray-800 bg-green-500"
+              title="在线"
+            />
+          )}
         </a>
       </Link>
 
