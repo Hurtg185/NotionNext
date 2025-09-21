@@ -1,4 +1,4 @@
-// pages/forum/index.js (优化版 - 避免 N+1 查询)
+// pages/forum/index.js (修复语法错误)
 
 import { useState, useEffect } from 'react';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
@@ -8,10 +8,10 @@ import Link from 'next/link';
 import ForumCategoryTabs from '../../themes/heo/components/ForumCategoryTabs';
 import PostItem from '../../themes/heo/components/PostItem';
 import LoginModal from '@/components/LoginModal';
-import { LayoutBase } from '@/themes/heo'; // 【新增】导入 LayoutBase 以保持页面结构统一
+import { LayoutBase } from '@/themes/heo'; // 确保这个导入存在且正确
 
 const ForumHomePage = () => {
-  const { user } from useAuth();
+  const { user } = useAuth();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
@@ -24,13 +24,10 @@ const ForumHomePage = () => {
     let q;
     const postsRef = collection(db, 'posts');
 
-    // --- 构建查询 ---
-    // 排序逻辑
     const orderClause = currentSort === '最热'
-      ? orderBy('likesCount', 'desc') // 按点赞数降序
-      : orderBy('createdAt', 'desc'); // 默认按创建时间降序
+      ? orderBy('likesCount', 'desc')
+      : orderBy('createdAt', 'desc');
 
-    // 分类筛选逻辑
     if (currentCategory === '推荐' || !currentCategory) {
       q = query(postsRef, orderClause);
     } else {
@@ -41,7 +38,6 @@ const ForumHomePage = () => {
       const postsData = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-        // 确保关键字段存在，避免渲染错误
         title: doc.data().title || '无标题',
         authorName: doc.data().authorName || '匿名用户',
         commentsCount: doc.data().commentsCount || 0,
@@ -51,7 +47,7 @@ const ForumHomePage = () => {
       setLoading(false);
     }, (error) => {
       console.error("获取帖子列表失败:", error);
-      setPosts([]); // 出错时清空帖子列表
+      setPosts([]);
       setLoading(false);
     });
 
@@ -69,7 +65,6 @@ const ForumHomePage = () => {
   };
 
   return (
-    // 【修改】使用 LayoutBase 包裹，保持页面头部和底部一致
     <LayoutBase> 
       <div className="bg-stone-50 dark:bg-black min-h-screen">
         <div 
