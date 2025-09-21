@@ -1,4 +1,4 @@
-// pages/profile/[userId].js (最终功能完整版 + 在线状态)
+// pages/profile/[userId].js (最终功能完整版 + 在线状态优化)
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
@@ -160,18 +160,18 @@ const ProfilePage = () => {
               alt={profileUser.displayName} 
               className="w-28 h-28 rounded-full border-4 border-white dark:border-gray-900 shadow-lg object-cover"
             />
-            {/* 【新增】在线状态指示器 */}
-            <span
-              className={`absolute bottom-1 right-1 block h-6 w-6 rounded-full border-4 border-white dark:border-gray-900 ${
-                profileUser.isOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
-              }`}
-              title={profileUser.isOnline ? '在线' : '离线'}
-            />
+            {/* 【核心修改】只在 profileUser.isOnline 为 true 时渲染绿点 */}
+            {profileUser.isOnline && (
+              <span
+                className="absolute bottom-1 right-1 block h-6 w-6 rounded-full border-4 border-white dark:border-gray-900 bg-green-500 animate-pulse"
+                title="在线"
+              />
+            )}
           </div>
           
           <h1 className="text-3xl font-bold mt-4 text-gray-900 dark:text-white">{profileUser.displayName}</h1>
           
-          {/* 【新增】在线状态文本 */}
+          {/* 【修改】在线状态文本 */}
           <p className={`mt-1 text-sm font-semibold ${profileUser.isOnline ? 'text-green-600' : 'text-gray-500'}`}>
             {profileUser.isOnline ? '在线' : `最后上线: ${formatLastSeen(profileUser.lastSeen)}`}
           </p>
