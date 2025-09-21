@@ -61,6 +61,7 @@
     "axios": "^1.7.2",
     "critters": "^0.0.23",
     "date-fns": "^4.1.0",
+    "dayjs": "^1.11.18",
     "emoji-picker-react": "^4.13.3",
     "feed": "^4.2.2",
     "firebase": "^12.2.1",
