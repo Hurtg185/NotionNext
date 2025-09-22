@@ -1,4 +1,4 @@
-// pages/forum/post/[id].js (最终版 - 移除 Gemini, 保留 TTS)
+// pages/forum/post/[id].js (终极健 Başkanlık - 修复数据不一致和UI优化)
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
@@ -38,8 +38,6 @@ const ShareModal = ({ url, onClose }) => {
     );
 };
 
-// 【移除】GeminiSettingsModal 组件
-
 const CompactReply = ({ reply }) => (
     <div className="text-sm text-gray-700 dark:text-gray-300 truncate">
         <Link href={`/profile/${reply.authorId}`} passHref><a className="font-semibold text-gray-800 dark:text-white hover:underline">{reply.authorName || '匿名用户'}</a></Link>
@@ -68,13 +66,13 @@ const CommentItem = ({ comment, allComments, user, postAuthorId, handleVote, han
         </div>
         <p className="text-gray-800 dark:text-gray-200 text-base font-normal break-words">{comment.text}</p>
         <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mt-2">
-          <span>{new Date(comment.createdAt?.toDate()).toLocaleDateString()}</span>
+          <span>{new Date(comment.createdAt).toLocaleDateString()}</span>
           <div className="flex items-center space-x-5">
-            <button onClick={() => handleTTS(comment.text)} className="text-gray-400 dark:text-gray-500 hover:text-blue-500 transition-colors"><i className="fas fa-volume-high text-xl"></i></button>
+            <button onClick={() => handleTTS(comment.text)} title="朗读" className="text-gray-400 dark:text-gray-500 hover:text-blue-500 transition-colors"><i className="fas fa-volume-high text-xl"></i></button>
             <button onClick={() => handleVote(comment.id, 'like')} disabled={!user} className={`flex items-center space-x-1 text-base transition-colors ${isCommentLiked ? 'text-red-500' : 'text-gray-400 dark:text-gray-500 hover:text-red-400'} ${!user ? 'opacity-50' : ''}`}><i className={`${isCommentLiked ? 'fas' : 'far'} fa-heart text-xl`}></i><span className="font-semibold">{comment.likedBy?.length || 0}</span></button>
             <button onClick={() => handleVote(comment.id, 'dislike')} disabled={!user} className={`flex items-center space-x-1 text-base transition-colors ${isCommentDisliked ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500 hover:text-blue-400'} ${!user ? 'opacity-50' : ''}`}><i className={`${isCommentDisliked ? 'fas' : 'far'} fa-thumbs-down text-xl`}></i><span className="font-semibold">{comment.dislikedBy?.length || 0}</span></button>
-            <button onClick={() => handleReply(comment)} className="text-gray-400 dark:text-gray-500 hover:text-blue-500 transition-colors"><i className="fas fa-comment-dots text-xl"></i></button>
-            {canDelete && <button onClick={() => handleDelete(comment.id)} className="text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors"><i className="fas fa-trash text-lg"></i></button>}
+            <button onClick={() => handleReply(comment)} title="回复" className="text-gray-400 dark:text-gray-500 hover:text-blue-500 transition-colors"><i className="fas fa-comment-dots text-xl"></i></button>
+            {canDelete && <button onClick={() => handleDelete(comment.id)} title="删除" className="text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors"><i className="fas fa-trash text-lg"></i></button>}
           </div>
         </div>
         {directReplies.length > 0 && (
@@ -108,43 +106,79 @@ const PostDetailPage = () => {
   const commentInputRef = useRef(null);
   const [currentAudio, setCurrentAudio] = useState(null);
 
-  // 【移除】所有与翻译和 Gemini 相关的 state
-
   useEffect(() => {
-    // ... (useEffect 数据获取逻辑保持不变)
+    if (authLoading || !postId) return;
+    setDataLoading(true);
+
+    const postRef = doc(db, 'posts', postId);
+    const postUnsubscribe = onSnapshot(postRef, (docSnap) => {
+        if (docSnap.exists()) {
+            const postData = docSnap.data();
+            setPost({
+                id: docSnap.id,
+                ...postData,
+                likes: Array.isArray(postData.likes) ? postData.likes : [],
+                dislikes: Array.isArray(postData.dislikes) ? postData.dislikes : [],
+                likesCount: postData.likesCount || 0,
+                commentsCount: postData.commentsCount || 0
+            });
+        } else { setPost(null); }
+    }, (error) => { console.error("获取帖子失败:", error); setPost(null); });
+
+    const commentsRef = collection(db, 'posts', postId, 'comments');
+    let q;
+    if (sortOrder === '最热') {
+        q = query(commentsRef, orderBy('likedByCount', 'desc'), orderBy('createdAt', 'desc'));
+    } else {
+        q = query(commentsRef, orderBy('createdAt', 'asc'));
+    }
+    const commentsUnsubscribe = onSnapshot(q, (querySnapshot) => {
+        const allCommentsData = querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                createdAt: data.createdAt?.toDate() || new Date(), 
+                likedBy: Array.isArray(data.likedBy) ? data.likedBy : [],
+                dislikedBy: Array.isArray(data.dislikedBy) ? data.dislikedBy : [],
+                parentId: data.parentId || null,
+                text: data.text || ''
+            };
+        });
+        setComments(allCommentsData);
+        setDataLoading(false);
+    }, (error) => {
+        console.error("获取评论失败:", error);
+        setComments([]);
+        setDataLoading(false);
+    });
+
+    return () => { postUnsubscribe(); commentsUnsubscribe(); };
   }, [postId, authLoading, sortOrder]);
 
-  const handleTTS = (text) => {
-    if (currentAudio) { currentAudio.pause(); }
-    const encodedText = encodeURIComponent(text);
-    const ttsUrl = `https://t.leftsite.cn/tts?t=${encodedText}&v=zh-CN-XiaoxiaoMultilingualNeural&r=0&p=0&o=audio-24khz-48kbitrate-mono-mp3`;
-    const audio = new Audio(ttsUrl);
-    audio.play();
-    setCurrentAudio(audio);
+  const handleTTS = (text) => { if (currentAudio) { currentAudio.pause(); } const encodedText = encodeURIComponent(text); const ttsUrl = `https://t.leftsite.cn/tts?t=${encodedText}&v=zh-CN-XiaoxiaoMultilingualNeural&r=0&p=0&o=audio-24khz-48kbitrate-mono-mp3`; const audio = new Audio(ttsUrl); audio.play(); setCurrentAudio(audio); };
+  
+  const voteHandler = async (docRef, type, currentLikes, currentDislikes, isPost = false) => {
+    if (!user) { alert('请登录后操作！'); return; }
+    const userId = user.uid; const batch = writeBatch(db); const isLiked = currentLikes.includes(userId); const isDisliked = currentDislikes.includes(userId);
+    if (type === 'like') {
+        if (isLiked) { batch.update(docRef, { likedBy: arrayRemove(userId) }); if(isPost) { batch.update(docRef, { likesCount: increment(-1) }); } else { batch.update(docRef, { likedByCount: increment(-1) }); } }
+        else { batch.update(docRef, { likedBy: arrayUnion(userId) }); if(isPost) { batch.update(docRef, { likesCount: increment(1) }); } else { batch.update(docRef, { likedByCount: increment(1) }); } if (isDisliked) { batch.update(docRef, { dislikedBy: arrayRemove(userId) }); } }
+    } else {
+        if (isDisliked) { batch.update(docRef, { dislikedBy: arrayRemove(userId) }); }
+        else { batch.update(docRef, { dislikedBy: arrayUnion(userId) }); if (isLiked) { batch.update(docRef, { likedBy: arrayRemove(userId) }); if(isPost) { batch.update(docRef, { likesCount: increment(-1) }); } else { batch.update(docRef, { likedByCount: increment(-1) }); } } }
+    }
+    try { await batch.commit(); } catch (error) { console.error("投票操作失败:", error); }
   };
   
-  // 【移除】callGeminiApi, handleTranslate, handleSaveGeminiSettings 函数
-
-  const voteHandler = async (docRef, type, currentLikes, currentDislikes, isPost = false) => { /* ... (保持不变) ... */ };
-  const handlePostVote = (type) => { /* ... (保持不变) ... */ };
-  const handleCommentVote = (commentId, type) => { /* ... (保持不变) ... */ };
-  const handleDeleteComment = async (commentId) => { /* ... (保持不变) ... */ };
-  const handleAddComment = async (e) => { /* ... (保持不变) ... */ };
-  const handleReplyClick = (comment) => { /* ... (保持不变) ... */ };
-  const handleFollow = async () => { /* ... (保持不变) ... */ };
-  const handleBookmark = async () => { /* ... (保持不变) ... */ };
-
-  const handleMenuItemClick = async (action) => {
-    setShowMenu(false); if (!user || !post) return;
-    switch (action) {
-      case 'delete': /* ... */ break;
-      case 'edit': /* ... */ break;
-      case 'share': setShowShareModal(true); break;
-      case 'bookmark': handleBookmark(); break;
-      case 'report': alert('举报功能待实现。'); break;
-      // 【移除】'gemini' case
-    }
-  };
+  const handlePostVote = (type) => { if (!post) return; const postRef = doc(db, 'posts', postId); voteHandler(postRef, type, post.likes, post.dislikes, true); };
+  const handleCommentVote = (commentId, type) => { const commentRef = doc(db, 'posts', postId, 'comments', commentId); const comment = comments.find(c => c.id === commentId); if (comment) { voteHandler(commentRef, type, comment.likedBy, comment.dislikedBy, false); } };
+  const handleDeleteComment = async (commentId) => { if (!post) return; const commentToDelete = comments.find(c => c.id === commentId); if (!commentToDelete) return; const isAuthor = user && user.uid === commentToDelete.authorId; const isPostAuthor = user && user.uid === post.authorId; if (!isAuthor && !isPostAuthor) return; if (confirm('确定要删除这条评论及其所有回复吗？')) { let count = 0; const countReplies = (cId) => { count++; comments.filter(c => c.parentId === cId).forEach(r => countReplies(r.id)); }; countReplies(commentId); const deleteRecursive = async (cId) => { const replies = comments.filter(c => c.parentId === cId); for (const r of replies) { await deleteRecursive(r.id); } await deleteDoc(doc(db, 'posts', postId, 'comments', cId)); }; try { await deleteRecursive(commentId); await updateDoc(doc(db, 'posts', postId), { commentsCount: increment(-count) }); } catch (error) {} } };
+  const handleAddComment = async (e) => { e.preventDefault(); if (!newComment.trim() || !user || !post) return; const postRef = doc(db, 'posts', postId); const commentsRef = collection(db, 'posts', postId, 'comments'); const newCommentRef = doc(commentsRef); const batch = writeBatch(db); batch.set(newCommentRef, { postId: postId, text: newComment, authorId: user.uid, authorName: user.displayName || '匿名用户', authorAvatar: user.photoURL || 'https://www.gravatar.com/avatar?d=mp', createdAt: serverTimestamp(), likedBy: [], dislikedBy: [], likedByCount: 0, parentId: replyTo ? replyTo.id : null }); batch.update(postRef, { commentsCount: increment(1) }); try { await batch.commit(); setNewComment(''); setReplyTo(null); } catch (error) {} };
+  const handleReplyClick = (comment) => { setReplyTo({ id: comment.id, authorName: comment.authorName }); setNewComment(`@${comment.authorName} `); if (commentInputRef.current) { commentInputRef.current.focus(); } };
+  const handleFollow = async () => { if (!user || !post || user.uid === post.authorId) return; const userRef = doc(db, 'users', user.uid); try { await updateDoc(userRef, { following: userData?.following?.includes(post.authorId) ? arrayRemove(post.authorId) : arrayUnion(post.authorId) }); } catch (error) {} };
+  const handleBookmark = async () => { if (!user || !post) return; const userRef = doc(db, 'users', user.uid); try { await updateDoc(userRef, { bookmarks: userData?.bookmarks?.includes(postId) ? arrayRemove(postId) : arrayUnion(postId) }); } catch (error) {} };
+  const handleMenuItemClick = async (action) => { setShowMenu(false); if (!user || !post) return; switch (action) { case 'delete': if (user.uid !== post.authorId) return; if (confirm('确定要删除此帖子吗？')) { try { await deleteDoc(doc(db, 'posts', postId)); router.push('/forum'); } catch (error) {} } break; case 'edit': if (user.uid !== post.authorId) return; alert('修改功能待实现。'); break; case 'share': setShowShareModal(true); break; case 'bookmark': handleBookmark(); break; case 'report': alert('举报功能待实现。'); break; } };
 
   if (authLoading || dataLoading) { return <LayoutBase><p className="p-8 text-center text-xl">加载中...</p></LayoutBase>; }
   if (!post) { return <LayoutBase><p className="p-8 text-center text-xl text-red-500">帖子不存在或已被删除。</p></LayoutBase>; }
@@ -152,44 +186,30 @@ const PostDetailPage = () => {
   const mainComments = comments.filter(comment => !comment.parentId);
   const postIsLiked = user && post.likes.includes(user.uid);
   const postIsDisliked = user && post.dislikes.includes(user.uid);
-  const isFollowingPostAuthor = user && userData?.following?.includes(post.authorId);
-  const isBookmarked = user && userData?.bookmarks?.includes(postId);
+  const isFollowingPostAuthor = user && Array.isArray(userData?.following) && userData.following.includes(post.authorId);
+  const isBookmarked = user && Array.isArray(userData?.bookmarks) && userData.bookmarks.includes(postId);
 
   return (
     <LayoutBase>
-      {/* 【移除】GeminiSettingsModal 的渲染 */}
       {showShareModal && <ShareModal url={window.location.href} onClose={() => setShowShareModal(false)} />}
       <div className="bg-gray-50 dark:bg-gray-900 min-h-screen py-8">
         <div className="container mx-auto p-4 max-w-4xl text-base sm:text-lg">
-          <div className="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg relative mb-6">
-            <h1 className="text-3xl sm:text-4xl font-extrabold mb-4 text-gray-900 dark:text-white leading-tight flex items-center">
+          <div className="p-4 sm:p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg relative mb-6">
+            <h1 className="text-2xl sm:text-3xl font-extrabold mb-4 text-gray-900 dark:text-white leading-tight flex items-center">
               <span>{post.title}</span>
-              <button onClick={() => handleTTS(post.title)} className="ml-4 text-gray-400 hover:text-blue-500 transition-colors"><i className="fas fa-volume-high"></i></button>
+              <button onClick={() => handleTTS(post.title)} title="朗读标题" className="ml-3 text-gray-400 hover:text-blue-500 transition-colors"><i className="fas fa-volume-high text-xl"></i></button>
             </h1>
-            <div className="flex justify-between items-center mb-6">
-              <div className="flex items-center space-x-3"><Link href={`/profile/${post.authorId}`} passHref><a className="flex items-center space-x-3 cursor-pointer"><img src={post.authorAvatar || 'https://www.gravatar.com/avatar?d=mp'} alt={post.authorName || '匿名用户'} className="w-14 h-14 rounded-full object-cover border-2 border-blue-400 flex-shrink-0"/><div><p className="font-bold text-xl text-gray-900 dark:text-white hover:underline">{post.authorName || '匿名用户'}</p><p className="text-sm text-gray-500 dark:text-gray-400">{new Date(post.createdAt?.toDate()).toLocaleDateString()}</p></div></a></Link></div>
-              <div className="flex items-center space-x-3">{user && post.authorId !== user.uid && <button onClick={handleFollow} className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors duration-200 ${isFollowingPostAuthor ? 'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-200' : 'bg-blue-500 text-white hover:bg-blue-600'}`}>{isFollowingPostAuthor ? '已关注' : '关注'}</button>}
-                <div className="relative"><button onClick={() => setShowMenu(!showMenu)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"><i className="fas fa-ellipsis text-2xl text-gray-500 dark:text-gray-300"></i></button>
-                {showMenu && 
-                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-700 rounded-md shadow-lg z-10 py-1 text-base">
-                    {/* 【移除】Gemini 设置菜单项 */}
-                    {user && user.uid === post.authorId && (<><button onClick={() => handleMenuItemClick('edit')} className="flex items-center w-full text-left px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 font-semibold"><i className="fas fa-pen-to-square mr-2 text-lg"></i>修改</button><button onClick={() => handleMenuItemClick('delete')} className="flex items-center w-full text-left px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-800 font-semibold"><i className="fas fa-trash mr-2 text-lg"></i>删除</button></>)}
-                    <button onClick={() => handleMenuItemClick('share')} className="flex items-center w-full text-left px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 font-semibold"><i className="fas fa-share-nodes mr-2 text-lg"></i>分享</button>
-                    <button onClick={() => handleMenuItemClick('bookmark')} className="flex items-center w-full text-left px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 font-semibold"><i className={`${isBookmarked ? 'fas' : 'far'} fa-bookmark mr-2 text-lg`}></i>收藏</button>
-                    <button onClick={() => handleMenuItemClick('report')} className="flex items-center w-full text-left px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 font-semibold"><i className="fas fa-flag mr-2 text-lg"></i>举报</button>
-                  </div>
-                }
-                </div>
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center space-x-3"><Link href={`/profile/${post.authorId}`} passHref><a className="flex items-center space-x-3 cursor-pointer"><img src={post.authorAvatar || 'https://www.gravatar.com/avatar?d=mp'} alt={post.authorName || '匿名用户'} className="w-12 h-12 rounded-full object-cover"/><div><p className="font-bold text-lg text-gray-900 dark:text-white hover:underline">{post.authorName || '匿名用户'}</p><p className="text-xs text-gray-500 dark:text-gray-400">{new Date(post.createdAt?.toDate()).toLocaleDateString()}</p></div></a></Link></div>
+              <div className="flex items-center space-x-2">{user && post.authorId !== user.uid && <button onClick={handleFollow} className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${isFollowingPostAuthor ? 'bg-gray-200 text-gray-700' : 'bg-blue-500 text-white hover:bg-blue-600'}`}>{isFollowingPostAuthor ? '已关注' : '关注'}</button>}
+                <div className="relative"><button onClick={() => setShowMenu(!showMenu)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"><i className="fas fa-ellipsis text-xl text-gray-500 dark:text-gray-300"></i></button>{showMenu && <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-700 rounded-md shadow-lg z-10 py-1 text-base">{user && user.uid === post.authorId && (<><button onClick={() => handleMenuItemClick('edit')} className="flex items-center w-full text-left px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 font-semibold"><i className="fas fa-pen-to-square mr-2 text-lg"></i>修改</button><button onClick={() => handleMenuItemClick('delete')} className="flex items-center w-full text-left px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-800 font-semibold"><i className="fas fa-trash mr-2 text-lg"></i>删除</button></>)}<button onClick={() => handleMenuItemClick('share')} className="flex items-center w-full text-left px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 font-semibold"><i className="fas fa-share-nodes mr-2 text-lg"></i>分享</button><button onClick={() => handleMenuItemClick('bookmark')} className="flex items-center w-full text-left px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 font-semibold"><i className={`${isBookmarked ? 'fas' : 'far'} fa-bookmark mr-2 text-lg`}></i>收藏</button><button onClick={() => handleMenuItemClick('report')} className="flex items-center w-full text-left px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 font-semibold"><i className="fas fa-flag mr-2 text-lg"></i>举报</button></div>}</div>
               </div>
             </div>
-            <div className="prose dark:prose-invert max-w-none text-lg leading-relaxed mt-6">{post.content && <PostContent content={post.content} />}</div>
-            <div className="flex items-center justify-end mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 space-x-6">
-                <button onClick={() => handleTTS(post.content)} className="text-gray-400 dark:text-gray-500 hover:text-blue-500 transition-colors"><i className="fas fa-volume-high text-2xl"></i></button>
-                {/* 【移除】翻译按钮 */}
-                <button onClick={() => handlePostVote('like')} disabled={!user} className={`flex items-center space-x-1 transition-colors ${postIsLiked ? 'text-red-500' : 'text-gray-400 dark:text-gray-500 hover:text-red-400'} ${!user ? 'opacity-50' : ''}`}><i className={`${postIsLiked ? 'fas' : 'far'} fa-heart text-2xl`}></i><span className="font-semibold">{post.likesCount || 0}</span></button>
-                <button onClick={() => handlePostVote('dislike')} disabled={!user} className={`flex items-center space-x-1 transition-colors ${postIsDisliked ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500 hover:text-blue-400'} ${!user ? 'opacity-50' : ''}`}><i className={`${postIsDisliked ? 'fas' : 'far'} fa-thumbs-down text-2xl`}></i></button>
-                <button onClick={handleBookmark} disabled={!user} className={`transition-colors ${isBookmarked ? 'text-yellow-500' : 'text-gray-400 dark:text-gray-500 hover:text-yellow-400'} ${!user ? 'opacity-50' : ''}`}><i className={`${isBookmarked ? 'fas' : 'far'} fa-bookmark text-2xl`}></i></button>
-                <button onClick={() => setShowShareModal(true)} className="text-gray-400 dark:text-gray-500 hover:text-blue-500 transition-colors"><i className="fas fa-share-nodes text-2xl"></i></button>
+            <div className="prose dark:prose-invert max-w-none text-lg leading-relaxed mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">{post.content && <PostContent content={post.content} />}</div>
+            <div className="flex items-center justify-end mt-4 pt-2 space-x-4">
+                <button onClick={() => handleTTS(post.content)} title="朗读" className="text-gray-400 dark:text-gray-500 hover:text-blue-500 transition-colors"><i className="fas fa-volume-high text-xl"></i></button>
+                <button onClick={() => handlePostVote('like')} disabled={!user} className={`flex items-center space-x-1 transition-colors ${postIsLiked ? 'text-red-500' : 'text-gray-400 dark:text-gray-500 hover:text-red-400'} ${!user ? 'opacity-50' : ''}`}><i className={`${postIsLiked ? 'fas' : 'far'} fa-heart text-xl`}></i><span className="font-semibold text-sm">{post.likesCount || 0}</span></button>
+                <button onClick={() => handlePostVote('dislike')} disabled={!user} className={`flex items-center space-x-1 transition-colors ${postIsDisliked ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500 hover:text-blue-400'} ${!user ? 'opacity-50' : ''}`}><i className={`${postIsDisliked ? 'fas' : 'far'} fa-thumbs-down text-xl`}></i></button>
             </div>
           </div>
           <div className="mt-8">
