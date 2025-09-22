@@ -38,6 +38,7 @@ const AiTtsButton = ({
   text, 
   voice = 'zh-CN-XiaoxiaoMultilingualNeural', 
   rate = 0,
+  pitch = 0 // pitch 参数在 GET 接口中也可能有效
 }) => {
   const [playbackState, setPlaybackState] = useState('idle');
   const audioRef = useRef(null);
@@ -70,33 +71,25 @@ const AiTtsButton = ({
     abortControllerRef.current = new AbortController();
 
     try {
-      // --- 【核心修复】 ---
-      // 始终使用 OpenAI 兼容的 POST 请求方式
-      const url = 'https://t.leftsite.cn/tts';
-      // 将 rate (-100 to 100) 转换为 speed (0.25 to 4.0)
-      const speed = Math.max(0.25, Math.min(4.0, 1.0 + (rate / 100)));
+      // --- 【最终核心修复】 ---
+      // 回归到可以工作的 GET 请求方式
+      const params = new URLSearchParams({
+        t: cleanedText,
+        v: voice,
+        r: `${rate}%`,
+        p: `${pitch}%`
+      });
+      const url = `https://t.leftsite.cn/tts?${params.toString()}`;
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'tts-1', // 兼容接口通常需要这个模型名
-          input: cleanedText,
-          voice: voice,   // 这里传入的是 Microsoft 的发音人名字
-          speed: speed
-        }),
-        signal: abortControllerRef.current.signal
+      const response = await fetch(url, { 
+        method: 'GET', // 明确指定为 GET
+        signal: abortControllerRef.current.signal 
       });
       // --- 修复结束 ---
 
       if (!response.ok) {
-        // 尝试解析JSON错误体以获得更清晰的信息
-        try {
-            const errData = await response.json();
-            throw new Error(errData.error || `API 请求失败，状态码: ${response.status}`);
-        } catch (e) {
-            throw new Error(`API 请求失败，状态码: ${response.status}`);
-        }
+        const errorText = await response.text();
+        throw new Error(`API 请求失败, 状态码: ${response.status}. ${errorText}`);
       }
       
       const blob = await response.blob();
@@ -121,7 +114,7 @@ const AiTtsButton = ({
       }
       setPlaybackState('idle');
     }
-  }, [voice, rate, playbackState]);
+  }, [voice, rate, pitch, playbackState]);
 
   // --- 动画图标组件 ---
   const AnimatedMusicIcon = ({ state }) => {
