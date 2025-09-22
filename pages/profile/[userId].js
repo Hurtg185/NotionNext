@@ -1,10 +1,10 @@
-// pages/profile/[userId].js (最终美化版 - 类似小红书/抖音主页 - 修复 Auth 依赖)
+// pages/profile/[userId].js (最终美化版 - 类似小红书/抖音主页)
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { useAuth } from '@/lib/AuthContext'; // 【注意】useAuth 现在只提供原始 Firebase Auth User 和 loading 状态
+import { useAuth } from '@/lib/AuthContext';
 import { LayoutBase } from '@/themes/heo';
-import { getUserProfile, startChat } from '@/lib/chat'; // getUserProfile 从 Firestore 获取完整资料
+import { getUserProfile, startChat } from '@/lib/chat';
 import { 
   followUser, unfollowUser, checkFollowing, 
   blockUser, unblockUser, checkBlocked,
@@ -46,10 +46,10 @@ const PostList = ({ posts }) => {
 const ProfilePage = () => {
   const router = useRouter();
   const { userId } = router.query;
-  const { user: authUser, loading: authLoading } = useAuth(); // 【修改】获取 AuthContext 的原始 user 和 loading 状态
+  const { user: currentUser } = useAuth();
   const { openDrawer } = useDrawer();
-  const [profileUser, setProfileUser] = useState(null); // 这个是 Firestore 中的用户完整资料
-  const [loading, setLoading] = useState(true); // 页面自身的加载状态
+  const [profileUser, setProfileUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('posts');
   const [isEditing, setIsEditing] = useState(false);
   
@@ -57,46 +57,26 @@ const ProfilePage = () => {
   const [isBlocked, setIsBlocked] = useState(false);
   const [tabContent, setTabContent] = useState([]);
 
-  // 判断当前页面是否是自己的主页
-  // 只有当 authUser 和 userId 都加载完毕后才能准确判断
-  const isMyProfile = authUser && authUser.uid === userId; 
+  const isMyProfile = currentUser && currentUser.uid === userId;
 
-  // 【核心修改】数据获取逻辑，依赖 authUser 的 uid
   const fetchUserProfile = async () => {
-    console.log('DEBUG [ProfilePage]: fetchUserProfile called. userId:', userId, 'authUser.uid:', authUser?.uid);
-    if (!userId || authLoading) { // 【新增】如果 userId 未加载或 AuthContext 还在加载，则跳过
-      setLoading(true); // 继续显示加载状态
-      return;
+    if (!userId) return;
+    setLoading(true);
+    const profileData = await getUserProfile(userId);
+    setProfileUser(profileData);
+    if (currentUser && currentUser.uid !== userId) {
+      setIsFollowing(await checkFollowing(currentUser.uid, userId));
+      setIsBlocked(await checkBlocked(currentUser.uid, userId));
     }
-    setLoading(true); // 开始加载页面数据
-    try {
-      const profileData = await getUserProfile(userId); // 从 Firestore 获取完整的 profileUser
-      setProfileUser(profileData);
-      
-      // 【新增】如果正在看别人的主页，检查关注/拉黑状态
-      if (authUser && authUser.uid && authUser.uid !== userId) { 
-        setIsFollowing(await checkFollowing(authUser.uid, userId));
-        setIsBlocked(await checkBlocked(authUser.uid, userId));
-      } else {
-        setIsFollowing(false); // 自己的主页，不显示关注按钮
-        setIsBlocked(false);   // 自己的主页，不显示拉黑按钮
-      }
-    } catch (error) {
-      console.error('ERROR [ProfilePage]: Failed to fetch user profile:', error);
-      setProfileUser(null);
-    } finally {
-      setLoading(false); // 结束加载页面数据
-    }
+    setLoading(false);
   };
 
-  // 【核心修改】useEffect 依赖 authUser.uid 和 userId
   useEffect(() => {
-    if (authLoading) return; // 如果 AuthContext 还在加载，则不执行
     fetchUserProfile();
-  }, [userId, authLoading, authUser?.uid]); // 依赖 userId, authLoading 和 authUser?.uid
+  }, [userId, currentUser]);
 
   useEffect(() => {
-    if (!userId || loading) return; // 【新增】如果页面数据还在加载，则跳过
+    if (!userId) return;
     let unsubscribe;
     if (activeTab === 'posts') {
       unsubscribe = getPostsByUser(userId, setTabContent);
@@ -108,37 +88,38 @@ const ProfilePage = () => {
       setTabContent([]);
     }
     return () => unsubscribe && unsubscribe();
-  }, [activeTab, userId, isMyProfile, loading]); // 依赖 loading
+  }, [activeTab, userId, isMyProfile]);
 
-
+  
   const handleFollow = async () => {
-    if (!authUser || !authUser.uid || !userId) return; // 【修改】使用 authUser.uid
+    if (!currentUser) return;
     if (isFollowing) {
-      await unfollowUser(authUser.uid, userId);
+      await unfollowUser(currentUser.uid, userId);
     } else {
-      await followUser(authUser.uid, userId);
+      await followUser(currentUser.uid, userId);
     }
     fetchUserProfile();
   };
   
   const handleBlock = async () => {
-    if (!authUser || !authUser.uid || !userId) return; // 【修改】使用 authUser.uid
+    if (!currentUser) return;
     if (isBlocked) {
-      await unblockUser(authUser.uid, userId);
+      await unblockUser(currentUser.uid, userId);
     } else {
       if (window.confirm('确定要拉黑该用户吗？拉黑后将互相取关且无法看到对方动态。')) {
-        await blockUser(authUser.uid, userId);
+        await blockUser(currentUser.uid, userId);
       }
     }
     fetchUserProfile();
   };
 
   const handleStartChat = async () => {
-    if (!authUser || !authUser.uid || !profileUser || profileUser.id === authUser.uid) { // 【修改】使用 authUser.uid
-      alert('请先登录或用户信息无效！');
+    if (!currentUser) {
+      alert('请先登录再发送私信！');
       return;
     }
-    const conversation = await startChat(authUser.uid, profileUser.id); // 【修改】使用 authUser.uid
+    if (!profileUser || profileUser.id === currentUser.uid) return;
+    const conversation = await startChat(currentUser.uid, profileUser.id);
     if (conversation) {
       openDrawer('chat', { conversation, chatId: conversation.id });
     } else {
@@ -163,28 +144,30 @@ const ProfilePage = () => {
   };
 
 
-  if (loading || authLoading) { // 【修改】页面加载或 AuthContext 加载中都显示加载状态
+  if (loading) {
     return <LayoutBase><div className="p-10 text-center">正在加载用户资料...</div></LayoutBase>;
   }
-  if (!profileUser) { // 如果 profileUser 为 null，可能用户不存在或加载失败
+  if (!profileUser) {
     return <LayoutBase><div className="p-10 text-center text-red-500">无法加载该用户的信息或用户不存在。</div></LayoutBase>;
   }
 
 
   return (
     <LayoutBase>
-      <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
-        {/* 【核心修改】顶部背景图区域 - 高度更合理，移除默认渐变 */}
+      {/* 【核心修改】整个页面容器，移除 LayoutBase 默认 padding, 背景色由主题 body 决定 */}
+      <div className="flex flex-col min-h-screen">
+        
+        {/* 【核心修改】顶部背景图区域 - 更高，背景更深沉，信息块浮动在其上 */}
         <div 
-          className="relative w-full h-48 bg-cover bg-center flex items-end justify-between p-4" // h-48 更合理的高度
+          className="relative w-full h-60 bg-cover bg-center flex flex-col justify-end p-4 text-white" // h-60 增加高度
           style={{ backgroundImage: profileUser.backgroundImageUrl ? `url(${profileUser.backgroundImageUrl})` : 'none' }}
         >
           {/* 半透明遮罩层，提升文字可读性 */}
-          {profileUser.backgroundImageUrl && <div className="absolute inset-0 bg-black/30"></div>}
+          {profileUser.backgroundImageUrl && <div className="absolute inset-0 bg-black/50"></div>} {/* 更深的遮罩 */}
           {/* 如果没有背景图，显示一个默认的浅灰/深灰背景，与 body 颜色一致 */}
           {!profileUser.backgroundImageUrl && <div className="absolute inset-0 bg-gray-50 dark:bg-gray-900"></div>}
 
-          {/* 右上角编辑资料按钮 (如果是我自己的主页) - 定位在背景图内 */}
+          {/* 右上角编辑资料按钮 (如果是我自己的主页) */}
           {isMyProfile && (
             <button 
               onClick={() => setIsEditing(true)} 
@@ -193,65 +176,63 @@ const ProfilePage = () => {
               编辑资料
             </button>
           )}
+
+          {/* 【核心修改】个人信息浮动块 - 在背景图内，头像左侧，资料右侧 */}
+          <div className="relative z-10 flex items-end space-x-4">
+            {/* 头像及在线状态 */}
+            <div className="relative flex-shrink-0">
+              <img 
+                src={profileUser.photoURL || 'https://www.gravatar.com/avatar?d=mp'} 
+                alt={profileUser.displayName} 
+                className="w-24 h-24 rounded-full border-4 border-white dark:border-gray-900 shadow-lg object-cover" // 调整头像大小
+              />
+              {profileUser.isOnline && (
+                <span
+                  className="absolute bottom-0 right-0 block h-5 w-5 rounded-full border-3 border-white dark:border-gray-900 bg-green-500 animate-pulse" // 调整绿点大小
+                  title="在线"
+                />
+              )}
+              {/* 性别标志 - 定位在头像左上角 */}
+              {profileUser.gender && profileUser.gender !== 'not-specified' && (
+                <span className={`absolute top-0 left-0 p-1 rounded-full text-white text-xs ${profileUser.gender === 'male' ? 'bg-blue-500' : 'bg-pink-500'} flex items-center justify-center w-5 h-5`}>
+                  <i className={`fas ${profileUser.gender === 'male' ? 'fa-male' : 'fa-female'}`}></i>
+                </span>
+              )}
+            </div>
+
+            {/* 右侧信息区 */}
+            <div className="flex-grow min-w-0">
+              <h1 className="text-3xl font-bold text-white text-shadow-lg mb-1 truncate">{profileUser.displayName}</h1>
+              
+              {/* 在线状态文本 */}
+              <p className={`text-sm font-semibold ${profileUser.isOnline ? 'text-green-400' : 'text-gray-300'} text-shadow-lg`}>
+                {profileUser.isOnline ? '在线' : `最后上线: ${formatLastSeen(profileUser.lastSeen)}`}
+              </p>
+
+              <p className="text-gray-300 text-shadow-lg text-sm truncate">@{profileUser.id?.substring(0, 8)}</p>
+            </div>
+          </div>
         </div>
         
-        {/* 【核心修改】个人资料信息块 - 悬浮在背景图上方，头像左侧，信息右侧，更紧凑 */}
-        <div className="relative -mt-16 mx-auto w-full max-w-lg z-20 px-4"> {/* -mt-16 将资料块抬到背景图上 */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-5 relative"> {/* 资料卡片主体 */}
-            
-            <div className="flex items-center space-x-4">
-              {/* 头像及在线状态 */}
-              <div className="relative flex-shrink-0">
-                <img 
-                  src={profileUser.photoURL || 'https://www.gravatar.com/avatar?d=mp'} 
-                  alt={profileUser.displayName} 
-                  className="w-24 h-24 rounded-full border-4 border-white dark:border-gray-900 shadow-lg object-cover" // 调整头像大小
-                />
-                {profileUser.isOnline && (
-                  <span
-                    className="absolute bottom-0 right-0 block h-5 w-5 rounded-full border-3 border-white dark:border-gray-900 bg-green-500 animate-pulse" // 调整绿点大小
-                    title="在线"
-                  />
-                )}
-                {/* 【新增】性别标志 - 定位在头像左上角 */}
-                {profileUser.gender && profileUser.gender !== 'not-specified' && (
-                  <span className={`absolute top-0 left-0 p-1 rounded-full text-white text-xs ${profileUser.gender === 'male' ? 'bg-blue-500' : 'bg-pink-500'} flex items-center justify-center w-5 h-5`}>
-                    <i className={`fas ${profileUser.gender === 'male' ? 'fa-male' : 'fa-female'}`}></i>
-                  </span>
-                )}
-              </div>
-
-              {/* 右侧信息区 */}
-              <div className="flex-grow min-w-0">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white truncate">{profileUser.displayName}</h1>
-                
-                {/* 在线状态文本 */}
-                <p className={`mt-0.5 text-sm font-semibold ${profileUser.isOnline ? 'text-green-600' : 'text-gray-500'}`}>
-                  {profileUser.isOnline ? '在线' : `最后上线: ${formatLastSeen(profileUser.lastSeen)}`}
-                </p>
-
-                <p className="text-gray-500 mt-0.5 text-sm truncate">@{profileUser.id?.substring(0, 8)}</p>
-              </div>
-            </div>
-            
-            {/* 简介 */}
-            <p className="text-gray-700 dark:text-gray-300 text-sm mt-3 line-clamp-2">{profileUser.bio || '这个人很懒，什么都没写...'}</p>
+        {/* 【核心修改】下方紧凑的个人详细信息和操作按钮 */}
+        <div className="relative -mt-4 mx-auto w-full max-w-lg z-20 px-4"> {/* -mt-4 继续上移，减少与上方背景块的间距 */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4"> {/* 新的白色卡片 */}
             
             {/* 关注/粉丝计数 */}
-            <div className="flex justify-between items-center text-gray-800 dark:text-white mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+            <div className="flex justify-around items-center text-gray-800 dark:text-white mb-4">
               <div className="text-center">
-                <div className="font-bold text-lg">{profileUser.followersCount || 0}</div>
+                <div className="font-bold text-xl">{profileUser.followersCount || 0}</div>
                 <div className="text-sm text-gray-500 dark:text-gray-400">粉丝</div>
               </div>
               <div className="text-center">
-                <div className="font-bold text-lg">{profileUser.followingCount || 0}</div>
+                <div className="font-bold text-xl">{profileUser.followingCount || 0}</div>
                 <div className="text-sm text-gray-500 dark:text-gray-400">关注</div>
               </div>
             </div>
 
             {/* 操作按钮 (如果不是自己的主页) */}
             {!isMyProfile && (
-              <div className="flex space-x-3 mt-4 justify-center">
+              <div className="flex space-x-3 justify-center mb-4">
                 <button onClick={handleFollow} className={`px-4 py-2 rounded-full font-semibold text-sm transition-colors ${isFollowing ? 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-white' : 'bg-blue-500 text-white hover:bg-blue-600'}`}>
                   {isFollowing ? '已关注' : '关注'}
                 </button>
@@ -263,30 +244,27 @@ const ProfilePage = () => {
                 </button>
               </div>
             )}
-          </div>
-        </div>
-
-        {/* 【修改】更紧凑的个人详细信息，放在卡片下方或侧边 */}
-        <div className="w-full max-w-lg mx-auto p-4 mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl">
-          <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">个人资料</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-gray-600 dark:text-gray-400 text-sm">
-            {profileUser.currentCity && <span className="flex items-center"><i className="fas fa-map-marker-alt mr-2 w-4 text-center"></i><span className="font-bold mr-1">常住:</span> {profileUser.currentCity}</span>}
-            {profileUser.hometown && <span className="flex items-center"><i className="fas fa-home mr-2 w-4 text-center"></i><span className="font-bold mr-1">家乡:</span> {profileUser.hometown}</span>}
-            {profileUser.occupation && <span className="flex items-center"><i className="fas fa-briefcase mr-2 w-4 text-center"></i><span className="font-bold mr-1">职业:</span> {profileUser.occupation}</span>}
-            {profileUser.learningLanguage && <span className="flex items-center"><i className="fas fa-language mr-2 w-4 text-center"></i><span className="font-bold mr-1">在学:</span> {profileUser.learningLanguage}</span>}
             
-            {profileUser.birthDate && (
-              <span className="flex items-center">
-                <i className="fas fa-birthday-cake mr-2 w-4 text-center"></i>
-                <span className="font-bold mr-1">年龄:</span> {calculateAge(profileUser.birthDate)}岁
-              </span>
-            )}
-            {profileUser.nationality && (
-              <span className="flex items-center">
-                <i className="fas fa-flag mr-2 w-4 text-center"></i>
-                <span className="font-bold mr-1">国籍:</span> {profileUser.nationality}
-              </span>
-            )}
+            {/* 个人资料详情 (更紧凑的网格布局) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-gray-600 dark:text-gray-400 text-sm mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+              {profileUser.currentCity && <span className="flex items-center"><i className="fas fa-map-marker-alt mr-2 w-4 text-center"></i><span className="font-bold mr-1">常住:</span> {profileUser.currentCity}</span>}
+              {profileUser.hometown && <span className="flex items-center"><i className="fas fa-home mr-2 w-4 text-center"></i><span className="font-bold mr-1">家乡:</span> {profileUser.hometown}</span>}
+              {profileUser.occupation && <span className="flex items-center"><i className="fas fa-briefcase mr-2 w-4 text-center"></i><span className="font-bold mr-1">职业:</span> {profileUser.occupation}</span>}
+              {profileUser.learningLanguage && <span className="flex items-center"><i className="fas fa-language mr-2 w-4 text-center"></i><span className="font-bold mr-1">在学:</span> {profileUser.learningLanguage}</span>}
+              
+              {profileUser.birthDate && (
+                <span className="flex items-center">
+                  <i className="fas fa-birthday-cake mr-2 w-4 text-center"></i>
+                  <span className="font-bold mr-1">年龄:</span> {calculateAge(profileUser.birthDate)}岁
+                </span>
+              )}
+              {profileUser.nationality && (
+                <span className="flex items-center">
+                  <i className="fas fa-flag mr-2 w-4 text-center"></i>
+                  <span className="font-bold mr-1">国籍:</span> {profileUser.nationality}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
