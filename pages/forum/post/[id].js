@@ -1,4 +1,4 @@
-// pages/forum/post/[id].js (最终修复完整版 - 移除 Gemini 和 TTS)
+// pages/forum/post/[id].js (终极健 Başkanlık - 修复数据不一致和UI优化)
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
@@ -45,7 +45,7 @@ const CompactReply = ({ reply }) => (
     </div>
 );
 
-const CommentItem = ({ comment, allComments, user, postAuthorId, handleVote, handleDelete, handleReply }) => {
+const CommentItem = ({ comment, allComments, user, postAuthorId, handleVote, handleDelete, handleReply, handleTTS }) => {
   const [showFullReplies, setShowFullReplies] = useState(false);
   const isCommentLiked = user && Array.isArray(comment.likedBy) && comment.likedBy.includes(user.uid);
   const isCommentDisliked = user && Array.isArray(comment.dislikedBy) && comment.dislikedBy.includes(user.uid);
@@ -66,8 +66,9 @@ const CommentItem = ({ comment, allComments, user, postAuthorId, handleVote, han
         </div>
         <p className="text-gray-800 dark:text-gray-200 text-base font-normal break-words">{comment.text}</p>
         <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mt-2">
-          <span>{new Date(comment.createdAt?.toDate()).toLocaleDateString()}</span>
+          <span>{new Date(comment.createdAt).toLocaleDateString()}</span>
           <div className="flex items-center space-x-5">
+            <button onClick={() => handleTTS(comment.text)} title="朗读" className="text-gray-400 dark:text-gray-500 hover:text-blue-500 transition-colors"><i className="fas fa-volume-high text-xl"></i></button>
             <button onClick={() => handleVote(comment.id, 'like')} disabled={!user} className={`flex items-center space-x-1 text-base transition-colors ${isCommentLiked ? 'text-red-500' : 'text-gray-400 dark:text-gray-500 hover:text-red-400'} ${!user ? 'opacity-50' : ''}`}><i className={`${isCommentLiked ? 'fas' : 'far'} fa-heart text-xl`}></i><span className="font-semibold">{comment.likedBy?.length || 0}</span></button>
             <button onClick={() => handleVote(comment.id, 'dislike')} disabled={!user} className={`flex items-center space-x-1 text-base transition-colors ${isCommentDisliked ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500 hover:text-blue-400'} ${!user ? 'opacity-50' : ''}`}><i className={`${isCommentDisliked ? 'fas' : 'far'} fa-thumbs-down text-xl`}></i><span className="font-semibold">{comment.dislikedBy?.length || 0}</span></button>
             <button onClick={() => handleReply(comment)} title="回复" className="text-gray-400 dark:text-gray-500 hover:text-blue-500 transition-colors"><i className="fas fa-comment-dots text-xl"></i></button>
@@ -77,7 +78,7 @@ const CommentItem = ({ comment, allComments, user, postAuthorId, handleVote, han
         {directReplies.length > 0 && (
           <div className="mt-3 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg space-y-2">
             {showFullReplies ? (
-                <div className="space-y-4">{directReplies.map(reply => (<CommentItem key={reply.id} comment={reply} allComments={allComments} user={user} postAuthorId={postAuthorId} handleVote={handleVote} handleDelete={handleDelete} handleReply={handleReply} />))}</div>
+                <div className="space-y-4">{directReplies.map(reply => (<CommentItem key={reply.id} comment={reply} allComments={allComments} user={user} postAuthorId={postAuthorId} handleVote={handleVote} handleDelete={handleDelete} handleReply={handleReply} handleTTS={handleTTS} />))}</div>
             ) : (
                 <div className="space-y-1">{visibleReplies.map(reply => (<CompactReply key={reply.id} reply={reply} />))}</div>
             )}
@@ -103,19 +104,60 @@ const PostDetailPage = () => {
   const [showMenu, setShowMenu] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const commentInputRef = useRef(null);
+  const [currentAudio, setCurrentAudio] = useState(null);
 
   useEffect(() => {
     if (authLoading || !postId) return;
     setDataLoading(true);
+
     const postRef = doc(db, 'posts', postId);
-    const postUnsubscribe = onSnapshot(postRef, (docSnap) => { if (docSnap.exists()) { const postData = docSnap.data(); setPost({ id: docSnap.id, ...postData, likes: Array.isArray(postData.likes) ? postData.likes : [], dislikes: Array.isArray(postData.dislikes) ? postData.dislikes : [], likesCount: postData.likesCount || 0, commentsCount: postData.commentsCount || 0 }); } else { setPost(null); } }, (error) => { setPost(null); });
+    const postUnsubscribe = onSnapshot(postRef, (docSnap) => {
+        if (docSnap.exists()) {
+            const postData = docSnap.data();
+            setPost({
+                id: docSnap.id,
+                ...postData,
+                likes: Array.isArray(postData.likes) ? postData.likes : [],
+                dislikes: Array.isArray(postData.dislikes) ? postData.dislikes : [],
+                likesCount: postData.likesCount || 0,
+                commentsCount: postData.commentsCount || 0
+            });
+        } else { setPost(null); }
+    }, (error) => { console.error("获取帖子失败:", error); setPost(null); });
+
     const commentsRef = collection(db, 'posts', postId, 'comments');
     let q;
-    if (sortOrder === '最热') { q = query(commentsRef, orderBy('likedByCount', 'desc'), orderBy('createdAt', 'desc')); } else { q = query(commentsRef, orderBy('createdAt', 'asc')); }
-    const commentsUnsubscribe = onSnapshot(q, (querySnapshot) => { const allCommentsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), createdAt: doc.data().createdAt?.toDate() || new Date(), likedBy: Array.isArray(doc.data().likedBy) ? doc.data().likedBy : [], dislikedBy: Array.isArray(doc.data().dislikedBy) ? doc.data().dislikedBy : [], parentId: doc.data().parentId || null })); setComments(allCommentsData); setDataLoading(false); }, (error) => { setComments([]); setDataLoading(false); });
+    if (sortOrder === '最热') {
+        q = query(commentsRef, orderBy('likedByCount', 'desc'), orderBy('createdAt', 'desc'));
+    } else {
+        q = query(commentsRef, orderBy('createdAt', 'asc'));
+    }
+    const commentsUnsubscribe = onSnapshot(q, (querySnapshot) => {
+        const allCommentsData = querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                createdAt: data.createdAt?.toDate() || new Date(), 
+                likedBy: Array.isArray(data.likedBy) ? data.likedBy : [],
+                dislikedBy: Array.isArray(data.dislikedBy) ? data.dislikedBy : [],
+                parentId: data.parentId || null,
+                text: data.text || ''
+            };
+        });
+        setComments(allCommentsData);
+        setDataLoading(false);
+    }, (error) => {
+        console.error("获取评论失败:", error);
+        setComments([]);
+        setDataLoading(false);
+    });
+
     return () => { postUnsubscribe(); commentsUnsubscribe(); };
   }, [postId, authLoading, sortOrder]);
 
+  const handleTTS = (text) => { if (currentAudio) { currentAudio.pause(); } const encodedText = encodeURIComponent(text); const ttsUrl = `https://t.leftsite.cn/tts?t=${encodedText}&v=zh-CN-XiaoxiaoMultilingualNeural&r=0&p=0&o=audio-24khz-48kbitrate-mono-mp3`; const audio = new Audio(ttsUrl); audio.play(); setCurrentAudio(audio); };
+  
   const voteHandler = async (docRef, type, currentLikes, currentDislikes, isPost = false) => {
     if (!user) { alert('请登录后操作！'); return; }
     const userId = user.uid; const batch = writeBatch(db); const isLiked = currentLikes.includes(userId); const isDisliked = currentDislikes.includes(userId);
@@ -142,8 +184,8 @@ const PostDetailPage = () => {
   if (!post) { return <LayoutBase><p className="p-8 text-center text-xl text-red-500">帖子不存在或已被删除。</p></LayoutBase>; }
 
   const mainComments = comments.filter(comment => !comment.parentId);
-  const postIsLiked = user && Array.isArray(post.likes) && post.likes.includes(user.uid);
-  const postIsDisliked = user && Array.isArray(post.dislikes) && post.dislikes.includes(user.uid);
+  const postIsLiked = user && post.likes.includes(user.uid);
+  const postIsDisliked = user && post.dislikes.includes(user.uid);
   const isFollowingPostAuthor = user && Array.isArray(userData?.following) && userData.following.includes(post.authorId);
   const isBookmarked = user && Array.isArray(userData?.bookmarks) && userData.bookmarks.includes(postId);
 
@@ -153,8 +195,9 @@ const PostDetailPage = () => {
       <div className="bg-gray-50 dark:bg-gray-900 min-h-screen py-8">
         <div className="container mx-auto p-4 max-w-4xl text-base sm:text-lg">
           <div className="p-4 sm:p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg relative mb-6">
-            <h1 className="text-2xl sm:text-3xl font-extrabold mb-4 text-gray-900 dark:text-white leading-tight">
-              {post.title}
+            <h1 className="text-2xl sm:text-3xl font-extrabold mb-4 text-gray-900 dark:text-white leading-tight flex items-center">
+              <span>{post.title}</span>
+              <button onClick={() => handleTTS(post.title)} title="朗读标题" className="ml-3 text-gray-400 hover:text-blue-500 transition-colors"><i className="fas fa-volume-high text-xl"></i></button>
             </h1>
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center space-x-3"><Link href={`/profile/${post.authorId}`} passHref><a className="flex items-center space-x-3 cursor-pointer"><img src={post.authorAvatar || 'https://www.gravatar.com/avatar?d=mp'} alt={post.authorName || '匿名用户'} className="w-12 h-12 rounded-full object-cover"/><div><p className="font-bold text-lg text-gray-900 dark:text-white hover:underline">{post.authorName || '匿名用户'}</p><p className="text-xs text-gray-500 dark:text-gray-400">{new Date(post.createdAt?.toDate()).toLocaleDateString()}</p></div></a></Link></div>
@@ -164,6 +207,7 @@ const PostDetailPage = () => {
             </div>
             <div className="prose dark:prose-invert max-w-none text-lg leading-relaxed mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">{post.content && <PostContent content={post.content} />}</div>
             <div className="flex items-center justify-end mt-4 pt-2 space-x-4">
+                <button onClick={() => handleTTS(post.content)} title="朗读" className="text-gray-400 dark:text-gray-500 hover:text-blue-500 transition-colors"><i className="fas fa-volume-high text-xl"></i></button>
                 <button onClick={() => handlePostVote('like')} disabled={!user} className={`flex items-center space-x-1 transition-colors ${postIsLiked ? 'text-red-500' : 'text-gray-400 dark:text-gray-500 hover:text-red-400'} ${!user ? 'opacity-50' : ''}`}><i className={`${postIsLiked ? 'fas' : 'far'} fa-heart text-xl`}></i><span className="font-semibold text-sm">{post.likesCount || 0}</span></button>
                 <button onClick={() => handlePostVote('dislike')} disabled={!user} className={`flex items-center space-x-1 transition-colors ${postIsDisliked ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500 hover:text-blue-400'} ${!user ? 'opacity-50' : ''}`}><i className={`${postIsDisliked ? 'fas' : 'far'} fa-thumbs-down text-xl`}></i></button>
             </div>
@@ -171,7 +215,7 @@ const PostDetailPage = () => {
           <div className="mt-8">
             <div className="flex justify-between items-center mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">评论 ({post.commentsCount || 0})</h2><div className="flex items-center space-x-4 text-sm font-semibold"><button onClick={() => setSortOrder('最新')} className={sortOrder === '最新' ? 'text-blue-500' : 'text-gray-500 hover:text-blue-500'}>最新</button><button onClick={() => setSortOrder('最热')} className={sortOrder === '最热' ? 'text-blue-500' : 'text-gray-500 hover:text-blue-500'}>最热</button></div></div>
             {user ? (<form onSubmit={handleAddComment} className="mb-8 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg"><div className="relative"><textarea ref={commentInputRef} value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder={replyTo ? `回复 @${replyTo.authorName}...` : "发表你的看法..."} rows="4" className="w-full p-3 text-base border-gray-200 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-blue-500 focus:border-blue-500 resize-y"/><div className="absolute bottom-3 right-3 flex items-center space-x-2">{replyTo && <button type="button" onClick={() => { setReplyTo(null); setNewComment(''); }} className="text-sm text-gray-500 hover:text-red-500 font-semibold">取消回复</button>}<button type="submit" className="bg-blue-600 text-white px-5 py-2 rounded-md font-semibold hover:bg-blue-700 transition-colors text-base">发表评论</button></div></div></form>) : (<p className="text-center text-lg text-gray-600 dark:text-gray-400 mb-8 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg">请<Link href="/signin"><a className="text-blue-500 hover:underline">登录</a></Link>后发表评论。</p>)}
-            <div className="space-y-6">{mainComments.map(comment => (<CommentItem key={comment.id} comment={comment} allComments={comments} user={user} postAuthorId={post.authorId} handleVote={handleCommentVote} handleDelete={handleDeleteComment} handleReply={handleReplyClick} />))}</div>
+            <div className="space-y-6">{mainComments.map(comment => (<CommentItem key={comment.id} comment={comment} allComments={comments} user={user} postAuthorId={post.authorId} handleVote={handleCommentVote} handleDelete={handleDeleteComment} handleReply={handleReplyClick} handleTTS={handleTTS} />))}</div>
           </div>
         </div>
       </div>
