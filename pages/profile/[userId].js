@@ -1,10 +1,10 @@
-// pages/profile/[userId].js (最终美化版 - 类似小红书/抖音主页)
+// pages/profile/[userId].js (最终美化版 - 类似小红书/抖音主页 - 修复 Auth 依赖)
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { useAuth } from '@/lib/AuthContext';
+import { useAuth } from '@/lib/AuthContext'; // 【注意】useAuth 现在只提供原始 Firebase Auth User 和 loading 状态
 import { LayoutBase } from '@/themes/heo';
-import { getUserProfile, startChat } from '@/lib/chat';
+import { getUserProfile, startChat } from '@/lib/chat'; // getUserProfile 从 Firestore 获取完整资料
 import { 
   followUser, unfollowUser, checkFollowing, 
   blockUser, unblockUser, checkBlocked,
@@ -46,10 +46,10 @@ const PostList = ({ posts }) => {
 const ProfilePage = () => {
   const router = useRouter();
   const { userId } = router.query;
-  const { user: currentUser } = useAuth();
+  const { user: authUser, loading: authLoading } = useAuth(); // 【修改】获取 AuthContext 的原始 user 和 loading 状态
   const { openDrawer } = useDrawer();
-  const [profileUser, setProfileUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [profileUser, setProfileUser] = useState(null); // 这个是 Firestore 中的用户完整资料
+  const [loading, setLoading] = useState(true); // 页面自身的加载状态
   const [activeTab, setActiveTab] = useState('posts');
   const [isEditing, setIsEditing] = useState(false);
   
@@ -57,26 +57,46 @@ const ProfilePage = () => {
   const [isBlocked, setIsBlocked] = useState(false);
   const [tabContent, setTabContent] = useState([]);
 
-  const isMyProfile = currentUser && currentUser.uid === userId;
+  // 判断当前页面是否是自己的主页
+  // 只有当 authUser 和 userId 都加载完毕后才能准确判断
+  const isMyProfile = authUser && authUser.uid === userId; 
 
+  // 【核心修改】数据获取逻辑，依赖 authUser 的 uid
   const fetchUserProfile = async () => {
-    if (!userId) return;
-    setLoading(true);
-    const profileData = await getUserProfile(userId);
-    setProfileUser(profileData);
-    if (currentUser && currentUser.uid !== userId) {
-      setIsFollowing(await checkFollowing(currentUser.uid, userId));
-      setIsBlocked(await checkBlocked(currentUser.uid, userId));
+    console.log('DEBUG [ProfilePage]: fetchUserProfile called. userId:', userId, 'authUser.uid:', authUser?.uid);
+    if (!userId || authLoading) { // 【新增】如果 userId 未加载或 AuthContext 还在加载，则跳过
+      setLoading(true); // 继续显示加载状态
+      return;
     }
-    setLoading(false);
+    setLoading(true); // 开始加载页面数据
+    try {
+      const profileData = await getUserProfile(userId); // 从 Firestore 获取完整的 profileUser
+      setProfileUser(profileData);
+      
+      // 【新增】如果正在看别人的主页，检查关注/拉黑状态
+      if (authUser && authUser.uid && authUser.uid !== userId) { 
+        setIsFollowing(await checkFollowing(authUser.uid, userId));
+        setIsBlocked(await checkBlocked(authUser.uid, userId));
+      } else {
+        setIsFollowing(false); // 自己的主页，不显示关注按钮
+        setIsBlocked(false);   // 自己的主页，不显示拉黑按钮
+      }
+    } catch (error) {
+      console.error('ERROR [ProfilePage]: Failed to fetch user profile:', error);
+      setProfileUser(null);
+    } finally {
+      setLoading(false); // 结束加载页面数据
+    }
   };
 
+  // 【核心修改】useEffect 依赖 authUser.uid 和 userId
   useEffect(() => {
+    if (authLoading) return; // 如果 AuthContext 还在加载，则不执行
     fetchUserProfile();
-  }, [userId, currentUser]);
+  }, [userId, authLoading, authUser?.uid]); // 依赖 userId, authLoading 和 authUser?.uid
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || loading) return; // 【新增】如果页面数据还在加载，则跳过
     let unsubscribe;
     if (activeTab === 'posts') {
       unsubscribe = getPostsByUser(userId, setTabContent);
@@ -88,38 +108,37 @@ const ProfilePage = () => {
       setTabContent([]);
     }
     return () => unsubscribe && unsubscribe();
-  }, [activeTab, userId, isMyProfile]);
+  }, [activeTab, userId, isMyProfile, loading]); // 依赖 loading
 
-  
+
   const handleFollow = async () => {
-    if (!currentUser) return;
+    if (!authUser || !authUser.uid || !userId) return; // 【修改】使用 authUser.uid
     if (isFollowing) {
-      await unfollowUser(currentUser.uid, userId);
+      await unfollowUser(authUser.uid, userId);
     } else {
-      await followUser(currentUser.uid, userId);
+      await followUser(authUser.uid, userId);
     }
     fetchUserProfile();
   };
   
   const handleBlock = async () => {
-    if (!currentUser) return;
+    if (!authUser || !authUser.uid || !userId) return; // 【修改】使用 authUser.uid
     if (isBlocked) {
-      await unblockUser(currentUser.uid, userId);
+      await unblockUser(authUser.uid, userId);
     } else {
       if (window.confirm('确定要拉黑该用户吗？拉黑后将互相取关且无法看到对方动态。')) {
-        await blockUser(currentUser.uid, userId);
+        await blockUser(authUser.uid, userId);
       }
     }
     fetchUserProfile();
   };
 
   const handleStartChat = async () => {
-    if (!currentUser) {
-      alert('请先登录再发送私信！');
+    if (!authUser || !authUser.uid || !profileUser || profileUser.id === authUser.uid) { // 【修改】使用 authUser.uid
+      alert('请先登录或用户信息无效！');
       return;
     }
-    if (!profileUser || profileUser.id === currentUser.uid) return;
-    const conversation = await startChat(currentUser.uid, profileUser.id);
+    const conversation = await startChat(authUser.uid, profileUser.id); // 【修改】使用 authUser.uid
     if (conversation) {
       openDrawer('chat', { conversation, chatId: conversation.id });
     } else {
@@ -144,10 +163,10 @@ const ProfilePage = () => {
   };
 
 
-  if (loading) {
+  if (loading || authLoading) { // 【修改】页面加载或 AuthContext 加载中都显示加载状态
     return <LayoutBase><div className="p-10 text-center">正在加载用户资料...</div></LayoutBase>;
   }
-  if (!profileUser) {
+  if (!profileUser) { // 如果 profileUser 为 null，可能用户不存在或加载失败
     return <LayoutBase><div className="p-10 text-center text-red-500">无法加载该用户的信息或用户不存在。</div></LayoutBase>;
   }
 
@@ -157,7 +176,7 @@ const ProfilePage = () => {
       <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* 【核心修改】顶部背景图区域 - 高度更合理，移除默认渐变 */}
         <div 
-          className="relative w-full h-48 bg-cover bg-center" // h-48 更合理的高度
+          className="relative w-full h-48 bg-cover bg-center flex items-end justify-between p-4" // h-48 更合理的高度
           style={{ backgroundImage: profileUser.backgroundImageUrl ? `url(${profileUser.backgroundImageUrl})` : 'none' }}
         >
           {/* 半透明遮罩层，提升文字可读性 */}
@@ -165,7 +184,7 @@ const ProfilePage = () => {
           {/* 如果没有背景图，显示一个默认的浅灰/深灰背景，与 body 颜色一致 */}
           {!profileUser.backgroundImageUrl && <div className="absolute inset-0 bg-gray-50 dark:bg-gray-900"></div>}
 
-          {/* 【修改】右上角编辑资料按钮 (如果是我自己的主页) - 定位在背景图内 */}
+          {/* 右上角编辑资料按钮 (如果是我自己的主页) - 定位在背景图内 */}
           {isMyProfile && (
             <button 
               onClick={() => setIsEditing(true)} 
