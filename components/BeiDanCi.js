@@ -1,7 +1,6 @@
 // /components/BeiDanCi.js - 终极代码版 v29 (优化样式 + 修复所有已知Bug)
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TextToSpeechButton from './TextToSpeechButton';
-import JumpToCardModal from './JumpToCardModal';
 
 // --- 发音检查器子组件 (核心样式优化) ---
 const PronunciationChecker = ({ correctText, studentText }) => {
