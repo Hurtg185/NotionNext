@@ -1,6 +1,6 @@
 // themes/heo/components/PostItem.js
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react'; // 【修改】导入 useMemo
 import Link from 'next/link';
 import { useAuth } from '@/lib/AuthContext';
 import { siteConfig } from '@/lib/config';
@@ -9,11 +9,23 @@ import { doc, updateDoc, arrayUnion, arrayRemove, increment } from 'firebase/fir
 import { db } from '@/lib/firebase';
 import StartChatButton from './StartChatButton';
 
+// 【新增】从 PostContent 组件中借鉴的 YouTube ID 提取函数
+const getYouTubeId = (url) => {
+  if (!url) return null;
+  const regex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+  const match = url.match(regex);
+  return match ? match[1] : null;
+};
+
+
 const PostItem = ({ post }) => {
   const { user } = useAuth();
   const [showShareModal, setShowShareModal] = useState(false);
   const postUrl = `${siteConfig('LINK')}/forum/post/${post.id}`;
   const hasLiked = user && post.likers?.includes(user.uid);
+
+  // 【新增】使用 useMemo 高效地检测帖子内容中是否有视频
+  const videoId = useMemo(() => getYouTubeId(post.content), [post.content]);
 
   const handleLike = async () => {
     if (!user) {
@@ -48,69 +60,68 @@ const PostItem = ({ post }) => {
       <div className="bg-white dark:bg-gray-800 p-4 border-b border-gray-200 dark:border-gray-700 shadow-md hover:shadow-xl transition-shadow duration-300">
         <div className="flex items-center mb-3">
           
-          {/* 【核心修改】用 Link 组件包裹头像和作者信息 */}
-          {post.authorId ? (
-            <Link href={`/profile/${post.authorId}`} passHref>
-              <a className="flex items-center cursor-pointer group">
-                {post.authorAvatar && (
-                  <img 
-                    src={post.authorAvatar} 
-                    alt={post.authorName} 
-                    className="w-12 h-12 rounded-lg border-2 border-gray-100 dark:border-gray-600"
-                  />
-                )}
-                <div className="ml-3 flex-grow">
-                  <div className="flex items-center">
-                    <p className="font-semibold text-gray-800 dark:text-gray-200 group-hover:text-blue-500 transition-colors">{post.authorName || '匿名用户'}</p>
-                    {post.authorIsAdmin && (
-                      <span className="ml-2 text-xs bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300 px-2 py-0.5 rounded-full font-semibold">
-                        管理员
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {post.createdAt ? new Date(post.createdAt.toDate()).toLocaleString() : '不久前'}
-                    {post.city && ` · ${post.city}`}
-                  </p>
-                </div>
-              </a>
-            </Link>
-          ) : (
-            // 如果没有作者ID，则显示为不可点击的静态信息
-            <div className="flex items-center">
-              {post.authorAvatar && <img src={post.authorAvatar} alt="avatar" className="w-12 h-12 rounded-lg border-2 border-gray-100 dark:border-gray-600"/>}
+          <Link href={`/profile/${post.authorId || ''}`} passHref>
+            <a className="flex items-center cursor-pointer group">
+              {post.authorAvatar && (
+                <img 
+                  src={post.authorAvatar} 
+                  alt={post.authorName} 
+                  className="w-12 h-12 rounded-lg border-2 border-gray-100 dark:border-gray-600"
+                />
+              )}
               <div className="ml-3 flex-grow">
-                 <p className="font-semibold text-gray-800 dark:text-gray-200">{post.authorName || '匿名用户'}</p>
-                 <p className="text-xs text-gray-500 dark:text-gray-400">时间地点信息...</p>
+                <div className="flex items-center">
+                  <p className="font-semibold text-gray-800 dark:text-gray-200 group-hover:text-blue-500 transition-colors">{post.authorName || '匿名用户'}</p>
+                  {post.authorIsAdmin && (
+                    <span className="ml-2 text-xs bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300 px-2 py-0.5 rounded-full font-semibold">
+                      管理员
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {post.createdAt ? new Date(post.createdAt.toDate()).toLocaleString() : '不久前'}
+                  {post.city && ` · ${post.city}`}
+                </p>
               </div>
-            </div>
-          )}
+            </a>
+          </Link>
 
-          {/* 将私信按钮移到 Link 区域之外，确保点击区域不冲突 */}
           <div className="ml-auto">
             {post.authorId && user && user.uid !== post.authorId && <StartChatButton targetUserId={post.authorId} />}
           </div>
         </div>
 
-        {/* 帖子内容链接保持不变 */}
+        {/* ============= 核心修改区域 START ============= */}
         <Link href={`/forum/post/${post.id}`}>
           <a className="space-y-2 block my-3">
             <h2 className="text-lg font-bold hover:text-blue-500 dark:text-gray-100">{post.title}</h2>
-            <p className="text-gray-800 dark:text-gray-200 text-base line-clamp-2">{post.content}</p>
+            
+            {/* 条件渲染：如果有videoId，显示视频缩略图；否则显示文字预览 */}
+            {videoId ? (
+              <div className="relative w-full aspect-video bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden group">
+                <img src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`} alt={post.title} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                  <i className="fas fa-play text-white text-4xl bg-black/50 p-4 rounded-full"></i>
+                </div>
+              </div>
+            ) : (
+              <p className="text-gray-800 dark:text-gray-200 text-base line-clamp-2">{post.content}</p>
+            )}
+
           </a>
         </Link>
-
-        {/* 底部操作栏保持不变 */}
+        {/* ============= 核心修改区域 END ============= */}
+        
         <div className="flex justify-center items-center space-x-8 mt-4 text-gray-600 dark:text-gray-400">
           <button 
             onClick={handleLike} 
-            className={`flex items-center space-x-2 transition-colors ${hasLiked ? 'text-blue-500 animate-pulse' : 'hover:text-blue-500'}`}
+            className={`flex items-center space-x-2 transition-colors ${hasLiked ? 'text-red-500 animate-pulse' : 'hover:text-red-500'}`}
           >
-            <span className="text-xl">👍</span>
+            {hasLiked ? <i className="fas fa-heart text-lg"></i> : <i className="far fa-heart text-lg"></i>}
             <span className="text-sm font-semibold">{post.likersCount || 0}</span>
           </button>
-          <button className="flex items-center space-x-1 hover:text-gray-400 transition-colors">
-            <span className="text-xl">👎</span>
+          <button className="flex items-center space-x-1 hover:text-gray-500 transition-colors">
+            <i className="far fa-thumbs-down text-lg"></i>
           </button>
           <Link href={`/forum/post/${post.id}#comments`}>
             <a className="flex items-center space-x-2 hover:text-green-500 transition-colors">
@@ -127,7 +138,6 @@ const PostItem = ({ post }) => {
         </div>
       </div>
       
-      {/* 分享模态框保持不变 */}
       {showShareModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowShareModal(false)}>
           <div className="bg-white p-6 rounded-lg flex space-x-6" onClick={(e) => e.stopPropagation()}>
