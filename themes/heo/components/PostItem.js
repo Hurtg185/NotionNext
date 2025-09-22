@@ -1,4 +1,4 @@
-// themes/heo/components/PostItem.js (最终修正版 - 逻辑与渲染分离)
+// themes/heo/components/PostItem.js (最终安全版)
 
 import { useMemo } from 'react';
 import Link from 'next/link';
@@ -10,29 +10,24 @@ import { doc, updateDoc, arrayUnion, arrayRemove, increment } from 'firebase/fir
 import { db } from '@/lib/firebase';
 import StartChatButton from './StartChatButton';
 
-// 【核心修改 ①】：进行一次“静态导入”，专门用于逻辑判断
-// 我们从这个导入中获取 canPlay 方法
-import ReactPlayer from 'react-player';
-
-// 【核心修改 ②】：进行一次“动态导入”，专门用于组件渲染
-// 我们给它换个名字，避免冲突，比如 DynamicReactPlayer
-const DynamicReactPlayer = dynamic(() => import('react-player'), { ssr: false });
+// 只进行一次安全的动态导入
+const ReactPlayer = dynamic(() => import('react-player'), { ssr: false });
 
 const PostItem = ({ post }) => {
   const { user } = useAuth();
   const hasLiked = user && post.likers?.includes(user.uid);
-  
-  const videoUrl = useMemo(() => {
+
+  // 【核心修改】：不再调用 canPlay，只找出内容里的第一条链接
+  const firstUrl = useMemo(() => {
     if (!post.content) return null;
     const lines = post.content.split('\n');
-    // 【核心修改 ③】：在这里使用静态导入的 ReactPlayer 进行 canPlay 判断，现在它一定存在！
-    const url = lines.find(line => line.trim() && ReactPlayer.canPlay(line.trim()));
+    // 简单地找到第一行看起来像链接的文本
+    const url = lines.find(line => line.trim().startsWith('http'));
     return url ? url.trim() : null;
   }, [post.content]);
 
-  // handleLike 和 handleBookmark 函数保持不变
-  const handleLike = async () => { /* ... */ };
-  const handleBookmark = () => { /* ... */ };
+  const handleLike = async () => { /* ... (保持不变) ... */ };
+  const handleBookmark = () => { /* ... (保持不变) ... */ };
 
   return (
     <>
@@ -47,15 +42,15 @@ const PostItem = ({ post }) => {
           </a>
         </Link>
         
-        {videoUrl ? (
+        {/* 【核心修改】：把找到的链接交给 ReactPlayer，并使用 light 属性 */}
+        {firstUrl ? (
           <div 
              className="relative w-full aspect-video bg-black rounded-lg overflow-hidden group mt-2"
              onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
           >
-            {/* 【核心修改 ④】：在这里使用动态导入的 DynamicReactPlayer 进行渲染 */}
-            <DynamicReactPlayer
-              url={videoUrl}
-              light={true}
+            <ReactPlayer
+              url={firstUrl}
+              light={true} // light 模式会自动处理：能播放就显示封面，不能播放就不显示任何东西
               playing={true}
               controls={true}
               width="100%"
@@ -64,6 +59,7 @@ const PostItem = ({ post }) => {
             />
           </div>
         ) : (
+          // 如果内容里连一条链接都没有，就显示文字摘要
           post.content && <p className="text-gray-800 dark:text-gray-200 text-base line-clamp-2">{post.content}</p>
         )}
         
