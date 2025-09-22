@@ -234,3 +234,9 @@ html.dark * {
 #color-transition {
     display: none !important;
 }
+
+
+/* --- 【新增】社区页面隐藏底部导航栏的规则 --- */
+body.hide-bottom-nav #bottom-nav {
+  display: none !important;
+}
