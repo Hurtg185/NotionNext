@@ -1,4 +1,4 @@
-// pages/forum/index.js (修复语法错误)
+// pages/forum/index.js (已修改)
 
 import { useState, useEffect } from 'react';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
@@ -8,7 +8,7 @@ import Link from 'next/link';
 import ForumCategoryTabs from '../../themes/heo/components/ForumCategoryTabs';
 import PostItem from '../../themes/heo/components/PostItem';
 import LoginModal from '@/components/LoginModal';
-import { LayoutBase } from '@/themes/heo'; // 确保这个导入存在且正确
+import { LayoutBase } from '@/themes/heo'; 
 
 const ForumHomePage = () => {
   const { user } = useAuth();
@@ -71,12 +71,16 @@ const ForumHomePage = () => {
           className="relative h-48 bg-cover bg-center" 
           style={{ backgroundImage: "url('/images/forum-header-bg.jpg')" }}
         >
-          <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
+          {/* 【核心修改 ①】：将 flex items-center justify-center 改为 flex-col */}
+          <div className="absolute inset-0 bg-black bg-opacity-40 flex flex-col items-center justify-center">
             <h1 className="text-4xl font-bold text-white text-shadow-lg">中文社区</h1>
+            {/* 【核心修改 ②】：添加名言 */}
+            <p className="mt-2 text-lg text-gray-200 text-shadow">— 有朋自远方来，不亦乐乎 —</p>
           </div>
         </div>
 
-        <div className="container mx-auto px-2 md:px-4 -mt-20 relative z-10">
+        {/* 【核心修改 ③】：将 -mt-20 改为 -mt-16，减少上移距离，从而增加间距 */}
+        <div className="container mx-auto px-2 md:px-4 -mt-16 relative z-10">
           <ForumCategoryTabs onCategoryChange={handleCategoryChange} onSortChange={handleSortChange} />
           
           <div className="mt-4 bg-white dark:bg-gray-800 rounded-lg shadow-md divide-y divide-gray-200 dark:divide-gray-700">
