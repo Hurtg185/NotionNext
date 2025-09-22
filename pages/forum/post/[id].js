@@ -9,8 +9,6 @@ import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../lib/AuthContext';
 import { useRouter } from 'next/router';
 import PostContent from '@/themes/heo/components/PostContent';
-
-import PostContent from '@/themes/heo/components/PostContent';
 import { LayoutBase } from '@/themes/heo';
 
 // =====================================
