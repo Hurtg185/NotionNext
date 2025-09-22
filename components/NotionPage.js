@@ -15,6 +15,7 @@ const MotionTest = dynamic(() => import('@/components/MotionTest'), { ssr: false
 const HanziWriterPractice = dynamic(() => import('@/components/HanziWriterPractice'), { ssr: false });
 const SentenceScramble = dynamic(() => import('@/components/SentenceScramble'), { ssr: false });
 const SwipeableFlashcard = dynamic(() => import('@/components/SwipeableFlashcard'), { ssr: false });
+const AiTtsButton = dynamic(() => import('@/components/AiTtsButton'), { ssr: false });
 // const MediaPlayer = dynamic(() => import('@/components/MediaPlayer'), { ssr: false }); // <-- 已删除：暂时移除未创建的 MediaPlayer 导入
 
 // 动态导入 react-notion-x 提供的原始 Code 组件
