@@ -1,4 +1,3 @@
-// pages/forum/post/[id].js (最终完整修复版)
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
@@ -11,12 +10,14 @@ import { useRouter } from 'next/router';
 
 import PostContent from '@/themes/heo/components/PostContent';
 import { LayoutBase } from '@/themes/heo';
+import AiTtsButton from '@/components/AiTtsButton'; // <--- 1. 导入我们的新组件
 
 // =====================================
 // 1. 辅助组件
 // =====================================
 
 const ShareModal = ({ url, onClose }) => {
+    // ... (此组件无修改)
     const shareOptions = [
         { name: '复制链接', iconClass: 'fas fa-copy', action: () => { navigator.clipboard.writeText(url); alert('链接已复制!'); onClose(); } },
         { name: 'Facebook', iconClass: 'fab fa-facebook', href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}` },
@@ -38,48 +39,42 @@ const ShareModal = ({ url, onClose }) => {
     );
 };
 
-// 【核心重构】为实现“楼中楼”，创建独立的紧凑型回复组件
 const CompactReply = ({ reply, allComments, handleReply }) => {
-  // 找出这条回复所回复的对象（父评论）
-  const parentComment = allComments.find(c => c.id === reply.parentId);
-  
-  return (
-    <div className="text-sm text-gray-700 dark:text-gray-300">
-      <p className="break-words leading-relaxed">
-        <Link href={`/profile/${reply.authorId}`} passHref>
-            <a className="font-bold text-gray-800 dark:text-white cursor-pointer hover:underline">{reply.authorName}</a>
-        </Link>
-        {/* 如果父评论不是顶级评论，则显示“回复 xxx” */}
-        {parentComment && parentComment.parentId !== null && (
-          <>
-            <span className="text-gray-500 dark:text-gray-400 mx-1">回复</span>
-            <Link href={`/profile/${parentComment.authorId}`} passHref>
-                <a className="font-bold text-gray-800 dark:text-white cursor-pointer hover:underline">{parentComment.authorName}</a>
+    // ... (此组件无修改)
+    const parentComment = allComments.find(c => c.id === reply.parentId);
+    return (
+        <div className="text-sm text-gray-700 dark:text-gray-300">
+        <p className="break-words leading-relaxed">
+            <Link href={`/profile/${reply.authorId}`} passHref>
+                <a className="font-bold text-gray-800 dark:text-white cursor-pointer hover:underline">{reply.authorName}</a>
             </Link>
-          </>
-        )}
-        <span className="mx-1">:</span>
-        {/* 点击回复内容可以触发对这条回复的回复 */}
-        <span className="cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 rounded px-1 py-0.5" onClick={() => handleReply(reply)}>
-          {reply.text}
-        </span>
-      </p>
-    </div>
-  );
+            {parentComment && parentComment.parentId !== null && (
+            <>
+                <span className="text-gray-500 dark:text-gray-400 mx-1">回复</span>
+                <Link href={`/profile/${parentComment.authorId}`} passHref>
+                    <a className="font-bold text-gray-800 dark:text-white cursor-pointer hover:underline">{parentComment.authorName}</a>
+                </Link>
+            </>
+            )}
+            <span className="mx-1">:</span>
+            <span className="cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 rounded px-1 py-0.5" onClick={() => handleReply(reply)}>
+            {reply.text}
+            </span>
+        </p>
+        </div>
+    );
 };
 
-
-// 【核心重构】重写主评论组件以实现楼中楼效果
-const CommentItem = ({ comment, allComments, user, post, handleVote, handleDelete, handleReply, handleTTS }) => {
+// 【修改】移除了 handleTTS prop，直接使用 AiTtsButton 组件
+const CommentItem = ({ comment, allComments, user, post, handleVote, handleDelete, handleReply }) => {
   const commentIsLiked = user && comment.likers?.includes(user.uid);
   const commentIsDisliked = user && comment.dislikers?.includes(user.uid);
   const isAuthor = user && user.uid === comment.authorId;
   const isPostAuthor = user && user.uid === post.authorId;
   const canDelete = isAuthor || isPostAuthor;
 
-  // 找出所有回复此条顶级评论的回复
   const directReplies = allComments.filter(c => c.parentId === comment.id);
-  const visibleReplies = directReplies.slice(0, 3); // 只显示前3条
+  const visibleReplies = directReplies.slice(0, 3);
   const hasMoreReplies = directReplies.length > 3;
 
   return (
@@ -98,7 +93,8 @@ const CommentItem = ({ comment, allComments, user, post, handleVote, handleDelet
         <div className="flex items-center justify-between mt-2">
             <p className="text-xs text-gray-500 dark:text-gray-400">{new Date(comment.createdAt).toLocaleDateString()}</p>
             <div className="flex items-center space-x-3">
-                <button onClick={() => handleTTS(comment.text)} title="朗读" className="text-gray-400 dark:text-gray-500 hover:text-blue-500"><i className="fas fa-volume-high"></i></button>
+                {/* 3. 【替换】使用 AiTtsButton 替换旧的朗读按钮 */}
+                <AiTtsButton text={comment.text} provider="microsoft" voice="zh-CN-XiaoxiaoMultilingualNeural" />
                 <button onClick={() => handleVote({ path: `posts/${post.id}/comments/${comment.id}`, likers: comment.likers, dislikers: comment.dislikers }, 'like')} disabled={!user} className={`flex items-center space-x-1 text-xs ${commentIsLiked ? 'text-red-500' : 'text-gray-500 hover:text-red-500'}`}>
                     <i className={`${commentIsLiked ? 'fas' : 'far'} fa-heart`}></i><span>{comment.likersCount || 0}</span>
                 </button>
@@ -109,8 +105,6 @@ const CommentItem = ({ comment, allComments, user, post, handleVote, handleDelet
                 {canDelete && <button onClick={() => handleDelete(comment.id)} title="删除" className="text-gray-400 dark:text-gray-500 hover:text-red-500"><i className="fas fa-trash"></i></button>}
             </div>
         </div>
-
-        {/* 回复楼中楼 */}
         {directReplies.length > 0 && (
           <div className="mt-4 pt-3 px-3 pb-2 border-t border-gray-200 dark:border-gray-700 space-y-2 bg-gray-50 dark:bg-gray-700/50 rounded-md">
             {visibleReplies.map(reply => (
@@ -141,15 +135,13 @@ const PostDetailPage = () => {
   const [showMenu, setShowMenu] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const commentInputRef = useRef(null);
-  const [currentAudio, setCurrentAudio] = useState(null);
-  const menuRef = useRef(null); // 【修复】为菜单创建ref
+  const menuRef = useRef(null);
 
-  // 【修复】点击菜单外部关闭菜单的逻辑
+  // 2. 【移除】删除了旧的 currentAudio 状态和 handleTTS 函数
+  
   useEffect(() => {
     function handleClickOutside(event) {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setShowMenu(false);
-      }
+      if (menuRef.current && !menuRef.current.contains(event.target)) { setShowMenu(false); }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => { document.removeEventListener("mousedown", handleClickOutside); };
@@ -163,12 +155,7 @@ const PostDetailPage = () => {
     const postUnsubscribe = onSnapshot(postRef, (docSnap) => {
         if (docSnap.exists()) {
             const postData = docSnap.data();
-            setPost({
-                id: docSnap.id, ...postData,
-                likers: postData.likers || [], dislikers: postData.dislikers || [],
-                likesCount: postData.likesCount || 0, dislikersCount: postData.dislikersCount || 0,
-                commentsCount: postData.commentsCount || 0
-            });
+            setPost({ id: docSnap.id, ...postData, likers: postData.likers || [], dislikers: postData.dislikers || [], likesCount: postData.likesCount || 0, dislikersCount: postData.dislikersCount || 0, commentsCount: postData.commentsCount || 0 });
         } else { setPost(null); }
     }, (error) => { console.error("获取帖子失败:", error); setPost(null); });
 
@@ -178,20 +165,16 @@ const PostDetailPage = () => {
       : query(commentsRef, orderBy('createdAt', 'asc'));
       
     const commentsUnsubscribe = onSnapshot(q, (querySnapshot) => {
-        const allCommentsData = querySnapshot.docs.map(doc => ({
-            id: doc.id, ...doc.data(), createdAt: doc.data().createdAt?.toDate() || new Date()
-        }));
+        const allCommentsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), createdAt: doc.data().createdAt?.toDate() || new Date() }));
         setComments(allCommentsData);
         setDataLoading(false);
     }, (error) => { console.error("获取评论失败:", error); setComments([]); setDataLoading(false); });
 
     return () => { postUnsubscribe(); commentsUnsubscribe(); };
   }, [postId, authLoading, sortOrder]);
-
-  const handleTTS = (text) => { if (currentAudio) { currentAudio.pause(); } const encodedText = encodeURIComponent(text); const ttsUrl = `https://t.leftsite.cn/tts?t=${encodedText}&v=zh-CN-XiaoxiaoMultilingualNeural&r=0&p=0&o=audio-24khz-48kbitrate-mono-mp3`; const audio = new Audio(ttsUrl); audio.play(); setCurrentAudio(audio); };
   
-  // 【修复】彻底重写点赞/点踩函数
   const handleVote = async (target, type) => {
+    // ... (此函数无修改)
     if (!user) { alert('请登录后操作！'); return; }
     const { path, likers = [], dislikers = [] } = target;
     const docRef = doc(db, path);
@@ -199,47 +182,21 @@ const PostDetailPage = () => {
     const batch = writeBatch(db);
     const isLiked = likers.includes(userId);
     const isDisliked = dislikers.includes(userId);
-
-    if (type === 'like') {
-      if (isLiked) {
-        batch.update(docRef, { likers: arrayRemove(userId), likesCount: increment(-1) });
-      } else {
-        batch.update(docRef, { likers: arrayUnion(userId), likesCount: increment(1) });
-        if (isDisliked) {
-          batch.update(docRef, { dislikers: arrayRemove(userId), dislikersCount: increment(-1) });
-        }
-      }
-    } else if (type === 'dislike') {
-      if (isDisliked) {
-        batch.update(docRef, { dislikers: arrayRemove(userId), dislikersCount: increment(-1) });
-      } else {
-        batch.update(docRef, { dislikers: arrayUnion(userId), dislikersCount: increment(1) });
-        if (isLiked) {
-          batch.update(docRef, { likers: arrayRemove(userId), likesCount: increment(-1) });
-        }
-      }
-    }
+    if (type === 'like') { if (isLiked) { batch.update(docRef, { likers: arrayRemove(userId), likesCount: increment(-1) }); } else { batch.update(docRef, { likers: arrayUnion(userId), likesCount: increment(1) }); if (isDisliked) { batch.update(docRef, { dislikers: arrayRemove(userId), dislikersCount: increment(-1) }); } } } else if (type === 'dislike') { if (isDisliked) { batch.update(docRef, { dislikers: arrayRemove(userId), dislikersCount: increment(-1) }); } else { batch.update(docRef, { dislikers: arrayUnion(userId), dislikersCount: increment(1) }); if (isLiked) { batch.update(docRef, { likers: arrayRemove(userId), likesCount: increment(-1) }); } } }
     try { await batch.commit(); } catch (error) { console.error("投票操作失败:", error); }
   };
   
-  const handleDeleteComment = async (commentId) => { if (!post) return; const commentToDelete = comments.find(c => c.id === commentId); if (!commentToDelete) return; const isAuthor = user && user.uid === commentToDelete.authorId; const isPostAuthor = user && user.uid === post.authorId; if (!isAuthor && !isPostAuthor) return; if (confirm('确定要删除这条评论及其所有回复吗？')) { let count = 0; const countReplies = (cId) => { count++; comments.filter(c => c.parentId === cId).forEach(r => countReplies(r.id)); }; countReplies(commentId); const deleteRecursive = async (cId) => { const replies = comments.filter(c => c.parentId === cId); for (const r of replies) { await deleteRecursive(r.id); } await deleteDoc(doc(db, 'posts', postId, 'comments', cId)); }; try { await deleteRecursive(commentId); await updateDoc(doc(db, 'posts', postId), { commentsCount: increment(-count) }); } catch (error) { console.error("删除评论失败: ", error); } } };
+  const handleDeleteComment = async (commentId) => { 
+    // ... (此函数无修改)
+    if (!post) return; const commentToDelete = comments.find(c => c.id === commentId); if (!commentToDelete) return; const isAuthor = user && user.uid === commentToDelete.authorId; const isPostAuthor = user && user.uid === post.authorId; if (!isAuthor && !isPostAuthor) return; if (confirm('确定要删除这条评论及其所有回复吗？')) { let count = 0; const countReplies = (cId) => { count++; comments.filter(c => c.parentId === cId).forEach(r => countReplies(r.id)); }; countReplies(commentId); const deleteRecursive = async (cId) => { const replies = comments.filter(c => c.parentId === cId); for (const r of replies) { await deleteRecursive(r.id); } await deleteDoc(doc(db, 'posts', postId, 'comments', cId)); }; try { await deleteRecursive(commentId); await updateDoc(doc(db, 'posts', postId), { commentsCount: increment(-count) }); } catch (error) { console.error("删除评论失败: ", error); } } };
   
   const handleAddComment = async (e) => {
+    // ... (此函数无修改)
     e.preventDefault();
     if (!newComment.trim() || !user || !post) { if(!user) alert('请先登录。'); return; }
-    const newCommentData = {
-        postId: postId, text: newComment, authorId: user.uid,
-        authorName: user.displayName || '匿名用户', authorAvatar: user.photoURL || 'https://www.gravatar.com/avatar?d=mp',
-        createdAt: serverTimestamp(), likers: [], dislikers: [], likersCount: 0, dislikersCount: 0,
-        parentId: replyTo ? replyTo.id : null
-    };
-    try {
-      await addDoc(collection(db, 'posts', postId, 'comments'), newCommentData);
-      setNewComment(''); setReplyTo(null);
-    } catch (error) { console.error("创建评论失败:", error); alert("评论失败: " + error.message); return; }
-    try {
-      await updateDoc(doc(db, 'posts', postId), { commentsCount: increment(1) });
-    } catch (error) { console.warn("更新计数失败(可忽略):", error.message); }
+    const newCommentData = { postId: postId, text: newComment, authorId: user.uid, authorName: user.displayName || '匿名用户', authorAvatar: user.photoURL || 'https://www.gravatar.com/avatar?d=mp', createdAt: serverTimestamp(), likers: [], dislikers: [], likersCount: 0, dislikersCount: 0, parentId: replyTo ? replyTo.id : null };
+    try { await addDoc(collection(db, 'posts', postId, 'comments'), newCommentData); setNewComment(''); setReplyTo(null); } catch (error) { console.error("创建评论失败:", error); alert("评论失败: " + error.message); return; }
+    try { await updateDoc(doc(db, 'posts', postId), { commentsCount: increment(1) }); } catch (error) { console.warn("更新计数失败(可忽略):", error.message); }
   };
 
   const handleReplyClick = (comment) => { setReplyTo(comment); commentInputRef.current?.focus(); };
@@ -264,7 +221,10 @@ const PostDetailPage = () => {
           <div className="p-4 sm:p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg relative mb-6">
             <h1 className="text-2xl sm:text-3xl font-extrabold mb-4 text-gray-900 dark:text-white leading-tight flex items-center">
               <span>{post.title}</span>
-              <button onClick={() => handleTTS(post.title)} title="朗读标题" className="ml-3 text-gray-400 hover:text-blue-500 transition-colors"><i className="fas fa-volume-high text-xl"></i></button>
+              {/* 3. 【替换】使用 AiTtsButton 替换旧的朗读按钮 */}
+              <div className="ml-3">
+                <AiTtsButton text={post.title} provider="microsoft" voice="zh-CN-XiaoxiaoMultilingualNeural" />
+              </div>
             </h1>
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center space-x-3"><Link href={`/profile/${post.authorId}`} passHref><a className="flex items-center space-x-3 cursor-pointer"><img src={post.authorAvatar || 'https://www.gravatar.com/avatar?d=mp'} alt={post.authorName || '匿名用户'} className="w-12 h-12 rounded-full object-cover"/><div><p className="font-bold text-lg text-gray-900 dark:text-white hover:underline">{post.authorName || '匿名用户'}</p><p className="text-xs text-gray-500 dark:text-gray-400">{new Date(post.createdAt?.toDate()).toLocaleDateString()}</p></div></a></Link></div>
@@ -282,7 +242,8 @@ const PostDetailPage = () => {
             <div className="prose prose-lg dark:prose-invert max-w-none text-gray-800 dark:text-gray-200 mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">{post.content && <PostContent content={post.content} />}</div>
             
             <div className="flex items-center justify-end mt-4 pt-2 space-x-4">
-                <button onClick={() => handleTTS(post.content)} title="朗读" className="text-gray-400 dark:text-gray-500 hover:text-blue-500 transition-colors"><i className="fas fa-volume-high text-xl"></i></button>
+                {/* 3. 【替换】使用 AiTtsButton 替换旧的朗读按钮 */}
+                <AiTtsButton text={post.content} provider="microsoft" voice="zh-CN-XiaoxiaoMultilingualNeural" />
                 <button onClick={() => handleVote({ path: `posts/${postId}`, likers: post.likers, dislikers: post.dislikers }, 'like')} disabled={!user} className={`flex items-center space-x-1 transition-colors ${postIsLiked ? 'text-red-500' : 'text-gray-400 dark:text-gray-500 hover:text-red-400'} ${!user ? 'opacity-50' : ''}`}><i className={`${postIsLiked ? 'fas' : 'far'} fa-heart text-xl`}></i><span className="font-semibold text-sm">{post.likesCount || 0}</span></button>
                 <button onClick={() => handleVote({ path: `posts/${postId}`, likers: post.likers, dislikers: post.dislikers }, 'dislike')} disabled={!user} className={`flex items-center space-x-1 transition-colors ${postIsDisliked ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500 hover:text-blue-400'} ${!user ? 'opacity-50' : ''}`}><i className={`${postIsDisliked ? 'fas' : 'far'} fa-thumbs-down text-xl`}></i></button>
             </div>
@@ -292,7 +253,8 @@ const PostDetailPage = () => {
             {user ? (<form onSubmit={handleAddComment} className="mb-8 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg"><div className="relative"><textarea ref={commentInputRef} value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder={replyTo ? `回复 @${replyTo.authorName}...` : "发表你的看法..."} rows="4" className="w-full p-3 text-base border-gray-200 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-blue-500 focus:border-blue-500 resize-y"/><div className="absolute bottom-3 right-3 flex items-center space-x-2">{replyTo && <button type="button" onClick={() => setReplyTo(null)} className="text-sm text-gray-500 hover:text-red-500 font-semibold">取消回复</button>}<button type="submit" className="bg-blue-600 text-white px-5 py-2 rounded-md font-semibold hover:bg-blue-700 transition-colors text-base">发表评论</button></div></div></form>) : (<p className="text-center text-lg text-gray-600 dark:text-gray-400 mb-8 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg">请<Link href="/signin"><a className="text-blue-500 hover:underline">登录</a></Link>后发表评论。</p>)}
             <div className="space-y-6">
               {mainComments.map(comment => (
-                <CommentItem key={comment.id} comment={comment} allComments={comments} user={user} post={post} handleVote={handleVote} handleDelete={handleDeleteComment} handleReply={handleReplyClick} handleTTS={handleTTS} />
+                // 【修改】移除了 handleTTS prop 的传递
+                <CommentItem key={comment.id} comment={comment} allComments={comments} user={user} post={post} handleVote={handleVote} handleDelete={handleDeleteComment} handleReply={handleReplyClick} />
               ))}
             </div>
           </div>
