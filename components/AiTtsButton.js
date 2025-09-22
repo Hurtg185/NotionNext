@@ -1,10 +1,7 @@
-// /components/AiTtsButton.js (Microsoft TTS 专用版 + 音乐动画图标)
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 
-// --- 1. 发音人数据已内置 ---
-// 精选的 Microsoft Azure TTS 发音人列表
+// --- 发音人数据已内置 ---
 export const MICROSOFT_TTS_VOICES = [
-  // --- 中文 (大陆) ---
   { name: '晓晓 (女, 多语言)', value: 'zh-CN-XiaoxiaoMultilingualNeural' },
   { name: '晓辰 (女, 多语言)', value: 'zh-CN-XiaochenMultilingualNeural' },
   { name: '云希 (男, 温和)', value: 'zh-CN-YunxiNeural' },
@@ -12,52 +9,37 @@ export const MICROSOFT_TTS_VOICES = [
   { name: '晓梦 (女, 播音)', value: 'zh-CN-XiaomengNeural' },
   { name: '云扬 (男, 阳光)', value: 'zh-CN-YunyangNeural' },
   { name: '晓伊 (女, 动漫)', value: 'zh-CN-XiaoyiNeural' },
-  // --- 中文 (台湾) ---
   { name: '晓臻 (女, 台湾)', value: 'zh-TW-HsiaoChenNeural' },
   { name: '允喆 (男, 台湾)', value: 'zh-TW-YunJheNeural' },
-  // --- 英语 (美国) ---
   { name: 'Ava (女, 美国, 多语言)', value: 'en-US-AvaMultilingualNeural' },
   { name: 'Andrew (男, 美国, 多语言)', value: 'en-US-AndrewMultilingualNeural' },
-  // --- 日语 ---
   { name: '七海 (女, 日本)', value: 'ja-JP-NanamiNeural' },
   { name: '圭太 (男, 日本)', value: 'ja-JP-KeitaNeural' },
-  // --- 缅甸语 ---
   { name: '妮拉 (女, 缅甸)', value: 'my-MM-NilarNeural' },
   { name: '蒂哈 (男, 缅甸)', value: 'my-MM-ThihaNeural' },
 ];
 
-/**
- * 文本清理函数
- */
+// --- 加强版文本清理函数 ---
 const cleanTextForSpeech = (text) => {
-  if (!text) return '';
-  let cleaned = text;
-  // ... (文本清理逻辑保持不变)
-  cleaned = cleaned.replace(/【.*?】|\[.*?\]/g, '');
-  const pinyinRegex = /\b([a-zA-Z\u00FC\u00DC\u00E1\u00E9\u00ED\u00F3\u00FA\u0101\u0113\u012B\u014D\u016B\u01CE\u01D0\u01D2\u01D4\u01D6\u01D8\u01DA\u01DC\u00E0\u00E8\u00EC\u00F2\u00F9\u0103\u0115\u012D\u014F\u016D\u0105\u0117\u012F\u0151\u016F]+[1-5]?)\b\s*/g;
-  cleaned = cleaned.replace(/\((.*?)\)/g, (match, contentInsideParentheses) => {
-    return contentInsideParentheses.replace(pinyinRegex, '');
-  });
-  cleaned = cleaned.replace(/\*\*|__|\*|_|~~|`/g, '').replace(/^(#+\s*|[\*\-]\s*)/gm, '');
-  const emojiRegex = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/g;
-  cleaned = cleaned.replace(emojiRegex, '');
-  return cleaned.replace(/\s+/g, ' ').trim();
+    if (!text) return '';
+    let cleaned = text;
+    cleaned = cleaned.replace(/<[^>]*>/g, '');
+    cleaned = cleaned.replace(/!\[.*?\]\(.*?\)|\[(.*?)\]\(.*?\)/g, '$1');
+    cleaned = cleaned.replace(/```[\s\S]*?```|`[^`]*`/g, '');
+    cleaned = cleaned.replace(/(\*\*|__|\*|_|~~|#+\s*|[\*\-]\s*)/g, '');
+    cleaned = cleaned.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s.,?!;:()'"-]/g, '');
+    const pinyinRegex = /\b([a-zA-Z\u00FC\u00DC\u00E1\u00E9\u00ED\u00F3\u00FA\u0101\u0113\u012B\u014D\u016B\u01CE\u01D0\u01D2\u01D4\u01D6\u01D8\u01DA\u01DC\u00E0\u00E8\u00EC\u00F2\u00F9\u0103\u0115\u012D\u014F\u016D\u0105\u0117\u012F\u0151\u016F]+[1-5]?)\b\s*/g;
+    cleaned = cleaned.replace(/\((.*?)\)/g, (match, content) => content.replace(pinyinRegex, ''));
+    return cleaned.replace(/\s+/g, ' ').trim();
 };
 
-/**
- * 一个专为 Microsoft TTS 设计的，带有音乐动画图标的朗读按钮
- * @param {string} text - 需要朗读的文本
- * @param {string} voice - Microsoft 的发音人
- * @param {number} rate - 语速, 范围 -100 到 100
- * @param {number} pitch - 音调, 范围 -100 到 100
- */
+
 const AiTtsButton = ({ 
   text, 
   voice = 'zh-CN-XiaoxiaoMultilingualNeural', 
   rate = 0,
-  pitch = 0
 }) => {
-  const [playbackState, setPlaybackState] = useState('idle'); // idle, loading, playing, paused
+  const [playbackState, setPlaybackState] = useState('idle');
   const audioRef = useRef(null);
   const abortControllerRef = useRef(null);
 
@@ -88,18 +70,33 @@ const AiTtsButton = ({
     abortControllerRef.current = new AbortController();
 
     try {
-      const params = new URLSearchParams({
-        t: cleanedText,
-        v: voice,
-        r: `${rate}%`,
-        p: `${pitch}%`
+      // --- 【核心修复】 ---
+      // 始终使用 OpenAI 兼容的 POST 请求方式
+      const url = 'https://t.leftsite.cn/tts';
+      // 将 rate (-100 to 100) 转换为 speed (0.25 to 4.0)
+      const speed = Math.max(0.25, Math.min(4.0, 1.0 + (rate / 100)));
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'tts-1', // 兼容接口通常需要这个模型名
+          input: cleanedText,
+          voice: voice,   // 这里传入的是 Microsoft 的发音人名字
+          speed: speed
+        }),
+        signal: abortControllerRef.current.signal
       });
-      const url = `https://t.leftsite.cn/tts?${params.toString()}`;
-      const response = await fetch(url, { signal: abortControllerRef.current.signal });
+      // --- 修复结束 ---
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API 请求失败: ${response.status} ${errorText}`);
+        // 尝试解析JSON错误体以获得更清晰的信息
+        try {
+            const errData = await response.json();
+            throw new Error(errData.error || `API 请求失败，状态码: ${response.status}`);
+        } catch (e) {
+            throw new Error(`API 请求失败，状态码: ${response.status}`);
+        }
       }
       
       const blob = await response.blob();
@@ -111,9 +108,7 @@ const AiTtsButton = ({
       audioRef.current = audio;
       
       audio.onplay = () => setPlaybackState('playing');
-      audio.onpause = () => {
-        if (audio.currentTime < audio.duration) setPlaybackState('paused');
-      };
+      audio.onpause = () => { if (audio.currentTime < audio.duration) setPlaybackState('paused'); };
       audio.onended = () => setPlaybackState('idle');
       audio.onerror = (e) => { console.error('音频播放错误:', e); setPlaybackState('idle'); };
 
@@ -126,24 +121,25 @@ const AiTtsButton = ({
       }
       setPlaybackState('idle');
     }
-  }, [voice, rate, pitch, playbackState]);
+  }, [voice, rate, playbackState]);
 
-  // --- 3. 全新的音乐动画图标组件 ---
+  // --- 动画图标组件 ---
   const AnimatedMusicIcon = ({ state }) => {
-    // 定义每个声波条的动画样式
     const barStyle = (animationDelay) => ({
       animation: state === 'playing' ? `sound-wave 1.2s ease-in-out ${animationDelay} infinite alternate` : 'none',
     });
 
     return (
       <div className="relative w-6 h-6 flex items-center justify-center">
-        {/* 加载中 Spinner */}
-        <div className={`absolute transition-opacity duration-300 ${state === 'loading' ? 'opacity-100' : 'opacity-0'}`}>
+        <div className={`absolute transition-opacity duration-300 ${state === 'loading' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
            <svg className="animate-spin h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
         </div>
-        
-        {/* 音乐声波图标 */}
-        <div className={`absolute transition-opacity duration-300 ${state !== 'loading' ? 'opacity-100' : 'opacity-0'}`}>
+        <div className={`absolute transition-opacity duration-300 ${state === 'idle' || state === 'paused' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5 L18 12 L8 19z" />
+            </svg>
+        </div>
+        <div className={`absolute transition-opacity duration-300 ${state === 'playing' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
            <div className="flex items-end justify-center w-6 h-6 gap-0.5">
              <span className="w-1 h-2 bg-current rounded-full" style={barStyle('0s')}></span>
              <span className="w-1 h-4 bg-current rounded-full" style={barStyle('0.2s')}></span>
@@ -151,7 +147,6 @@ const AiTtsButton = ({
              <span className="w-1 h-3 bg-current rounded-full" style={barStyle('0.6s')}></span>
            </div>
         </div>
-        {/* 定义动画的关键帧 */}
         <style jsx>{`
           @keyframes sound-wave {
             0% { transform: scaleY(0.2); }
