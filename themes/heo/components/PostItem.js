@@ -1,4 +1,4 @@
-// themes/heo/components/PostItem.js (回归简单模式 - 修复YouTube封面)
+// themes/heo/components/PostItem.js (回归简模式 - 修复YouTube封面)
 
 import { useMemo } from 'react';
 import Link from 'next/link';
