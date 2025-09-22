@@ -1,13 +1,14 @@
-// pages/forum/post/[id].js (最终重构和统一版本)
+// pages/forum/post/[id].js (完整版，已修复表情、朗读、排序问题)
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
-  doc, getDoc, collection, addDoc, query, orderBy, onSnapshot,
+  doc, collection, query, orderBy, onSnapshot,
   serverTimestamp, updateDoc, arrayUnion, arrayRemove, deleteDoc, writeBatch, increment
 } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../lib/AuthContext';
 import { useRouter } from 'next/router';
+import EmojiPicker from 'emoji-picker-react'; // 【修复】重新引入表情库
 
 import PostContent from '@/themes/heo/components/PostContent';
 import { LayoutBase } from '@/themes/heo';
@@ -38,26 +39,20 @@ const ShareModal = ({ url, onClose }) => {
     );
 };
 
-// **优化**: 移除了 CompactReply 组件，所有评论和回复都使用下面的 CommentItem 组件来保证样式统一
 const CommentItem = ({ comment, allComments, user, post, handleVote, handleDelete, handleReply, handleTTS }) => {
   const [showFullReplies, setShowFullReplies] = useState(false);
-  
   const commentIsLiked = user && comment.likers?.includes(user.uid);
   const commentIsDisliked = user && comment.dislikers?.includes(user.uid);
   const isAuthor = user && user.uid === comment.authorId;
   const isPostAuthor = user && user.uid === post.authorId;
   const canDelete = isAuthor || isPostAuthor;
-
   const directReplies = allComments.filter(c => c.parentId === comment.id);
   const visibleReplies = directReplies.slice(0, 2);
   const hasMoreReplies = directReplies.length > 2;
-  
-  // **优化**: 定义了要渲染的回复列表，逻辑更清晰
   const repliesToRender = showFullReplies ? directReplies : visibleReplies;
 
   return (
     <div className="flex items-start space-x-3 w-full">
-      {/* **优化**: 只有顶级评论才显示头像，回复天然缩进 */}
       {comment.parentId === null && (
         <Link href={`/profile/${comment.authorId}`} passHref>
           <a className="flex-shrink-0">
@@ -65,7 +60,6 @@ const CommentItem = ({ comment, allComments, user, post, handleVote, handleDelet
           </a>
         </Link>
       )}
-      {/* **优化**: 为回复添加左边距，形成视觉上的层级 */}
       {comment.parentId !== null && <div className="w-10 flex-shrink-0"></div>}
       
       <div className="flex-1 min-w-0">
@@ -80,19 +74,11 @@ const CommentItem = ({ comment, allComments, user, post, handleVote, handleDelet
             <p className="text-xs text-gray-500 dark:text-gray-400">{new Date(comment.createdAt).toLocaleDateString()}</p>
             <div className="flex items-center space-x-3">
                 <button onClick={() => handleTTS(comment.text)} title="朗读" className="text-gray-400 dark:text-gray-500 hover:text-blue-500 transition-colors"><i className="fas fa-volume-high"></i></button>
-                <button 
-                    onClick={() => handleVote({ path: `posts/${post.id}/comments/${comment.id}`, likers: comment.likers, dislikers: comment.dislikers }, 'like')}
-                    disabled={!user}
-                    className={`flex items-center space-x-1 text-xs ${commentIsLiked ? 'text-red-500' : 'text-gray-500 hover:text-red-500'}`}
-                >
+                <button onClick={() => handleVote({ path: `posts/${post.id}/comments/${comment.id}`, likers: comment.likers, dislikers: comment.dislikers }, 'like')} disabled={!user} className={`flex items-center space-x-1 text-xs ${commentIsLiked ? 'text-red-500' : 'text-gray-500 hover:text-red-500'}`}>
                     <i className={`${commentIsLiked ? 'fas' : 'far'} fa-heart`}></i>
                     <span>{comment.likersCount || 0}</span>
                 </button>
-                <button 
-                    onClick={() => handleVote({ path: `posts/${post.id}/comments/${comment.id}`, likers: comment.likers, dislikers: comment.dislikers }, 'dislike')}
-                    disabled={!user}
-                    className={`flex items-center space-x-1 text-xs ${commentIsDisliked ? 'text-blue-500' : 'text-gray-500 hover:text-blue-500'}`}
-                >
+                <button onClick={() => handleVote({ path: `posts/${post.id}/comments/${comment.id}`, likers: comment.likers, dislikers: comment.dislikers }, 'dislike')} disabled={!user} className={`flex items-center space-x-1 text-xs ${commentIsDisliked ? 'text-blue-500' : 'text-gray-500 hover:text-blue-500'}`}>
                     <i className={`${commentIsDisliked ? 'fas' : 'far'} fa-thumbs-down`}></i>
                     <span>{comment.dislikersCount || 0}</span>
                 </button>
@@ -103,19 +89,8 @@ const CommentItem = ({ comment, allComments, user, post, handleVote, handleDelet
 
         {directReplies.length > 0 && (
           <div className="mt-3 space-y-4">
-            {/* **重大优化**: 不再使用 CompactReply，所有回复都用 CommentItem 渲染，保证样式统一 */}
             {repliesToRender.map(reply => (
-              <CommentItem 
-                key={reply.id} 
-                comment={reply} 
-                allComments={allComments} 
-                user={user} 
-                post={post}
-                handleVote={handleVote} 
-                handleDelete={handleDelete} 
-                handleReply={handleReply} 
-                handleTTS={handleTTS} 
-              />
+              <CommentItem key={reply.id} comment={reply} allComments={allComments} user={user} post={post} handleVote={handleVote} handleDelete={handleDelete} handleReply={handleReply} handleTTS={handleTTS} />
             ))}
             {hasMoreReplies && !showFullReplies && (<button onClick={() => setShowFullReplies(true)} className="text-blue-500 dark:text-blue-400 text-sm font-semibold hover:underline mt-2 inline-block">展开其余 {directReplies.length - visibleReplies.length} 条回复</button>)}
             {showFullReplies && (<button onClick={() => setShowFullReplies(false)} className="text-blue-500 dark:text-blue-400 text-sm font-semibold hover:underline mt-2 inline-block">收起回复</button>)}
@@ -140,6 +115,7 @@ const PostDetailPage = () => {
   const [showShareModal, setShowShareModal] = useState(false);
   const commentInputRef = useRef(null);
   const [currentAudio, setCurrentAudio] = useState(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false); // 【修复】添加表情选择器状态
 
   useEffect(() => {
     if (authLoading || !postId) return;
@@ -149,81 +125,92 @@ const PostDetailPage = () => {
     const postUnsubscribe = onSnapshot(postRef, (docSnap) => {
         if (docSnap.exists()) {
             const postData = docSnap.data();
-            // **数据统一**: 确保读取的字段是 `likers`, `dislikers`, `likesCount`
             setPost({
                 id: docSnap.id,
                 ...postData,
                 likers: Array.isArray(postData.likers) ? postData.likers : [],
                 dislikers: Array.isArray(postData.dislikers) ? postData.dislikers : [],
                 likesCount: postData.likesCount || 0,
+                dislikesCount: postData.dislikesCount || 0,
                 commentsCount: postData.commentsCount || 0
             });
         } else { setPost(null); }
     }, (error) => { console.error("获取帖子失败:", error); setPost(null); });
 
     const commentsRef = collection(db, 'posts', postId, 'comments');
+    // 【修复】修正排序逻辑
     const q = sortOrder === '最热'
       ? query(commentsRef, orderBy('likersCount', 'desc'), orderBy('createdAt', 'desc'))
-      : query(commentsRef, orderBy('createdAt', 'asc'));
+      : query(commentsRef, orderBy('createdAt', 'desc')); // 'asc' 改为 'desc'，实现“最新”
       
     const commentsUnsubscribe = onSnapshot(q, (querySnapshot) => {
         const allCommentsData = querySnapshot.docs.map(doc => {
             const data = doc.data();
-            // **数据统一**: 确保读取的评论字段是 `likers`, `dislikers`, `likersCount`等
             return {
-                id: doc.id,
-                ...data,
+                id: doc.id, ...data,
                 createdAt: data.createdAt?.toDate() || new Date(), 
-                likers: Array.isArray(data.likers) ? data.likers : [],
-                dislikers: Array.isArray(data.dislikers) ? data.dislikers : [],
-                likersCount: data.likersCount || 0,
-                dislikersCount: data.dislikersCount || 0,
-                parentId: data.parentId || null,
-                text: data.text || ''
+                likers: data.likers || [], dislikers: data.dislikers || [],
+                likersCount: data.likersCount || 0, dislikersCount: data.dislikersCount || 0,
+                parentId: data.parentId || null, text: data.text || ''
             };
         });
         setComments(allCommentsData);
         setDataLoading(false);
     }, (error) => {
-        console.error("获取评论失败:", error);
+        console.error("【Firestore错误】获取评论失败，请检查数据库索引:", error);
+        alert("评论加载失败，可能是“最热”排序缺少数据库索引，请按F12在控制台查看详情。");
         setComments([]);
         setDataLoading(false);
     });
 
-    return () => { postUnsubscribe(); commentsUnsubscribe(); };
+    // 【修复】组件卸载时停止音频
+    return () => {
+      postUnsubscribe();
+      commentsUnsubscribe();
+      if (currentAudio) {
+        currentAudio.pause();
+        setCurrentAudio(null);
+      }
+    };
   }, [postId, authLoading, sortOrder]);
 
-  const handleTTS = (text) => { if (currentAudio) { currentAudio.pause(); } const encodedText = encodeURIComponent(text); const ttsUrl = `https://t.leftsite.cn/tts?t=${encodedText}&v=zh-CN-XiaoxiaoMultilingualNeural&r=0&p=0&o=audio-24khz-48kbitrate-mono-mp3`; const audio = new Audio(ttsUrl); audio.play(); setCurrentAudio(audio); };
+  // 【修复】朗读功能
+  const handleTTS = (text) => {
+    if (!text || typeof text !== 'string') {
+        console.error("朗读失败：文本无效。");
+        return;
+    }
+    if (currentAudio) {
+        currentAudio.pause();
+    }
+    const encodedText = encodeURIComponent(text.substring(0, 200)); // 限制长度防止URL过长
+    const ttsUrl = `https://t.leftsite.cn/tts?t=${encodedText}&v=zh-CN-XiaoxiaoMultilingualNeural&r=0&p=0&o=audio-24khz-48kbitrate-mono-mp3`;
+    const audio = new Audio(ttsUrl);
+    audio.play().catch(e => console.error("音频播放错误:", e));
+    setCurrentAudio(audio);
+  };
   
-  // **优化**: 统一的投票函数，适用于帖子和评论
   const handleVote = async (target, type) => {
     if (!user) { alert('请登录后操作！'); return; }
     const { path, likers, dislikers } = target;
     const docRef = doc(db, path);
     const userId = user.uid;
     const batch = writeBatch(db);
-
     const isLiked = likers.includes(userId);
     const isDisliked = dislikers.includes(userId);
-
     if (type === 'like') {
         if (isLiked) {
             batch.update(docRef, { likers: arrayRemove(userId), likesCount: increment(-1) });
         } else {
             batch.update(docRef, { likers: arrayUnion(userId), likesCount: increment(1) });
-            if (isDisliked) {
-                batch.update(docRef, { dislikers: arrayRemove(userId) });
-                // 如果需要，也可以更新 dislikersCount
-            }
+            if (isDisliked) { batch.update(docRef, { dislikers: arrayRemove(userId), dislikersCount: increment(-1) }); }
         }
     } else if (type === 'dislike') {
         if (isDisliked) {
-            batch.update(docRef, { dislikers: arrayRemove(userId) });
+            batch.update(docRef, { dislikers: arrayRemove(userId), dislikersCount: increment(-1) });
         } else {
-            batch.update(docRef, { dislikers: arrayUnion(userId) });
-            if (isLiked) {
-                batch.update(docRef, { likers: arrayRemove(userId), likesCount: increment(-1) });
-            }
+            batch.update(docRef, { dislikers: arrayUnion(userId), dislikersCount: increment(1) });
+            if (isLiked) { batch.update(docRef, { likers: arrayRemove(userId), likesCount: increment(-1) }); }
         }
     }
     try { await batch.commit(); } catch (error) { console.error("投票操作失败:", error); }
@@ -231,45 +218,27 @@ const PostDetailPage = () => {
   
   const handleDeleteComment = async (commentId) => { if (!post) return; const commentToDelete = comments.find(c => c.id === commentId); if (!commentToDelete) return; const isAuthor = user && user.uid === commentToDelete.authorId; const isPostAuthor = user && user.uid === post.authorId; if (!isAuthor && !isPostAuthor) return; if (confirm('确定要删除这条评论及其所有回复吗？')) { let count = 0; const countReplies = (cId) => { count++; comments.filter(c => c.parentId === cId).forEach(r => countReplies(r.id)); }; countReplies(commentId); const deleteRecursive = async (cId) => { const replies = comments.filter(c => c.parentId === cId); for (const r of replies) { await deleteRecursive(r.id); } await deleteDoc(doc(db, 'posts', postId, 'comments', cId)); }; try { await deleteRecursive(commentId); await updateDoc(doc(db, 'posts', postId), { commentsCount: increment(-count) }); } catch (error) { console.error("删除评论失败: ", error); } } };
   
-  // **重大修复**: 修正了创建评论的函数，使用正确的字段名并添加了错误处理
   const handleAddComment = async (e) => {
     e.preventDefault();
-    if (!newComment.trim() || !user || !post) {
-        if(!user) alert('请先登录再发表评论。');
-        return;
-    }
-
+    if (!newComment.trim() || !user || !post) { if(!user) alert('请先登录再发表评论。'); return; }
     const postRef = doc(db, 'posts', postId);
     const commentsRef = collection(db, 'posts', postId, 'comments');
     const newCommentRef = doc(commentsRef);
     const batch = writeBatch(db);
-
-    // **数据统一**: 创建评论时使用标准化的字段名
     batch.set(newCommentRef, {
-        postId: postId,
-        text: newComment,
-        authorId: user.uid,
-        authorName: user.displayName || '匿名用户',
-        authorAvatar: user.photoURL || 'https://www.gravatar.com/avatar?d=mp',
-        createdAt: serverTimestamp(),
-        likers: [],
-        dislikers: [],
-        likersCount: 0,
-        dislikersCount: 0,
+        postId: postId, text: newComment, authorId: user.uid,
+        authorName: user.displayName || '匿名用户', authorAvatar: user.photoURL || 'https://www.gravatar.com/avatar?d=mp',
+        createdAt: serverTimestamp(), likers: [], dislikers: [], likersCount: 0, dislikersCount: 0,
         parentId: replyTo ? replyTo.id : null
     });
-
     batch.update(postRef, { commentsCount: increment(1) });
+    try { await batch.commit(); setNewComment(''); setReplyTo(null); } catch (error) { console.error("发表评论失败:", error); }
+  };
 
-    try {
-        await batch.commit();
-        setNewComment('');
-        setReplyTo(null);
-    } catch (error) {
-        // **优化**: 添加详细的错误日志，方便调试
-        console.error("发表评论失败:", error);
-        alert(`评论发表失败，请检查网络或联系管理员。错误: ${error.message}`);
-    }
+  // 【修复】添加表情处理函数
+  const onEmojiClick = (emojiObject) => {
+    setNewComment(prevInput => prevInput + emojiObject.emoji);
+    setShowEmojiPicker(false);
   };
 
   const handleReplyClick = (comment) => { setReplyTo({ id: comment.id, authorName: comment.authorName }); setNewComment(`@${comment.authorName} `); if (commentInputRef.current) { commentInputRef.current.focus(); } };
@@ -302,31 +271,43 @@ const PostDetailPage = () => {
                 <div className="relative"><button onClick={() => setShowMenu(!showMenu)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"><i className="fas fa-ellipsis text-xl text-gray-500 dark:text-gray-300"></i></button>{showMenu && <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-700 rounded-md shadow-lg z-10 py-1 text-base">{user && user.uid === post.authorId && (<><button onClick={() => handleMenuItemClick('edit')} className="flex items-center w-full text-left px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 font-semibold"><i className="fas fa-pen-to-square mr-2 text-lg"></i>修改</button><button onClick={() => handleMenuItemClick('delete')} className="flex items-center w-full text-left px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-800 font-semibold"><i className="fas fa-trash mr-2 text-lg"></i>删除</button></>)}<button onClick={() => handleMenuItemClick('share')} className="flex items-center w-full text-left px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 font-semibold"><i className="fas fa-share-nodes mr-2 text-lg"></i>分享</button><button onClick={() => handleMenuItemClick('bookmark')} className="flex items-center w-full text-left px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 font-semibold"><i className={`${isBookmarked ? 'fas' : 'far'} fa-bookmark mr-2 text-lg`}></i>收藏</button><button onClick={() => handleMenuItemClick('report')} className="flex items-center w-full text-left px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 font-semibold"><i className="fas fa-flag mr-2 text-lg"></i>举报</button></div>}</div>
               </div>
             </div>
-            {/* **样式优化**: 添加 prose-lg 增大正文字体和行间距，并优化颜色 */}
             <div className="prose prose-lg dark:prose-invert max-w-none text-gray-800 dark:text-gray-200 mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">{post.content && <PostContent content={post.content} />}</div>
             
             <div className="flex items-center justify-end mt-4 pt-2 space-x-4">
-                <button onClick={() => handleTTS(post.content)} title="朗读" className="text-gray-400 dark:text-gray-500 hover:text-blue-500 transition-colors"><i className="fas fa-volume-high text-xl"></i></button>
+                <button onClick={() => handleTTS(post.content?.body)} title="朗读" className="text-gray-400 dark:text-gray-500 hover:text-blue-500 transition-colors"><i className="fas fa-volume-high text-xl"></i></button>
                 <button onClick={() => handleVote({ path: `posts/${postId}`, likers: post.likers, dislikers: post.dislikers }, 'like')} disabled={!user} className={`flex items-center space-x-1 transition-colors ${postIsLiked ? 'text-red-500' : 'text-gray-400 dark:text-gray-500 hover:text-red-400'} ${!user ? 'opacity-50' : ''}`}><i className={`${postIsLiked ? 'fas' : 'far'} fa-heart text-xl`}></i><span className="font-semibold text-sm">{post.likesCount || 0}</span></button>
-                <button onClick={() => handleVote({ path: `posts/${postId}`, likers: post.likers, dislikers: post.dislikers }, 'dislike')} disabled={!user} className={`flex items-center space-x-1 transition-colors ${postIsDisliked ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500 hover:text-blue-400'} ${!user ? 'opacity-50' : ''}`}><i className={`${postIsDisliked ? 'fas' : 'far'} fa-thumbs-down text-xl`}></i></button>
+                <button onClick={() => handleVote({ path: `posts/${postId}`, likers: post.likers, dislikers: post.dislikers }, 'dislike')} disabled={!user} className={`flex items-center space-x-1 transition-colors ${postIsDisliked ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500 hover:text-blue-400'} ${!user ? 'opacity-50' : ''}`}><i className={`${postIsDisliked ? 'fas' : 'far'} fa-thumbs-down text-xl`}></i><span className="font-semibold text-sm">{post.dislikesCount || 0}</span></button>
             </div>
           </div>
           <div className="mt-8">
             <div className="flex justify-between items-center mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">评论 ({post.commentsCount || 0})</h2><div className="flex items-center space-x-4 text-sm font-semibold"><button onClick={() => setSortOrder('最新')} className={sortOrder === '最新' ? 'text-blue-500' : 'text-gray-500 hover:text-blue-500'}>最新</button><button onClick={() => setSortOrder('最热')} className={sortOrder === '最热' ? 'text-blue-500' : 'text-gray-500 hover:text-blue-500'}>最热</button></div></div>
-            {user ? (<form onSubmit={handleAddComment} className="mb-8 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg"><div className="relative"><textarea ref={commentInputRef} value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder={replyTo ? `回复 @${replyTo.authorName}...` : "发表你的看法..."} rows="4" className="w-full p-3 text-base border-gray-200 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-blue-500 focus:border-blue-500 resize-y"/><div className="absolute bottom-3 right-3 flex items-center space-x-2">{replyTo && <button type="button" onClick={() => { setReplyTo(null); setNewComment(''); }} className="text-sm text-gray-500 hover:text-red-500 font-semibold">取消回复</button>}<button type="submit" className="bg-blue-600 text-white px-5 py-2 rounded-md font-semibold hover:bg-blue-700 transition-colors text-base">发表评论</button></div></div></form>) : (<p className="text-center text-lg text-gray-600 dark:text-gray-400 mb-8 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg">请<Link href="/signin"><a className="text-blue-500 hover:underline">登录</a></Link>后发表评论。</p>)}
+            
+            {/* 【修复】评论输入框，增加表情功能 */}
+            {user ? (
+              <form onSubmit={handleAddComment} className="mb-8 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
+                <div className="relative">
+                  <textarea ref={commentInputRef} value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder={replyTo ? `回复 @${replyTo.authorName}...` : "发表你的看法..."} rows="4" className="w-full p-3 pr-28 text-base border-gray-200 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-blue-500 focus:border-blue-500 resize-y"/>
+                  <div className="absolute bottom-3 right-3 flex items-center space-x-2">
+                    {replyTo && <button type="button" onClick={() => { setReplyTo(null); setNewComment(''); }} className="text-sm text-gray-500 hover:text-red-500 font-semibold">取消回复</button>}
+                    {/* 表情按钮 */}
+                    <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="text-gray-500 hover:text-blue-500 text-xl"><i className="far fa-smile"></i></button>
+                    <button type="submit" className="bg-blue-600 text-white px-5 py-2 rounded-md font-semibold hover:bg-blue-700 transition-colors text-base">发表</button>
+                  </div>
+                  {/* 表情选择器 */}
+                  {showEmojiPicker && (
+                    <div className="absolute right-0 bottom-full mb-2 z-20">
+                       <EmojiPicker onEmojiClick={onEmojiClick} />
+                    </div>
+                  )}
+                </div>
+              </form>
+            ) : (
+              <p className="text-center text-lg text-gray-600 dark:text-gray-400 mb-8 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg">请<Link href="/signin"><a className="text-blue-500 hover:underline">登录</a></Link>后发表评论。</p>
+            )}
+
             <div className="space-y-6">
               {mainComments.map(comment => (
-                <CommentItem 
-                  key={comment.id} 
-                  comment={comment} 
-                  allComments={comments} 
-                  user={user} 
-                  post={post} // 传递整个 post 对象
-                  handleVote={handleVote} 
-                  handleDelete={handleDeleteComment} 
-                  handleReply={handleReplyClick} 
-                  handleTTS={handleTTS} 
-                />
+                <CommentItem key={comment.id} comment={comment} allComments={comments} user={user} post={post} handleVote={handleVote} handleDelete={handleDeleteComment} handleReply={handleReplyClick} handleTTS={handleTTS} />
               ))}
             </div>
           </div>
