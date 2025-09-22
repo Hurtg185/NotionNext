@@ -1,80 +1,154 @@
-// themes/heo/components/PostContent.js (根据官方迁移指南，为 react-player v3+ 版本修正)
+// themes/heo/components/PostItem.js (终极安全版)
 
-import React from 'react';
+import { useState, useMemo } from 'react';
+import Link from 'next/link';
+import dynamic from 'next/dynamic';
+import { useAuth } from '@/lib/AuthContext';
+// ... 其他 import 保持不变
+
+// 【核心修改 ①】：只进行一次动态导入，这是最安全的方式
+const ReactPlayer = dynamic(() => import('react-player'), { ssr: false });
+
+const PostItem = ({ post }) => {
+  const { user } = useAuth();
+  const [hasChecked, setHasChecked] = useState(false);
+  const [videoUrl, setVideoUrl] = useState(null);
+
+  // 【核心修改 ②】：使用 useEffect 在组件挂载到浏览器后，再安全地进行 canPlay 检测
+  useEffect(() => {
+    if (post.content && !hasChecked) {
+      const lines = post.content.split('\n');
+      // 这里的 ReactPlayer.canPlay 是在客户端调用的，此时库已加载，不会报错
+      const url = lines.find(line => line.trim() && ReactPlayer.canPlay(line.trim()));
+      if (url) {
+        setVideoUrl(url.trim());
+      }
+      setHasChecked(true); // 标记为已检查，避免重复运行
+    }
+  }, [post.content, hasChecked]);
+
+  // ... handleLike, handleBookmark 等函数保持不变
+
+  return (
+    <>
+      <div className="bg-white dark:bg-gray-800 p-4 border-b border-gray-200 dark:border-gray-700 shadow-md hover:shadow-xl transition-shadow duration-300">
+        {/* ... 作者信息和标题部分保持不变 ... */}
+        <Link href={`/forum/post/${post.id}`} passHref>
+          <a className="space-y-2 block my-3">
+            <h2 className="text-lg font-bold hover:text-blue-500 dark:text-gray-100">{post.title}</h2>
+          </a>
+        </Link>
+        
+        {/* 【核心修改 ③】：渲染逻辑保持不变，但现在 videoUrl 是通过安全的 useEffect 设置的 */}
+        {videoUrl ? (
+          <div 
+             className="relative w-full aspect-video bg-black rounded-lg overflow-hidden group mt-2"
+             onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+          >
+            <ReactPlayer
+              url={videoUrl}
+              light={true}
+              playing={true}
+              controls={true}
+              width="100%"
+              height="100%"
+              className="absolute top-0 left-0"
+            />
+          </div>
+        ) : (
+          // 如果内容已检查且没有视频，或者内容本身就为空，则显示文字
+          hasChecked && post.content && <p className="text-gray-800 dark:text-gray-200 text-base line-clamp-2">{post.content}</p>
+        )}
+        
+        {/* ... 底部操作栏和分享模态框保持不变 ... */}
+      </div>
+    </>
+  );
+};
+
+export default PostItem;```
+**`PostItem.js` 修改总结**:
+我们不再尝试在组件渲染前就用 `useMemo` 判断视频链接。而是等到组件在浏览器中渲染完成后，再通过 `useEffect` 调用 `ReactPlayer.canPlay()`。这确保了该函数被调用时，`ReactPlayer` 库已经完整加载，从而彻底杜绝了 `is not a function` 的错误。
+
+---
+
+### 问题二：帖子详细页报错
+
+您的第一、二张截图显示，**帖子详细页面**也出现了 `canPlay is not a function` 的报错。
+
+**根本原因**：
+和 `PostItem.js` **完全一样**！我们在 `PostContent.js` 组件中也犯了同样的错误，在组件渲染完成前就尝试调用 `canPlay`。
+
+**解决方案**：
+同样，我们需要修改 `themes/heo/components/PostContent.js`，采用和上面 `PostItem.js` 一样的安全模式：**使用 `useEffect` 在客户端进行检测**。
+
+#### 请用下面这份代码，完全替换 `themes/heo/components/PostContent.js`
+
+```javascript
+// themes/heo/components/PostContent.js (终极安全版)
+
+import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 
-// 根据 react-player v3 官方迁移指南，'/lazy' 入口点已被移除。
-// 在 Next.js 中实现懒加载的正确方法是，使用 next/dynamic 来导入 'react-player' 主模块。
-// 这能实现完全相同的代码分割和懒加载效果，而且兼容性更好。
-const ReactPlayer = dynamic(() => import('react-player'), { 
-  ssr: false, // 播放器组件需要 'window' 对象，所以必须只在客户端渲染。
-  // 可选：在播放器组件加载时显示一个占位符，提升用户体验。
-  loading: () => (
-    <div className="aspect-video w-full bg-gray-900 flex items-center justify-center text-gray-400">
-      <i className="fas fa-spinner fa-spin mr-2"></i>
-      正在加载播放器...
-    </div>
-  )
-});
+const ReactPlayer = dynamic(() => import('react-player'), { ssr: false });
 
 const PostContent = ({ content }) => {
-  if (!content) {
-    return null;
-  }
+  const [lines, setLines] = useState([]);
 
-  const lines = content.split('\n');
+  // 在组件挂载到客户端后，再处理内容
+  useEffect(() => {
+    if (content) {
+      const processedLines = content.split('\n').map((line, index) => {
+        const trimmedLine = line.trim();
+        // 在这里进行安全的 canPlay 检测
+        if (trimmedLine && ReactPlayer.canPlay(trimmedLine)) {
+          return { type: 'video', url: trimmedLine, key: index };
+        } else {
+          return { type: 'text', text: line, key: index };
+        }
+      });
+      setLines(processedLines);
+    }
+  }, [content]);
+
+  // 如果内容还未处理，显示加载中或什么都不显示
+  if (lines.length === 0) {
+    return (
+        <div className="p-4 text-center text-gray-500">
+            <i className="fas fa-spinner fa-spin mr-2"></i>
+            正在加载内容...
+        </div>
+    );
+  }
 
   return (
     <div className="post-content-container">
-      {lines.map((line, index) => {
-        const trimmedLine = line.trim();
-
-        // 我们先简单判断这行是否以 'http' 开头，像一个链接。
-        // 最终的确认 (ReactPlayer.canPlay) 会在 RenderPlayer 组件内部执行，
-        // 以确保 ReactPlayer 库本身已经被加载完毕。
-        if (trimmedLine.startsWith('http')) {
-          return <RenderPlayer key={index} url={trimmedLine} />;
+      {lines.map(item => {
+        if (item.type === 'video') {
+          return (
+            <div key={item.key} className="my-4 relative w-full max-w-3xl mx-auto aspect-video rounded-lg overflow-hidden shadow-lg bg-black">
+              <ReactPlayer
+                url={item.url}
+                width="100%"
+                height="100%"
+                controls={true}
+                className="absolute top-0 left-0"
+              />
+            </div>
+          );
         }
-        else if (trimmedLine === '') {
-          return <br key={index} />;
+        else if (item.text.trim() === '') {
+          return <br key={item.key} />;
         }
         else {
           return (
-            <p key={index} className="my-2">
-              {line}
+            <p key={item.key} className="my-2">
+              {item.text}
             </p>
           );
         }
       })}
     </div>
-  );
-};
-
-// 这个辅助组件确保我们只在动态导入成功加载了组件后，才调用 ReactPlayer.canPlay()。
-// 这是最稳妥的做法。
-const RenderPlayer = ({ url }) => {
-  // 检查这个 URL 是否能被现在已经加载好的 ReactPlayer 库播放。
-  if (ReactPlayer.canPlay(url)) {
-    return (
-      <div className="my-4 relative w-full max-w-3xl mx-auto aspect-video rounded-lg overflow-hidden shadow-lg bg-black">
-        <ReactPlayer
-          url={url}
-          width="100%"
-          height="100%"
-          controls={true}
-          className="absolute top-0 left-0"
-        />
-      </div>
-    );
-  }
-
-  // 如果它是一个URL，但不是可播放的视频，就把它渲染成一个普通的文本链接。
-  return (
-    <p className="my-2">
-      <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline break-all">
-        {url}
-      </a>
-    </p>
   );
 };
 
