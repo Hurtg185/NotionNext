@@ -1,4 +1,4 @@
-// themes/heo/components/PostContent.js (增强 Facebook 视频链接匹配)
+// themes/heo/components/PostContent.js (增 Facebook 视频链接匹配)
 
 import React from 'react';
 
