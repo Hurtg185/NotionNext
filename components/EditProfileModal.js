@@ -1,7 +1,7 @@
-// components/EditProfileModal.js (已包含本地上传和预览逻辑)
+// components/EditProfileModal.js (最终修复版 - 包含背景图上传 UI)
 
 import { useState, useEffect, useRef } from 'react';
-import { updateUserProfile, uploadProfilePicture, uploadUserBackground } from '@/lib/user';
+import { updateUserProfile, uploadProfilePicture, uploadUserBackground } from '@/lib/user'; // 确保导入 uploadUserBackground
 
 const EditProfileModal = ({ user, onClose, onProfileUpdate }) => {
   const [formData, setFormData] = useState({});
@@ -11,9 +11,9 @@ const EditProfileModal = ({ user, onClose, onProfileUpdate }) => {
   const [imageFile, setImageFile] = useState(null);       // 头像文件
   const fileInputRef = useRef(null);
 
-  const [backgroundPreview, setBackgroundPreview] = useState(null); // 背景图预览
-  const [backgroundFile, setBackgroundFile] = useState(null);       // 背景图文件
-  const backgroundInputRef = useRef(null);                          // 背景图文件输入 ref
+  const [backgroundPreview, setBackgroundPreview] = useState(null); // 【新增】背景图预览
+  const [backgroundFile, setBackgroundFile] = useState(null);       // 【新增】背景图文件
+  const backgroundInputRef = useRef(null);                          // 【新增】背景图文件输入 ref
 
 
   useEffect(() => {
@@ -30,9 +30,19 @@ const EditProfileModal = ({ user, onClose, onProfileUpdate }) => {
         currentCity: user.currentCity || '',
       });
       setImagePreview(user.photoURL || null);
-      setBackgroundPreview(user.backgroundImageUrl || null); // 初始化背景图预览
+      setBackgroundPreview(user.backgroundImageUrl || null); // 【新增】初始化背景图预览
     }
   }, [user]);
+
+  // 【新增】useEffect 来控制 body 样式 (防止滚动，已存在)
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.body.classList.add('modal-open');
+      return () => {
+        document.body.classList.remove('modal-open');
+      };
+    }
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -47,11 +57,12 @@ const EditProfileModal = ({ user, onClose, onProfileUpdate }) => {
           return;
       }
       setImageFile(file);
-      setImagePreview(URL.createObjectURL(file)); // 【关键】本地预览
+      setImagePreview(URL.createObjectURL(file)); // 本地预览
       setError('');
     }
   };
 
+  // 【新增】处理背景图文件选择
   const handleBackgroundChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -60,7 +71,7 @@ const EditProfileModal = ({ user, onClose, onProfileUpdate }) => {
           return;
       }
       setBackgroundFile(file);
-      setBackgroundPreview(URL.URL.createObjectURL(file)); // 【关键】本地预览
+      setBackgroundPreview(URL.createObjectURL(file)); // 本地预览
       setError('');
     }
   };
@@ -70,15 +81,23 @@ const EditProfileModal = ({ user, onClose, onProfileUpdate }) => {
     setIsLoading(true);
     setError('');
 
+    if (!user || !user.uid) { // 检查用户ID，避免上传失败
+      setError('用户信息无效，无法保存。请尝试重新登录。');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       let newPhotoURL = user.photoURL;
       let newBackgroundURL = user.backgroundImageUrl;
 
       if (imageFile) {
         newPhotoURL = await uploadProfilePicture(user.uid, imageFile);
+        console.log('DEBUG [EditProfileModal]: New photoURL uploaded:', newPhotoURL);
       }
       if (backgroundFile) {
         newBackgroundURL = await uploadUserBackground(user.uid, backgroundFile);
+        console.log('DEBUG [EditProfileModal]: New backgroundURL uploaded:', newBackgroundURL);
       }
 
       const profileData = {
@@ -116,7 +135,7 @@ const EditProfileModal = ({ user, onClose, onProfileUpdate }) => {
             <input type="file" ref={fileInputRef} onChange={handleImageChange} accept="image/png, image/jpeg, image/gif" className="hidden"/>
           </div>
 
-          {/* 背景图上传 */}
+          {/* 【核心新增】背景图上传 UI */}
           <div className="mt-4">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">个人主页背景图</label>
             <div className="flex items-center space-x-4">
