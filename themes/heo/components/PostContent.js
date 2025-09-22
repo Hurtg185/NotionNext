@@ -1,4 +1,4 @@
-// themes/heo/components/PostContent.js (最终稳定版 - 无依赖库视频嵌入)
+// themes/heo/components/PostContent.js (增强 Facebook 视频链接匹配)
 
 import React from 'react';
 
@@ -33,9 +33,12 @@ export default function PostContent({ content }) {
   const paragraphs = content.split('\n');
 
   // 正则表达式用于匹配并提取视频ID或URL
-  // 确保正则表达式末尾有 $，表示匹配整行
   const youtubeRegex = /^(?:https?:\/\/)?(?:www\.)?(?:m\.)?(?:youtube\.com|youtu\.be)\/(?:watch\?v=|embed\/|v\/|)([\w-]{11})(?:\S+)?$/;
-  const facebookRegex = /^(https?:\/\/(?:www\.)?facebook\.com\/(?:watch\/\?v=|video\.php\?v=|[^/]+\/videos\/)(?:\d+)(?:\S+)?)$/;
+  
+  // 【核心修改】增强的 Facebook 正则表达式
+  // 匹配 facebook.com/watch/, facebook.com/videos/, facebook.com/reel/, 和 fb.watch/
+  // 并捕获完整的、干净的URL
+  const facebookRegex = /^(https?:\/\/(?:www\.|m\.)?(?:facebook\.com\/(?:watch\/?\?v=|[^/]+\/videos\/|[^/]+\/reel\/)|fb\.watch\/)[\w.-]+)/;
 
   return (
     <div className="post-content">
@@ -59,18 +62,38 @@ export default function PostContent({ content }) {
 
         // --- 渲染 Facebook 视频 ---
         if (facebookMatch) {
-          const videoUrl = facebookMatch[0];
+          // facebookMatch[0] 捕获了完整的 URL，包括可能的跟踪参数
+          // facebookMatch[1] 是我们捕获组捕获的更干净的 URL
+          const videoUrl = facebookMatch[1] || facebookMatch[0]; // 优先使用捕获组
           const embedSrc = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(videoUrl)}&show_text=false&width=560`;
           return <VideoPlayer key={index} src={embedSrc} />;
         }
         
-        // --- 渲染普通文本段落 ---
+        // --- 渲染普通文本段落，并将文本中的URL转换为可点击链接 ---
+        const urlInTextRegex = /(https?:\/\/[^\s]+)/g;
+        const parts = paragraph.split(urlInTextRegex);
+
         return (
           <p key={index} className="text-base leading-relaxed whitespace-pre-wrap my-4">
-            {paragraph}
+            {parts.map((part, partIndex) => {
+              if (urlInTextRegex.test(part)) {
+                return (
+                  <a
+                    key={partIndex}
+                    href={part}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-500 hover:underline break-all"
+                  >
+                    {part}
+                  </a>
+                );
+              }
+              return part;
+            })}
           </p>
         );
       })}
     </div>
   );
-            }
+}
