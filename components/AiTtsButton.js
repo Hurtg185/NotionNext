@@ -4,8 +4,6 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 
 // 假设 TTS_ENGINE 从外部导入，例如：
 // export const TTS_ENGINE = { SYSTEM: 'system', THIRD_PARTY: 'third_party' };
-import { TTS_ENGINE } from './AiChatAssistant'; 
-
 /**
  * 预处理文本，移除不适合朗读的字符和格式。
  * 规则：
