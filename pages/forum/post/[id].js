@@ -34,7 +34,6 @@ const ShareModal = ({ url, onClose }) => {
     );
 };
 
-// 【修复】紧凑版回复组件
 const CompactReply = ({ reply }) => (
     <div className="text-sm text-gray-700 dark:text-gray-300 truncate">
         <Link href={`/profile/${reply.authorId}`} passHref>
@@ -44,9 +43,7 @@ const CompactReply = ({ reply }) => (
     </div>
 );
 
-// 【修改】CommentItem 组件，处理新的跳转逻辑
 const CommentItem = ({ comment, allComments, user, postAuthorId, handleVote, handleDelete, handleReply }) => {
-  const [showAllReplies, setShowAllReplies] = useState(false);
   const isCommentLiked = user && comment.likedBy.includes(user.uid);
   const isCommentDisliked = user && comment.dislikedBy.includes(user.uid);
   const isAuthor = user && user.uid === comment.authorId;
@@ -157,7 +154,7 @@ const PostDetailPage = () => {
       const countReplies = (cId) => { deleteCount++; comments.filter(c => c.parentId === cId).forEach(reply => countReplies(reply.id)); };
       countReplies(commentId);
       const deleteRecursive = async (cId) => { const replies = comments.filter(c => c.parentId === cId); for (const reply of replies) { await deleteRecursive(reply.id); } await deleteDoc(doc(db, 'posts', postId, 'comments', cId)); };
-      try { const postRef = doc(db, 'posts', postId); const batch = writeBatch(db); await deleteRecursive(commentId); batch.update(postRef, { commentsCount: increment(-deleteCount) }); await batch.commit(); } catch (error) {}
+      try { const postRef = doc(db, 'posts', postId); await deleteRecursive(commentId); await updateDoc(postRef, { commentsCount: increment(-deleteCount) }); } catch (error) {}
     }
   };
 
