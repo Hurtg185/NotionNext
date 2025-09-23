@@ -11,7 +11,6 @@ import ReactPlayer from 'react-player';
 const normalizeUrl = (url) => {
   // 转换 Facebook 的 /share/v/ 链接
   if (url.includes('facebook.com/share/v/')) {
-    // 将 https://www.facebook.com/share/v/178cPgEtQW/ 转换为 https://www.facebook.com/videos/178cPgEtQW/
     return url.replace('/share/v/', '/videos/');
   }
   // 未来可以增加其他链接的转换规则
@@ -28,7 +27,7 @@ const PostContent = ({ content }) => {
   return (
     <div className="space-y-4">
       {lines.map((line, idx) => {
-        // 【核心修改】先将链接标准化
+        // 先将链接标准化
         const playableUrl = normalizeUrl(line);
         
         // 用标准化后的链接去判断和播放
