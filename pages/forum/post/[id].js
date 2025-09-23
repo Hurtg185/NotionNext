@@ -1,4 +1,4 @@
-// pages/forum/post/[id].js (完整且仅在原代码础上修改)
+// pages/forum/post/[id].js (完整且仅在原代础上修改)
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
