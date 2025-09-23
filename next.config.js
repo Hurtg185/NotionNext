@@ -1,4 +1,4 @@
-// next.config.js (最终修正版)
+// next.config.js
 
 const { THEME } = require('./blog.config')
 const fs = require('fs')
@@ -118,21 +118,61 @@ const nextConfig = {
     }
     return [ ...langsRewrites, { source: '/:path*.html', destination: '/:path*' } ]
   },
-  // [核心修复] 在 headers 中为 media-src 添加 TTS 服务域名
+  
+  // ⬇️ [核心修复] 使用下面这个增强版的 headers 函数 ⬇️
   headers: process.env.EXPORT ? undefined : async () => {
     const ContentSecurityPolicy = `
       default-src 'self';
-      script-src 'self' 'unsafe-eval' 'unsafe-inline' https://*.googletagmanager.com https://*.google-analytics.com https://connect.facebook.net;
-      child-src 'self' https://*.google.com https://www.youtube.com https://www.facebook.com;
-      style-src 'self' 'unsafe-inline' https://*.googleapis.com https://cdnjs.cloudflare.com;
+      
+      script-src 'self' 'unsafe-eval' 'unsafe-inline' 
+        https://*.googletagmanager.com 
+        https://*.google-analytics.com 
+        https://connect.facebook.net 
+        https://*.youtube.com 
+        https://*.tiktok.com 
+        https://*.static-z.com;
+        
+      child-src 'self' 
+        https://*.google.com 
+        https://www.youtube.com 
+        https://www.facebook.com 
+        https://*.tiktok.com;
+        
+      style-src 'self' 'unsafe-inline' 
+        https://*.googleapis.com 
+        https://cdnjs.cloudflare.com;
+        
       img-src * blob: data:;
-      media-src 'self' https://t.leftsite.cn https://*.youtube.com https://*.facebook.com https://*.googlevideo.com;
-      connect-src 'self' https://t.leftsite.cn https://*.google.com https://*.googleapis.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com wss://*.firebaseio.com;
+      
+      media-src 'self' 
+        https://t.leftsite.cn 
+        https://*.youtube.com 
+        https://*.facebook.com 
+        https://*.googlevideo.com 
+        https://*.tiktok.com;
+        
+      connect-src 'self' 
+        https://t.leftsite.cn 
+        https://*.google.com 
+        https://*.googleapis.com 
+        https://firestore.googleapis.com 
+        https://identitytoolkit.googleapis.com 
+        wss://*.firebaseio.com 
+        https://*.tiktok.com 
+        https://*.facebook.com;
+        
       font-src 'self' data: https://cdnjs.cloudflare.com;
-      frame-src 'self' https://*.google.com https://www.youtube.com https://www.facebook.com;
+      
+      frame-src 'self' 
+        https://*.google.com 
+        https://www.youtube.com 
+        https://www.facebook.com 
+        https://*.tiktok.com;
     `.replace(/\s{2,}/g, ' ').trim();
+    
     return [{ source: '/:path*', headers: [{ key: 'Content-Security-Policy', value: ContentSecurityPolicy }] }];
   },
+  
   webpack: (config, { dev, isServer }) => {
     config.resolve.alias['@'] = path.resolve(__dirname)
     const currentTheme = THEME || 'heo';
