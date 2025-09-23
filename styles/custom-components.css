@@ -1,4 +1,4 @@
-/* styles/custom-components.css (最终版 - 适配独立版 PinyinPracticeCard) */
+/* styles/custom-components.css (最终修复版) */
 
 .study-pro-container {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -13,14 +13,13 @@
   flex-direction: column;
   align-items: center;
 }
-
+.loading-text { color: #888; }
 .study-pro-title {
   font-size: 1.8rem;
   font-weight: 700;
   color: #2d3748;
   margin-bottom: 1.5rem;
 }
-
 .study-pro-scene {
   width: 100%;
   height: 340px;
@@ -33,13 +32,13 @@
   margin-bottom: 1.5rem;
 }
 .study-pro-scene:active { cursor: grabbing; }
-
 .study-pro-cube {
+  width: 340px;
+  height: 340px;
   position: relative;
   transform-style: preserve-3d;
   will-change: transform;
 }
-
 .study-pro-face-wrapper {
   position: absolute;
   width: 100%;
@@ -47,7 +46,6 @@
   top: 0;
   left: 0;
 }
-
 .study-pro-flipper {
   width: 100%;
   height: 100%;
@@ -55,7 +53,6 @@
   transform-style: preserve-3d;
   cursor: pointer;
 }
-
 .study-pro-cardface {
   position: absolute;
   width: 100%;
@@ -77,11 +74,7 @@
   background-position: center;
   background-image: linear-gradient(145deg, #4facfe 0%, #00f2fe 100%);
 }
-.study-pro-cardface.back {
-  background-color: #34495e;
-  background-image: none;
-  transform: rotateY(180deg);
-}
+.study-pro-cardface.back { background-color: #34495e; background-image: none; transform: rotateY(180deg); }
 .study-pro-overlay {
   position: absolute;
   inset: 0;
@@ -89,18 +82,11 @@
   background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.6) 100%);
   pointer-events: none;
 }
-
 .study-pro-pinyin { font-size: 1.8rem; opacity: 0.9; }
 .study-pro-word { font-size: 5rem; font-weight: bold; margin-top: 0.5rem; }
 .study-pro-meaning { font-size: 2.2rem; font-weight: 500; }
 .study-pro-example { font-size: 1rem; opacity: 0.8; margin-top: 1rem; font-style: italic; }
-
-.tts-button-corner {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  z-index: 10;
-}
+.tts-button-corner { position: absolute; top: 1rem; right: 1rem; z-index: 10; }
 .tts-button-corner button {
   background-color: rgba(255,255,255,0.2);
   backdrop-filter: blur(5px);
@@ -113,32 +99,15 @@
   border: 1px solid rgba(255,255,255,0.3);
   color: white;
 }
-
 .study-pro-controls {
   width: 100%;
   display: flex;
-  justify-content: space-around;
-  align-items: center;
-  gap: 1rem;
-}
-.arrow-btn {
-  background-color: #e9ecef;
-  color: #495057;
-  border: none;
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  display: flex;
   justify-content: center;
   align-items: center;
-  cursor: pointer;
-  transition: all 0.2s;
 }
-.arrow-btn:hover { background-color: #ced4da; }
-
 .mic-btn {
-  width: 64px;
-  height: 64px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
   border: none;
   background-color: #007bff;
@@ -148,18 +117,15 @@
   justify-content: center;
   box-shadow: 0 4px 15px rgba(0, 123, 255, 0.4);
   transition: all 0.2s;
+  cursor: pointer;
 }
 .mic-btn:hover { background-color: #0056b3; }
-.mic-btn.listening {
-  background-color: #dc3545;
-  animation: pulse-mic 1.5s infinite;
-}
+.mic-btn.listening { background-color: #dc3545; animation: pulse-mic 1.5s infinite; }
 @keyframes pulse-mic {
   0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
   70% { box-shadow: 0 0 0 15px rgba(220, 53, 69, 0); }
   100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
 }
-
 .pronunciation-checker {
   width: 100%;
   max-width: 380px;
@@ -167,7 +133,7 @@
   padding: 1rem;
   border-top: 2px solid #e9ecef;
 }
-.checker-title { font-size: 1.2rem; font-weight: 600; text-align: center; margin-bottom: 1rem; }
+.checker-title { font-size: 1.2rem; font-weight: 600; text-align: center; margin-bottom: 1rem; color: #4a5568; }
 .checker-message { text-align: center; color: #6c757d; }
 .checker-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem; }
 .syllable-analysis { padding: 0.5rem; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6; }
