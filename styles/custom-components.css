@@ -58,59 +58,111 @@
 
 
 /* ================================================================ */
-/* 8. [新增] PinyinPracticeCard (高级版) 专属样式
-/* ================================================================ */
+/* styles/custom-components.css (追加或替换为以下样式) */
 
-.practice-card-container {
+/* --- 全屏3D卡片 (ImmersiveFlashcard/PinyinPracticeCard) 最终样式 --- */
+
+.immersive-container-full {
+  width: 100%;
+  height: 85vh; /* 占据更多屏幕高度 */
+  max-height: 800px;
+  min-height: 500px;
   display: flex;
   flex-direction: column;
+  justify-content: flex-start;
   align-items: center;
-  padding: 2rem 0;
-  width: 100%;
-  max-width: 420px;
-  margin: 2rem auto;
+  padding: 1rem 0; /* 移除左右内边距 */
+  box-sizing: border-box;
+  overflow: hidden; /* 防止内容溢出 */
 }
-.practice-card-drag-area {
-  width: 100%;
-  height: 480px; /* 增大卡片高度 */
-  overflow: hidden;
-  cursor: grab;
-}
-.practice-card-drag-area:active { cursor: grabbing; }
-.practice-card-track {
+
+.pinyin-feedback-area-top {
+  width: 90%;
+  max-width: 400px;
+  min-height: 50px;
+  margin-bottom: 1rem;
+  background-color: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 25px;
   display: flex;
-  height: 100%;
+  justify-content: center;
+  align-items: center;
+  padding: 0.5rem 1.5rem;
+  box-sizing: border-box;
 }
-.practice-card-wrapper {
-  width: 340px; /* 卡片宽度 */
-  flex-shrink: 0;
-  padding: 0 1rem;
-  height: 100%;
+.pinyin-display-top.standard {
+  color: #eee;
+  font-size: 1.25rem;
+  font-style: italic;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
-.practice-card {
+.pinyin-comparison-top {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-family: sans-serif;
+  font-weight: 500;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+.syllable-top .error { color: #ff5252; font-weight: bold; }
+.syllable-top .correct { color: #4caf50; }
+
+.scene-container-full {
+  width: 100%;
+  flex-grow: 1;
+  perspective: 2000px;
+  cursor: grab;
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+.scene-container-full:active { cursor: grabbing; }
+
+.cube-full {
   width: 100%;
   height: 100%;
-  border-radius: 12px; /* 减小圆角 */
   position: relative;
+  transform-style: preserve-d;
+  will-change: transform;
+}
+
+.cube-face-full {
+  position: absolute;
+  height: 100%;
+  top: 0;
+  left: 50%; /* 将所有卡片的原点放在中心 */
+  transform-origin: center;
+  margin-left: calc(var(--card-width, 340px) / -2); /* 根据卡片宽度向左偏移一半 */
+  border-radius: 16px;
   background-size: cover;
   background-position: center;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.1), 0 5px 10px rgba(0,0,0,0.05);
-  perspective: 1500px;
+  box-shadow: 0 15px 40px rgba(0,0,0,0.25);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  display: flex;
+  flex-direction: column;
 }
-.practice-card-overlay {
+
+.immersive-card-overlay {
   position: absolute;
   inset: 0;
-  border-radius: 12px;
-  background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.6) 100%);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.7) 100%);
   pointer-events: none;
 }
-.practice-card-content {
+
+.immersive-card-content {
   width: 100%;
-  height: 100%;
+  flex-grow: 1;
   transform-style: preserve-3d;
   position: relative;
+  cursor: pointer;
 }
-.practice-card-face {
+
+.immersive-card-face {
   position: absolute;
   width: 100%;
   height: 100%;
@@ -122,80 +174,40 @@
   color: white;
   padding: 1.5rem;
   text-align: center;
-}
-.practice-card-face.back {
-  background-color: #2c3e50;
-  border-radius: 12px;
-  transform: rotateY(180deg);
-}
-.practice-word {
-  font-size: 4rem;
-  font-weight: bold;
   text-shadow: 0 2px 10px rgba(0,0,0,0.5);
 }
-.practice-pinyin {
-  font-size: 1.5rem;
-  margin-top: 0.5rem;
-  opacity: 0.9;
-  text-shadow: 0 1px 5px rgba(0,0,0,0.5);
+
+.immersive-card-face.back {
+  background-color: rgba(44, 62, 80, 0.95);
+  backdrop-filter: blur(5px);
+  border-radius: 16px;
+  transform: rotateY(180deg);
 }
-.practice-meaning {
-  font-size: 2rem;
-  font-weight: 500;
-}
-.pinyin-feedback-area {
-  margin-top: 1.5rem;
-  min-height: 40px;
-  padding: 0.5rem 1rem;
-  background-color: #f0f2f5;
-  border-radius: 20px;
+
+.immersive-pinyin { font-size: 1.8rem; opacity: 0.9; }
+.immersive-word { font-size: 5rem; font-weight: bold; margin-top: 0.5rem; }
+.immersive-meaning { font-size: 2.5rem; font-weight: 500; }
+
+.immersive-card-controls {
   width: 100%;
-  max-width: 340px;
-  box-sizing: border-box;
-}
-.pinyin-comparison {
+  padding: 1.5rem;
   display: flex;
-  gap: 0.5rem;
   justify-content: center;
-  font-size: 1.25rem;
-  font-family: monospace;
-}
-.pinyin-display.standard {
-  color: #888;
-  font-size: 1.25rem;
-  font-style: italic;
-  text-align: center;
-}
-.syllable .error {
-  color: #e74c3c;
-  font-weight: bold;
-}
-.syllable .correct {
-  color: #2ecc71;
-}
-.practice-card-controls {
-  margin-top: 1.5rem;
-  display: flex;
   align-items: center;
-  gap: 2rem;
+  gap: 3rem;
+  position: relative;
+  z-index: 5;
+  margin-top: auto;
 }
-.control-btn-small {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background-color: #e9ecef;
-  color: #495057;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.immersive-card-controls button {
+  background: none;
   border: none;
+  padding: 0.5rem;
+  color: rgba(255, 255, 255, 0.85);
   cursor: pointer;
   transition: all 0.2s;
+  transform-origin: center;
 }
-.control-btn-small:hover {
-  background-color: #ced4da;
-}
-@keyframes pulse-mic {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
-  70% { box-shadow: 0 0 0 15px rgba(231, 76, 60, 0); }
-}
+.immersive-card-controls button:hover { color: white; transform: scale(1.1); }
+.immersive-card-controls button:active { transform: scale(0.9); }
+.immersive-card-controls button.listening { color: #ff5252; }
