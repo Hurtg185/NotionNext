@@ -19,7 +19,6 @@ const AiTtsButton = dynamic(() => import('@/components/AiTtsButton'), { ssr: fal
 const TtsSettingsModal = dynamic(() => import('@/components/TtsSettingsModal'), { ssr: false });
 const BeiDanCi = dynamic(() => import('@/components/BeiDanCi'), { ssr: false });
 const TextToSpeechButton = dynamic(() => import('@/components/TextToSpeechButton'), { ssr: false });
-// const MediaPlayer = dynamic(() => import('@/components/MediaPlayer'), { ssr: false }); // <-- 已删除：暂时移除未创建的 MediaPlayer 导入
 
 // 动态导入 react-notion-x 提供的原始 Code 组件
 const Code = dynamic(
@@ -45,7 +44,6 @@ const Tweet = ({ id }) => { return <TweetEmbed tweetId={id} /> }
  * @returns
  */
 const NotionPage = ({ post, className }) => {
-  // ... useEffect 和其他 Hooks (保持不变) ...
   const POST_DISABLE_GALLERY_CLICK = siteConfig('POST_DISABLE_GALLERY_CLICK')
   const POST_DISABLE_DATABASE_CLICK = siteConfig('POST_DISABLE_DATABASE_CLICK')
   const SPOILER_TEXT_TAG = siteConfig('SPOILER_TEXT_TAG')
@@ -89,12 +87,8 @@ const NotionPage = ({ post, className }) => {
     return () => clearTimeout(timer)
   }, [post])
 
-  // --- 关键修复：更新 parseInclude 函数 ---
   const parseInclude = (textContent) => {
-    // 移除所有换行符和多余的空格，让正则表达式更容易匹配
     const cleanedText = textContent.replace(/(\r\n|\n|\r)/gm, " ").replace(/\s+/g, " ");
-    
-    // 使用更健壮的正则表达式，匹配到第一个 '{' 和最后一个 '}'
     const includeRegex = /!include\s+(\S+?\.js)\s*({.*})?/;
     const match = cleanedText.match(includeRegex);
 
@@ -106,7 +100,6 @@ const NotionPage = ({ post, className }) => {
         return { componentPath, parsedProps };
       } catch (e) {
         console.error('Failed to parse JSON props for !include block:', e, `Original text: "${textContent}"`, `Cleaned text: "${cleanedText}"`);
-        // 返回一个明确的错误信号，而不是 null
         return { error: 'JSON_PARSE_ERROR' }; 
       }
     }
@@ -128,7 +121,6 @@ const NotionPage = ({ post, className }) => {
             if (blockContent) {
               const includeData = parseInclude(blockContent);
               
-              // 检查是否有解析错误
               if (includeData && !includeData.error) {
                  const { componentPath, parsedProps } = includeData;
                  // --- 根据 componentPath 渲染不同的自定义组件 ---
@@ -144,14 +136,19 @@ const NotionPage = ({ post, className }) => {
                  if (componentPath === '/components/SentenceScramble.js') {
                     return <SentenceScramble key={props.block.id} {...parsedProps} />;
                  }
-                 // if (componentPath === '/components/MediaPlayer.js') { // <-- 已删除：暂时移除未创建的 MediaPlayer 渲染规则
-                 //    return <MediaPlayer key={props.block.id} {...parsedProps} />;
-                 // }
                  if (componentPath === '/components/SwipeableFlashcard.js') {
                     return <SwipeableFlashcard key={props.block.id} {...parsedProps} />;
                  }
+                 
+                 // ==========================================================
+                 //  [核心修复] 在这里添加对 BeiDanCi 组件的渲染规则
+                 // ==========================================================
+                 if (componentPath === '/components/BeiDanCi.js') {
+                   return <BeiDanCi key={props.block.id} {...parsedProps} />;
+                 }
+                 // ==========================================================
+
               } else if (includeData && includeData.error) {
-                  // 如果解析 JSON 失败，显示一个错误组件
                   return <div style={{padding: '1rem', border: '2px dashed red', color: 'red'}}>!include 块的 JSON 配置错误，请检查 Notion 页面。</div>
               }
             }
@@ -174,7 +171,6 @@ const NotionPage = ({ post, className }) => {
 }
 
 // ==================== 以下是辅助函数，无需修改 ====================
-// ... (所有辅助函数保持不变) ...
 const processDisableDatabaseUrl = () => { if (isBrowser) { const links = document.querySelectorAll('.notion-table a'); for (const e of links) { e.removeAttribute('href') } } }
 const processGalleryImg = zoom => { setTimeout(() => { if (isBrowser) { const imgList = document?.querySelectorAll('.notion-collection-card-cover img'); if (imgList && zoom) { for (let i = 0; i < imgList.length; i++) { zoom.attach(imgList[i]) } } const cards = document.getElementsByClassName('notion-collection-card'); for (const e of cards) { e.removeAttribute('href') } } }, 800) }
 const autoScrollToHash = () => { setTimeout(() => { const hash = window?.location?.hash; const needToJumpToTitle = hash && hash.length > 0; if (needToJumpToTitle) { console.log('jump to hash', hash); const tocNode = document.getElementById(hash.substring(1)); if (tocNode && tocNode?.className?.indexOf('notion') > -1) { tocNode.scrollIntoView({ block: 'start', behavior: 'smooth' }) } } }, 180) }
