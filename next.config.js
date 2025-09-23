@@ -1,4 +1,4 @@
-// next.config.js (已添加 TTS 域名到 CSP)
+// next.config.js (最终修正版)
 
 const { THEME } = require('./blog.config')
 const fs = require('fs')
@@ -118,7 +118,7 @@ const nextConfig = {
     }
     return [ ...langsRewrites, { source: '/:path*.html', destination: '/:path*' } ]
   },
-  // [核心修复] 在 headers 中添加 TTS 服务域名
+  // [核心修复] 在 headers 中为 media-src 添加 TTS 服务域名
   headers: process.env.EXPORT ? undefined : async () => {
     const ContentSecurityPolicy = `
       default-src 'self';
@@ -126,7 +126,7 @@ const nextConfig = {
       child-src 'self' https://*.google.com https://www.youtube.com https://www.facebook.com;
       style-src 'self' 'unsafe-inline' https://*.googleapis.com https://cdnjs.cloudflare.com;
       img-src * blob: data:;
-      media-src 'self' https://*.youtube.com https://*.facebook.com https://*.googlevideo.com;
+      media-src 'self' https://t.leftsite.cn https://*.youtube.com https://*.facebook.com https://*.googlevideo.com;
       connect-src 'self' https://t.leftsite.cn https://*.google.com https://*.googleapis.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com wss://*.firebaseio.com;
       font-src 'self' data: https://cdnjs.cloudflare.com;
       frame-src 'self' https://*.google.com https://www.youtube.com https://www.facebook.com;
