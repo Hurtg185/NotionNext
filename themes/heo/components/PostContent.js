@@ -1,38 +1,23 @@
-// themes/heo/components/PostContent.js (最终正确版 - 详情页支持 YT+TK 播放)
+// themes/heo/components/PostContent.js
+// (ReactPlayer 增强版 - 支持视频播放 + 普通网址自动转链接)
 
-import React, { useEffect } from 'react';
+import React from 'react';
+import ReactPlayer from 'react-player';
 
-// === 辅助函数区域 START ===
-const getVideoInfo = (url) => {
-  if (!url) return null;
-  const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-  if (ytMatch && ytMatch[1]) {
-    return { type: 'youtube', id: ytMatch[1] };
-  }
-  const tkMatch = url.match(/(?:tiktok\.com\/.*\/video\/(\d+))|(?:vm\.tiktok\.com\/([\w\d]+))/);
-  if (tkMatch) {
-    return { type: 'tiktok', id: tkMatch[1] || tkMatch[2], originalUrl: url };
-  }
-  return null;
+// === 判断是否为视频链接 ===
+const isVideoUrl = (url) => {
+  if (!url) return false;
+  return ReactPlayer.canPlay(url); // react-player 内置判断
 };
-// === 辅助函数区域 END ===
+
+// === 判断是否为普通网址 ===
+const isUrl = (text) => {
+  if (!text) return false;
+  return /^https?:\/\/[^\s]+$/.test(text); // 简单 URL 检测
+};
 
 const PostContent = ({ content }) => {
-  useEffect(() => {
-    // 动态加载 TikTok 官方脚本，用于渲染播放器
-    const tkScript = document.getElementById('tiktok-embed-script');
-    if (content && content.includes('tiktok.com') && !tkScript) {
-      const script = document.createElement('script');
-      script.src = 'https://www.tiktok.com/embed.js';
-      script.async = true;
-      script.id = 'tiktok-embed-script';
-      document.head.appendChild(script);
-    }
-  }, [content]);
-
-  if (!content) {
-    return null;
-  }
+  if (!content) return null;
 
   const lines = content.split('\n');
 
@@ -40,54 +25,47 @@ const PostContent = ({ content }) => {
     <div className="post-content-container">
       {lines.map((line, index) => {
         const trimmedLine = line.trim();
-        const videoInfo = getVideoInfo(trimmedLine);
 
-        if (videoInfo) {
-          if (videoInfo.type === 'youtube') {
-            return (
-              <div key={index} className="my-4 relative w-full max-w-3xl mx-auto aspect-video rounded-lg overflow-hidden shadow-lg bg-black">
-                <iframe
-                  className="absolute top-0 left-0 w-full h-full"
-                  src={`https://www.youtube.com/embed/${videoInfo.id}`}
-                  title="YouTube video player"
-                  frameBorder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                ></iframe>
-              </div>
-            );
-          }
-          if (videoInfo.type === 'tiktok') {
-            return (
-              <blockquote
-                key={index}
-                className="tiktok-embed"
-                cite={videoInfo.originalUrl}
-                data-video-id={videoInfo.id}
-                style={{
-                  maxWidth: '325px',
-                  minWidth: '32-5px',
-                  minHeight: '750px',
-                  margin: '2rem auto',
-                }}
-              >
-                <section>
-                  <a href={videoInfo.originalUrl} target="_blank" rel="noopener noreferrer"> </a>
-                </section>
-              </blockquote>
-            );
-          }
-        }
-        else if (trimmedLine === '') {
-          return <br key={index} />;
-        }
-        else {
+        // 视频链接
+        if (isVideoUrl(trimmedLine)) {
           return (
-            <p key={index} className="my-2 break-all">
-              {line}
+            <div
+              key={index}
+              className="my-4 relative w-full max-w-3xl mx-auto aspect-video rounded-lg overflow-hidden shadow-lg bg-black"
+            >
+              <ReactPlayer
+                url={trimmedLine}
+                width="100%"
+                height="100%"
+                controls
+                playsinline
+              />
+            </div>
+          );
+        }
+
+        // 普通网址（非视频） -> 转成链接
+        if (isUrl(trimmedLine)) {
+          return (
+            <p key={index} className="my-2 break-all text-blue-600 underline">
+              <a href={trimmedLine} target="_blank" rel="noopener noreferrer">
+                {trimmedLine}
+              </a>
             </p>
           );
         }
+
+        // 空行 -> 换行
+        if (trimmedLine === '') {
+          return <br key={index} />;
+        }
+
+        // 普通文字
+        return (
+          <p key={index} className="my-2 break-all">
+            {line}
+          </p>
+        );
       })}
     </div>
   );
