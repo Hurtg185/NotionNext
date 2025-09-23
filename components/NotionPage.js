@@ -20,6 +20,7 @@ const AiTtsButton = dynamic(() => import('@/components/AiTtsButton'), { ssr: fal
 const TtsSettingsModal = dynamic(() => import('@/components/TtsSettingsModal'), { ssr: false });
 const BeiDanCi = dynamic(() => import('@/components/BeiDanCi'), { ssr: false });
 const TextToSpeechButton = dynamic(() => import('@/components/TextToSpeechButton'), { ssr: false });
+const PinyinPracticeCard = dynamic(() => import('@/components/PinyinPracticeCard'), { ssr: false });
 
 // --- 其他组件导入 ---
 const Code = dynamic(() => import('react-notion-x/build/third-party/code').then(m => m.Code), { ssr: false });
@@ -121,7 +122,9 @@ const NotionPage = ({ post, className }) => {
                  if (componentPath === '/components/SwipeableFlashcard.js') return <SwipeableFlashcard key={props.block.id} {...parsedProps} />;
                  if (componentPath === '/components/BeiDanCi.js') return <BeiDanCi key={props.block.id} {...parsedProps} />;
                  if (componentPath === '/components/AiTtsButton.js') return <AiTtsButton key={props.block.id} {...parsedProps} />;
-                 
+                 if (componentPath === '/components/PinyinPracticeCard.js') return <PinyinPracticeCard key={props.block.id} {...parsedProps} />;
+}
+
               } else if (includeData && includeData.error) {
                   return <div style={{padding: '1rem', border: '2px dashed red', color: 'red'}}>!include 块的 JSON 配置错误，请检查 Notion 页面。</div>
               }
