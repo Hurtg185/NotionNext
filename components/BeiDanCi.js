@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TextToSpeechButton from './TextToSpeechButton';
-import JumpToCardModal from './JumpToCardModal';
-
 // 【已移除】 PronunciationChecker 子组件
 
 const BeiDanCi = ({
