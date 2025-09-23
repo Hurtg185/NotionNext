@@ -99,7 +99,7 @@ export default function PinyinPracticeCard({ flashcards, backgroundImages = [] }
     return rotateY.get();
   }, { from: () => rotateY.get() });
   
-  const playTTS = (text) => new Audio(`https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=zh-CN-XiaochenMultilingualNeural&r=-20%`).play();
+  const playTTS = (text) => new Audio(`https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=zh-CN-XiaochenMultilingualNeural&r=-20`).play();
 
   // [核心修复] 彻底重构语音识别
   const handleMicClick = () => {
