@@ -1,4 +1,4 @@
-// components/NotionPage.js (已整合所有自定义组件的渲染规则)
+// components/NotionPage.js (最终修正版，修复了拼写错误)
 
 import { siteConfig } from '@/lib/config'
 import { compressImage, mapImgUrl } from '@/lib/notion/mapImage'
@@ -9,7 +9,7 @@ import dynamic from 'next/dynamic'
 import { useEffect, useRef } from 'react'
 import { NotionRenderer } from 'react-notion-x'
 
-// --- 导入您的所有自定义组件 (已包含 ImmersiveCubeCard) ---
+// --- 导入您的所有自定义组件 ---
 const ImmersiveCubeCard = dynamic(() => import('@/components/ImmersiveCubeCard'), { ssr: false });
 const PronunciationPractice = dynamic(() => import('@/components/PronunciationPractice'), { ssr: false });
 const MotionTest = dynamic(() => import('@/components/MotionTest'), { ssr: false });
@@ -82,7 +82,6 @@ const NotionPage = ({ post, className }) => {
     const cleanedText = textContent.replace(/(\r\n|\n|\r)/gm, " ").replace(/\s+/g, " ");
     const includeRegex = /!include\s+(\S+?\.js)\s*({.*})?/;
     const match = cleanedText.match(includeRegex);
-
     if (match) {
       const componentPath = match[1];
       const propsString = match[2] || '{}';
@@ -110,20 +109,19 @@ const NotionPage = ({ post, className }) => {
             const blockContent = props.block.properties?.title?.[0]?.[0];
             if (blockContent) {
               const includeData = parseInclude(blockContent);
-              
               if (includeData && !includeData.error) {
                  const { componentPath, parsedProps } = includeData;
                  
-                 // --- [核心修复] 完整的组件渲染白名单 ---
+                 // --- [核心修复] 完整的、已修正拼写错误的组件渲染白名单 ---
                  if (componentPath === '/components/ImmersiveCubeCard.js') return <ImmersiveCubeCard key={props.block.id} {...parsedProps} />;
-                 if (component-path === '/components/PronunciationPractice.js') return <PronunciationPractice key={props.block.id} {...parsedProps} />;
+                 if (componentPath === '/components/PronunciationPractice.js') return <PronunciationPractice key={props.block.id} {...parsedProps} />;
                  if (componentPath === '/components/MotionTest.js') return <MotionTest key={props.block.id} {...parsedProps} />;
                  if (componentPath === '/components/HanziWriterPractice.js') return <HanziWriterPractice key={props.block.id} {...parsedProps} />;
                  if (componentPath === '/components/SentenceScramble.js') return <SentenceScramble key={props.block.id} {...parsedProps} />;
                  if (componentPath === '/components/SwipeableFlashcard.js') return <SwipeableFlashcard key={props.block.id} {...parsedProps} />;
                  if (componentPath === '/components/BeiDanCi.js') return <BeiDanCi key={props.block.id} {...parsedProps} />;
                  if (componentPath === '/components/AiTtsButton.js') return <AiTtsButton key={props.block.id} {...parsedProps} />;
-
+                 
               } else if (includeData && includeData.error) {
                   return <div style={{padding: '1rem', border: '2px dashed red', color: 'red'}}>!include 块的 JSON 配置错误，请检查 Notion 页面。</div>
               }
