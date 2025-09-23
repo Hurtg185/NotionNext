@@ -1,9 +1,9 @@
-/* styles/custom-components.css (最终稳定版) */
+/* styles/custom-components.css (最终版 - 适配独立版 PinyinPracticeCard) */
 
-.study-cube-container {
+.study-pro-container {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   width: 100%;
-  max-width: 420px;
+  max-width: 450px;
   margin: 40px auto;
   padding: 1.5rem;
   background-color: #f4f7f6;
@@ -14,14 +14,14 @@
   align-items: center;
 }
 
-.study-cube-title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #333;
+.study-pro-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #2d3748;
   margin-bottom: 1.5rem;
 }
 
-.study-cube-scene {
+.study-pro-scene {
   width: 100%;
   height: 340px;
   perspective: 1800px;
@@ -32,17 +32,15 @@
   align-items: center;
   margin-bottom: 1.5rem;
 }
-.study-cube-scene:active { cursor: grabbing; }
+.study-pro-scene:active { cursor: grabbing; }
 
-.study-cube {
-  width: 340px;
-  height: 340px;
+.study-pro-cube {
   position: relative;
   transform-style: preserve-3d;
   will-change: transform;
 }
 
-.study-cube-face-wrapper {
+.study-pro-face-wrapper {
   position: absolute;
   width: 100%;
   height: 100%;
@@ -50,7 +48,7 @@
   left: 0;
 }
 
-.study-cube-flipper {
+.study-pro-flipper {
   width: 100%;
   height: 100%;
   position: relative;
@@ -58,7 +56,7 @@
   cursor: pointer;
 }
 
-.study-cube-cardface {
+.study-pro-cardface {
   position: absolute;
   width: 100%;
   height: 100%;
@@ -75,16 +73,16 @@
   color: white;
   text-shadow: 0 2px 8px rgba(0,0,0,0.4);
   box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-}
-.study-cube-cardface.front {
   background-size: cover;
   background-position: center;
+  background-image: linear-gradient(145deg, #4facfe 0%, #00f2fe 100%);
 }
-.study-cube-cardface.back {
+.study-pro-cardface.back {
   background-color: #34495e;
+  background-image: none;
   transform: rotateY(180deg);
 }
-.study-cube-overlay {
+.study-pro-overlay {
   position: absolute;
   inset: 0;
   border-radius: inherit;
@@ -92,38 +90,38 @@
   pointer-events: none;
 }
 
-.study-cube-pinyin { font-size: 1.8rem; opacity: 0.9; }
-.study-cube-word { font-size: 5rem; font-weight: bold; margin-top: 0.5rem; }
-.study-cube-meaning { font-size: 2.2rem; font-weight: 500; }
-.study-cube-example { font-size: 1rem; opacity: 0.8; margin-top: 1rem; font-style: italic; }
+.study-pro-pinyin { font-size: 1.8rem; opacity: 0.9; }
+.study-pro-word { font-size: 5rem; font-weight: bold; margin-top: 0.5rem; }
+.study-pro-meaning { font-size: 2.2rem; font-weight: 500; }
+.study-pro-example { font-size: 1rem; opacity: 0.8; margin-top: 1rem; font-style: italic; }
 
-.pinyin-comparison-inline {
+.tts-button-corner {
   position: absolute;
-  bottom: 1rem;
-  left: 1rem;
+  top: 1rem;
   right: 1rem;
-  padding: 0.75rem;
-  background-color: rgba(0,0,0,0.4);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
-  border-radius: 12px;
   z-index: 10;
 }
-.syllable-track { display: flex; gap: 0.75rem; justify-content: center; }
-.syllable-inline-pro { font-size: 1.5rem; font-weight: 500; font-family: sans-serif; display: inline-flex; align-items: baseline; }
-.syllable-inline-pro .error { color: #ff6b6b; }
-.syllable-inline-pro .correct { color: #69f0ae; }
-.syllable-inline-pro .tone { font-size: 0.8rem; margin-left: 2px; font-weight: normal; opacity: 0.8; }
-.syllable-inline-pro .tone.error { text-decoration: line-through; }
+.tts-button-corner button {
+  background-color: rgba(255,255,255,0.2);
+  backdrop-filter: blur(5px);
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255,255,255,0.3);
+  color: white;
+}
 
-
-.study-cube-controls {
+.study-pro-controls {
   width: 100%;
   display: flex;
-  justify-content: space-between;
+  justify-content: space-around;
   align-items: center;
+  gap: 1rem;
 }
-.study-cube-controls button {
+.arrow-btn {
   background-color: #e9ecef;
   color: #495057;
   border: none;
@@ -136,6 +134,45 @@
   cursor: pointer;
   transition: all 0.2s;
 }
-.study-cube-controls button:hover { background-color: #ced4da; }
-.study-cube-controls button:disabled { opacity: 0.5; cursor: not-allowed; }
-.study-cube-counter { font-size: 1.1rem; font-weight: 500; color: #888; }
+.arrow-btn:hover { background-color: #ced4da; }
+
+.mic-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: none;
+  background-color: #007bff;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(0, 123, 255, 0.4);
+  transition: all 0.2s;
+}
+.mic-btn:hover { background-color: #0056b3; }
+.mic-btn.listening {
+  background-color: #dc3545;
+  animation: pulse-mic 1.5s infinite;
+}
+@keyframes pulse-mic {
+  0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+  70% { box-shadow: 0 0 0 15px rgba(220, 53, 69, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+}
+
+.pronunciation-checker {
+  width: 100%;
+  max-width: 380px;
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border-top: 2px solid #e9ecef;
+}
+.checker-title { font-size: 1.2rem; font-weight: 600; text-align: center; margin-bottom: 1rem; }
+.checker-message { text-align: center; color: #6c757d; }
+.checker-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem; }
+.syllable-analysis { padding: 0.5rem; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6; }
+.syllable-analysis.all-correct { border-color: #28a745; }
+.syllable-parts { font-size: 1.5rem; font-family: monospace; }
+.tone-analysis { font-size: 0.8rem; color: #6c757d; margin-top: 0.25rem; }
+.syllable-parts .error, .tone-analysis.error { color: #dc3545; }
+.syllable-parts .correct, .tone-analysis.correct { color: #28a745; }
