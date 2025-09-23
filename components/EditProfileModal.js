@@ -1,4 +1,4 @@
-// components/EditProfileModal.js (最终修复版 - 包含背景图上传 UI)
+// components/EditProfileModal.js (最终复版 - 包含背景图上传 UI)
 
 import { useState, useEffect, useRef } from 'react';
 import { updateUserProfile, uploadProfilePicture, uploadUserBackground } from '@/lib/user'; // 确保导入 uploadUserBackground
