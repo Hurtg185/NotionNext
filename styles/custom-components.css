@@ -1,4 +1,4 @@
-/* styles/custom-components.css (已更新为支持新版 BeiDanCi) */
+/* styles/custom-components.css (已整合 PinyinPracticeCard 样式) */
 
 /* ================================================================ */
 /* 7. 自定义组件样式 (Custom Component Styles)
@@ -20,66 +20,13 @@
 
 
 /* --- BeiDanCi (V2 - 3D 手势切换版) 专属样式 --- */
-.beidanci-container {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  max-width: 380px;
-  margin: 40px auto;
-  padding: 20px;
-  background-image: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  border-radius: 20px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  position: relative;
-}
-.beidanci-drag-area {
-  width: 100%;
-  height: 250px;
-  margin-bottom: 20px;
-  overflow: hidden;
-  cursor: grab;
-  position: relative;
-}
+.beidanci-container { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 380px; margin: 40px auto; padding: 20px; background-image: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); border-radius: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); display: flex; flex-direction: column; align-items: center; border: 1px solid rgba(255, 255, 255, 0.5); position: relative; }
+.beidanci-drag-area { width: 100%; height: 250px; margin-bottom: 20px; overflow: hidden; cursor: grab; position: relative; }
 .beidanci-drag-area:active { cursor: grabbing; }
-.beidanci-card-track {
-  display: flex;
-  height: 100%;
-  position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-150px);
-}
-.beidanci-card {
-  flex-shrink: 0;
-  height: 100%;
-  padding: 0 10px;
-  box-sizing: content-box;
-}
-.card-flipper-flat {
-  width: 100%;
-  height: 100%;
-  position: relative;
-  transform-style: preserve-3d;
-  cursor: pointer;
-  perspective: 1200px;
-}
-.card-face-flat {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  border-radius: 16px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  padding: 20px;
-  box-sizing: border-box;
-  backface-visibility: hidden;
-  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1.5);
-  box-shadow: 0 5px 15px rgba(0,0,0,0.08);
-}
+.beidanci-card-track { display: flex; height: 100%; position: absolute; top: 0; left: 50%; transform: translateX(-150px); }
+.beidanci-card { flex-shrink: 0; height: 100%; padding: 0 10px; box-sizing: content-box; }
+.card-flipper-flat { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; cursor: pointer; perspective: 1200px; }
+.card-face-flat { position: absolute; width: 100%; height: 100%; border-radius: 16px; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; backface-visibility: hidden; transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1.5); box-shadow: 0 5px 15px rgba(0,0,0,0.08); }
 .card-face-flat.front { background: white; }
 .card-face-flat.back { background: #f8f9fa; transform: rotateY(-180deg); }
 .word-flat { font-size: 3rem; font-weight: bold; color: #212529; margin: 0; }
@@ -108,3 +55,147 @@
 .cube-control-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .feedback-toast-3d { position: absolute; bottom: 100px; background-color: rgba(0, 0, 0, 0.7); color: white; padding: 8px 16px; border-radius: 20px; font-size: 0.9rem; z-index: 30; animation: fade-in-out 2s ease-in-out; }
 @keyframes fade-in-out { 0%, 100% { opacity: 0; transform: translateY(10px); } 10%, 90% { opacity: 1; transform: translateY(0); } }
+
+
+/* ================================================================ */
+/* 8. [新增] PinyinPracticeCard (高级版) 专属样式
+/* ================================================================ */
+
+.practice-card-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem 0;
+  width: 100%;
+  max-width: 420px;
+  margin: 2rem auto;
+}
+.practice-card-drag-area {
+  width: 100%;
+  height: 480px; /* 增大卡片高度 */
+  overflow: hidden;
+  cursor: grab;
+}
+.practice-card-drag-area:active { cursor: grabbing; }
+.practice-card-track {
+  display: flex;
+  height: 100%;
+}
+.practice-card-wrapper {
+  width: 340px; /* 卡片宽度 */
+  flex-shrink: 0;
+  padding: 0 1rem;
+  height: 100%;
+}
+.practice-card {
+  width: 100%;
+  height: 100%;
+  border-radius: 12px; /* 减小圆角 */
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1), 0 5px 10px rgba(0,0,0,0.05);
+  perspective: 1500px;
+}
+.practice-card-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.6) 100%);
+  pointer-events: none;
+}
+.practice-card-content {
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  position: relative;
+}
+.practice-card-face {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  padding: 1.5rem;
+  text-align: center;
+}
+.practice-card-face.back {
+  background-color: #2c3e50;
+  border-radius: 12px;
+  transform: rotateY(180deg);
+}
+.practice-word {
+  font-size: 4rem;
+  font-weight: bold;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}
+.practice-pinyin {
+  font-size: 1.5rem;
+  margin-top: 0.5rem;
+  opacity: 0.9;
+  text-shadow: 0 1px 5px rgba(0,0,0,0.5);
+}
+.practice-meaning {
+  font-size: 2rem;
+  font-weight: 500;
+}
+.pinyin-feedback-area {
+  margin-top: 1.5rem;
+  min-height: 40px;
+  padding: 0.5rem 1rem;
+  background-color: #f0f2f5;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 340px;
+  box-sizing: border-box;
+}
+.pinyin-comparison {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-family: monospace;
+}
+.pinyin-display.standard {
+  color: #888;
+  font-size: 1.25rem;
+  font-style: italic;
+  text-align: center;
+}
+.syllable .error {
+  color: #e74c3c;
+  font-weight: bold;
+}
+.syllable .correct {
+  color: #2ecc71;
+}
+.practice-card-controls {
+  margin-top: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+.control-btn-small {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #e9ecef;
+  color: #495057;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.control-btn-small:hover {
+  background-color: #ced4da;
+}
+@keyframes pulse-mic {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+  70% { box-shadow: 0 0 0 15px rgba(231, 76, 60, 0); }
+}
