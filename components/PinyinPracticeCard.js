@@ -1,4 +1,4 @@
-// components/PinyinPracticeCard.js (V4 - 终极修和重构版)
+// components/PinyinPracticeCard.js (V4 - 终极修重构版)
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, useMotionValue, animate } from 'framer-motion';
