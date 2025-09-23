@@ -116,31 +116,4 @@
   z-index: 5;
   margin-top: auto;
 }
-/* ... (按钮样式) ... */```
-
----
-
-### **第三步：在 `NotionPage.js` 中使用**
-
-最后，确保你的 `NotionPage.js` 干净且正确。
-
-1.  **打开** `components/NotionPage.js`。
-2.  **确保**顶部的导入是这样的（**只保留你实际使用的组件**）：
-    ```javascript
-    const ImmersiveCubeCard = dynamic(() => import('@/components/ImmersiveCubeCard'), { ssr: false });
-    // const PinyinPracticeCard = ... // 如果你不用它了，就删除或注释掉
-    ```
-3.  **确保** `Code` 组件的渲染逻辑里，调用的是 `ImmersiveCubeCard`：
-    ```javascript
-    if (componentPath === '/components/ImmersiveCubeCard.js') {
-      return <ImmersiveCubeCard key={props.block.id} {...parsedProps} />;
-    }
-    ```
-
----
-
-**最后一步：重新构建和部署**
-
-在你完成了以上所有文件的替换和确认后，请**重新构建并部署你的网站**。
-
-这次的修改是**决定性**的。我们回归到了一个稳定、经过验证的组件基础上，只对它进行了尺寸和功能的增强，并提供了一套干净、独立的 CSS。这应该能最终解决你遇到的所有问题。再次为之前的混乱和错误道歉！
+/* ... (按钮样式) ... */
