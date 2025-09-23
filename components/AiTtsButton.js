@@ -143,12 +143,4 @@ const AiTtsButton = ({
   );
 };
 
-export default AiTtsButton;```
-
-**操作指南：**
-1.  **复制** 上面提供的完整代码。
-2.  **打开** 你项目中的 `components/AiTtsButton.js` 文件。
-3.  用复制的代码**替换**文件的全部内容。
-4.  **保存** 文件，然后重新构建并部署你的网站。
-
-这次修改后，`AiTtsButton` 组件处理文本的方式将和其他能正常工作的组件保持一致，应该就能解决 API 返回 `400` 错误的问题了。
+export default AiTtsButton;
