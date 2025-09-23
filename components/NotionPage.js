@@ -1,4 +1,4 @@
-// components/NotionPage.js (V2.2 - 最终修复括号匹配错误)
+// components/NotionPage.js (最终纯净版)
 
 import { siteConfig } from '@/lib/config'
 import { compressImage, mapImgUrl } from '@/lib/notion/mapImage'
@@ -21,7 +21,6 @@ const TtsSettingsModal = dynamic(() => import('@/components/TtsSettingsModal'), 
 const BeiDanCi = dynamic(() => import('@/components/BeiDanCi'), { ssr: false });
 const TextToSpeechButton = dynamic(() => import('@/components/TextToSpeechButton'), { ssr: false });
 const PinyinPracticeCard = dynamic(() => import('@/components/PinyinPracticeCard'), { ssr: false });
-const FlashcardPro = dynamic(() => import('@/components/FlashcardPro'), { ssr: false }); // 假设你也创建了这个
 
 // --- 其他组件导入 ---
 const Code = dynamic(() => import('react-notion-x/build/third-party/code').then(m => m.Code), { ssr: false });
@@ -35,13 +34,71 @@ const PrismMac = dynamic(() => import('@/components/PrismMac'), { ssr: false });
 const Tweet = ({ id }) => { return <TweetEmbed tweetId={id} /> }
 
 const NotionPage = ({ post, className }) => {
-  // --- Hooks, useEffect, parseInclude 函数 (保持不变) ---
-  /* ... */
+  const POST_DISABLE_GALLERY_CLICK = siteConfig('POST_DISABLE_GALLERY_CLICK')
+  const POST_DISABLE_DATABASE_CLICK = siteConfig('POST_DISABLE_DATABASE_CLICK')
+  const SPOILER_TEXT_TAG = siteConfig('SPOILER_TEXT_TAG')
+  const zoom = isBrowser && mediumZoom({ background: 'rgba(0, 0, 0, 0.2)', margin: getMediumZoomMargin() })
+  const zoomRef = useRef(zoom ? zoom.clone() : null)
+  const IMAGE_ZOOM_IN_WIDTH = siteConfig('IMAGE_ZOOM_IN_WIDTH', 1200)
+  
+  useEffect(() => { autoScrollToHash() }, [])
+  
+  useEffect(() => {
+    if (POST_DISABLE_GALLERY_CLICK) { processGalleryImg(zoomRef?.current) }
+    if (POST_DISABLE_DATABASE_CLICK) { processDisableDatabaseUrl() }
+    const observer = new MutationObserver((mutationsList, observer) => {
+      mutationsList.forEach(mutation => {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+          if (mutation.target.classList.contains('medium-zoom-image--opened')) {
+            setTimeout(() => {
+              const src = mutation?.target?.getAttribute('src')
+              mutation?.target?.setAttribute('src', compressImage(src, IMAGE_ZOOM_IN_WIDTH))
+            }, 800)
+          }
+        }
+      })
+    })
+    observer.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['class'] })
+    return () => { observer.disconnect() }
+  }, [post])
+  
+  useEffect(() => {
+    if (SPOILER_TEXT_TAG) {
+      import('lodash/escapeRegExp').then(escapeRegExp => {
+        Promise.all([
+          loadExternalResource('/js/spoilerText.js', 'js'),
+          loadExternalResource('/css/spoiler-text.css', 'css')
+        ]).then(() => {
+          window.textToSpoiler && window.textToSpoiler(escapeRegExp.default(SPOILER_TEXT_TAG))
+        })
+      })
+    }
+    const timer = setTimeout(() => {
+      const elements = document.querySelectorAll('.notion-collection-page-properties')
+      elements?.forEach(element => { element?.remove() })
+    }, 1000)
+    return () => clearTimeout(timer)
+  }, [post])
+
+  const parseInclude = (textContent) => {
+    const includeRegex = /!include\s+(\S+\.js)\s*({.*})?/s;
+    const match = textContent.match(includeRegex);
+    if (match) {
+      const componentPath = match[1];
+      const propsString = match[2] || '{}';
+      try {
+        const parsedProps = JSON.parse(propsString);
+        return { componentPath, parsedProps };
+      } catch (e) {
+        console.error('!include JSON 解析失败:', e, `原始JSON字符串: "${propsString}"`);
+        return { error: 'JSON_PARSE_ERROR' }; 
+      }
+    }
+    return null;
+  };
 
   return (
-    <div
-      id='notion-article'
-      className={`mx-auto overflow-hidden ${className || ''}`}>
+    <div id='notion-article' className={`mx-auto overflow-hidden ${className || ''}`}>
       <NotionRenderer
         recordMap={post?.blockMap}
         mapPageUrl={mapPageUrl}
@@ -49,15 +106,12 @@ const NotionPage = ({ post, className }) => {
         components={{
           Code: (props) => {
             const blockContent = props.block.properties?.title?.[0]?.[0];
-            
-            // 快速判断是否为 include 指令
             if (blockContent && blockContent.startsWith('!include')) {
               const includeData = parseInclude(blockContent);
-
               if (includeData && !includeData.error) {
                  const { componentPath, parsedProps } = includeData;
                  
-                 // --- 完整的、已修正拼写错误的组件渲染白名单 ---
+                 // --- 完整的组件渲染白名单 ---
                  if (componentPath === '/components/ImmersiveCubeCard.js') return <ImmersiveCubeCard key={props.block.id} {...parsedProps} />;
                  if (componentPath === '/components/PronunciationPractice.js') return <PronunciationPractice key={props.block.id} {...parsedProps} />;
                  if (componentPath === '/components/MotionTest.js') return <MotionTest key={props.block.id} {...parsedProps} />;
@@ -67,18 +121,12 @@ const NotionPage = ({ post, className }) => {
                  if (componentPath === '/components/BeiDanCi.js') return <BeiDanCi key={props.block.id} {...parsedProps} />;
                  if (componentPath === '/components/AiTtsButton.js') return <AiTtsButton key={props.block.id} {...parsedProps} />;
                  if (componentPath === '/components/PinyinPracticeCard.js') return <PinyinPracticeCard key={props.block.id} {...parsedProps} />;
-                 if (componentPath === '/components/FlashcardPro.js') return <FlashcardPro key={props.block.id} {...parsedProps} />;
-              
-              // [核心修复] 将 else if 放在正确的位置
               } else if (includeData && includeData.error) {
                   return <div style={{padding: '1rem', border: '2px dashed red', color: 'red'}}>!include 块的 JSON 配置错误，请检查 Notion 页面。</div>
               }
             }
-            
-            // 如果不是有效的 include 指令，则正常渲染代码块
             return <Code {...props} />;
           },
-          // --- 其他组件 ---
           Collection,
           Equation,
           Modal,
@@ -86,35 +134,16 @@ const NotionPage = ({ post, className }) => {
           Tweet,
         }}
       />
-
       <AdEmbed />
       <PrismMac />
     </div>
   )
 }
 
-// --- 辅助函数 (折叠，无需修改) ---
-/* ... */
-const processDisableDatabaseUrl = () => { /* ... */ }
-const processGalleryImg = zoom => { /* ... */ }
-const autoScrollToHash = () => { /* ... */ }
-const mapPageUrl = id => { /* ... */ }
-function getMediumZoomMargin() { /* ... */ }
+const processDisableDatabaseUrl = () => { if (isBrowser) { const links = document.querySelectorAll('.notion-table a'); for (const e of links) { e.removeAttribute('href') } } }
+const processGalleryImg = zoom => { setTimeout(() => { if (isBrowser) { const imgList = document?.querySelectorAll('.notion-collection-card-cover img'); if (imgList && zoom) { for (let i = 0; i < imgList.length; i++) { zoom.attach(imgList[i]) } } const cards = document.getElementsByClassName('notion-collection-card'); for (const e of cards) { e.removeAttribute('href') } } }, 800) }
+const autoScrollToHash = () => { setTimeout(() => { const hash = window?.location?.hash; const needToJumpToTitle = hash && hash.length > 0; if (needToJumpToTitle) { const tocNode = document.getElementById(hash.substring(1)); if (tocNode && tocNode?.className?.indexOf('notion') > -1) { tocNode.scrollIntoView({ block: 'start', behavior: 'smooth' }) } } }, 180) }
+const mapPageUrl = id => { return '/' + id.replace(/-/g, '') }
+function getMediumZoomMargin() { const width = window.innerWidth; if (width < 500) { return 8 } else if (width < 800) { return 20 } else if (width < 1280) { return 30 } else if (width < 1600) { return 40 } else if (width < 1920) { return 48 } else { return 72 } }
 
-export default NotionPage;```
-*(为了简洁，我再次折叠了 Hooks 和辅助函数部分，你只需整体替换文件内容即可)*
-
-**这份代码的关键修复点：**
-*   **修正了括号**：我重构了 `Code` 组件的 `if-else` 逻辑，确保所有的 `{}` 括号都正确匹配。
-*   **增加了快速判断**：在调用 `parseInclude` 之前，先用 `blockContent.startsWith('!include')` 进行一次快速检查，可以略微提高性能，并让逻辑更清晰。
-*   **保留了所有组件**：白名单中保留了我们创建过的所有组件，包括 `FlashcardPro`，以备你将来使用。
-
----
-
-**最后一步：重新构建和部署**
-
-1.  用上面这份完整的代码，**替换**掉你 `components/NotionPage.js` 文件中的全部内容。
-2.  **保存**文件。
-3.  **重新运行构建命令** (`yarn build` 或 `npm run build`)。
-
-这次的编译错误是纯粹的语法问题，修复后应该就能顺利通过了。
+export default NotionPage;
