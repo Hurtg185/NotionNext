@@ -119,7 +119,6 @@ const nextConfig = {
     return [ ...langsRewrites, { source: '/:path*.html', destination: '/:path*' } ]
   },
   
-  // ⬇️ [核心修复] 使用下面这个增强版的 headers 函数 ⬇️
   headers: process.env.EXPORT ? undefined : async () => {
     const ContentSecurityPolicy = `
       default-src 'self';
@@ -130,7 +129,9 @@ const nextConfig = {
         https://connect.facebook.net 
         https://*.youtube.com 
         https://*.tiktok.com 
-        https://*.static-z.com;
+        https://*.static-z.com
+        https://cdnjs.cloudflare.com 
+        https://busuanzi.ibruce.info;
         
       child-src 'self' 
         https://*.google.com 
@@ -159,7 +160,8 @@ const nextConfig = {
         https://identitytoolkit.googleapis.com 
         wss://*.firebaseio.com 
         https://*.tiktok.com 
-        https://*.facebook.com;
+        https://*.facebook.com
+        https://busuanzi.ibruce.info;
         
       font-src 'self' data: https://cdnjs.cloudflare.com;
       
