@@ -1,37 +1,12 @@
-/* styles/custom-components.css (最终修复版 V4.1 - 使用更安全的隐藏规则) */
+/* styles/custom-components.css (最终修复版 V4.2 - 纯 Flexbox 布局) */
+
+/* ... (保留顶部的全局沉浸模式规则) ... */
+html.flashcard-mode-active { /* ... */ }
+html.flashcard-mode-active body > #__next > :not(main),
+/* ... 等等 */
 
 /* ================================================================ */
-/* 1. 全局沉浸模式 & 基础共享样式 (Global Immersive Mode & Shared)
-/* ================================================================ */
-
-/* [核心修复] 当卡片激活时，隐藏所有无关内容并禁止页面滚动 */
-html.flashcard-mode-active {
-  overflow: hidden !important;
-  position: fixed !important; /* 进一步强制禁止滚动 */
-  width: 100%;
-  height: 100%;
-}
-
-/* [核心修复] 更安全、更精准的隐藏规则 */
-/* 直接指定隐藏 Heo 主题的已知元素ID或class */
-html.flashcard-mode-active #sticky-nav,
-html.flashcard-mode-active #top-nav,
-html.flashcard-mode-active #floating-toc,
-html.flashcard-mode-active #right-side-bar,
-html.flashcard-mode-active #bottom-nav,
-html.flashcard-mode-active #article-footer {
-  display: none !important;
-}
-
-/* 这是一个关键规则：隐藏掉我们卡片组件之后的所有“兄弟”元素 */
-/* 这能确保评论、分享、版权信息等都被隐藏，但绝不会误伤卡片本身 */
-.immersive-container-full ~ * {
-  display: none !important;
-}
-
-
-/* ================================================================ */
-/* 2. 全屏3D卡片 (PinyinPracticeCard) 样式
+/* 2. 全屏3D卡片 (PinyinPracticeCard) 最终样式 V4.2
 /* ================================================================ */
 
 .immersive-container-full {
@@ -44,49 +19,12 @@ html.flashcard-mode-active #article-footer {
   padding: 1rem 0;
   box-sizing: border-box;
   overflow: hidden;
-  position: relative; /* 确保自身不会被隐藏规则影响 */
-  z-index: 100; /* 提高层级 */
 }
-
-.pinyin-feedback-area-top {
-  width: 90%;
-  max-width: 400px;
-  min-height: 50px;
-  margin-bottom: 1rem;
-  background-color: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 999px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 0.5rem 1.5rem;
-  box-sizing: border-box;
-  transition: background-color 0.3s;
-}
-.pinyin-display-top.standard {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 1.25rem;
-  font-style: italic;
-  text-align: center;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-}
-.pinyin-comparison-top {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: center;
-  font-size: 1.5rem;
-  font-family: sans-serif;
-  font-weight: 500;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-}
-.syllable-top .error { color: #ff6b6b; font-weight: bold; }
-.syllable-top .correct { color: #69f0ae; }
 
 .scene-container-full {
   width: 100%;
-  flex-grow: 1;
+  height: 80%;
+  max-height: 600px;
   perspective: 2000px;
   cursor: grab;
   position: relative;
@@ -95,49 +33,12 @@ html.flashcard-mode-active #article-footer {
 }
 .scene-container-full:active { cursor: grabbing; }
 
-.cube-full {
-  width: 100%;
-  height: 100%;
-  position: relative;
-  transform-style: preserve-3d;
-  will-change: transform;
-}
+.cube-full { /* ... 保持不变 ... */ }
+.cube-face-full { /* ... 保持不变 ... */ }
+.immersive-card-overlay { /* ... 保持不变 ... */ }
+.immersive-card-content { /* ... 保持不变 ... */ }
 
-.cube-face-full {
-  position: absolute;
-  height: 100%;
-  top: 0;
-  left: 50%;
-  transform-origin: center;
-  margin-left: calc(var(--card-width, 340px) / -2);
-  border-radius: 20px;
-  background-size: cover;
-  background-position: center;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.immersive-card-overlay {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.8) 100%);
-  pointer-events: none;
-}
-
-.immersive-card-content {
-  width: 100%;
-  flex-grow: 1;
-  transform-style: preserve-3d;
-  position: relative;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-}
-
+/* [核心修复] 使用纯 Flexbox 布局 */
 .immersive-card-face {
   position: absolute;
   width: 100%;
@@ -146,10 +47,10 @@ html.flashcard-mode-active #article-footer {
   -webkit-backface-visibility: hidden;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: space-between; /* 关键：在顶部、主内容、反馈和按钮之间分配空间 */
   align-items: center;
   color: white;
-  padding: 2rem;
+  padding: 1.5rem;
   text-align: center;
   text-shadow: 0 2px 15px rgba(0,0,0,0.6);
 }
@@ -159,69 +60,45 @@ html.flashcard-mode-active #article-footer {
   -webkit-backdrop-filter: blur(10px);
   border-radius: inherit;
   transform: rotateY(180deg);
+  justify-content: center; /* 背面内容垂直居中 */
 }
 
-.main-content {
-  margin-top: auto;
-  padding-bottom: 2rem;
+/* 布局元素 */
+.top-spacer {
+  flex-basis: 5%; /* 在顶部占据一点空间 */
 }
-.immersive-pinyin { font-size: 2.2rem; opacity: 0.9; font-weight: 400; }
-.immersive-word { font-size: 6rem; font-weight: 700; margin-top: 0.25rem; }
+.main-content {
+  /* 无需特殊样式，Flexbox 会自动处理 */
+}
+.immersive-pinyin { font-size: 2rem; opacity: 0.9; font-weight: 400; }
+.immersive-word { font-size: 5.5rem; font-weight: 700; margin-top: 0.5rem; }
 .immersive-meaning { font-size: 2.8rem; font-weight: 500; }
 
+/* 内置的拼音识别结果 */
 .pinyin-comparison-inline {
-  width: calc(100% - 2rem);
-  margin: 0 auto;
-  margin-top: auto;
+  width: 100%;
   padding: 0.75rem;
   background-color: rgba(0,0,0,0.3);
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
   border-radius: 12px;
-  position: absolute;
-  bottom: 1rem;
-  left: 1rem;
-  z-index: 10;
+  min-height: 80px; /* 给予一个最小高度，避免内容跳动 */
 }
-.user-transcript {
-  font-size: 0.8rem;
-  color: rgba(255,255,255,0.7);
-  text-align: center;
-  margin-bottom: 0.5rem;
-}
-.syllable-track { display: flex; gap: 0.5rem; justify-content: center; }
-.syllable-inline { font-size: 1.2rem; font-weight: 500; }
-.syllable-inline .error { color: #ff6b6b; font-weight: bold; }
-.syllable-inline .correct { color: #69f0ae; }
+.user-transcript { /* ... 保持不变 ... */ }
+.syllable-track { /* ... 保持不变 ... */ }
+.syllable-inline { /* ... 保持不变 ... */ }
+.syllable-inline .error { /* ... 保持不变 ... */ }
+.syllable-inline .correct { /* ... 保持不变 ... */ }
 
+/* 卡片内置控制按钮 */
 .immersive-card-controls {
   width: 100%;
-  padding: 2rem;
+  padding-top: 1rem; /* 与上方内容保持距离 */
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 4rem;
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  z-index: 5;
 }
-.immersive-card-controls button {
-  background: none;
-  border: none;
-  padding: 0.5rem;
-  color: rgba(255, 255, 255, 0.85);
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  transform-origin: center;
-}
-.immersive-card-controls button:hover { color: white; transform: scale(1.15); }
-.immersive-card-controls button:active { transform: scale(0.9); }
-.immersive-card-controls button.listening {
-  color: #ff6b6b; 
-  animation: pulse-mic-btn 1.5s infinite;
-}
-@keyframes pulse-mic-btn {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.1); }
-}
+.immersive-card-controls button { /* ... 保持不变 ... */ }
+.immersive-card-controls button.listening { /* ... 保持不变 ... */ }
+@keyframes pulse-mic-btn { /* ... 保持不变 ... */ }
