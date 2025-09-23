@@ -1,220 +1,157 @@
-// components/EditProfileModal.js (最终复版 - 包含背景图上传 UI)
+// components/EditProfileModal.js (完整版)
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/lib/AuthContext';
+import { updateUserProfile } from '@/lib/user';
 
-import { useState, useEffect, useRef } from 'react';
-import { updateUserProfile, uploadProfilePicture, uploadUserBackground } from '@/lib/user'; // 确保导入 uploadUserBackground
+const SOCIAL_PLATFORMS = {
+    weibo: { name: '微博', icon: 'fab fa-weibo', placeholder: '请输入微博主页用户名' },
+    github: { name: 'GitHub', icon: 'fab fa-github', placeholder: '请输入GitHub用户名' },
+    twitter: { name: 'X (Twitter)', icon: 'fab fa-twitter', placeholder: '请输入X用户名' },
+    instagram: { name: 'Instagram', icon: 'fab fa-instagram', placeholder: '请输入Instagram用户名' },
+};
 
-const EditProfileModal = ({ user, onClose, onProfileUpdate }) => {
-  const [formData, setFormData] = useState({});
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [imagePreview, setImagePreview] = useState(null); // 头像预览
-  const [imageFile, setImageFile] = useState(null);       // 头像文件
-  const fileInputRef = useRef(null);
+const EditProfileModal = ({ onClose, onProfileUpdate }) => {
+    const { userData, user } = useAuth();
+    const [displayName, setDisplayName] = useState('');
+    const [bio, setBio] = useState('');
+    const [gender, setGender] = useState('');
+    const [tags, setTags] = useState(''); // 以逗号分隔的字符串
+    const [socials, setSocials] = useState({});
+    const [isSaving, setIsSaving] = useState(false);
 
-  const [backgroundPreview, setBackgroundPreview] = useState(null); // 【新增】背景图预览
-  const [backgroundFile, setBackgroundFile] = useState(null);       // 【新增】背景图文件
-  const backgroundInputRef = useRef(null);                          // 【新增】背景图文件输入 ref
+    useEffect(() => {
+        if (userData) {
+            setDisplayName(userData.displayName || '');
+            setBio(userData.bio || '');
+            setGender(userData.gender || 'not_specified');
+            setTags((userData.tags || []).join(', '));
+            setSocials(userData.socials || {});
+        }
+    }, [userData]);
 
+    const handleSocialChange = (platform, value) => {
+        setSocials(prev => ({ ...prev, [platform]: value }));
+    };
 
-  useEffect(() => {
-    if (user) {
-      setFormData({
-        displayName: user.displayName || '',
-        gender: user.gender || 'not-specified',
-        birthDate: user.birthDate || '',
-        occupation: user.occupation || '',
-        bio: user.bio || '',
-        nationality: user.nationality || '',
-        learningLanguage: user.learningLanguage || '',
-        hometown: user.hometown || '',
-        currentCity: user.currentCity || '',
-      });
-      setImagePreview(user.photoURL || null);
-      setBackgroundPreview(user.backgroundImageUrl || null); // 【新增】初始化背景图预览
-    }
-  }, [user]);
+    const handleSave = async () => {
+        setIsSaving(true);
+        const tagsArray = tags.split(',').map(tag => tag.trim()).filter(Boolean);
+        const profileData = {
+            displayName,
+            bio,
+            gender,
+            tags: tagsArray,
+            socials,
+        };
 
-  // 【新增】useEffect 来控制 body 样式 (防止滚动，已存在)
-  useEffect(() => {
-    if (typeof document !== 'undefined') {
-      document.body.classList.add('modal-open');
-      return () => {
-        document.body.classList.remove('modal-open');
-      };
-    }
-  }, []);
+        try {
+            await updateUserProfile(user.uid, profileData);
+            onProfileUpdate(); // 通知父组件刷新
+            onClose();
+        } catch (error) {
+            console.error("更新资料失败:", error);
+            alert("更新失败，请稍后再试。");
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4" onClick={onClose}>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4 overflow-y-auto max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">编辑资料</h2>
 
-  const handleImageChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      if (file.size > 5 * 1024 * 1024) { // 文件大小限制 5MB
-          setError("头像图片文件不能超过 5MB");
-          return;
-      }
-      setImageFile(file);
-      setImagePreview(URL.createObjectURL(file)); // 本地预览
-      setError('');
-    }
-  };
+                {/* 基本信息 */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">昵称</label>
+                    <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="mt-1 block w-full input-style" />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">自我介绍</label>
+                    <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows="3" className="mt-1 block w-full input-style"></textarea>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">性别</label>
+                    <select value={gender} onChange={(e) => setGender(e.target.value)} className="mt-1 block w-full input-style">
+                        <option value="not_specified">不透露</option>
+                        <option value="male">男</option>
+                        <option value="female">女</option>
+                    </select>
+                </div>
 
-  // 【新增】处理背景图文件选择
-  const handleBackgroundChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      if (file.size > 5 * 1024 * 1024) { // 背景图也限制 5MB
-          setError("背景图片文件不能超过 5MB");
-          return;
-      }
-      setBackgroundFile(file);
-      setBackgroundPreview(URL.createObjectURL(file)); // 本地预览
-      setError('');
-    }
-  };
+                {/* 标签 */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">性格爱好标签</label>
+                    <input type="text" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="用逗号分隔，如：旅游, 摄影" className="mt-1 block w-full input-style" />
+                </div>
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError('');
+                {/* 社交账号 */}
+                <div className="space-y-3">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">社交平台</label>
+                    {Object.entries(SOCIAL_PLATFORMS).map(([key, { name, icon, placeholder }]) => (
+                        <div key={key} className="flex items-center space-x-2">
+                            <i className={`${icon} w-6 text-center text-lg text-gray-500`}></i>
+                            <input
+                                type="text"
+                                value={socials[key] || ''}
+                                onChange={(e) => handleSocialChange(key, e.target.value)}
+                                placeholder={placeholder}
+                                className="flex-1 input-style"
+                            />
+                        </div>
+                    ))}
+                </div>
 
-    if (!user || !user.uid) { // 检查用户ID，避免上传失败
-      setError('用户信息无效，无法保存。请尝试重新登录。');
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      let newPhotoURL = user.photoURL;
-      let newBackgroundURL = user.backgroundImageUrl;
-
-      if (imageFile) {
-        newPhotoURL = await uploadProfilePicture(user.uid, imageFile);
-        console.log('DEBUG [EditProfileModal]: New photoURL uploaded:', newPhotoURL);
-      }
-      if (backgroundFile) {
-        newBackgroundURL = await uploadUserBackground(user.uid, backgroundFile);
-        console.log('DEBUG [EditProfileModal]: New backgroundURL uploaded:', newBackgroundURL);
-      }
-
-      const profileData = {
-        ...formData,
-        photoURL: newPhotoURL,
-        backgroundImageUrl: newBackgroundURL
-      };
-      
-      await updateUserProfile(user.uid, profileData);
-      
-      onProfileUpdate();
-      onClose();
-    } catch (err) {
-      setError('更新失败，请稍后再试。' + err.message);
-      console.error("ERROR [EditProfileModal]: handleSubmit failed:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  if (!user) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex justify-center items-start overflow-y-auto py-10" onClick={onClose}>
-      <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-lg shadow-xl p-6 w-full max-w-2xl m-4" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">编辑个人资料</h2>
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* 头像上传 */}
-          <div className="flex items-center space-x-4">
-            <img src={imagePreview || 'https://www.gravatar.com/avatar?d=mp'} alt="头像预览" className="w-20 h-20 rounded-full object-cover"/>
-            <button type="button" onClick={() => fileInputRef.current.click()} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">
-              更换头像
-            </button>
-            <input type="file" ref={fileInputRef} onChange={handleImageChange} accept="image/png, image/jpeg, image/gif" className="hidden"/>
-          </div>
-
-          {/* 【核心新增】背景图上传 UI */}
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">个人主页背景图</label>
-            <div className="flex items-center space-x-4">
-              <div className="w-32 h-16 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden flex-shrink-0 border border-gray-300 dark:border-gray-600">
-                {backgroundPreview ? (
-                  <img src={backgroundPreview} alt="背景图预览" className="w-full h-full object-cover"/>
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">无背景图</div>
-                )}
-              </div>
-              <button type="button" onClick={() => backgroundInputRef.current.click()} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">
-                更换背景
-              </button>
-              <input type="file" ref={backgroundInputRef} onChange={handleBackgroundChange} accept="image/png, image/jpeg, image/gif" className="hidden"/>
+                {/* 操作按钮 */}
+                <div className="flex justify-end space-x-3 pt-4">
+                    <button onClick={onClose} className="btn-secondary">取消</button>
+                    <button onClick={handleSave} disabled={isSaving} className="btn-primary">
+                        {isSaving ? '保存中...' : '保存'}
+                    </button>
+                </div>
             </div>
-          </div>
-
-
-          {/* 表单字段 (保持不变) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">昵称</label>
-              <input type="text" name="displayName" value={formData.displayName} onChange={handleChange} className="mt-1 block w-full input-style" required />
-            </div>
-            <div>
-              <label htmlFor="gender" className="block text-sm font-medium text-gray-700 dark:text-gray-300">性别</label>
-              <select name="gender" value={formData.gender} onChange={handleChange} className="mt-1 block w-full input-style">
-                <option value="not-specified">不透露</option>
-                <option value="male">男</option>
-                <option value="female">女</option>
-              </select>
-            </div>
-            <div>
-              <label htmlFor="birthDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300">出生日期</label>
-              <input type="date" name="birthDate" value={formData.birthDate} onChange={handleChange} className="mt-1 block w-full input-style" />
-            </div>
-             <div>
-              <label htmlFor="occupation" className="block text-sm font-medium text-gray-700 dark:text-gray-300">职业</label>
-              <input type="text" name="occupation" placeholder="例如：学生、工程师" value={formData.occupation} onChange={handleChange} className="mt-1 block w-full input-style" />
-            </div>
-            <div>
-              <label htmlFor="nationality" className="block text-sm font-medium text-gray-700 dark:text-gray-300">国籍</label>
-              <input type="text" name="nationality" placeholder="例如：中国" value={formData.nationality} onChange={handleChange} className="mt-1 block w-full input-style" />
-            </div>
-            <div>
-              <label htmlFor="learningLanguage" className="block text-sm font-medium text-gray-700 dark:text-gray-300">想学的语言</label>
-              <input type="text" name="learningLanguage" placeholder="例如：英语、日语" value={formData.learningLanguage} onChange={handleChange} className="mt-1 block w-full input-style" />
-            </div>
-            <div>
-              <label htmlFor="hometown" className="block text-sm font-medium text-gray-700 dark:text-gray-300">我的家乡</label>
-              <input type="text" name="hometown" placeholder="例如：北京" value={formData.hometown} onChange={handleChange} className="mt-1 block w-full input-style" />
-            </div>
-            <div>
-              <label htmlFor="currentCity" className="block text-sm font-medium text-gray-700 dark:text-gray-300">目前所在城市</label>
-              <input type="text" name="currentCity" value={formData.currentCity} onChange={handleChange} className="mt-1 block w-full input-style" />
-            </div>
-          </div>
-
-          {/* 自我介绍 */}
-          <div>
-            <label htmlFor="bio" className="block text-sm font-medium text-gray-700 dark:text-gray-300">自我介绍</label>
-            <textarea name="bio" rows="4" placeholder="介绍一下自己吧..." value={formData.bio} onChange={handleChange} className="mt-1 block w-full input-style" />
-          </div>
-
-          {error && <p className="text-red-500 text-sm">{error}</p>}
-
-          {/* 操作按钮 */}
-          <div className="flex justify-end space-x-3 pt-4">
-            <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500" disabled={isLoading}>
-              取消
-            </button>
-            <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-400" disabled={isLoading}>
-              {isLoading ? '保存中...' : '保存'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
+            {/* 定义一些通用样式，可以放在 global.css 中 */}
+            <style jsx>{`
+                .input-style {
+                    background-color: #f3f4f6; /* gray-100 */
+                    border: 1px solid #d1d5db; /* gray-300 */
+                    border-radius: 0.375rem; /* rounded-md */
+                    padding: 0.5rem 0.75rem;
+                    width: 100%;
+                }
+                .dark .input-style {
+                    background-color: #374151; /* dark:bg-gray-700 */
+                    border-color: #4b5563; /* dark:border-gray-600 */
+                    color: white;
+                }
+                .btn-primary {
+                    background-color: #2563eb; /* bg-blue-600 */
+                    color: white;
+                    padding: 0.5rem 1.25rem;
+                    border-radius: 9999px; /* rounded-full */
+                    font-weight: 600;
+                }
+                .btn-primary:hover {
+                    background-color: #1d4ed8; /* hover:bg-blue-700 */
+                }
+                .btn-primary:disabled {
+                    opacity: 0.6;
+                    cursor: not-allowed;
+                }
+                .btn-secondary {
+                    background-color: #e5e7eb; /* bg-gray-200 */
+                    color: #1f2937; /* text-gray-800 */
+                    padding: 0.5rem 1.25rem;
+                    border-radius: 9999px; /* rounded-full */
+                    font-weight: 600;
+                }
+                .dark .btn-secondary {
+                    background-color: #4b5563; /* dark:bg-gray-600 */
+                    color: #f3f4f6; /* dark:text-gray-100 */
+                }
+            `}</style>
+        </div>
+    );
 };
 
 export default EditProfileModal;
