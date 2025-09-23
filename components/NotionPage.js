@@ -1,4 +1,4 @@
-// components/NotionPage.js
+// components/NotionPage.js (已更新，支持 AiTtsButton)
 
 import { siteConfig } from '@/lib/config'
 import { compressImage, mapImgUrl } from '@/lib/notion/mapImage'
@@ -20,13 +20,7 @@ const TtsSettingsModal = dynamic(() => import('@/components/TtsSettingsModal'), 
 const BeiDanCi = dynamic(() => import('@/components/BeiDanCi'), { ssr: false });
 const TextToSpeechButton = dynamic(() => import('@/components/TextToSpeechButton'), { ssr: false });
 
-// 动态导入 react-notion-x 提供的原始 Code 组件
-const Code = dynamic(
-  () => import('react-notion-x/build/third-party/code').then(m => m.Code),
-  { ssr: false }
-);
-
-// ... 其他组件导入 (保持不变) ...
+const Code = dynamic(() => import('react-notion-x/build/third-party/code').then(m => m.Code), { ssr: false });
 const Collection = dynamic(() => import('react-notion-x/build/third-party/collection').then(m => m.Collection),{ ssr: true });
 const Equation = dynamic(() => import('@/components/Equation').then(async m => { await import('@/lib/plugins/mhchem'); return m.Equation }), { ssr: false });
 const Modal = dynamic(() => import('react-notion-x/build/third-party/modal').then(m => m.Modal), { ssr: false });
@@ -36,14 +30,8 @@ const AdEmbed = dynamic(() => import('@/components/GoogleAdsense').then(m => m.A
 const PrismMac = dynamic(() => import('@/components/PrismMac'), { ssr: false });
 const Tweet = ({ id }) => { return <TweetEmbed tweetId={id} /> }
 
-
-/**
- * 整个站点的核心组件
- * 将Notion数据渲染成网页
- * @param {*} param0
- * @returns
- */
 const NotionPage = ({ post, className }) => {
+  // ... (此部分所有 Hooks 和 useEffect 保持不变) ...
   const POST_DISABLE_GALLERY_CLICK = siteConfig('POST_DISABLE_GALLERY_CLICK')
   const POST_DISABLE_DATABASE_CLICK = siteConfig('POST_DISABLE_DATABASE_CLICK')
   const SPOILER_TEXT_TAG = siteConfig('SPOILER_TEXT_TAG')
@@ -106,7 +94,6 @@ const NotionPage = ({ post, className }) => {
     return null;
   };
 
-
   return (
     <div
       id='notion-article'
@@ -123,28 +110,20 @@ const NotionPage = ({ post, className }) => {
               
               if (includeData && !includeData.error) {
                  const { componentPath, parsedProps } = includeData;
+                 
                  // --- 根据 componentPath 渲染不同的自定义组件 ---
-                 if (componentPath === '/components/PronunciationPractice.js') {
-                   return <PronunciationPractice key={props.block.id} {...parsedProps} />;
-                 }
-                 if (componentPath === '/components/MotionTest.js') {
-                   return <MotionTest key={props.block.id} {...parsedProps} />;
-                 }
-                 if (componentPath === '/components/HanziWriterPractice.js') {
-                    return <HanziWriterPractice key={props.block.id} {...parsedProps} />;
-                 }
-                 if (componentPath === '/components/SentenceScramble.js') {
-                    return <SentenceScramble key={props.block.id} {...parsedProps} />;
-                 }
-                 if (componentPath === '/components/SwipeableFlashcard.js') {
-                    return <SwipeableFlashcard key={props.block.id} {...parsedProps} />;
-                 }
+                 if (componentPath === '/components/PronunciationPractice.js') return <PronunciationPractice key={props.block.id} {...parsedProps} />;
+                 if (componentPath === '/components/MotionTest.js') return <MotionTest key={props.block.id} {...parsedProps} />;
+                 if (componentPath === '/components/HanziWriterPractice.js') return <HanziWriterPractice key={props.block.id} {...parsedProps} />;
+                 if (componentPath === '/components/SentenceScramble.js') return <SentenceScramble key={props.block.id} {...parsedProps} />;
+                 if (componentPath === '/components/SwipeableFlashcard.js') return <SwipeableFlashcard key={props.block.id} {...parsedProps} />;
+                 if (componentPath === '/components/BeiDanCi.js') return <BeiDanCi key={props.block.id} {...parsedProps} />;
                  
                  // ==========================================================
-                 //  [核心修复] 在这里添加对 BeiDanCi 组件的渲染规则
+                 //  [核心修复] 在这里添加对 AiTtsButton 组件的渲染规则
                  // ==========================================================
-                 if (componentPath === '/components/BeiDanCi.js') {
-                   return <BeiDanCi key={props.block.id} {...parsedProps} />;
+                 if (componentPath === '/components/AiTtsButton.js') {
+                   return <AiTtsButton key={props.block.id} {...parsedProps} />;
                  }
                  // ==========================================================
 
@@ -152,10 +131,8 @@ const NotionPage = ({ post, className }) => {
                   return <div style={{padding: '1rem', border: '2px dashed red', color: 'red'}}>!include 块的 JSON 配置错误，请检查 Notion 页面。</div>
               }
             }
-            // 如果不是 !include 块，或解析失败，则回退到原始 Code 组件
             return <Code {...props} />;
           },
-          // ... 其他组件 (保持不变) ...
           Collection,
           Equation,
           Modal,
@@ -170,7 +147,7 @@ const NotionPage = ({ post, className }) => {
   )
 }
 
-// ==================== 以下是辅助函数，无需修改 ====================
+// ... (所有辅助函数保持不变) ...
 const processDisableDatabaseUrl = () => { if (isBrowser) { const links = document.querySelectorAll('.notion-table a'); for (const e of links) { e.removeAttribute('href') } } }
 const processGalleryImg = zoom => { setTimeout(() => { if (isBrowser) { const imgList = document?.querySelectorAll('.notion-collection-card-cover img'); if (imgList && zoom) { for (let i = 0; i < imgList.length; i++) { zoom.attach(imgList[i]) } } const cards = document.getElementsByClassName('notion-collection-card'); for (const e of cards) { e.removeAttribute('href') } } }, 800) }
 const autoScrollToHash = () => { setTimeout(() => { const hash = window?.location?.hash; const needToJumpToTitle = hash && hash.length > 0; if (needToJumpToTitle) { console.log('jump to hash', hash); const tocNode = document.getElementById(hash.substring(1)); if (tocNode && tocNode?.className?.indexOf('notion') > -1) { tocNode.scrollIntoView({ block: 'start', behavior: 'smooth' }) } } }, 180) }
