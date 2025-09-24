@@ -1,4 +1,4 @@
-// next.config.js (Complete version with merged CSP for Qiniu Cloud)
+// next.config.js (Complete version wih merged CSP for Qiniu Cloud)
 
 const { THEME } = require('./blog.config')
 const fs = require('fs')
