@@ -1,12 +1,11 @@
-// themes/heo/components/ChatMessage.js (最终的、唯一的修改)
+// themes/heo/components/ChatMessage.js (已增强以支持媒体显示，并保留所有原有功能)
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Image from 'next/image';
 import { useDrawer } from '@/lib/DrawerContext';
-import { useAuth } from '@/lib/AuthContext';
 
-// === 与 ChatSettingsPanel.js 保持一致的主题定义 ===
+// === 与 ChatSettingsPanel.js 保持一致的主题定义 (保留不变) ===
 const THEMES = [
     { id: 'classic-blue', name: '经典蓝', incoming: { className: 'bg-white text-gray-800 border', style: {} }, outgoing: { className: 'bg-blue-600 text-white', style: {} } },
     { id: 'soft-pastel', name: '柔和粉', incoming: { className: 'bg-pink-50 text-pink-800', style: {} }, outgoing: { className: 'bg-rose-200 text-rose-900', style: {} } },
@@ -43,6 +42,7 @@ const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) 
   const isMe = currentUserProfile && message.senderId === currentUserProfile.uid;
   const senderProfile = isMe ? currentUserProfile : otherUserProfile;
 
+  // useEffect for loading and listening to style changes (保留不变)
   useEffect(() => {
     const loadAndListenStyles = () => {
         const savedThemeId = localStorage.getItem(`chat_theme_id_${chatId}`) || 'classic-blue';
@@ -84,12 +84,62 @@ const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) 
     }
   };
 
+  // 【新增】媒体渲染函数
+  const renderMessageContent = () => {
+    // 优先渲染媒体内容
+    if (message.mediaUrl && message.mediaType) {
+      if (message.mediaType === 'image') {
+        return (
+          <a href={message.mediaUrl} target="_blank" rel="noopener noreferrer">
+            <img 
+              src={message.mediaUrl} 
+              alt="聊天图片" 
+              className="max-w-xs max-h-64 object-contain rounded-lg cursor-pointer" 
+              // 使用 Next/Image 会导致动态 URL 的问题，直接用 img 更稳妥
+            />
+          </a>
+        );
+      }
+      if (message.mediaType === 'video') {
+        return <video src={message.mediaUrl} controls className="max-w-xs rounded-lg" />;
+      }
+      if (message.mediaType === 'audio') {
+        return <audio src={message.mediaUrl} controls className="w-full max-w-xs" />;
+      }
+    }
+    
+    // 如果没有媒体，或者同时有文本，渲染文本
+    if (message.text) {
+      return <p className="break-all whitespace-pre-wrap">{message.text}</p>;
+    }
+    
+    // 如果是纯媒体消息但类型不被识别，显示一个提示
+    if (message.mediaUrl && !message.text) {
+        return <p className="text-sm italic opacity-75">[不支持的媒体类型]</p>
+    }
+
+    return null; // 确保总有返回值
+  };
+  
+  // 【新增】用于在媒体下方显示文本的函数
+  const renderTextBelowMedia = () => {
+      // 仅当同时存在媒体和文本时才渲染
+      if (message.mediaUrl && message.mediaType && message.text) {
+          return <p className="mt-2 break-all whitespace-pre-wrap">{message.text}</p>;
+      }
+      return null;
+  };
+
+
   if (!senderProfile) {
+    // 这是一个占位符，防止在 senderProfile 加载完成前 UI 跳动
     return <div className="h-[52px]"></div>;
   }
   
   const bubbleTheme = isMe ? chatStyles.theme.outgoing : chatStyles.theme.incoming;
-  const bubbleBaseClasses = 'inline-block max-w-full px-4 py-2';
+  // 【修改】如果消息是纯图片，移除内边距，让图片填满气泡
+  const isPureImage = message.mediaType === 'image' && !message.text;
+  const bubbleBaseClasses = `inline-block max-w-full ${isPureImage ? '' : 'px-4 py-2'}`;
   
   const bubbleShapeClasses = getBubbleShapeClasses(chatStyles.bubbleShapeKey, isMe);
   const bubbleColorAndFontClasses = `${bubbleTheme.className} ${chatStyles.fontSize} ${chatStyles.fontWeight}`;
@@ -107,8 +157,15 @@ const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) 
           className={`${bubbleBaseClasses} ${bubbleShapeClasses} ${bubbleColorAndFontClasses}`} 
           style={bubbleTheme.style}
         >
-          {/* 【核心修复】使用 break-all 强制在任何字符处换行 */}
-          <p className="break-all whitespace-pre-wrap">{message.text}</p>
+          {/* 【核心修改】调用新的渲染函数 */}
+          {message.mediaUrl && message.mediaType ? (
+            <div>
+              {renderMessageContent()}
+              {renderTextBelowMedia()}
+            </div>
+          ) : (
+            renderMessageContent() // 对于纯文本消息
+          )}
         </div>
       </div>
 
