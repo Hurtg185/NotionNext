@@ -1,4 +1,4 @@
-// next.config.js
+// next.config.js (Complete version with merged CSP for Qiniu Cloud)
 
 const { THEME } = require('./blog.config')
 const fs = require('fs')
@@ -161,7 +161,8 @@ const nextConfig = {
         wss://*.firebaseio.com 
         https://*.tiktok.com 
         https://*.facebook.com
-        https://busuanzi.ibruce.info;
+        https://busuanzi.ibruce.info
+        https://*.qiniup.com;
         
       font-src 'self' data: https://cdnjs.cloudflare.com;
       
