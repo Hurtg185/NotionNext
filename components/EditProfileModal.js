@@ -1,52 +1,78 @@
-// components/EditProfileModal.js (完整版)
+// components/EditProfileModal.js (功能增强版)
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { updateUserProfile } from '@/lib/user';
 
-const SOCIAL_PLATFORMS = {
-    weibo: { name: '微博', icon: 'fab fa-weibo', placeholder: '请输入微博主页用户名' },
-    github: { name: 'GitHub', icon: 'fab fa-github', placeholder: '请输入GitHub用户名' },
-    twitter: { name: 'X (Twitter)', icon: 'fab fa-twitter', placeholder: '请输入X用户名' },
-    instagram: { name: 'Instagram', icon: 'fab fa-instagram', placeholder: '请输入Instagram用户名' },
-};
+// 预设的兴趣爱好标签
+const HOBBY_OPTIONS = [ "电影", "音乐", "阅读", "旅游", "摄影", "美食", "运动", "游戏", "刷视频", "绘画", "交友" ];
 
 const EditProfileModal = ({ onClose, onProfileUpdate }) => {
     const { userData, user } = useAuth();
-    const [displayName, setDisplayName] = useState('');
-    const [bio, setBio] = useState('');
-    const [gender, setGender] = useState('');
-    const [tags, setTags] = useState(''); // 以逗号分隔的字符串
-    const [socials, setSocials] = useState({});
     const [isSaving, setIsSaving] = useState(false);
+    
+    // 使用一个 state 来管理所有表单数据
+    const [formData, setFormData] = useState({
+        displayName: '',
+        bio: '',
+        nationality: '',
+        hometown: '',
+        city: '',
+        occupation: '',
+        dob: '', // 存储为 YYYY-MM-DD 格式
+        hobbies: [],
+        socials: { github: '', twitter: '' }
+    });
 
     useEffect(() => {
         if (userData) {
-            setDisplayName(userData.displayName || '');
-            setBio(userData.bio || '');
-            setGender(userData.gender || 'not_specified');
-            setTags((userData.tags || []).join(', '));
-            setSocials(userData.socials || {});
+            setFormData({
+                displayName: userData.displayName || '',
+                bio: userData.bio || '',
+                nationality: userData.nationality || '',
+                hometown: userData.hometown || '',
+                city: userData.city || '',
+                occupation: userData.occupation || '',
+                // 将 Firestore Timestamp 转换为 YYYY-MM-DD
+                dob: userData.dob?.toDate().toISOString().split('T')[0] || '',
+                hobbies: userData.hobbies || [],
+                socials: userData.socials || { github: '', twitter: '' }
+            });
         }
     }, [userData]);
 
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+    
     const handleSocialChange = (platform, value) => {
-        setSocials(prev => ({ ...prev, [platform]: value }));
+        setFormData(prev => ({
+            ...prev,
+            socials: { ...prev.socials, [platform]: value }
+        }));
+    };
+
+    const handleHobbyToggle = (hobby) => {
+        setFormData(prev => {
+            const newHobbies = prev.hobbies.includes(hobby)
+                ? prev.hobbies.filter(h => h !== hobby)
+                : [...prev.hobbies, hobby];
+            return { ...prev, hobbies: newHobbies };
+        });
     };
 
     const handleSave = async () => {
         setIsSaving(true);
-        const tagsArray = tags.split(',').map(tag => tag.trim()).filter(Boolean);
-        const profileData = {
-            displayName,
-            bio,
-            gender,
-            tags: tagsArray,
-            socials,
+        // 准备要上传到 Firestore 的数据
+        const dataToSave = {
+            ...formData,
+            // 如果 dob 存在，则转换为 Firestore Timestamp
+            dob: formData.dob ? new Date(formData.dob) : null
         };
 
         try {
-            await updateUserProfile(user.uid, profileData);
-            onProfileUpdate(); // 通知父组件刷新
+            await updateUserProfile(user.uid, dataToSave);
+            onProfileUpdate();
             onClose();
         } catch (error) {
             console.error("更新资料失败:", error);
@@ -60,96 +86,46 @@ const EditProfileModal = ({ onClose, onProfileUpdate }) => {
         <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4" onClick={onClose}>
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4 overflow-y-auto max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white">编辑资料</h2>
-
-                {/* 基本信息 */}
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">昵称</label>
-                    <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="mt-1 block w-full input-style" />
+                
+                {/* 字段输入区 */}
+                <input name="displayName" value={formData.displayName} onChange={handleInputChange} placeholder="昵称" className="input-style" />
+                <textarea name="bio" value={formData.bio} onChange={handleInputChange} placeholder="自我介绍" rows="3" className="input-style"></textarea>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input name="nationality" value={formData.nationality} onChange={handleInputChange} placeholder="国籍" className="input-style" />
+                    <input name="hometown" value={formData.hometown} onChange={handleInputChange} placeholder="家乡" className="input-style" />
+                    <input name="city" value={formData.city} onChange={handleInputChange} placeholder="所在城市" className="input-style" />
+                    <input name="occupation" value={formData.occupation} onChange={handleInputChange} placeholder="职业" className="input-style" />
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">自我介绍</label>
-                    <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows="3" className="mt-1 block w-full input-style"></textarea>
+                    <label className="text-sm text-gray-500">出生日期</label>
+                    <input name="dob" type="date" value={formData.dob} onChange={handleInputChange} className="input-style" />
                 </div>
+                
+                {/* 兴趣爱好选择器 */}
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">性别</label>
-                    <select value={gender} onChange={(e) => setGender(e.target.value)} className="mt-1 block w-full input-style">
-                        <option value="not_specified">不透露</option>
-                        <option value="male">男</option>
-                        <option value="female">女</option>
-                    </select>
-                </div>
-
-                {/* 标签 */}
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">性格爱好标签</label>
-                    <input type="text" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="用逗号分隔，如：旅游, 摄影" className="mt-1 block w-full input-style" />
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">兴趣爱好</label>
+                    <div className="flex flex-wrap gap-2">
+                        {HOBBY_OPTIONS.map(hobby => (
+                            <button key={hobby} onClick={() => handleHobbyToggle(hobby)}
+                                className={`px-3 py-1 text-sm rounded-full transition-colors ${formData.hobbies.includes(hobby) ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
+                                {hobby}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 {/* 社交账号 */}
-                <div className="space-y-3">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">社交平台</label>
-                    {Object.entries(SOCIAL_PLATFORMS).map(([key, { name, icon, placeholder }]) => (
-                        <div key={key} className="flex items-center space-x-2">
-                            <i className={`${icon} w-6 text-center text-lg text-gray-500`}></i>
-                            <input
-                                type="text"
-                                value={socials[key] || ''}
-                                onChange={(e) => handleSocialChange(key, e.target.value)}
-                                placeholder={placeholder}
-                                className="flex-1 input-style"
-                            />
-                        </div>
-                    ))}
-                </div>
+                <input value={formData.socials.github} onChange={(e) => handleSocialChange('github', e.target.value)} placeholder="GitHub 用户名" className="input-style" />
+                <input value={formData.socials.twitter} onChange={(e) => handleSocialChange('twitter', e.target.value)} placeholder="Twitter 用户名" className="input-style" />
 
-                {/* 操作按钮 */}
                 <div className="flex justify-end space-x-3 pt-4">
-                    <button onClick={onClose} className="btn-secondary">取消</button>
-                    <button onClick={handleSave} disabled={isSaving} className="btn-primary">
+                    <button onClick={onClose} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-md font-semibold">取消</button>
+                    <button onClick={handleSave} disabled={isSaving} className="px-4 py-2 bg-blue-600 text-white rounded-md font-semibold disabled:opacity-50">
                         {isSaving ? '保存中...' : '保存'}
                     </button>
                 </div>
             </div>
-            {/* 定义一些通用样式，可以放在 global.css 中 */}
-            <style jsx>{`
-                .input-style {
-                    background-color: #f3f4f6; /* gray-100 */
-                    border: 1px solid #d1d5db; /* gray-300 */
-                    border-radius: 0.375rem; /* rounded-md */
-                    padding: 0.5rem 0.75rem;
-                    width: 100%;
-                }
-                .dark .input-style {
-                    background-color: #374151; /* dark:bg-gray-700 */
-                    border-color: #4b5563; /* dark:border-gray-600 */
-                    color: white;
-                }
-                .btn-primary {
-                    background-color: #2563eb; /* bg-blue-600 */
-                    color: white;
-                    padding: 0.5rem 1.25rem;
-                    border-radius: 9999px; /* rounded-full */
-                    font-weight: 600;
-                }
-                .btn-primary:hover {
-                    background-color: #1d4ed8; /* hover:bg-blue-700 */
-                }
-                .btn-primary:disabled {
-                    opacity: 0.6;
-                    cursor: not-allowed;
-                }
-                .btn-secondary {
-                    background-color: #e5e7eb; /* bg-gray-200 */
-                    color: #1f2937; /* text-gray-800 */
-                    padding: 0.5rem 1.25rem;
-                    border-radius: 9999px; /* rounded-full */
-                    font-weight: 600;
-                }
-                .dark .btn-secondary {
-                    background-color: #4b5563; /* dark:bg-gray-600 */
-                    color: #f3f4f6; /* dark:text-gray-100 */
-                }
-            `}</style>
+            <style jsx>{`.input-style { background-color: #f3f4f6; border: 1px solid #d1d5db; border-radius: 0.375rem; padding: 0.5rem 0.75rem; width: 100%; } .dark .input-style { background-color: #374151; border-color: #4b5563; color: white; }`}</style>
         </div>
     );
 };
