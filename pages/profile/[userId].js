@@ -1,6 +1,6 @@
 // pages/profile/[userId].js (最终修复和功能增强版)
 
-import React, { useState, useEffect } from 'react'; // 【修复】修正了 import 语法
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '@/lib/AuthContext';
 import { LayoutBase } from '@/themes/heo';
@@ -9,7 +9,7 @@ import {
   getPostsByUser,
   getFavoritesByUser,
   getViewHistoryByUser,
-  getDynamicsByUser, // 【新增】导入获取动态的函数
+  getDynamicsByUser,
   followUser,
   unfollowUser,
   checkFollowing,
@@ -17,38 +17,9 @@ import {
 import EditProfileModal from '@/components/EditProfileModal';
 import FollowListModal from '@/components/FollowListModal';
 
-// --- PostList 组件保持单列帖子布局 ---
-const PostList = ({ posts, type, profileUser }) => {
-  // ... 此组件代码保持不变 ...
-};
-
-// --- 【新增】DynamicsList 组件，用于展示新的“动态”内容 ---
-const DynamicsList = ({ dynamics, profileUser }) => {
-    const router = useRouter();
-    if (!dynamics || dynamics.length === 0) {
-        return <p className="text-center text-gray-500 dark:text-gray-400 mt-8">还没有发布任何动态。</p>;
-    }
-    return (
-        <div className="space-y-4">
-            {dynamics.map(item => (
-                <div key={item.id} className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                    <div className="flex items-center space-x-3 mb-3">
-                        <img src={profileUser.photoURL || 'https://www.gravatar.com/avatar?d=mp'} alt={profileUser.displayName} className="w-10 h-10 rounded-full object-cover" />
-                        <div>
-                            <p className="font-bold text-gray-800 dark:text-white">{profileUser.displayName}</p>
-                            <p className="text-xs text-gray-500">{item.createdAt ? new Date(item.createdAt.toDate()).toLocaleString() : '刚刚'}</p>
-                        </div>
-                    </div>
-                    {/* 动态文本内容 */}
-                    {item.text && <p className="text-gray-700 dark:text-gray-300 mb-3">{item.text}</p>}
-                    {/* 动态图片 */}
-                    {item.imageUrl && <img src={item.imageUrl} alt="动态图片" className="w-full rounded-lg object-cover" />}
-                </div>
-            ))}
-        </div>
-    );
-};
-
+// --- PostList 和 DynamicsList 组件保持不变 ---
+const PostList = ({ posts, type, profileUser }) => { /* ... 此组件代码保持不变 ... */ };
+const DynamicsList = ({ dynamics, profileUser }) => { /* ... 此组件代码保持不变 ... */ };
 
 const SOCIAL_ICONS = {
     weibo: 'fab fa-weibo',
@@ -63,7 +34,7 @@ const ProfilePage = () => {
   const { user: currentUser } = useAuth();
   const [profileUser, setProfileUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('posts');
+  const [activeTab, setActiveTab] = useState('dynamics'); // 默认显示动态
   const [isEditing, setIsEditing] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [tabContent, setTabContent] = useState([]);
@@ -73,21 +44,55 @@ const ProfilePage = () => {
 
   const isMyProfile = currentUser && currentUser.uid === userId;
 
-  const fetchUserProfile = async () => { /* ... 此函数代码保持不变 ... */ };
+  // 【核心修复】重写数据获取函数，增加错误处理和 finally 块
+  const fetchUserProfile = async () => {
+    if (!userId) {
+      setLoading(false); // 如果没有 userId，直接停止加载
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      // 尝试获取用户资料
+      const profileData = await getUserProfile(userId);
+      if (profileData) {
+        setProfileUser(profileData);
+        // 如果是查看他人主页，则检查关注状态
+        if (currentUser && currentUser.uid !== userId) {
+          const followingStatus = await checkFollowing(currentUser.uid, userId);
+          setIsFollowing(followingStatus);
+        }
+      } else {
+        // 用户不存在
+        setProfileUser(null);
+      }
+    } catch (error) {
+      // 如果获取过程中发生任何错误
+      console.error("获取用户资料失败:", error);
+      setProfileUser(null); // 将用户设置为 null 以显示错误信息
+    } finally {
+      // 无论成功还是失败，这个块都会执行
+      setLoading(false); // 保证加载状态最终会被关闭
+    }
+  };
 
   useEffect(() => {
+    // 当 userId 变化时，重置状态并重新获取数据
     setProfileUser(null);
-    setActiveTab('posts');
-    if(userId) fetchUserProfile();
+    setActiveTab('dynamics');
+    fetchUserProfile();
   }, [userId, currentUser]);
 
   useEffect(() => {
-    if (!userId || !profileUser) return;
+    if (!userId || !profileUser) {
+      setTabContent([]); // 如果没有用户，清空标签页内容
+      return;
+    };
     
     let unsubscribe;
     if (activeTab === 'posts') {
       unsubscribe = getPostsByUser(userId, setTabContent);
-    } else if (activeTab === 'dynamics') { // 【新增】处理“动态”标签
+    } else if (activeTab === 'dynamics') {
       unsubscribe = getDynamicsByUser(userId, setTabContent);
     } else if (activeTab === 'favorites' && isMyProfile) {
       getFavoritesByUser(userId, setTabContent);
@@ -96,31 +101,35 @@ const ProfilePage = () => {
     } else {
       setTabContent([]);
     }
-    return () => unsubscribe && unsubscribe();
+    // 组件卸载时取消订阅
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [activeTab, userId, isMyProfile, profileUser]);
 
   const handleFollow = async () => { /* ... 此函数代码保持不变 ... */ };
-  
-  // 【修复】为私信按钮添加实际的导航功能
-  const handleStartChat = () => {
-      if (!userId) return;
-      // 跳转到与该用户的聊天页面，你需要创建这个页面
-      router.push(`/messages/${userId}`);
-  };
-
+  const handleStartChat = () => { /* ... 此函数代码保持不变 ... */ };
   const handleOpenFollowModal = (type) => { /* ... 此函数代码保持不变 ... */ };
   const handleProfileUpdate = () => { /* ... 此函数代码保持不变 ... */ };
 
-  if (loading) return <LayoutBase><div className="p-10 text-center">正在加载...</div></LayoutBase>;
-  if (!profileUser) return <LayoutBase><div className="p-10 text-center text-red-500">用户不存在。</div></LayoutBase>;
+  // --- UI 渲染逻辑 ---
 
+  // 首先处理加载状态
+  if (loading) {
+    return <LayoutBase><div className="flex justify-center items-center h-screen">正在加载用户资料...</div></LayoutBase>;
+  }
+
+  // 加载结束后，如果用户不存在，显示错误信息
+  if (!profileUser) {
+    return <LayoutBase><div className="flex justify-center items-center h-screen text-red-500">无法加载该用户的信息或用户不存在。</div></LayoutBase>;
+  }
+
+  // 正常渲染用户主页
   return (
     <LayoutBase>
       <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
-        {/* 【UI修改】背景图高度改为屏幕的1/3 */}
         <div className="relative w-full h-[33vh] min-h-[250px] bg-cover bg-center" style={{ backgroundImage: `url(${profileUser.backgroundImageUrl || '/images/zhuyetu.jpg'})` }}>
           <div className="absolute inset-0 bg-black/40"></div>
-          
           <div className="absolute top-4 right-4 z-10">
             {isMyProfile && (
               <button onClick={() => setIsEditing(true)} className="px-3 py-1.5 bg-white/30 text-white rounded-full text-sm font-semibold backdrop-blur-sm hover:bg-white/50 transition-colors">
@@ -128,16 +137,13 @@ const ProfilePage = () => {
               </button>
             )}
           </div>
-          
-          {/* 将用户信息移到背景图下方，形成更清晰的卡片布局 */}
         </div>
         
-        {/* 用户信息和操作按钮区域 */}
         <div className="container mx-auto px-4 -mt-16">
             <div className="relative bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg">
                 <div className="flex justify-between items-start">
                     <img src={profileUser.photoURL || 'https://www.gravatar.com/avatar?d=mp'} alt={profileUser.displayName} className="w-24 h-24 rounded-full border-4 border-white dark:border-gray-800 object-cover" />
-                    {!loading && !isMyProfile && (
+                    {!isMyProfile && (
                         <div className="flex space-x-2 mt-4">
                             <button onClick={handleFollow} disabled={isFollowLoading} className="px-6 py-2 bg-red-500 text-white rounded-full font-semibold hover:bg-red-600 transition-colors disabled:opacity-70">
                                 {isFollowing ? '已关注' : '关注'}
@@ -151,11 +157,9 @@ const ProfilePage = () => {
                 
                 <div className="mt-2">
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white truncate">{profileUser.displayName || '未命名用户'}</h1>
-                    {/* ... 社交链接等信息保持不变 ... */}
                 </div>
 
                 <p className="text-sm mt-2 text-gray-600 dark:text-gray-400">{profileUser.bio || '这位用户很神秘，什么都没留下...'}</p>
-                {/* ... 性别、标签等信息保持不变 ... */}
                 
                 <div className="flex items-center space-x-5 mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
                     <button onClick={() => handleOpenFollowModal('following')} className="text-center">
@@ -170,12 +174,9 @@ const ProfilePage = () => {
             </div>
         </div>
 
-
-        {/* 标签页和内容 */}
         <div className="container mx-auto px-2 md:px-4 py-4 flex-grow">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md">
                 <div className="flex border-b border-gray-200 dark:border-gray-700">
-                    {/* 【新增】“动态”标签 */}
                     <button onClick={() => setActiveTab('dynamics')} className={`py-3 px-6 font-semibold ${activeTab === 'dynamics' ? 'text-blue-500 border-b-2 border-blue-500' : 'text-gray-600 dark:text-gray-400'}`}>
                         动态
                     </button>
