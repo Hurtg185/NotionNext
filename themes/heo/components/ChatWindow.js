@@ -1,4 +1,4 @@
-// themes/heo/components/ChatWindow.js (UI美化最终版 - 保留所有功能 - 已修正上传地址)
+// themes/heo/components/ChatWindow.js (聊天页面UI美化最终版 - 保留所有功能 - 已修正上传地址)
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
