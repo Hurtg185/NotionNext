@@ -78,6 +78,7 @@
     "notion-utils": "7.4.3",
     "nprogress": "^0.2.0",
     "pinyin-pro": "^3.27.0",
+    "qiniu": "^7.14.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-facebook": "^8.1.4",
