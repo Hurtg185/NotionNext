@@ -1,24 +1,20 @@
-// themes/heo/components/ChatMessage.js (最终优化版 - 状态隔离 + 缩略图优先)
+// themes/heo/components/ChatMessage.js (最终优化版 - 已整合七牛云实时图片样式)
 
-import React from 'react'; // 移除了 useState 和 useEffect
+import React from 'react';
 import { useRouter } from 'next/router';
 import Image from 'next/image';
 import { useDrawer } from '@/lib/DrawerContext';
-// 【核心修改】导入新的 Context Hook 和函数
 import { useChatStyle, getBubbleShapeClasses } from '@/lib/ChatStyleContext'; 
 
 const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) => {
   const router = useRouter();
   const { closeDrawer } = useDrawer();
 
-  // 【核心修改】从 Context 获取样式，不再需要组件内部的状态和监听器
   const { styles } = useChatStyle();
   const { theme, fontSize, fontWeight, bubbleShapeKey } = styles;
 
   const isMe = currentUserProfile && message.senderId === currentUserProfile.uid;
   const senderProfile = isMe ? currentUserProfile : otherUserProfile;
-
-  // 【已删除】之前用于加载和监听全局事件的 useEffect 已被完全移除，解决了全局状态污染问题。
 
   const handleAvatarClick = () => {
     if (senderProfile?.id) {
@@ -27,21 +23,20 @@ const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) 
     }
   };
 
-  // 【性能优化】渲染函数，优先使用 thumbnailUrl
   const renderMessageContent = () => {
     // 渲染媒体内容
     if (message.mediaUrl && message.mediaType) {
-      const thumbnailUrl = message.thumbnailUrl || message.mediaUrl; // 如果没有缩略图，则降级使用原图
-
       if (message.mediaType === 'image') {
+        // 【核心修改】动态拼接七牛云图片样式，不再依赖数据库的 thumbnailUrl 字段
+        const thumbnailUrl = `${message.mediaUrl}?thumb400`; 
+
         return (
           <div className="relative group cursor-pointer" onClick={() => window.open(message.mediaUrl, '_blank')}>
             <img 
               src={thumbnailUrl} 
               alt="聊天图片" 
-              className="max-w-xs max-h-64 object-cover rounded-lg" // 使用 object-cover 让缩略图填满容器
+              className="max-w-xs max-h-64 object-cover rounded-lg"
             />
-            {/* 在图片上覆盖一个放大镜图标，提示用户可以点击看原图 */}
             <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
                 <i className="fas fa-search-plus text-white text-2xl"></i>
             </div>
@@ -49,12 +44,15 @@ const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) 
         );
       }
       if (message.mediaType === 'video') {
+        // 视频逻辑保持不变，依然使用工作流生成的 thumbnailUrl
+        const thumbnailUrl = message.thumbnailUrl || message.mediaUrl; 
+
         return (
           <video 
-            src={message.mediaUrl} // 视频可以直接播放压缩后的版本
-            poster={thumbnailUrl}   // 使用视频截图作为封面
+            src={message.mediaUrl}
+            poster={thumbnailUrl}
             controls 
-            preload="metadata" // 只加载元数据（时长等），不加载整个视频
+            preload="metadata"
             className="max-w-xs rounded-lg" 
           />
         );
@@ -77,7 +75,6 @@ const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) 
     return null;
   };
   
-  // 渲染媒体下方的文本
   const renderTextBelowMedia = () => {
       if (message.mediaUrl && message.mediaType && message.text) {
           return <p className="mt-2 break-all whitespace-pre-wrap">{message.text}</p>;
@@ -90,7 +87,6 @@ const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) 
   }
   
   const bubbleTheme = isMe ? theme.outgoing : theme.incoming;
-  // 如果是纯图片或视频，移除内边距，让媒体填满气泡
   const isPureMedia = (message.mediaType === 'image' || message.mediaType === 'video') && !message.text;
   const bubbleBaseClasses = `inline-block max-w-full overflow-hidden ${isPureMedia ? 'p-0' : 'px-4 py-2'}`;
   
@@ -110,18 +106,15 @@ const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) 
           className={`${bubbleBaseClasses} ${bubbleShapeClasses} ${bubbleColorAndFontClasses}`} 
           style={bubbleTheme.style}
         >
-          {/* 根据消息类型决定渲染结构 */}
           {message.mediaUrl && message.mediaType ? (
             <div>
               {renderMessageContent()}
-              {/* 如果是纯媒体，文字在气泡外；如果媒体+文字，文字在气泡内 */}
               {isPureMedia ? null : renderTextBelowMedia()}
             </div>
           ) : (
-            renderMessageContent() // 纯文本消息
+            renderMessageContent()
           )}
         </div>
-        {/* 如果是纯媒体，把文字显示在气泡下方 */}
         {isPureMedia && renderTextBelowMedia() && (
              <div className="text-sm text-gray-600 dark:text-gray-300 mt-1 px-2">
                 {renderTextBelowMedia()}
