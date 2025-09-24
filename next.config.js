@@ -1,4 +1,4 @@
-// next.config.js (Complete version wih merged CSP for Qiniu Cloud)
+// next.config.js (已合并七牛云相关域名)
 
 const { THEME } = require('./blog.config')
 const fs = require('fs')
@@ -10,6 +10,7 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: BLOG.BUNDLE_ANALYZER
 })
 
+// ... (所有您原来的函数 scanSubdirectories, locales, preBuild 都保持不变)
 function scanSubdirectories(directory) {
   const subdirectories = []
   fs.readdirSync(directory).forEach(file => {
@@ -21,7 +22,6 @@ function scanSubdirectories(directory) {
   })
   return subdirectories
 }
-
 const locales = (function () {
   const langs = [BLOG.LANG]
   if (BLOG.NOTION_PAGE_ID.indexOf(',') > 0) {
@@ -38,7 +38,6 @@ const locales = (function () {
   }
   return langs
 })()
-
 const preBuild = (function () {
   if (
     !process.env.npm_lifecycle_event === 'export' &&
@@ -51,20 +50,20 @@ const preBuild = (function () {
     fs.unlinkSync(sitemapPath)
     console.log('Deleted existing sitemap.xml from public directory')
   }
-
   const sitemap2Path = path.resolve(__dirname, 'sitemap.xml')
   if (fs.existsSync(sitemap2Path)) {
     fs.unlinkSync(sitemap2Path)
     console.log('Deleted existing sitemap.xml from root directory')
   }
 })()
-
 const themes = scanSubdirectories(path.resolve(__dirname, 'themes'))
+
 
 /**
  * @type {import('next').NextConfig}
  */
 const nextConfig = {
+  // ... (所有您原来的配置 eslint, output, images 等都保持不变)
   eslint: {
     ignoreDuringBuilds: true
   },
@@ -90,7 +89,9 @@ const nextConfig = {
       'gravatar.com', 'www.notion.so', 'avatars.githubusercontent.com',
       'images.unsplash.com', 'source.unsplash.com', 'p1.qhimg.com',
       'webmention.io', 'ko-fi.com', 'lh3.googleusercontent.com',
-      'graph.facebook.com', 'i.ytimg.com'
+      'graph.facebook.com', 'i.ytimg.com',
+      // 【新增】添加您的七牛云 CDN 域名
+      'cdn.843075.xyz' 
     ],
     loader: 'default',
     minimumCacheTTL: 60 * 60 * 24 * 7,
@@ -118,7 +119,7 @@ const nextConfig = {
     }
     return [ ...langsRewrites, { source: '/:path*.html', destination: '/:path*' } ]
   },
-  
+
   headers: process.env.EXPORT ? undefined : async () => {
     const ContentSecurityPolicy = `
       default-src 'self';
@@ -145,13 +146,16 @@ const nextConfig = {
         
       img-src * blob: data:;
       
-      media-src 'self' 
+      // 【核心修改】在这里添加您的七牛云域名
+      media-src 'self' blob: https:
         https://t.leftsite.cn 
         https://*.youtube.com 
         https://*.facebook.com 
         https://*.googlevideo.com 
-        https://*.tiktok.com;
+        https://*.tiktok.com
+        ${process.env.NEXT_PUBLIC_QINIU_DOMAIN || ''}; 
         
+      // 【核心修改】在这里添加七牛云上传域名
       connect-src 'self' 
         https://t.leftsite.cn 
         https://*.google.com 
@@ -176,6 +180,7 @@ const nextConfig = {
     return [{ source: '/:path*', headers: [{ key: 'Content-Security-Policy', value: ContentSecurityPolicy }] }];
   },
   
+  // ... (所有您原来的配置 webpack, experimental 等都保持不变)
   webpack: (config, { dev, isServer }) => {
     config.resolve.alias['@'] = path.resolve(__dirname)
     const currentTheme = THEME || 'heo';
