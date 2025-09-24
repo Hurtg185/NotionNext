@@ -1,81 +1,24 @@
-// themes/heo/components/ChatMessage.js (已增强以支持媒体显示，并保留所有原有功能)
+// themes/heo/components/ChatMessage.js (最终优化版 - 状态隔离 + 缩略图优先)
 
-import React, { useState, useEffect } from 'react';
+import React from 'react'; // 移除了 useState 和 useEffect
 import { useRouter } from 'next/router';
 import Image from 'next/image';
 import { useDrawer } from '@/lib/DrawerContext';
-
-// === 与 ChatSettingsPanel.js 保持一致的主题定义 (保留不变) ===
-const THEMES = [
-    { id: 'classic-blue', name: '经典蓝', incoming: { className: 'bg-white text-gray-800 border', style: {} }, outgoing: { className: 'bg-blue-600 text-white', style: {} } },
-    { id: 'soft-pastel', name: '柔和粉', incoming: { className: 'bg-pink-50 text-pink-800', style: {} }, outgoing: { className: 'bg-rose-200 text-rose-900', style: {} } },
-    { id: 'neon-dark', name: '霓虹暗', incoming: { className: 'bg-gray-900 text-gray-200', style: { boxShadow: '0 2px 8px rgba(0,0,0,0.6)' } }, outgoing: { className: 'text-black', style: { background: 'linear-gradient(90deg,#00F5A0,#00D2FF)', color: '#000' } } },
-    { id: 'glassmorphism', name: '玻璃拟物', incoming: { className: 'backdrop-blur-sm bg-white/30 text-gray-900 border', style: { borderColor: 'rgba(255,255,255,0.25)' } }, outgoing: { className: 'backdrop-blur-sm text-white', style: { background: 'linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))', border: '1px solid rgba(255,255,255,0.08)' } } },
-    { id: 'sunset-gradient', name: '日落渐变', incoming: { className: 'text-gray-900', style: { background: 'linear-gradient(90deg,#FFE29F,#FFA99F)' } }, outgoing: { className: 'text-white', style: { background: 'linear-gradient(90deg,#FF7E5F,#FEB47B)' } } },
-    { id: 'minimal-muted', name: '极简灰', incoming: { className: 'bg-gray-100 text-gray-800', style: {} }, outgoing: { className: 'bg-gray-800 text-white', style: {} } },
-    { id: 'tropical', name: '热带风', incoming: { className: 'text-gray-900', style: { background: 'linear-gradient(90deg,#E0F7FA,#B2EBF2)' } }, outgoing: { className: 'text-white', style: { background: 'linear-gradient(90deg,#00C9FF,#92FE9D)' } } },
-    { id: 'mono-line', name: '线条风', incoming: { className: 'bg-white text-indigo-700 border', style: { borderLeft: '4px solid #6366F1' } }, outgoing: { className: 'bg-indigo-600 text-white', style: {} } }
-];
-
-const getBubbleShapeClasses = (shapeKey, isMe) => {
-    switch (shapeKey) {
-        case 'squircle': return 'rounded-lg';
-        case 'pill': return 'rounded-full';
-        case 'sharp': return 'rounded-none';
-        case 'soft': return 'rounded-3xl';
-        case 'top-tail': return isMe ? 'rounded-2xl rounded-tr-md' : 'rounded-2xl rounded-tl-md';
-        case 'default': default: return isMe ? 'rounded-2xl rounded-br-md' : 'rounded-2xl rounded-bl-md';
-    }
-};
+// 【核心修改】导入新的 Context Hook 和函数
+import { useChatStyle, getBubbleShapeClasses } from '@/lib/ChatStyleContext'; 
 
 const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) => {
   const router = useRouter();
   const { closeDrawer } = useDrawer();
 
-  const [chatStyles, setChatStyles] = useState({
-      theme: THEMES[0],
-      fontSize: 'text-base',
-      fontWeight: 'font-normal',
-      bubbleShapeKey: 'default'
-  });
+  // 【核心修改】从 Context 获取样式，不再需要组件内部的状态和监听器
+  const { styles } = useChatStyle();
+  const { theme, fontSize, fontWeight, bubbleShapeKey } = styles;
 
   const isMe = currentUserProfile && message.senderId === currentUserProfile.uid;
   const senderProfile = isMe ? currentUserProfile : otherUserProfile;
 
-  // useEffect for loading and listening to style changes (保留不变)
-  useEffect(() => {
-    const loadAndListenStyles = () => {
-        const savedThemeId = localStorage.getItem(`chat_theme_id_${chatId}`) || 'classic-blue';
-        const savedBubbleShapeKey = localStorage.getItem(`chat_bubble_shape_key_${chatId}`) || 'default';
-        const savedFontSize = localStorage.getItem(`chat_font_size_${chatId}`) || 'text-base';
-        const savedFontWeight = localStorage.getItem(`chat_font_weight_${chatId}`) || 'font-normal';
-        const currentTheme = THEMES.find(t => t.id === savedThemeId) || THEMES[0];
-        
-        setChatStyles({ 
-            theme: currentTheme, 
-            bubbleShapeKey: savedBubbleShapeKey,
-            fontSize: savedFontSize, 
-            fontWeight: savedFontWeight 
-        });
-    };
-    loadAndListenStyles();
-
-    const handleStyleChange = (event) => {
-        const { themeId, bubbleShapeKey, fontSize, fontWeight } = event.detail;
-        const currentTheme = THEMES.find(t => t.id === themeId) || THEMES[0];
-        setChatStyles({ 
-            theme: currentTheme, 
-            bubbleShapeKey: bubbleShapeKey,
-            fontSize: fontSize, 
-            fontWeight: fontWeight 
-        });
-    };
-    window.addEventListener('chat-style-change', handleStyleChange);
-
-    return () => {
-        window.removeEventListener('chat-style-change', handleStyleChange);
-    };
-  }, [chatId]);
+  // 【已删除】之前用于加载和监听全局事件的 useEffect 已被完全移除，解决了全局状态污染问题。
 
   const handleAvatarClick = () => {
     if (senderProfile?.id) {
@@ -84,65 +27,75 @@ const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) 
     }
   };
 
-  // 【新增】媒体渲染函数
+  // 【性能优化】渲染函数，优先使用 thumbnailUrl
   const renderMessageContent = () => {
-    // 优先渲染媒体内容
+    // 渲染媒体内容
     if (message.mediaUrl && message.mediaType) {
+      const thumbnailUrl = message.thumbnailUrl || message.mediaUrl; // 如果没有缩略图，则降级使用原图
+
       if (message.mediaType === 'image') {
         return (
-          <a href={message.mediaUrl} target="_blank" rel="noopener noreferrer">
+          <div className="relative group cursor-pointer" onClick={() => window.open(message.mediaUrl, '_blank')}>
             <img 
-              src={message.mediaUrl} 
+              src={thumbnailUrl} 
               alt="聊天图片" 
-              className="max-w-xs max-h-64 object-contain rounded-lg cursor-pointer" 
-              // 使用 Next/Image 会导致动态 URL 的问题，直接用 img 更稳妥
+              className="max-w-xs max-h-64 object-cover rounded-lg" // 使用 object-cover 让缩略图填满容器
             />
-          </a>
+            {/* 在图片上覆盖一个放大镜图标，提示用户可以点击看原图 */}
+            <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
+                <i className="fas fa-search-plus text-white text-2xl"></i>
+            </div>
+          </div>
         );
       }
       if (message.mediaType === 'video') {
-        return <video src={message.mediaUrl} controls className="max-w-xs rounded-lg" />;
+        return (
+          <video 
+            src={message.mediaUrl} // 视频可以直接播放压缩后的版本
+            poster={thumbnailUrl}   // 使用视频截图作为封面
+            controls 
+            preload="metadata" // 只加载元数据（时长等），不加载整个视频
+            className="max-w-xs rounded-lg" 
+          />
+        );
       }
       if (message.mediaType === 'audio') {
         return <audio src={message.mediaUrl} controls className="w-full max-w-xs" />;
       }
     }
     
-    // 如果没有媒体，或者同时有文本，渲染文本
+    // 渲染纯文本内容
     if (message.text) {
       return <p className="break-all whitespace-pre-wrap">{message.text}</p>;
     }
     
-    // 如果是纯媒体消息但类型不被识别，显示一个提示
+    // 降级处理
     if (message.mediaUrl && !message.text) {
         return <p className="text-sm italic opacity-75">[不支持的媒体类型]</p>
     }
 
-    return null; // 确保总有返回值
+    return null;
   };
   
-  // 【新增】用于在媒体下方显示文本的函数
+  // 渲染媒体下方的文本
   const renderTextBelowMedia = () => {
-      // 仅当同时存在媒体和文本时才渲染
       if (message.mediaUrl && message.mediaType && message.text) {
           return <p className="mt-2 break-all whitespace-pre-wrap">{message.text}</p>;
       }
       return null;
   };
 
-
   if (!senderProfile) {
-    // 这是一个占位符，防止在 senderProfile 加载完成前 UI 跳动
     return <div className="h-[52px]"></div>;
   }
   
-  const bubbleTheme = isMe ? chatStyles.theme.outgoing : chatStyles.theme.incoming;
-  // 【修改】如果消息是纯图片，移除内边距，让图片填满气泡
-  const isPureImage = message.mediaType === 'image' && !message.text;
-  const bubbleBaseClasses = `inline-block max-w-full ${isPureImage ? '' : 'px-4 py-2'}`;
+  const bubbleTheme = isMe ? theme.outgoing : theme.incoming;
+  // 如果是纯图片或视频，移除内边距，让媒体填满气泡
+  const isPureMedia = (message.mediaType === 'image' || message.mediaType === 'video') && !message.text;
+  const bubbleBaseClasses = `inline-block max-w-full overflow-hidden ${isPureMedia ? 'p-0' : 'px-4 py-2'}`;
   
-  const bubbleShapeClasses = getBubbleShapeClasses(chatStyles.bubbleShapeKey, isMe);
-  const bubbleColorAndFontClasses = `${bubbleTheme.className} ${chatStyles.fontSize} ${chatStyles.fontWeight}`;
+  const bubbleShapeClasses = getBubbleShapeClasses(bubbleShapeKey, isMe);
+  const bubbleColorAndFontClasses = `${bubbleTheme.className} ${fontSize} ${fontWeight}`;
 
   return (
     <div className={`flex items-start gap-2 my-2 w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
@@ -157,16 +110,23 @@ const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) 
           className={`${bubbleBaseClasses} ${bubbleShapeClasses} ${bubbleColorAndFontClasses}`} 
           style={bubbleTheme.style}
         >
-          {/* 【核心修改】调用新的渲染函数 */}
+          {/* 根据消息类型决定渲染结构 */}
           {message.mediaUrl && message.mediaType ? (
             <div>
               {renderMessageContent()}
-              {renderTextBelowMedia()}
+              {/* 如果是纯媒体，文字在气泡外；如果媒体+文字，文字在气泡内 */}
+              {isPureMedia ? null : renderTextBelowMedia()}
             </div>
           ) : (
-            renderMessageContent() // 对于纯文本消息
+            renderMessageContent() // 纯文本消息
           )}
         </div>
+        {/* 如果是纯媒体，把文字显示在气泡下方 */}
+        {isPureMedia && renderTextBelowMedia() && (
+             <div className="text-sm text-gray-600 dark:text-gray-300 mt-1 px-2">
+                {renderTextBelowMedia()}
+             </div>
+        )}
       </div>
 
       {isMe && (
