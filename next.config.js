@@ -1,4 +1,4 @@
-// next.config.js (最终修复版 - 允许 unsafe-eval 以解决白屏问题)
+// next.config.js (最终修复版 - 已修复 i18n 配置问题)
 
 const { THEME } = require('./blog.config')
 const fs = require('fs')
@@ -10,21 +10,39 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: BLOG.BUNDLE_ANALYZER
 })
 
-// ... (所有您原来的函数都保持不变)
+// ... (其他函数保持不变)
 function scanSubdirectories(directory) { /* ... */ }
-const locales = (function () { /* ... */ })()
 const preBuild = (function () { /* ... */ })()
 const themes = scanSubdirectories(path.resolve(__dirname, 'themes'))
+
+
+// 【核心修改】增加健壮性，确保 locales 始终是一个有效的数组
+const locales = (() => {
+  // 提供一个默认语言，以防 BLOG.LANG 未定义
+  const defaultLang = BLOG.LANG || 'en';
+  const langs = [defaultLang];
+  
+  if (BLOG.NOTION_PAGE_ID && BLOG.NOTION_PAGE_ID.indexOf(',') > 0) {
+    const siteIds = BLOG.NOTION_PAGE_ID.split(',');
+    for (const siteId of siteIds) {
+      const prefix = extractLangPrefix(siteId);
+      // 确保 prefix 是一个有效的字符串，并且不重复
+      if (prefix && !langs.includes(prefix)) {
+        langs.push(prefix);
+      }
+    }
+  }
+  // 过滤掉任何可能的 undefined 或 null 值
+  return langs.filter(Boolean);
+})();
 
 
 /**
  * @type {import('next').NextConfig}
  */
 const nextConfig = {
-  // ... (所有您原来的配置都保持不变)
-  eslint: {
-    ignoreDuringBuilds: true
-  },
+  // ... (其他配置保持不变)
+  eslint: { ignoreDuringBuilds: true },
   output: process.env.EXPORT ? 'export' : process.env.NEXT_BUILD_STANDALONE === 'true' ? 'standalone' : undefined,
   staticPageGenerationTimeout: 120,
   compress: true,
@@ -35,10 +53,13 @@ const nextConfig = {
     '@heroicons/react/24/outline': { transform: '@heroicons/react/24/outline/{{member}}' },
     '@heroicons/react/24/solid': { transform: '@heroicons/react/24/solid/{{member}}' }
   },
+  
+  // 【核心修改】确保 i18n 配置始终有效
   i18n: process.env.EXPORT ? undefined : {
-    defaultLocale: BLOG.LANG,
-    locales: locales
+    locales: locales.length > 0 ? locales : ['en'], // 如果计算后为空，则提供一个默认值
+    defaultLocale: BLOG.LANG || 'en',
   },
+  
   images: {
     formats: ['image/avif', 'image/webp'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
@@ -54,9 +75,11 @@ const nextConfig = {
     minimumCacheTTL: 60 * 60 * 24 * 7,
     dangerouslyAllowSVG: true,
   },
+  
   redirects: process.env.EXPORT ? undefined : () => {
     return [{ source: '/feed', destination: '/rss/feed.xml', permanent: true }]
   },
+  
   rewrites: process.env.EXPORT ? undefined : () => {
     const langsRewrites = []
     if (BLOG.NOTION_PAGE_ID.indexOf(',') > 0) {
@@ -66,7 +89,6 @@ const nextConfig = {
         const siteId = siteIds[index]
         const prefix = extractLangPrefix(siteId)
         if (prefix) { langs.push(prefix) }
-        console.log('[Locales]', siteId)
       }
       langsRewrites.push(
         { source: `/:locale(${langs.join('|')})/:path*`, destination: '/:path*' },
@@ -78,30 +100,20 @@ const nextConfig = {
   },
 
   headers: process.env.EXPORT ? undefined : async () => {
-    // 【核心修改】使用一个更健壮的、经过验证的 CSP 策略
     const ContentSecurityPolicy = `
       default-src 'self';
-      
-      // 【核心修改】在这里添加 'unsafe-eval'
       script-src 'self' 'unsafe-eval' 'unsafe-inline' *.googletagmanager.com *.google-analytics.com *.youtube.com *.tiktok.com *.static-z.com *.facebook.net busuanzi.ibruce.info cdnjs.cloudflare.com;
-      
       style-src 'self' 'unsafe-inline' *.googleapis.com cdnjs.cloudflare.com;
-      
       img-src * blob: data:;
-      
       media-src 'self' blob: https: *.googlevideo.com *.tiktok.com ${process.env.NEXT_PUBLIC_QINIU_DOMAIN || ''};
-      
       font-src 'self' data: cdnjs.cloudflare.com;
-      
       frame-src 'self' *.google.com *.youtube.com *.facebook.com *.tiktok.com chrome-sum-448615-f2.firebaseapp.com;
-
       connect-src 'self' *.google.com *.googleapis.com firestore.googleapis.com identitytoolkit.googleapis.com securetoken.googleapis.com wss://*.firebaseio.com *.qiniup.com *.tiktok.com *.facebook.com busuanzi.ibruce.info www.google-analytics.com;
     `.replace(/\s{2,}/g, ' ').trim();
     
     return [{ source: '/:path*', headers: [{ key: 'Content-Security-Policy', value: ContentSecurityPolicy }] }];
   },
   
-  // ... (所有您原来的配置 webpack, experimental 等都保持不变)
   webpack: (config, { dev, isServer }) => {
     config.resolve.alias['@'] = path.resolve(__dirname)
     const currentTheme = THEME || 'heo';
