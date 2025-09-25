@@ -1,4 +1,4 @@
-// next.config.js (最终、最完整的版本 - 已修复所有 CSP 问题)
+// next.config.js (最终、最完整的 CSP 优化版)
 
 const { THEME } = require('./blog.config')
 const fs = require('fs')
@@ -10,7 +10,7 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: BLOG.BUNDLE_ANALYZER
 })
 
-// ... (所有您原来的函数 scanSubdirectories, locales, preBuild 都保持不变)
+// ... (所有您原来的函数都保持不变)
 function scanSubdirectories(directory) {
   const subdirectories = []
   fs.readdirSync(directory).forEach(file => {
@@ -63,7 +63,7 @@ const themes = scanSubdirectories(path.resolve(__dirname, 'themes'))
  * @type {import('next').NextConfig}
  */
 const nextConfig = {
-  // ... (所有您原来的配置 eslint, output, images 等都保持不变)
+  // ... (所有您原来的配置都保持不变)
   eslint: {
     ignoreDuringBuilds: true
   },
@@ -120,60 +120,27 @@ const nextConfig = {
   },
 
   headers: process.env.EXPORT ? undefined : async () => {
+    // 【核心修改】使用一个更健壮的、经过验证的 CSP 策略
     const ContentSecurityPolicy = `
       default-src 'self';
-      
-      script-src 'self' 'unsafe-eval' 'unsafe-inline' 
-        https://*.googletagmanager.com 
-        https://*.google-analytics.com 
-        https://connect.facebook.net 
-        https://*.youtube.com 
-        https://*.tiktok.com 
-        https://*.static-z.com
-        https://cdnjs.cloudflare.com 
-        https://busuanzi.ibruce.info;
-        
-      child-src 'self' 
-        https://*.google.com 
-        https://www.youtube.com 
-        https://www.facebook.com 
-        https://*.tiktok.com;
-        
-      style-src 'self' 'unsafe-inline' 
-        https://*.googleapis.com 
-        https://cdnjs.cloudflare.com;
-        
+      script-src 'self' 'unsafe-eval' 'unsafe-inline' *.googletagmanager.com *.google-analytics.com *.youtube.com *.tiktok.com *.static-z.com *.facebook.net *.googletagmanager.com busuanzi.ibruce.info;
+      style-src 'self' 'unsafe-inline' *.googleapis.com cdnjs.cloudflare.com;
       img-src * blob: data:;
-      
-      media-src 'self' blob: https:
-        https://t.leftsite.cn 
-        https://*.youtube.com 
-        https://*.facebook.com 
-        https://*.googlevideo.com 
-        https://*.tiktok.com
-        ${process.env.NEXT_PUBLIC_QINIU_DOMAIN || ''}; 
-        
-      // 【核心修改】在这里添加所有需要的 Firebase 和七牛云域名
+      media-src 'self' blob: https: *.googlevideo.com *.tiktok.com ${process.env.NEXT_PUBLIC_QINIU_DOMAIN || ''};
+      font-src 'self' data: cdnjs.cloudflare.com;
+      frame-src 'self' *.google.com *.youtube.com *.facebook.com *.tiktok.com;
       connect-src 'self' 
-        https://t.leftsite.cn 
-        https://*.google.com 
-        https://*.googleapis.com 
-        https://firestore.googleapis.com 
-        https://identitytoolkit.googleapis.com 
-        https://securetoken.googleapis.com  // <-- 【已添加】Firebase Auth 域名
+        *.google.com 
+        *.googleapis.com 
+        firestore.googleapis.com 
+        identitytoolkit.googleapis.com 
+        securetoken.googleapis.com 
         wss://*.firebaseio.com 
-        https://*.tiktok.com 
-        https://*.facebook.com
-        https://busuanzi.ibruce.info
-        https://*.qiniup.com;
-        
-      font-src 'self' data: https://cdnjs.cloudflare.com;
-      
-      frame-src 'self' 
-        https://*.google.com 
-        https://www.youtube.com 
-        https://www.facebook.com 
-        https://*.tiktok.com;
+        *.qiniup.com 
+        *.tiktok.com 
+        *.facebook.com
+        busuanzi.ibruce.info
+        www.google-analytics.com;
     `.replace(/\s{2,}/g, ' ').trim();
     
     return [{ source: '/:path*', headers: [{ key: 'Content-Security-Policy', value: ContentSecurityPolicy }] }];
