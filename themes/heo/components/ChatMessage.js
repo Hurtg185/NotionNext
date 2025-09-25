@@ -1,6 +1,6 @@
-// themes/heo/components/ChatMessage.js (最终优化版 - 增加加载占位符和时间戳)
+// themes/heo/components/ChatMessage.js (最终健壮版 - 增加默认样式以防止崩溃)
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react'; // 重新导入 useState 用于 MediaRenderer
 import { useRouter } from 'next/router';
 import Image from 'next/image';
 import { useDrawer } from '@/lib/DrawerContext';
@@ -11,18 +11,12 @@ const MediaRenderer = ({ message }) => {
     const [isMediaLoaded, setIsMediaLoaded] = useState(false);
     const [hasError, setHasError] = useState(false);
 
-    const handleMediaLoad = () => {
-        setIsMediaLoaded(true);
-    };
-
-    const handleMediaError = () => {
-        setHasError(true);
-    };
+    const handleMediaLoad = () => setIsMediaLoaded(true);
+    const handleMediaError = () => setHasError(true);
 
     const mediaUrl = message.mediaUrl;
     const mediaType = message.mediaType;
     
-    // 优先使用工作流生成的视频封面，或实时生成的图片缩略图
     const thumbnailUrl = mediaType === 'image' 
         ? `${mediaUrl}?thumb400` 
         : message.thumbnailUrl || mediaUrl;
@@ -34,13 +28,10 @@ const MediaRenderer = ({ message }) => {
     if (mediaType === 'image') {
         return (
             <div className="relative group cursor-pointer" onClick={() => window.open(mediaUrl, '_blank')}>
-                {/* 占位符和真实图片叠加在一起 */}
                 <div className="max-w-xs max-h-64">
-                    {/* 模糊的背景占位符 */}
                     {!isMediaLoaded && (
                         <div className="absolute inset-0 bg-gray-200 dark:bg-gray-600 animate-pulse rounded-lg"></div>
                     )}
-                    {/* 真实图片，加载完成后变为可见 */}
                     <img 
                         src={thumbnailUrl} 
                         alt="聊天图片" 
@@ -49,7 +40,6 @@ const MediaRenderer = ({ message }) => {
                         className={`w-full h-full object-cover rounded-lg transition-opacity duration-300 ${isMediaLoaded ? 'opacity-100' : 'opacity-0'}`}
                     />
                 </div>
-                {/* 放大镜图标 */}
                 <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
                     <i className="fas fa-search-plus text-white text-2xl"></i>
                 </div>
@@ -72,7 +62,21 @@ const MediaRenderer = ({ message }) => {
 const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) => {
   const router = useRouter();
   const { closeDrawer } = useDrawer();
-  const { styles } = useChatStyle();
+
+  // 【核心修复】增加一个安全的默认值，防止 useChatStyle 返回 undefined 时崩溃
+  const contextValue = useChatStyle();
+  const styles = contextValue?.styles || {
+      theme: { 
+          id: 'classic-blue', 
+          name: '经典蓝', 
+          incoming: { className: 'bg-white text-gray-800 border', style: {} }, 
+          outgoing: { className: 'bg-blue-600 text-white', style: {} } 
+      },
+      fontSize: 'text-base',
+      fontWeight: 'font-normal',
+      bubbleShapeKey: 'default'
+  };
+  
   const { theme, fontSize, fontWeight, bubbleShapeKey } = styles;
 
   const isMe = currentUserProfile && message.senderId === currentUserProfile.uid;
@@ -85,16 +89,13 @@ const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) 
     }
   };
   
-  // 【新增】格式化时间戳的函数
   const formatTimestamp = (timestamp) => {
-      if (!timestamp || !timestamp.toDate) {
-          return ''; // 如果时间戳不存在或格式不正确，返回空
-      }
+      if (!timestamp || !timestamp.toDate) return '';
       const date = timestamp.toDate();
       return date.toLocaleTimeString('zh-CN', {
           hour: '2-digit',
           minute: '2-digit',
-          hour12: true // 使用12小时制，例如 "上午 10:30"
+          hour12: true
       });
   };
 
@@ -123,7 +124,8 @@ const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) 
   const isPureMedia = (message.mediaType === 'image' || message.mediaType === 'video') && !message.text;
   const bubbleBaseClasses = `inline-block max-w-full overflow-hidden ${isPureMedia ? 'p-0' : 'px-4 py-2'}`;
   
-  const bubbleShapeClasses = getBubbleShapeClasses(bubbleShapeKey, isMe);
+  // 确保 getBubbleShapeClasses 在 context 不存在时也能工作
+  const bubbleShapeClasses = getBubbleShapeClasses ? getBubbleShapeClasses(bubbleShapeKey, isMe) : (isMe ? 'rounded-2xl rounded-br-md' : 'rounded-2xl rounded-bl-md');
   const bubbleColorAndFontClasses = `${theme.className} ${fontSize} ${fontWeight}`;
 
   return (
@@ -148,7 +150,6 @@ const ChatMessage = ({ message, chatId, currentUserProfile, otherUserProfile }) 
             renderMessageContent()
           )}
         </div>
-        {/* 【新增】显示时间戳 */}
         <div className="text-xs text-gray-400 dark:text-gray-500 mt-1 px-2">
             {formatTimestamp(message.timestamp || message.createdAt)}
         </div>
