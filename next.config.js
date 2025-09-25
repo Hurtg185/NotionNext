@@ -1,4 +1,4 @@
-// next.config.js (已合并七牛云相关域名)
+// next.config.js (最终、最完整的版本 - 已修复所有 CSP 问题)
 
 const { THEME } = require('./blog.config')
 const fs = require('fs')
@@ -90,7 +90,6 @@ const nextConfig = {
       'images.unsplash.com', 'source.unsplash.com', 'p1.qhimg.com',
       'webmention.io', 'ko-fi.com', 'lh3.googleusercontent.com',
       'graph.facebook.com', 'i.ytimg.com',
-      // 【新增】添加您的七牛云 CDN 域名
       'cdn.843075.xyz' 
     ],
     loader: 'default',
@@ -146,7 +145,6 @@ const nextConfig = {
         
       img-src * blob: data:;
       
-      // 【核心修改】在这里添加您的七牛云域名
       media-src 'self' blob: https:
         https://t.leftsite.cn 
         https://*.youtube.com 
@@ -155,13 +153,14 @@ const nextConfig = {
         https://*.tiktok.com
         ${process.env.NEXT_PUBLIC_QINIU_DOMAIN || ''}; 
         
-      // 【核心修改】在这里添加七牛云上传域名
+      // 【核心修改】在这里添加所有需要的 Firebase 和七牛云域名
       connect-src 'self' 
         https://t.leftsite.cn 
         https://*.google.com 
         https://*.googleapis.com 
         https://firestore.googleapis.com 
         https://identitytoolkit.googleapis.com 
+        https://securetoken.googleapis.com  // <-- 【已添加】Firebase Auth 域名
         wss://*.firebaseio.com 
         https://*.tiktok.com 
         https://*.facebook.com
