@@ -1,4 +1,4 @@
-// next.config.js (最终、最完整的 CSP 优化版)
+// next.config.js (最终修复版 - 已添加 cdnjs.cloudflare.com 到 CSP)
 
 const { THEME } = require('./blog.config')
 const fs = require('fs')
@@ -120,15 +120,37 @@ const nextConfig = {
   },
 
   headers: process.env.EXPORT ? undefined : async () => {
-    // 【核心修改】使用一个更健壮的、经过验证的 CSP 策略
     const ContentSecurityPolicy = `
       default-src 'self';
-      script-src 'self' 'unsafe-eval' 'unsafe-inline' *.googletagmanager.com *.google-analytics.com *.youtube.com *.tiktok.com *.static-z.com *.facebook.net *.googletagmanager.com busuanzi.ibruce.info;
-      style-src 'self' 'unsafe-inline' *.googleapis.com cdnjs.cloudflare.com;
+      
+      // 【核心修改】在 script-src 的末尾添加了 cdnjs.cloudflare.com
+      script-src 'self' 'unsafe-eval' 'unsafe-inline' 
+        *.googletagmanager.com 
+        *.google-analytics.com 
+        connect.facebook.net 
+        *.youtube.com 
+        *.tiktok.com 
+        *.static-z.com
+        cdnjs.cloudflare.com 
+        busuanzi.ibruce.info;
+        
+      child-src 'self' 
+        *.google.com 
+        www.youtube.com 
+        www.facebook.com 
+        *.tiktok.com;
+        
+      style-src 'self' 'unsafe-inline' 
+        *.googleapis.com 
+        cdnjs.cloudflare.com;
+        
       img-src * blob: data:;
-      media-src 'self' blob: https: *.googlevideo.com *.tiktok.com ${process.env.NEXT_PUBLIC_QINIU_DOMAIN || ''};
-      font-src 'self' data: cdnjs.cloudflare.com;
-      frame-src 'self' *.google.com *.youtube.com *.facebook.com *.tiktok.com;
+      
+      media-src 'self' blob: https: 
+        *.googlevideo.com 
+        *.tiktok.com 
+        ${process.env.NEXT_PUBLIC_QINIU_DOMAIN || ''};
+        
       connect-src 'self' 
         *.google.com 
         *.googleapis.com 
@@ -141,6 +163,14 @@ const nextConfig = {
         *.facebook.com
         busuanzi.ibruce.info
         www.google-analytics.com;
+        
+      font-src 'self' data: cdnjs.cloudflare.com;
+      
+      frame-src 'self' 
+        *.google.com 
+        www.youtube.com 
+        www.facebook.com 
+        *.tiktok.com;
     `.replace(/\s{2,}/g, ' ').trim();
     
     return [{ source: '/:path*', headers: [{ key: 'Content-Security-Policy', value: ContentSecurityPolicy }] }];
