@@ -1,4 +1,4 @@
-// pages/forum/post/[id].js (已根据需求优化和修复)
+// pages/forum/post/[id].js (已根据论坛主页需求优化和修复)
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
