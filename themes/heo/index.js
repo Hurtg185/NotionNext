@@ -56,9 +56,9 @@ import {
 import dynamic from 'next/dynamic'
 
 // 导入内容块组件
-import HskContentBlock from '@/components/HskPageClient'
+//import HskContentBlock from '@/components/HskPageClient'
 // 更新：从 kouyu.js 导入新的口语页面组件
-import KouyuPage from '@/components/kouyu'
+//（import KouyuPage from '@/components/kouyu'
 import PracticeContentBlock from '@/components/PracticeContentBlock'
 import BooksContentBlock from '@/components/BooksContentBlock'
 import WordsContentBlock from '@/components/WordsContentBlock'
