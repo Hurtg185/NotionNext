@@ -1,11 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { motion } from "framer-motion"
-import { Volume2 } from "lucide-react"
 
 /* =============================
-   主页面
+   主页面（可作为 index）
 ============================= */
 export default function HomeLearnChinese() {
   return (
@@ -61,7 +59,7 @@ function LeftSidebar() {
 }
 
 /* =============================
-   Hero：缅甸人专用文案（你点的 5）
+   Hero：缅甸人专用文案
 ============================= */
 function HeroSection() {
   return (
@@ -70,7 +68,7 @@ function HeroSection() {
         给缅甸人学的中文
       </h1>
       <p className="text-gray-600 dark:text-gray-300 text-lg leading-relaxed">
-        不背语法，不写作文  
+        不背语法，不写作文
         <br />
         <strong>先听 · 先说 · 先敢开口</strong>
         <br /><br />
@@ -81,7 +79,7 @@ function HeroSection() {
 }
 
 /* =============================
-   今日拼音模块（你点的 1）
+   今日拼音（无动画版）
 ============================= */
 function PinyinToday() {
   const today = ["b", "p", "m", "f"]
@@ -94,15 +92,15 @@ function PinyinToday() {
 
       <div className="flex gap-4">
         {today.map((py, i) => (
-          <motion.div
+          <div
             key={i}
-            whileTap={{ scale: 0.9 }}
             className="w-24 h-24 rounded-2xl bg-white dark:bg-[#1e1e1e]
-              shadow-lg flex flex-col items-center justify-center cursor-pointer"
+              shadow-lg flex flex-col items-center justify-center
+              cursor-pointer active:scale-95 transition"
           >
             <div className="text-3xl font-bold mb-2">{py}</div>
-            <Volume2 size={20} className="text-blue-500" />
-          </motion.div>
+            <div className="text-blue-500 text-sm">🔊</div>
+          </div>
         ))}
       </div>
 
@@ -114,7 +112,7 @@ function PinyinToday() {
 }
 
 /* =============================
-   拼音表（第一阶段）
+   拼音表（声母）
 ============================= */
 function PinyinGrid() {
   const initials = [
@@ -138,7 +136,7 @@ function PinyinGrid() {
             key={i}
             className="bg-white dark:bg-[#1e1e1e]
               rounded-xl py-4 text-center font-semibold
-              cursor-pointer hover:shadow-md"
+              cursor-pointer hover:shadow-md active:scale-95 transition"
           >
             {py}
           </div>
@@ -146,4 +144,4 @@ function PinyinGrid() {
       </div>
     </section>
   )
-    }
+                 }
