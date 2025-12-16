@@ -1,100 +1,213 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
-import WordCard from '../../components/WordCard'; // 路径可能需要根据你的结构调整
+import Head from 'next/head';
+import Link from 'next/link';
+import dynamic from 'next/dynamic'; // 关键引入
+import { BookOpen, GraduationCap, Dumbbell, ChevronLeft, Trophy } from 'lucide-react';
 
-// --- 数据中心：一次性导入所有单词数据 ---
-// 确保这些 JSON 文件都存在于你的 data/hsk 目录下
+// 引入 UI 组件
+import HskEntryCard from '../../components/HskEntryCard';
+
+// =========================================================================
+// 1. 动态加载重型组件 (解决 self defined 报错的关键)
+// =========================================================================
+
+// 生词组件 (假设这是你的刷卡组件)
+const DynamicWordModule = dynamic(() => import('../../components/WordCard'), {
+  ssr: false, // 禁止服务端渲染
+  loading: () => <LoadingOverlay text="正在加载单词卡片..." />
+});
+
+// 语法组件 (还没写的话，下面会提供一个占位符)
+const DynamicGrammarModule = dynamic(() => import('../../components/GrammarCard'), {
+  ssr: false,
+  loading: () => <LoadingOverlay text="正在加载语法模块..." />
+});
+
+// 练习组件
+const DynamicPracticeModule = dynamic(() => import('../../components/PracticeCard'), {
+  ssr: false,
+  loading: () => <LoadingOverlay text="正在加载练习模块..." />
+});
+
+// 简单的加载动画组件
+const LoadingOverlay = ({ text }) => (
+  <div className="fixed inset-0 z-50 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm flex items-center justify-center">
+    <div className="flex flex-col items-center gap-3">
+      <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      <p className="text-sm text-gray-500 font-medium">{text}</p>
+    </div>
+  </div>
+);
+
+// =========================================================================
+// 2. 数据准备 (保持你原有的逻辑)
+// =========================================================================
 import hsk1Words from '../../data/hsk/hsk1.json';
 import hsk2Words from '../../data/hsk/hsk2.json';
-import hsk3Words from '../../data/hsk/hsk3.json';
-import hsk4Words from '../../data/hsk/hsk4.json';
-import hsk5Words from '../../data/hsk/hsk5.json';
-import hsk6Words from '../../data/hsk/hsk6.json';
+// ... 导入其他 JSON
 
-// 创建一个映射，方便根据 URL 中的 level 动态查找数据
-const hskWordsData = {
+const hskDataMap = {
   '1': hsk1Words,
   '2': hsk2Words,
-  '3': hsk3Words,
-  '4': hsk4Words,
-  '5': hsk5Words,
-  '6': hsk6Words,
+  // ... 添加其他级别
 };
-// -------------------------------------------
 
+// =========================================================================
+// 3. 页面逻辑
+// =========================================================================
 const HskLevelPage = () => {
   const router = useRouter();
-  const { level } = router.query; // 从 URL 中获取 level 参数，例如 "1", "3"
+  const { level } = router.query;
+  
+  // 状态管理：当前激活的模块 ('words' | 'grammar' | 'practice' | null)
+  const [activeModule, setActiveModule] = useState(null);
+  const [levelData, setLevelData] = useState([]);
 
-  const [words, setWords] = useState([]);
-  const [isCardOpen, setIsCardOpen] = useState(false);
-
-  // 使用 useEffect 来在 level 参数可用时加载数据
+  // 加载数据
   useEffect(() => {
-    // 确保 level 存在，并且是 hskWordsData 中的一个有效键
-    if (level && hskWordsData[level]) {
-      setWords(hskWordsData[level]);
-    } else {
-      setWords([]); // 如果 level 无效，则清空单词
+    if (level && hskDataMap[level]) {
+      const data = hskDataMap[level];
+      // 兼容处理：有些 JSON 可能是数组，有些可能是 { words: [] } 对象
+      setLevelData(Array.isArray(data) ? data : (data.words || []));
     }
-  }, [level]); // 这个 effect 会在 level 改变时重新运行
+  }, [level]);
 
-  const handleStart = () => {
-    if (words.length > 0) {
-      setIsCardOpen(true);
-    } else {
-      alert("没有加载到任何生词数据！请检查链接是否正确。");
-    }
+  // 返回处理
+  const handleCloseModule = () => setActiveModule(null);
+
+  // 震动辅助
+  const vibrate = () => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(10);
   };
 
-  // 在路由准备好并且数据加载完成之前，可以显示一个加载状态
-  if (!level || (router.isReady && words.length === 0)) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <h1>加载中或未找到 HSK {level} 的单词数据...</h1>
-      </div>
-    );
-  }
+  // 如果路由没准备好
+  if (!level) return null;
 
-  // 如果卡片已经打开，渲染 WordCard 组件
-  if (isCardOpen) {
+  // =========================================================================
+  // 4. 渲染逻辑：如果某个模块被激活，渲染对应组件，否则渲染仪表盘
+  // =========================================================================
+  
+  // 渲染：生词模块
+  if (activeModule === 'words') {
     return (
-      <WordCard
-        words={words}
-        isOpen={isCardOpen}
-        onClose={() => setIsCardOpen(false)}
-        progressKey={`hsk${level}_study_page`} // 创建一个动态且唯一的进度键
+      <DynamicWordModule
+        words={levelData}
+        isOpen={true}
+        onClose={handleCloseModule}
+        progressKey={`hsk${level}_words`}
       />
     );
   }
 
-  // 默认显示开始学习的界面
+  // 渲染：语法模块
+  if (activeModule === 'grammar') {
+    return (
+      <DynamicGrammarModule
+        level={level}
+        onClose={handleCloseModule}
+      />
+    );
+  }
+
+  // 渲染：练习模块
+  if (activeModule === 'practice') {
+    return (
+      <DynamicPracticeModule
+        level={level}
+        words={levelData}
+        onClose={handleCloseModule}
+      />
+    );
+  }
+
+  // =========================================================================
+  // 5. 渲染逻辑：主仪表盘 (Dashboard)
+  // =========================================================================
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      height: '100vh',
-      textAlign: 'center',
-      padding: '20px'
-    }}>
-      <h1>HSK {level} 学习</h1>
-      <p>准备好开始学习 {words.length} 个新单词了吗？</p>
-      <button 
-        onClick={handleStart} 
-        style={{ 
-          padding: '12px 25px', 
-          fontSize: '1.2rem', 
-          cursor: 'pointer',
-          borderRadius: '12px',
-          border: 'none',
-          color: 'white',
-          background: 'linear-gradient(135deg, #4299e1, #3182ce)'
-        }}
-      >
-        开始学习
-      </button>
+    <div className="min-h-screen bg-[#F5F7FA] dark:bg-gray-950 font-sans pb-safe">
+      <Head>
+        <title>HSK Level {level} - Study</title>
+      </Head>
+
+      {/* 顶部导航 */}
+      <div className="sticky top-0 z-10 px-4 py-3 bg-[#F5F7FA]/90 dark:bg-gray-950/90 backdrop-blur-md flex items-center justify-between">
+        <Link 
+            href="/hsk" 
+            onClick={vibrate}
+            className="p-2 -ml-2 rounded-full active:bg-gray-200 dark:active:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300"
+        >
+          <ChevronLeft size={24} />
+        </Link>
+        <span className="font-bold text-gray-800 dark:text-white text-lg tracking-tight">
+          HSK {level} 级
+        </span>
+        <div className="w-8" />
+      </div>
+
+      <div className="px-5 pt-4 pb-10">
+        
+        {/* Banner 区域 */}
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 to-indigo-600 p-6 text-white shadow-lg shadow-blue-500/20 mb-8">
+            <div className="relative z-10 flex flex-col items-center text-center">
+                <div className="mb-3 p-3 bg-white/10 rounded-2xl backdrop-blur-md">
+                    <Trophy size={32} className="text-yellow-300" />
+                </div>
+                <h1 className="text-3xl font-extrabold mb-1">Level {level}</h1>
+                <p className="text-blue-100 text-sm font-medium">
+                    核心词汇 • 语法突破 • 模拟测试
+                </p>
+                
+                <div className="mt-5 flex gap-8 w-full justify-center border-t border-white/10 pt-4">
+                    <div>
+                        <div className="text-2xl font-bold">{levelData.length}</div>
+                        <div className="text-[10px] uppercase tracking-wider opacity-60">Words</div>
+                    </div>
+                    <div>
+                        <div className="text-2xl font-bold">45</div>
+                        <div className="text-[10px] uppercase tracking-wider opacity-60">Grammar</div>
+                    </div>
+                </div>
+            </div>
+            {/* 装饰圆圈 */}
+            <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
+            <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-40 h-40 bg-indigo-500/30 rounded-full blur-2xl"></div>
+        </div>
+
+        {/* 核心入口 (使用分离的 UI 组件) */}
+        <div className="space-y-4">
+          
+          <HskEntryCard 
+            icon={BookOpen}
+            title="生词学习"
+            subtitle={`Vocabulary (${levelData.length})`}
+            color="blue"
+            onClick={() => setActiveModule('words')}
+          />
+
+          <HskEntryCard 
+            icon={GraduationCap}
+            title="语法重点"
+            subtitle="Grammar Points"
+            color="emerald"
+            onClick={() => setActiveModule('grammar')}
+          />
+
+          <HskEntryCard 
+            icon={Dumbbell}
+            title="强化练习"
+            subtitle="Practice & Quiz"
+            color="orange"
+            onClick={() => setActiveModule('practice')}
+          />
+
+        </div>
+
+        <p className="text-center text-xs text-gray-300 mt-12 mb-4">
+          Keep calm and learn Chinese
+        </p>
+
+      </div>
     </div>
   );
 };
