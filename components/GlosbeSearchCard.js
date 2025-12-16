@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/router'; 
-import { Search, Mic, ArrowLeftRight, Volume2, Copy, BookOpen, ExternalLink, X } from 'lucide-react';
+import { Search, Mic, ArrowLeftRight, Volume2, Copy, ExternalLink, X } from 'lucide-react';
 
 // ==========================================
-// 1. 数据加载逻辑 (本地优先)
+// 1. 数据加载逻辑 (本地 HSK 数据聚合)
 // ==========================================
 const loadLocalData = () => {
   let allItems = [];
@@ -11,45 +10,45 @@ const loadLocalData = () => {
   
   hskLevels.forEach(level => {
     try {
-      // 假设文件路径是 @/data/hsk/hsk1.json
-      // 注意：Next.js 中 require 路径最好是静态的，或者确保目录结构正确
+      // 尝试加载 data/hsk/hsk{n}.json
+      // 确保你的项目根目录下有 data/hsk 文件夹
       const words = require(`@/data/hsk/hsk${level}.json`); 
+      
       if (Array.isArray(words)) {
+        // 数据清洗：统一字段名 (兼容 hanzi/chinese/word 等不同命名)
         const taggedWords = words.map(w => ({ 
-            ...w, 
-            type: 'hsk', 
-            level: level,
-            // 确保字段统一，防止 json 结构不一致
             hanzi: w.hanzi || w.chinese || w.word, 
             pinyin: w.pinyin,
-            definition: w.definition || w.meaning
-        }));
+            definition: w.definition || w.meaning || w.translation,
+            level: level,
+            type: 'hsk'
+        })).filter(w => w.hanzi); // 过滤掉无效数据
+        
         allItems = [...allItems, ...taggedWords];
       }
     } catch (e) {
-      // 某个等级文件不存在时忽略，不报错
-      console.warn(`HSK ${level} data not found.`);
+      // 如果文件不存在，忽略错误，继续加载下一个
+      // console.warn(`HSK ${level} 数据未找到`);
     }
   });
   
   return allItems;
 };
 
-// 预加载数据
-let localDictionary = []; 
-try { localDictionary = loadLocalData(); } catch(e) { console.error("Local dict load failed", e); }
+// 在组件外部预加载数据，避免重复计算
+let localDictionary = [];
+try { localDictionary = loadLocalData(); } catch(e) { console.error("本地词库加载失败", e); }
+
 
 // ==========================================
-// 2. 组件主体
+// 2. 搜索组件主体
 // ==========================================
 const GlosbeSearchCard = () => {
-    const router = useRouter();
-    
     // 状态管理
     const [word, setWord] = useState('');
     const [searchDirection, setSearchDirection] = useState('my2zh'); // my2zh: 缅->中, zh2my: 中->缅
     const [isListening, setIsListening] = useState(false);
-    const [localResult, setLocalResult] = useState(null); // 存储本地搜索结果
+    const [localResult, setLocalResult] = useState(null); // 用于存储本地搜索命中的结果
 
     const recognitionRef = useRef(null);
     const textareaRef = useRef(null);
@@ -62,11 +61,12 @@ const GlosbeSearchCard = () => {
         }
     }, [word]);
 
-    // 自动检测语言方向
+    // 自动检测输入语言方向 (有汉字则视为 中->缅)
     const containsChinese = (text) => /[\u4e00-\u9fa5]/.test(text);
+    
     useEffect(() => {
         if (!word || word.trim() === '') {
-            setLocalResult(null);
+            setLocalResult(null); // 清空结果
             return;
         }
         const targetDirection = containsChinese(word) ? 'zh2my' : 'my2zh';
@@ -75,39 +75,44 @@ const GlosbeSearchCard = () => {
         }
     }, [word]);
 
-    // 核心搜索逻辑
+    // ------------------------------------------------------------
+    // 核心搜索功能
+    // ------------------------------------------------------------
     const handleSearch = () => {
         const query = word.trim();
         if (!query) return;
 
-        // --- 1. 本地搜索 ---
-        // 简单匹配：匹配汉字，或者匹配拼音(去声调后)
-        const match = localDictionary.find(item => 
-            item.hanzi === query || 
-            (item.pinyin && item.pinyin.replace(/[āáǎàēéěèīíǐìōóǒòūúǔùüǖǘǚǜ]/g, '') === query)
-        );
+        // 1. 本地搜索优先 (精确匹配汉字)
+        // 你也可以加上 .toLowerCase() 来匹配拼音，这里暂只匹配汉字以确保准确性
+        const match = localDictionary.find(item => item.hanzi === query);
 
         if (match) {
-            // 找到了：显示本地结果
+            // 命中本地数据：显示卡片
             setLocalResult(match);
         } else {
-            // 没找到：跳转 Glosbe
+            // 未命中：跳转 Glosbe
             setLocalResult(null);
             handleExternalSearch(query);
         }
     };
 
-    // 跳转 Glosbe
+    // 跳转到 Glosbe
     const handleExternalSearch = (text) => {
         const direction = containsChinese(text) ? 'zh2my' : 'my2zh';
-        // Glosbe URL 规则: my/zh (缅对中) 或 zh/my (中对缅)
-        const glosbeUrl = direction === 'my2zh'
-            ? `https://glosbe.com/my/zh/${encodeURIComponent(text)}`
-            : `https://glosbe.com/zh/my/${encodeURIComponent(text)}`;
+        // zh2my -> 查中文 (glosbe.com/zh/my)
+        // my2zh -> 查缅文 (glosbe.com/my/zh)
+        const fromCode = direction === 'zh2my' ? 'zh' : 'my';
+        const toCode = direction === 'zh2my' ? 'my' : 'zh';
+        
+        const glosbeUrl = `https://glosbe.com/${fromCode}/${toCode}/${encodeURIComponent(text)}`;
         window.open(glosbeUrl, '_blank');
     };
 
-    // 语音识别 (浏览器原生)
+    // ------------------------------------------------------------
+    // 辅助功能：语音 & 朗读 & 复制
+    // ------------------------------------------------------------
+    
+    // 浏览器原生语音识别
     useEffect(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRecognition) {
@@ -115,65 +120,66 @@ const GlosbeSearchCard = () => {
             recognition.continuous = false;
             recognition.interimResults = false;
             recognitionRef.current = recognition;
+            
             recognition.onstart = () => setIsListening(true);
             recognition.onend = () => setIsListening(false);
+            
             recognition.onresult = (event) => {
                 const transcript = event.results[0][0].transcript;
                 setWord(transcript);
-                // 语音输入完毕后自动触发搜索
+                // 语音输入后，延迟自动搜索
                 setTimeout(() => {
                     const match = localDictionary.find(i => i.hanzi === transcript);
                     if (match) setLocalResult(match);
                     else handleExternalSearch(transcript);
-                }, 500);
+                }, 800);
             };
         }
     }, []);
 
     const toggleListening = () => {
         if (!recognitionRef.current) {
-            alert('您的浏览器不支持语音识别。');
+            alert('您的浏览器不支持语音识别功能。');
             return;
         }
         if (isListening) {
             recognitionRef.current.stop();
         } else {
-            // 根据当前语言方向决定识别语言
+            // 根据当前方向设置语言
             recognitionRef.current.lang = searchDirection === 'my2zh' ? 'my-MM' : 'zh-CN';
             recognitionRef.current.start();
         }
     };
 
-    // 朗读功能 (简化版)
+    // 简单的 TTS 朗读
     const handleSpeak = (text) => {
-        // 简单判断：如果是中文，用中文语音；否则用缅语语音
         const isChinese = containsChinese(text);
+        // 使用微软优质语音源
         const voiceName = isChinese ? 'zh-CN-XiaoxiaoNeural' : 'my-MM-NilarNeural';
         const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${voiceName}&r=0`;
-        new Audio(url).play().catch(e => console.error("TTS Error", e));
+        new Audio(url).play().catch(e => alert("朗读失败，请检查网络"));
     };
 
-    const handleCopy = (text) => {
-        navigator.clipboard.writeText(text);
-    };
+    const handleCopy = (text) => navigator.clipboard.writeText(text);
 
     const handleSwapLanguages = () => {
         setSearchDirection(prev => prev === 'my2zh' ? 'zh2my' : 'my2zh');
-        setLocalResult(null);
+        setLocalResult(null); // 切换语言时清空结果
     };
 
-    // 界面文本
     const fromLangText = searchDirection === 'my2zh' ? '缅甸语' : '中文';
     const toLangText = searchDirection === 'my2zh' ? '中文' : '缅甸语';
 
     return (
         <div className="w-full max-w-lg mx-auto bg-white/90 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200/80 dark:border-gray-700/50 shadow-lg rounded-2xl p-4 sm:p-6 transition-all duration-300">
             
-            {/* 顶部标题 */}
+            {/* 顶部栏 */}
             <div className="flex justify-between items-center mb-4">
                 <div className="flex items-center gap-2">
                     <span className="text-sm font-bold text-gray-700 dark:text-gray-200">词典搜索</span>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300 font-medium">Local First</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300 font-medium">
+                        本地优先
+                    </span>
                 </div>
             </div>
 
@@ -193,12 +199,15 @@ const GlosbeSearchCard = () => {
                             handleSearch();
                         }
                     }}
-                    placeholder={isListening ? "正在聆听..." : "输入单词 (如: 你好 / mingalarpar)"}
+                    placeholder={isListening ? "正在聆听..." : "输入单词查找..."}
                     className="w-full pl-12 pr-12 py-3 text-base text-gray-900 dark:text-gray-100 bg-gray-100/60 dark:bg-gray-900/60 border-2 border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all duration-300 resize-none overflow-hidden shadow-inner"
                 />
-                <div className="absolute inset-y-0 right-0 flex items-center pr-2">
+                <div className="absolute inset-y-0 right-0 flex items-center pr-2 gap-1">
                     {word && (
-                        <button onClick={() => {setWord(''); setLocalResult(null);}} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                        <button 
+                            onClick={() => {setWord(''); setLocalResult(null);}} 
+                            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                        >
                             <X size={16} />
                         </button>
                     )}
@@ -207,13 +216,14 @@ const GlosbeSearchCard = () => {
                         className={`p-2 rounded-full transition-colors ${
                             isListening ? 'bg-red-500/20 text-red-500 animate-pulse' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'
                         }`}
+                        title="语音输入"
                     >
                         <Mic size={20} />
                     </button>
                 </div>
             </div>
 
-            {/* 语言切换与搜索按钮 */}
+            {/* 操作栏 */}
             <div className="flex items-center justify-between mt-4">
                 <div className="flex items-center gap-3 text-sm font-semibold text-gray-500 dark:text-gray-400">
                     <span>{fromLangText}</span>
@@ -233,20 +243,20 @@ const GlosbeSearchCard = () => {
                     搜索
                 </button>
             </div>
-
-            {/* 本地结果显示卡片 */}
+            
+            {/* --- 本地结果展示区域 --- */}
             {localResult && (
-                <div className="mt-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                 <div className="mt-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                     <div className="p-5 rounded-2xl bg-white dark:bg-gray-800 border border-cyan-100 dark:border-cyan-900/30 shadow-sm relative overflow-hidden group">
-                        {/* 装饰背景 */}
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-50 dark:bg-cyan-900/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+                        {/* 背景装饰 */}
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-50 dark:bg-cyan-900/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110 pointer-events-none"></div>
                         
                         <div className="relative z-10">
                             <div className="flex justify-between items-start mb-2">
                                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white tracking-wide">
                                     {localResult.hanzi}
                                 </h3>
-                                <span className="px-2 py-1 rounded-md bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300 text-xs font-bold">
+                                <span className="px-2.5 py-1 rounded-md bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300 text-xs font-bold shadow-sm">
                                     HSK {localResult.level}
                                 </span>
                             </div>
@@ -256,10 +266,11 @@ const GlosbeSearchCard = () => {
                             </p>
                             
                             <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-900/50 text-gray-700 dark:text-gray-300 text-sm leading-relaxed border border-gray-100 dark:border-gray-700">
+                                <span className="font-bold text-gray-400 mr-2">释义:</span>
                                 {localResult.definition}
                             </div>
 
-                            {/* 操作栏 */}
+                            {/* 底部按钮栏 */}
                             <div className="flex items-center gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
                                 <button onClick={() => handleSpeak(localResult.hanzi)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 transition-colors" title="朗读">
                                     <Volume2 size={18} />
@@ -272,7 +283,7 @@ const GlosbeSearchCard = () => {
                                     onClick={() => handleExternalSearch(localResult.hanzi)}
                                     className="flex items-center gap-1 text-xs text-gray-400 hover:text-cyan-500 transition-colors"
                                 >
-                                    Glosbe 详情 <ExternalLink size={12}/>
+                                    去 Glosbe 查看更多 <ExternalLink size={12}/>
                                 </button>
                             </div>
                         </div>
