@@ -80,7 +80,7 @@ import { Style } from './style'
 // 请确保您在项目中创建了这些组件文件
 import PinyinContentBlock from '@/components/PinyinContentBlock'
 import WordsContentBlock from '@/components/WordsContentBlock'
-import KouyuPage from '@/components/kouyu'
+// import KouyuPage from '@/components/kouyu'
 
 // Dynamically imported heavy components for the new homepage
 const GlosbeSearchCard = dynamic(() => import('@/components/GlosbeSearchCard'), { ssr: false })
