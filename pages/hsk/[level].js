@@ -1,22 +1,31 @@
-// pages/hsk/[level].js
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
+import dynamic from 'next/dynamic'; // 1. 引入 dynamic
 import { BookOpen, GraduationCap, Dumbbell, ChevronLeft, Trophy } from 'lucide-react';
 
-// 引入刚才创建的组件
 import HskContentBlock from '../../components/HskContentBlock'; 
-import WordCard from '../../components/WordCard';
+
+// 2. 使用 dynamic 动态导入 WordCard，彻底解决 self is not defined
+const WordCard = dynamic(() => import('../../components/WordCard'), {
+  ssr: false, // 关键：禁止在服务端构建此组件
+});
 
 // --- 数据导入 ---
 import hsk1Words from '../../data/hsk/hsk1.json';
 import hsk2Words from '../../data/hsk/hsk2.json';
-// ... 其他数据导入
+import hsk3Words from '../../data/hsk/hsk3.json';
+import hsk4Words from '../../data/hsk/hsk4.json';
+import hsk5Words from '../../data/hsk/hsk5.json';
+import hsk6Words from '../../data/hsk/hsk6.json';
 
 const hskWordsData = {
   '1': hsk1Words,
   '2': hsk2Words,
-  // ...
+  '3': hsk3Words,
+  '4': hsk4Words,
+  '5': hsk5Words,
+  '6': hsk6Words,
 };
 
 const HskLevelPage = () => {
@@ -25,8 +34,9 @@ const HskLevelPage = () => {
   const [words, setWords] = useState([]);
   const [isCardOpen, setIsCardOpen] = useState(false);
 
-  // 震动函数
+  // 震动函数（安全的写法）
   const vibrate = () => {
+    // 再次确保只在浏览器端执行
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(15);
     }
@@ -55,8 +65,10 @@ const HskLevelPage = () => {
     console.log(`Open ${type}`);
   };
 
-  if (!level) return <div>Loading...</div>;
+  // 等待路由参数就绪
+  if (!level) return <div className="min-h-screen bg-[#F5F7FA]" />;
 
+  // 打开生词卡片
   if (isCardOpen) {
     return (
       <WordCard
@@ -73,10 +85,10 @@ const HskLevelPage = () => {
       
       {/* 顶部导航 */}
       <div className="sticky top-0 z-10 px-4 py-3 bg-[#F5F7FA]/90 dark:bg-gray-950/90 backdrop-blur-md flex items-center justify-between">
-        <Link href="/hsk" onClick={vibrate} className="p-2 -ml-2 rounded-full text-gray-600">
+        <Link href="/hsk" onClick={vibrate} className="p-2 -ml-2 rounded-full text-gray-600 dark:text-gray-300">
           <ChevronLeft size={24} />
         </Link>
-        <span className="font-bold text-gray-800 text-lg">HSK {level}</span>
+        <span className="font-bold text-gray-800 dark:text-white text-lg">HSK {level}</span>
         <div className="w-8" />
       </div>
 
@@ -86,14 +98,13 @@ const HskLevelPage = () => {
           <div className="w-20 h-20 rounded-3xl bg-blue-500 shadow-lg shadow-blue-500/30 flex items-center justify-center mb-4 text-white">
             <Trophy size={36} />
           </div>
-          <h1 className="text-2xl font-extrabold text-gray-800">HSK {level} 级</h1>
-          <p className="text-sm text-gray-500">共 {words.length} 个生词等待挑战</p>
+          <h1 className="text-2xl font-extrabold text-gray-800 dark:text-white">HSK {level} 级</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">共 {words.length} 个生词等待挑战</p>
         </div>
 
-        {/* 使用组件：代码非常简洁 */}
+        {/* 功能卡片列表 */}
         <div className="grid grid-cols-1 gap-4">
           
-          {/* 生词 */}
           <HskContentBlock 
             icon={BookOpen}
             title="生词学习"
@@ -102,7 +113,6 @@ const HskLevelPage = () => {
             onClick={handleOpenWords}
           />
 
-          {/* 语法 */}
           <HskContentBlock 
             icon={GraduationCap}
             title="语法重点"
@@ -111,7 +121,6 @@ const HskLevelPage = () => {
             onClick={() => handleOtherClick('grammar')}
           />
 
-          {/* 练习 */}
           <HskContentBlock 
             icon={Dumbbell}
             title="模拟练习"
