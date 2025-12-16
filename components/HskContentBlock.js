@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { 
   ChevronDown, ChevronUp, Mic2, Music4, BookText, 
-  ListTodo, Layers, Lightbulb, ArrowRight 
+  ListTodo, Layers, Lightbulb, Sparkles 
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import dynamic from 'next/dynamic';
@@ -18,31 +18,29 @@ const WordCard = dynamic(
 // 1. 数据中心 (Data Center)
 // ==========================================
 
-// --- 拼音数据 (按你的要求分为两组) ---
-
+// --- 拼音数据 (缅甸语版本) ---
 // 第一排：2个 (声母、韵母)
 const pinyinRow1 = [
   { 
     id: 'initials',
-    title: '声母', 
-    subtitle: 'Initials',
+    title: 'ဗျည်း', // 缅语：声母 (Consonants)
     href: '/pinyin/initials', 
     icon: Mic2, 
-    bg: 'bg-blue-50 dark:bg-blue-900/20',
-    borderColor: 'border-blue-200 dark:border-blue-800',
-    iconColor: 'text-blue-600 dark:text-blue-400',
-    gradient: 'from-blue-500 to-cyan-500'
+    // 使用更柔和的渐变背景色
+    bg: 'bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-900/20 dark:to-blue-800/20',
+    borderColor: 'border-blue-200 dark:border-blue-700',
+    iconBg: 'bg-blue-500',
+    textColor: 'text-blue-900 dark:text-blue-100'
   },
   { 
     id: 'finals',
-    title: '韵母', 
-    subtitle: 'Finals',
+    title: 'သရ', // 缅语：韵母 (Vowels)
     href: '/pinyin/finals', 
     icon: Music4, 
-    bg: 'bg-emerald-50 dark:bg-emerald-900/20',
-    borderColor: 'border-emerald-200 dark:border-emerald-800',
-    iconColor: 'text-emerald-600 dark:text-emerald-400',
-    gradient: 'from-emerald-500 to-teal-500'
+    bg: 'bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-900/20 dark:to-emerald-800/20',
+    borderColor: 'border-emerald-200 dark:border-emerald-700',
+    iconBg: 'bg-emerald-500',
+    textColor: 'text-emerald-900 dark:text-emerald-100'
   }
 ];
 
@@ -50,50 +48,46 @@ const pinyinRow1 = [
 const pinyinRow2 = [
   { 
     id: 'tones',
-    title: '声调', 
-    subtitle: 'Tones',
+    title: 'အသံ', // 缅语：声调 (Tones)
     href: '/pinyin/tones', 
     icon: BookText, 
-    bg: 'bg-amber-50 dark:bg-amber-900/20',
-    borderColor: 'border-amber-200 dark:border-amber-800',
-    iconColor: 'text-amber-600 dark:text-amber-400',
-    gradient: 'from-amber-500 to-orange-500'
+    bg: 'bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-900/20 dark:to-amber-800/20',
+    borderColor: 'border-amber-200 dark:border-amber-700',
+    iconBg: 'bg-amber-500',
+    textColor: 'text-amber-900 dark:text-amber-100'
   },
   { 
     id: 'whole',
-    title: '整体认读', 
-    subtitle: 'Whole',
+    title: 'အသံတွဲ', // 缅语：整体认读/音节 (Syllables)
     href: '/pinyin/whole', 
     icon: Layers, 
-    bg: 'bg-purple-50 dark:bg-purple-900/20',
-    borderColor: 'border-purple-200 dark:border-purple-800',
-    iconColor: 'text-purple-600 dark:text-purple-400',
-    gradient: 'from-purple-500 to-violet-500'
+    bg: 'bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-900/20 dark:to-purple-800/20',
+    borderColor: 'border-purple-200 dark:border-purple-700',
+    iconBg: 'bg-purple-500',
+    textColor: 'text-purple-900 dark:text-purple-100'
   },
   { 
     id: 'tips',
-    title: '技巧', 
-    subtitle: 'Tips',
+    title: 'နည်းလမ်း', // 缅语：技巧/方法 (Methods/Tips)
     href: '/pinyin/tips', 
     icon: Lightbulb, 
-    bg: 'bg-rose-50 dark:bg-rose-900/20',
-    borderColor: 'border-rose-200 dark:border-rose-800',
-    iconColor: 'text-rose-600 dark:text-rose-400',
-    gradient: 'from-rose-500 to-pink-500'
+    bg: 'bg-gradient-to-br from-rose-50 to-rose-100/50 dark:from-rose-900/20 dark:to-rose-800/20',
+    borderColor: 'border-rose-200 dark:border-rose-700',
+    iconBg: 'bg-rose-500',
+    textColor: 'text-rose-900 dark:text-rose-100'
   }
 ];
 
 // --- HSK 词汇数据加载 ---
-// 确保你的 data/hsk 目录下有这些 json 文件
 let hskWordsData = {};
-try { hskWordsData[1] = require('@/data/hsk/hsk1.json'); } catch (e) { console.warn("HSK 1 words missing"); }
-try { hskWordsData[2] = require('@/data/hsk/hsk2.json'); } catch (e) { console.warn("HSK 2 words missing"); }
-try { hskWordsData[3] = require('@/data/hsk/hsk3.json'); } catch (e) { console.warn("HSK 3 words missing"); }
-try { hskWordsData[4] = require('@/data/hsk/hsk4.json'); } catch (e) { console.warn("HSK 4 words missing"); }
-try { hskWordsData[5] = require('@/data/hsk/hsk5.json'); } catch (e) { console.warn("HSK 5 words missing"); }
-try { hskWordsData[6] = require('@/data/hsk/hsk6.json'); } catch (e) { console.warn("HSK 6 words missing"); }
+try { hskWordsData[1] = require('@/data/hsk/hsk1.json'); } catch (e) {}
+try { hskWordsData[2] = require('@/data/hsk/hsk2.json'); } catch (e) {}
+try { hskWordsData[3] = require('@/data/hsk/hsk3.json'); } catch (e) {}
+try { hskWordsData[4] = require('@/data/hsk/hsk4.json'); } catch (e) {}
+try { hskWordsData[5] = require('@/data/hsk/hsk5.json'); } catch (e) {}
+try { hskWordsData[6] = require('@/data/hsk/hsk6.json'); } catch (e) {}
 
-// --- HSK 课程列表数据 ---
+// --- HSK 课程列表数据 (包含完整的 HSK 4) ---
 const hskData = [
     { 
         level: 1, 
@@ -169,7 +163,76 @@ const hskData = [
             { id: 20, title: '第 20 课 我被他影响了' },
         ]
     },
-    // ... 其他等级省略，为节省篇幅，逻辑同上
+    { 
+        level: 4, 
+        title: '中级水平', 
+        description: '流畅地与母语者进行交流', 
+        imageUrl: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800&q=80', 
+        lessons: [
+            { id: 1, title: '第 1 课 简单的爱情' },
+            { id: 2, title: '第 2 课 真正的朋友' },
+            { id: 3, title: '第 3 课 经理对我印象不错' },
+            { id: 4, title: '第 4 课 不要太着急赚钱' },
+            { id: 5, title: '第 5 课 只买对的，不买贵的' },
+            { id: 6, title: '第 6 课 一分钱一分货' },
+            { id: 7, title: '第 7 课 最好的医生是自己' },
+            { id: 8, title: '第 8 课 话说得越高，摔得越重' },
+            { id: 9, title: '第 9 课 阳光总在风雨后' },
+            { id: 10, title: '第 10 课 幸福的标准' },
+            { id: 11, title: '第 11 课 阅读是种享受' },
+            { id: 12, title: '第 12 课 用心发现世界' },
+            { id: 13, title: '第 13 课 喝着茶看京剧' },
+            { id: 14, title: '第 14 课 保护地球母亲' },
+            { id: 15, title: '第 15 课 教育孩子的“学问”' },
+            { id: 16, title: '第 16 课 生活可以更美好' },
+            { id: 17, title: '第 17 课 人与自然' },
+            { id: 18, title: '第 18 课 科技与世界' },
+            { id: 19, title: '第 19 课 生活的味道' },
+            { id: 20, title: '第 20 课 路上的风景' },
+        ]
+    },
+    { 
+        level: 5, 
+        title: '高级水平', 
+        description: '阅读报刊杂志，欣赏影视节目', 
+        imageUrl: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=800&q=80', 
+        lessons: [
+            { id: 1, title: '第 1 课 爱的细节' }, { id: 2, title: '第 2 课 父母的“唠叨”' }, { id: 3, title: '第 3 课 丈量“幸福”' },
+            { id: 4, title: '第 4 课 “朝三暮四”的“猴子”' }, { id: 5, title: '第 5 课 “差不多”先生' }, { id: 6, title: '第 6 课 一张照片' },
+            { id: 7, title: '第 7 课 “另类”的母亲' }, { id: 8, title: '第 8 课 “漫画”的启示' }, { id: 9, title: '第 9 课 友谊的“保鲜期”' },
+            { id: 10, title: '第 10 课 成长的“痕迹”' }, { id: 11, title: '第 11 课 “跨界”的魅力' }, { id: 12, title: '第 12 课 “一见钟情”的背后' },
+            { id: 13, title: '第 13 课 “慢”的智慧' }, { id: 14, title: '第 14 课 “英雄”的定义' }, { id: 15, title: '第 15 课 “距离”的学问' },
+            { id: 16, title: '第 16 课 生活中的“发现”' }, { id: 17, title: '第 17 课 “真实”的价值' }, { id: 18, title: '第 18 课 “压力”是“动力”' },
+            { id: 19, title: '第 19 课 “明星”的烦恼' }, { id: 20, title: '第 20 课 汉字“三美”' }, { id: 21, title: '第 21 课 京剧的“脸谱”' },
+            { id: 22, title: '第 22 课 “环保”从我做起' }, { id: 23, title: '第 23 课 “克隆”的争议' }, { id: 24, title: '第 24 课 “网络”改变生活' },
+            { id: 25, title: '第 25 课 “火锅”里的文化' }, { id: 26, title: '第 26 课 “丝绸之路”的今昔' }, { id: 27, title: '第 27 课 “功夫”的魅力' },
+            { id: 28, title: '第 28 课 “中医”的智慧' }, { id: 29, title: '第 29 课 “城市”让生活更美好？' }, { id: 30, title: '第 30 课 “乡村”的变迁' },
+            { id: 31, title: '第 31 课 “广告”的陷阱' }, { id: 32, title: '第 32 课 “消费”的观念' }, { id: 33, title: '第 33 课 “创新”的力量' },
+            { id: 34, title: '第 34 课 “竞争”与“合作”' }, { id: 35, title: '第 35 课 “全球化”的挑战' }, { id: 36, title: '第 36 课 “未来”的展望' },
+        ]
+    },
+    { 
+        level: 6, 
+        title: '流利水平', 
+        description: '轻松理解信息，流利表达观点', 
+        imageUrl: 'https://images.unsplash.com/photo-1590402494682-cd3fb53b1f70?w=800&q=80', 
+        lessons: [
+            { id: 1, title: '第 1 课 创新的“智慧”' }, { id: 2, title: '第 2 课 走进“杂交水稻之父”袁隆平' }, { id: 3, title: '第 3 课 “诺贝尔奖”的背后' },
+            { id: 4, title: '第 4 课 “奥运”精神' }, { id: 5, title: '第 5 课 “世界杯”的激情' }, { id: 6, title: '第 6 课 “电子商务”的革命' },
+            { id: 7, title: '第 7 课 “人工智能”的未来' }, { id: 8, title: '第 8 课 “大数据”时代' }, { id: 9, title: '第 9 课 “共享经济”的浪潮' },
+            { id: 10, title: '第 10 课 “移动支付”的便捷' }, { id: 11, title: '第 11 课 “高铁”的速度' }, { id: 12, title: '第 12 课 “航天”的梦想' },
+            { id: 13, title: '第 13 课 “孔子”的智慧' }, { id: 14, title: '第 14 课 “老子”的道' }, { id: 15, title: '第 15 课 “孙子兵法”的谋略' },
+            { id: 16, title: '第 16 课 “唐诗”的韵味' }, { id: 17, title: '第 17 课 “宋词”的婉约' }, { id: 18, title: '第 18 课 “元曲”的豪放' },
+            { id: 19, title: '第 19 课 “红楼梦”的悲欢' }, { id: 20, title: '第 20 课 “西游记”的奇幻' }, { id: 21, title: '第 21 课 “三国演义”的英雄' },
+            { id: 22, title: '第 22 课 “水浒传”的江湖' }, { id: 23, title: '第 23 课 “故宫”的雄伟' }, { id: 24, title: '第 24 课 “长城”的壮丽' },
+            { id: 25, title: '第 25 课 “兵马俑”的震撼' }, { id: 26, title: '第 26 课 “敦煌”的瑰宝' }, { id: 27, title: '第 27 课 “茶”的文化' },
+            { id: 28, title: '第 28 课 “酒”的故事' }, { id: 29, title: '第 29 课 “筷子”的哲学' }, { id: 30, title: '第 30 课 “春节”的习俗' },
+            { id: 31, title: '第 31 课 “中秋”的团圆' }, { id: 32, title: '第 32 课 “端午”的纪念' }, { id: 33, title: '第 33 课 “清明”的追思' },
+            { id: 34, title: '第 34 课 “家庭”的变迁' }, { id: 35, title: '第 35 课 “教育”的改革' }, { id: 36, title: '第 36 课 “健康”的追求' },
+            { id: 37, title: '第 37 课 “旅游”的意义' }, { id: 38, title: '第 38 课 “时尚”的潮流' }, { id: 39, title: '第 39 课 “幸福”的感悟' },
+            { id: 40, title: '第 40 课 “梦想”的力量' },
+        ]
+    },
 ];
 
 // ==========================================
@@ -179,7 +242,6 @@ const hskData = [
 const HskCard = ({ level, onVocabularyClick }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const hasMore = level.lessons.length > 3;
-    // 修改默认显示数量为 3
     const visibleLessons = isExpanded ? level.lessons : level.lessons.slice(0, 3);
 
     const cardVariants = {
@@ -192,7 +254,6 @@ const HskCard = ({ level, onVocabularyClick }) => {
             variants={cardVariants}
             className="flex flex-col h-full relative rounded-[2rem] shadow-xl overflow-hidden group bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700"
         >
-            {/* 增加图片高度，更有冲击力 */}
             <div className="h-56 sm:h-64 relative overflow-hidden shrink-0">
                 <img 
                   src={level.imageUrl} 
@@ -262,23 +323,22 @@ const PinyinSection = () => {
     visible: { y: 0, opacity: 1 }
   };
 
-  // 渲染单个拼音模块的辅助函数
+  // 渲染单个拼音模块的辅助函数 - 美化版
   const renderCard = (module) => (
     <Link key={module.id} href={module.href} passHref>
         <motion.a
             variants={itemVariants}
             whileTap={{ scale: 0.95 }}
-            className={`flex flex-col items-center justify-center p-4 rounded-2xl border ${module.borderColor} ${module.bg} relative overflow-hidden h-full`}
+            className={`flex flex-col items-center justify-center p-4 rounded-2xl border ${module.borderColor} ${module.bg} relative overflow-hidden h-full shadow-sm hover:shadow-md transition-shadow duration-300`}
         >
-            <div className={`p-3 rounded-full bg-gradient-to-br ${module.gradient} text-white shadow-md mb-2`}>
-                <module.icon size={20} />
+            <div className={`p-3.5 rounded-full ${module.iconBg} text-white shadow-lg mb-3 ring-4 ring-white/50 dark:ring-white/10`}>
+                <module.icon size={22} />
             </div>
-            <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100">
+            <h3 className={`font-bold text-lg ${module.textColor} tracking-wide`}>
                 {module.title}
             </h3>
-            <span className="text-[10px] text-gray-500 uppercase font-semibold tracking-wide">
-                {module.subtitle}
-            </span>
+            {/* 装饰性背景光晕 */}
+            <div className="absolute -top-4 -right-4 w-16 h-16 bg-white/20 rounded-full blur-2xl pointer-events-none"></div>
         </motion.a>
     </Link>
   );
@@ -286,8 +346,11 @@ const PinyinSection = () => {
   return (
     <div className="space-y-4">
        <div className="flex items-center gap-2 mb-2">
-            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">拼音基础</h2>
-            <div className="h-px flex-grow bg-gray-200 dark:bg-gray-700"></div>
+            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                <Sparkles size={20} className="text-yellow-500" />
+                拼音基础
+            </h2>
+            <div className="h-px flex-grow bg-gradient-to-r from-gray-200 to-transparent dark:from-gray-700"></div>
        </div>
        
        <motion.div 
@@ -322,24 +385,16 @@ export default function HskPageClient() {
 
   const isCardViewOpen = router.asPath.includes('#hsk-vocabulary');
 
-  // =========================================================================
-  // 核心修复逻辑：监听 URL 参数，防止刷新/分享后数据丢失导致的“空白”
-  // =========================================================================
   useEffect(() => {
-    // 1. 确保路由就绪且当前处于单词模式
     if (!router.isReady || !router.asPath.includes('#hsk-vocabulary')) return;
-
-    // 2. 如果 state 里已经有数据，不重复加载
     if (activeHskWords && activeHskWords.length > 0) return;
 
-    // 3. 从 URL 获取 level 参数
     const { level } = router.query;
     if (!level) return;
 
     const levelNum = parseInt(level, 10);
     const words = hskWordsData[levelNum];
 
-    // 4. 恢复数据
     if (words && words.length > 0) {
         setActiveHskWords(words);
         setActiveLevelTag(`hsk${levelNum}`);
@@ -348,37 +403,29 @@ export default function HskPageClient() {
 
   const handleVocabularyClick = useCallback((level) => {
     const words = hskWordsData[level.level];
-    
-    // 安全检查：防止数据为空时打开空白弹窗
     if (!words || words.length === 0) {
       alert(`HSK ${level.level} 的词汇数据暂未加载，请检查 data 目录。`);
       return;
     }
-
     setActiveHskWords(words);
     setActiveLevelTag(`hsk${level.level}`);
     
-    // 关键修改：将 level 参数写入 URL，支持页面刷新恢复数据
     router.push({
         pathname: router.pathname,
         query: { ...router.query, level: level.level },
         hash: 'hsk-vocabulary'
     }, undefined, { shallow: true });
-
   }, [router]);
 
   const handleCloseCard = useCallback(() => {
     setActiveHskWords(null);
     setActiveLevelTag(null);
-    
-    // 关闭时清除 URL 中的 hash 和参数
     const { level, ...restQuery } = router.query;
     router.push({
         pathname: router.pathname,
         query: restQuery,
         hash: ''
     }, undefined, { shallow: true });
-
   }, [router]);
   
   return (
@@ -392,12 +439,9 @@ export default function HskPageClient() {
               backgroundAttachment: 'fixed'
           }}
       >
-          {/* 背景遮罩 */}
           <div className="absolute inset-0 bg-white/95 dark:bg-black/90 backdrop-blur-sm z-0"></div>
 
           <div className="relative z-10 max-w-4xl mx-auto px-4 py-10 space-y-10">
-              
-              {/* 头部 */}
               <motion.div
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -411,19 +455,16 @@ export default function HskPageClient() {
                   </p>
               </motion.div>
         
-              {/* 拼音部分 - 移动端优化 */}
               <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-3xl p-5 shadow-xl border border-white/50 dark:border-gray-700/50">
                   <PinyinSection />
               </div>
 
-              {/* HSK 部分 */}
               <div className="space-y-6">
                   <div className="flex items-center gap-3 pl-1">
                         <div className="w-1.5 h-6 bg-gradient-to-b from-blue-500 to-cyan-500 rounded-full"></div>
                         <h2 className="text-xl font-bold text-gray-900 dark:text-white">HSK 等级课程</h2>
                   </div>
                   
-                  {/* 改为单列布局适合手机，平板以上可双列 */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {hskData.map(level => (
                         <HskCard 
