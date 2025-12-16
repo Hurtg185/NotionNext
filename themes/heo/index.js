@@ -1,1060 +1,743 @@
 /**
- * 中文学习平台 - 移动端优化版
+ *   HEO 主题说明
+ *  > 主题设计者 [张洪](https://zhheo.com/)
+ *  > 主题开发者 [tangly1024](https://github.com/tangly1024)
+ *  > 此文件已根据用户需求进行定制修改，整合了新的主页布局。
  */
 
-import { useState, useEffect, useRef } from 'react'
+// React & Next.js
 import { useRouter } from 'next/router'
-import { siteConfig } from '@/lib/config'
+import { useEffect, useState, useRef, useCallback, Fragment } from 'react'
+import dynamic from 'next/dynamic'
+
+// UI & Animation
+import { Transition, Dialog } from '@headlessui/react'
+import { useSwipeable } from 'react-swipeable'
+import { loadWowJS } from '@/lib/plugins/wow'
+
+// Global State & Config
 import { useGlobal } from '@/lib/global'
+import { siteConfig } from '@/lib/config'
 import CONFIG from './config'
 
-import Header from './components/Header'
-import Footer from './components/Footer'
-import { Style } from './style'
+// Icons
+import { FaTiktok, FaFacebook, FaTelegramPlane } from 'react-icons/fa'
+import {
+    GraduationCap,
+    BookOpen,
+    Phone,
+    MessageSquare,
+    Users,
+    Settings,
+    LifeBuoy,
+    Moon,
+    Sun,
+    UserCircle,
+    Mic,
+    Heart,
+    List,
+    BookText,
+    SpellCheck2,
+    Type
+} from 'lucide-react'
+import { HashTag } from '@/components/HeroIcons'
 
-import LoadingCover from '@/components/LoadingCover'
-import SmartLink from '@/components/SmartLink'
-import NotionPage from '@/components/NotionPage'
+// Base Components from NotionNext
 import Comment from '@/components/Comment'
+import { AdSlot } from '@/components/GoogleAdsense'
+import LazyImage from '@/components/LazyImage'
+import LoadingCover from '@/components/LoadingCover'
+import replaceSearchResult from '@/components/Mark'
+import NotionPage from '@/components/NotionPage'
+import SmartLink from '@/components/SmartLink'
+import WWAds from '@/components/WWAds'
+import AISummary from '@/components/AISummary'
+import ArticleExpirationNotice from '@/components/ArticleExpirationNotice'
 import ShareBar from '@/components/ShareBar'
-import FloatTocButton from './components/FloatTocButton'
 
+
+// Original HEO Theme Components (for other pages)
+import BlogPostArchive from './components/BlogPostArchive'
 import BlogPostListPage from './components/BlogPostListPage'
 import BlogPostListScroll from './components/BlogPostListScroll'
-import BlogPostArchive from './components/BlogPostArchive'
-
+import CategoryBar from './components/CategoryBar'
+import FloatTocButton from './components/FloatTocButton'
+import Footer from './components/Footer'
+import Header from './components/Header'
+import Hero from './components/Hero'
+import LatestPostsGroup from './components/LatestPostsGroup'
+import { NoticeBar } from './components/NoticeBar'
 import PostAdjacent from './components/PostAdjacent'
-import PostRecommend from './components/PostRecommend'
+import PostCopyright from './components/PostCopyright'
+import PostHeader from './components/PostHeader'
 import { PostLock } from './components/PostLock'
+import PostRecommend from './components/PostRecommend'
 import SearchNav from './components/SearchNav'
+import SideRight from './components/SideRight'
+import { Style } from './style'
 
-/* =========================
-   基础布局 - 简化版
-========================= */
-const LayoutBase = props => {
-  const { children, slotTop, className } = props
-  const { fullWidth } = useGlobal()
-  const router = useRouter()
+// Custom Content Block Components for the new homepage
+// 请确保您在项目中创建了这些组件文件
+import PinyinContentBlock from '@/components/PinyinContentBlock'
+import WordsContentBlock from '@/components/WordsContentBlock'
+import KouyuPage from '@/components/kouyu'
 
-  const showSide = !(router.route === '/404' || fullWidth)
+// Dynamically imported heavy components for the new homepage
+const GlosbeSearchCard = dynamic(() => import('@/components/GlosbeSearchCard'), { ssr: false })
+const ShortSentenceCard = dynamic(() => import('@/components/ShortSentenceCard'), { ssr: false })
+const WordCard = dynamic(() => import('@/components/WordCard'), { ssr: false })
 
-  // 在移动端隐藏侧边栏
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+// Helper function to check if running in browser
+const isBrowser = typeof window !== 'undefined';
+
+// =================================================================================
+// ======================  辅助组件 (for new homepage)  ========================
+// =================================================================================
+
+const CustomScrollbarStyle = () => (
+    <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(150, 150, 150, 0.3); border-radius: 10px; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(100, 100, 100, 0.4); }
+    `}</style>
+);
+
+const HomeSidebar = ({ isOpen, onClose, sidebarX, isDragging }) => {
+  const { isDarkMode, toggleDarkMode } = useGlobal();
+  const sidebarWidth = 288;
+
+  const sidebarLinks = [
+    { icon: <Settings size={20} />, text: '通用设置', href: '/settings' },
+    { icon: <LifeBuoy size={20} />, text: '帮助中心', href: '/help' },
+  ];
+
+  const transitionClass = isDragging ? '' : 'transition-transform duration-300 ease-in-out';
 
   return (
-    <div
-      id="theme-heo-mobile"
-      className={`${siteConfig('FONT_STYLE')} min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900`}
-    >
-      <Style />
+    <>
+      <div
+        className={`fixed inset-0 bg-black z-30 transition-opacity duration-300 ${isOpen ? 'opacity-50' : 'opacity-0 pointer-events-none'}`}
+        onClick={onClose}
+        style={{ opacity: isOpen ? 0.5 : (sidebarX + sidebarWidth) / sidebarWidth * 0.5 }}
+      />
+      <div
+        className={`fixed inset-y-0 left-0 w-72 bg-white/95 dark:bg-gray-900/95 backdrop-blur-lg shadow-2xl z-40 transform ${transitionClass}`}
+        style={{ transform: `translateX(${sidebarX}px)` }}
+      >
+        <div className="flex flex-col h-full">
+            <div className="p-6 flex items-center gap-4 border-b dark:border-gray-700">
+                <UserCircle size={48} className="text-gray-500" />
+                <div>
+                    <p className="font-semibold text-lg text-gray-800 dark:text-gray-100">访客</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">欢迎来到本站</p>
+                </div>
+            </div>
+            <nav className="flex-grow p-4 space-y-2">
+                {sidebarLinks.map((link, index) => (
+                    <SmartLink key={index} href={link.href} className="flex items-center gap-4 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors">
+                        {link.icon}
+                        <span className="font-medium">{link.text}</span>
+                    </SmartLink>
+                ))}
+            </nav>
+            <div className="p-4 border-t dark:border-gray-700">
+                <button
+                    onClick={toggleDarkMode}
+                    className="w-full flex items-center gap-4 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors"
+                >
+                    {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+                    <span className="font-medium">{isDarkMode ? '切换到日间模式' : '切换到夜间模式'}</span>
+                </button>
+            </div>
+        </div>
+      </div>
+    </>
+  );
+};
 
-      <main className="flex-grow">
-        {slotTop}
-        {children}
-      </main>
-
-      <Footer />
-      {siteConfig('HEO_LOADING_COVER', true, CONFIG) && <LoadingCover />}
+const ActionButtons = ({ onOpenFavorites, onOpenContact }) => {
+  const actions = [
+    { icon: <Phone size={24} />, text: '联系我们', type: 'contact', color: 'from-blue-500 to-sky-500' },
+    { icon: <MessageSquare size={24} />, text: '在线客服', type: 'link', href: '#', color: 'from-green-500 to-emerald-500' },
+    { icon: <Users size={24} />, text: '加入社群', type: 'link', href: '#', color: 'from-purple-500 to-indigo-500' },
+    { icon: <Heart size={24} />, text: '收藏单词', type: 'words', color: 'from-orange-500 to-amber-500' },
+    { icon: <List size={24} />, text: '收藏短句', type: 'sentences', color: 'from-red-500 to-rose-500' },
+    { icon: <BookText size={24} />, text: '收藏语法', type: 'grammar', color: 'from-gray-500 to-slate-500' },
+  ];
+  return (
+    <div className="grid grid-cols-3 gap-4 px-4">
+      {actions.map((action, index) => {
+        const content = ( <> <div className="mb-2">{action.icon}</div> <span className="text-sm font-semibold">{action.text}</span> </> );
+        const className = `flex flex-col items-center justify-center p-4 rounded-xl shadow-lg hover:shadow-xl text-white bg-gradient-to-br ${action.color} transition-all duration-300 transform hover:-translate-y-1 w-full`;
+        
+        if (action.type === 'link') {
+          return ( <a key={index} href={action.href} className={className}> {content} </a> );
+        }
+        if (action.type === 'contact') {
+          return ( <button key={index} onClick={onOpenContact} className={className}> {content} </button> );
+        }
+        return ( <button key={index} onClick={() => onOpenFavorites(action.type)} className={className}> {content} </button> );
+      })}
     </div>
-  )
+  );
+};
+
+const ContactPanel = ({ isOpen, onClose }) => {
+    const socialLinks = [
+        { name: 'Facebook', href: 'https://www.facebook.com/share/1ErXyBbrZ1', icon: <FaFacebook size={32} />, color: 'text-blue-600' },
+        { name: 'TikTok', href: 'https://www.tiktok.com/@mmzh.onlione?_r=1&_t=ZS-91OzyDddPu8', icon: <FaTiktok size={32} />, color: 'text-black dark:text-white' },
+        { name: 'Telegram', href: 'https://t.me/hurt8888', icon: <FaTelegramPlane size={32} />, color: 'text-sky-500' }
+    ];
+
+    return (
+        <Transition show={isOpen} as={Fragment}>
+            <Dialog as="div" className="relative z-50" onClose={onClose}>
+                <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
+                    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
+                </Transition.Child>
+                <div className="fixed inset-0 overflow-y-auto">
+                    <div className="flex min-h-full items-center justify-center p-4 text-center">
+                        <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100" leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95">
+                            <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 p-6 text-left align-middle shadow-xl transition-all">
+                                <Dialog.Title as="h3" className="text-lg font-bold leading-6 text-gray-900 dark:text-gray-100">联系我们</Dialog.Title>
+                                <div className="mt-4"><p className="text-sm text-gray-500 dark:text-gray-400">通过以下方式与我们取得联系，我们期待您的咨询。</p></div>
+                                <div className="mt-6 space-y-4">
+                                    {socialLinks.map(link => (
+                                        <a key={link.name} href={link.href} target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 p-4 rounded-lg bg-gray-100 dark:bg-gray-700/50 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                                            <div className={link.color}>{link.icon}</div>
+                                            <div><p className="font-semibold text-gray-800 dark:text-gray-200">{link.name}</p><p className="text-xs text-gray-500 dark:text-gray-400">点击跳转</p></div>
+                                        </a>
+                                    ))}
+                                </div>
+                                <div className="mt-6">
+                                    <button type="button" className="inline-flex justify-center rounded-md border border-transparent bg-blue-100 dark:bg-blue-900/50 px-4 py-2 text-sm font-medium text-blue-900 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-900 focus:outline-none w-full" onClick={onClose}>关闭</button>
+                                </div>
+                            </Dialog.Panel>
+                        </Transition.Child>
+                    </div>
+                </div>
+            </Dialog>
+        </Transition>
+    );
+};
+
+// IndexedDB Helper Functions
+const DB_NAME = 'ChineseLearningDB';
+const SENTENCE_STORE_NAME = 'favoriteSentences';
+const WORD_STORE_NAME = 'favoriteWords';
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    if (!isBrowser) return resolve(null);
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onerror = () => reject('数据库打开失败');
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(SENTENCE_STORE_NAME)) db.createObjectStore(SENTENCE_STORE_NAME, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains(WORD_STORE_NAME)) db.createObjectStore(WORD_STORE_NAME, { keyPath: 'id' });
+    };
+  });
 }
 
-/* =========================
-   首页 - 抽屉式设计
-========================= */
-const LayoutIndex = () => {
-  const router = useRouter()
-  const [activePage, setActivePage] = useState('home')
-  const [drawerOpen, setDrawerOpen] = useState(false)
-  const [drawerContent, setDrawerContent] = useState(null)
-  const [drawerPosition, setDrawerPosition] = useState(0)
-  const isDragging = useRef(false)
-  const startY = useRef(0)
-  const startPosition = useRef(0)
-
-  // 主页面内容
-  const pages = {
-    home: {
-      title: '首页',
-      content: <HomeContent openDrawer={setDrawerOpen} setDrawerContent={setDrawerContent} />
-    },
-    pinyin: {
-      title: '拼音学习',
-      content: <PinyinPage openDrawer={setDrawerOpen} setDrawerContent={setDrawerContent} />
-    },
-    hsk: {
-      title: 'HSK课程',
-      content: <HskPage openDrawer={setDrawerOpen} setDrawerContent={setDrawerContent} />
-    },
-    speaking: {
-      title: '口语练习',
-      content: <SpeakingPage openDrawer={setDrawerOpen} setDrawerContent={setDrawerContent} />
-    },
-    practice: {
-      title: '练习题',
-      content: <PracticePage openDrawer={setDrawerOpen} setDrawerContent={setDrawerContent} />
+async function getAllFavorites(storeName) {
+    try {
+        const db = await openDB();
+        if (!db) return [];
+        const tx = db.transaction(storeName, 'readonly');
+        const store = tx.objectStore(storeName);
+        return new Promise((resolve, reject) => {
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = (event) => reject(new Error('Failed to retrieve items: ' + event.target.errorCode));
+        });
+    } catch (error) {
+        console.error("IndexedDB Error:", error);
+        return [];
     }
-  }
+}
 
-  // 处理触摸开始
-  const handleTouchStart = (e) => {
-    if (drawerOpen && drawerPosition < window.innerHeight * 0.7) {
-      isDragging.current = true
-      startY.current = e.touches[0].clientY
-      startPosition.current = drawerPosition
-      e.preventDefault()
-    }
-  }
 
-  // 处理触摸移动
-  const handleTouchMove = (e) => {
-    if (!isDragging.current) return
-    
-    const currentY = e.touches[0].clientY
-    const deltaY = currentY - startY.current
-    let newPosition = Math.max(0, startPosition.current + deltaY)
-    
-    // 限制最大拖动距离
-    newPosition = Math.min(window.innerHeight * 0.85, newPosition)
-    
-    setDrawerPosition(newPosition)
-    e.preventDefault()
-  }
+// =================================================================================
+// ======================  新主页布局 (LayoutIndex) ========================
+// =================================================================================
+const LayoutIndex = props => {
+  const router = useRouter();
 
-  // 处理触摸结束
-  const handleTouchEnd = () => {
-    if (!isDragging.current) return
-    
-    isDragging.current = false
-    
-    // 判断是否需要关闭或完全打开
-    if (drawerPosition > window.innerHeight * 0.6) {
-      setDrawerOpen(false)
-      setDrawerPosition(0)
-    } else {
-      setDrawerPosition(0) // 回到完全打开位置
-    }
-  }
-
-  // 打开抽屉并设置内容
-  const openDrawerWithContent = (content) => {
-    setDrawerContent(content)
-    setDrawerOpen(true)
-    setDrawerPosition(0)
-  }
-
-  // 关闭抽屉
-  const closeDrawer = () => {
-    setDrawerOpen(false)
-    setDrawerPosition(0)
-  }
+  const allTabs = [
+    { name: '拼音', key: 'pinyin', icon: <Type size={22} /> },
+    { name: '单词', key: 'words', icon: <BookText size={22} /> },
+    { name: 'HSK', key: 'hsk', icon: <GraduationCap size={22} /> },
+    { name: '口语', key: 'speaking', icon: <Mic size={22} /> },
+    { name: '语法', key: 'grammar', icon: <SpellCheck2 size={22} /> }
+  ];
+  
+  const [activeTabKey, setActiveTabKey] = useState('pinyin'); 
 
   useEffect(() => {
-    // 监听路由变化，切换页面
-    const handleRouteChange = () => {
-      const path = router.pathname
-      if (path === '/pinyin') setActivePage('pinyin')
-      else if (path === '/hsk') setActivePage('hsk')
-      else if (path === '/speaking') setActivePage('speaking')
-      else if (path === '/practice') setActivePage('practice')
-      else setActivePage('home')
+    if (router.isReady) {
+      const tabFromQuery = router.query.tab;
+      const validTab = allTabs.find(t => t.key === tabFromQuery);
+      setActiveTabKey(validTab ? validTab.key : allTabs[0].key);
     }
-
-    handleRouteChange()
-    router.events.on('routeChangeComplete', handleRouteChange)
-    
-    return () => {
-      router.events.off('routeChangeComplete', handleRouteChange)
-    }
-  }, [router])
-
-  return (
-    <div className="h-screen w-screen overflow-hidden bg-gray-100 dark:bg-gray-900">
-      {/* 抽屉遮罩层 */}
-      {drawerOpen && (
-        <div 
-          className="fixed inset-0 bg-black z-40 transition-opacity"
-          style={{ opacity: Math.max(0.3, 0.5 - (drawerPosition / (window.innerHeight * 0.85)) * 0.5) }}
-          onClick={closeDrawer}
-        />
-      )}
-
-      {/* 主内容区域 */}
-      <div className="h-full overflow-hidden">
-        {/* 顶部状态栏 */}
-        <div className="fixed top-0 left-0 right-0 z-30 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex justify-between items-center">
-          <button 
-            onClick={() => router.back()}
-            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
-          >
-            ←
-          </button>
-          <h1 className="text-lg font-bold">{pages[activePage].title}</h1>
-          <button 
-            onClick={() => openDrawerWithContent(<MenuContent />)}
-            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
-          >
-            ≡
-          </button>
-        </div>
-
-        {/* 页面内容 */}
-        <div className="h-full pt-16 pb-16 overflow-y-auto">
-          {pages[activePage].content}
-        </div>
-
-        {/* 底部导航栏 */}
-        <div className="fixed bottom-0 left-0 right-0 z-30 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-          <div className="flex justify-around py-3">
-            {Object.entries(pages).map(([key, page]) => (
-              <button
-                key={key}
-                onClick={() => {
-                  if (key === 'home') router.push('/')
-                  else router.push(`/${key}`)
-                }}
-                className={`flex flex-col items-center px-3 py-2 rounded-lg ${
-                  activePage === key 
-                    ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30' 
-                    : 'text-gray-600 dark:text-gray-400'
-                }`}
-              >
-                <span className="text-xl mb-1">
-                  {key === 'home' && '🏠'}
-                  {key === 'pinyin' && '🔊'}
-                  {key === 'hsk' && '📚'}
-                  {key === 'speaking' && '🎤'}
-                  {key === 'practice' && '✏️'}
-                </span>
-                <span className="text-xs">{page.title}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* 抽屉内容 */}
-      {drawerOpen && (
-        <div 
-          className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-800 rounded-t-2xl shadow-2xl"
-          style={{ 
-            height: '85%',
-            transform: `translateY(${drawerPosition}px)`,
-            transition: isDragging.current ? 'none' : 'transform 0.3s ease-out'
-          }}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-        >
-          {/* 拖动指示条 */}
-          <div className="flex justify-center pt-3 pb-2">
-            <div className="w-12 h-1 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
-          </div>
-
-          {/* 抽屉标题 */}
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-bold">菜单</h2>
-              <button 
-                onClick={closeDrawer}
-                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-
-          {/* 抽屉内容 */}
-          <div className="h-full overflow-y-auto pb-20">
-            {drawerContent || <MenuContent />}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-/* =========================
-   首页内容组件
-========================= */
-const HomeContent = ({ openDrawer, setDrawerContent }) => {
-  const sections = [
-    {
-      title: '快速开始',
-      items: [
-        { title: '学习拼音', desc: '掌握中文发音基础', icon: '🔊', page: 'pinyin' },
-        { title: 'HSK单词', desc: '分级学习核心词汇', icon: '📚', page: 'hsk' },
-        { title: '口语练习', desc: '实战对话训练', icon: '🎤', page: 'speaking' },
-        { title: '语法学习', desc: '理解句子结构', icon: '📝', page: 'hsk' },
-      ]
-    },
-    {
-      title: '今日推荐',
-      items: [
-        { title: '日常问候', desc: '10个常用问候语', icon: '👋', type: 'lesson' },
-        { title: '数字练习', desc: '1-100发音练习', icon: '🔢', type: 'lesson' },
-        { title: 'HSK 1 模拟', desc: '完整模拟考试', icon: '📊', type: 'test' },
-        { title: '发音挑战', desc: '拼音发音测试', icon: '🎯', type: 'challenge' },
-      ]
-    },
-    {
-      title: '学习统计',
-      items: [
-        { title: '连续学习', value: '7天', progress: 100 },
-        { title: '单词掌握', value: '85/100个', progress: 85 },
-        { title: '发音准确', value: '92%', progress: 92 },
-        { title: '语法掌握', value: '78%', progress: 78 },
-      ]
-    }
-  ]
-
-  return (
-    <div className="p-4 space-y-6">
-      {/* 欢迎区域 */}
-      <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl p-6 text-white">
-        <h1 className="text-2xl font-bold mb-2">欢迎回来！</h1>
-        <p className="opacity-90 mb-4">今日推荐：学习10个新单词</p>
-        <button className="px-6 py-3 bg-white text-blue-600 rounded-full font-bold hover:bg-gray-100">
-          开始今日学习
-        </button>
-      </div>
-
-      {/* 各模块内容 */}
-      {sections.map((section, sectionIndex) => (
-        <div key={sectionIndex} className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-          <h2 className="text-lg font-bold mb-3">{section.title}</h2>
-          <div className="space-y-3">
-            {section.items.map((item, itemIndex) => (
-              <div 
-                key={itemIndex}
-                className="flex items-center p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-                onClick={() => {
-                  if (item.page) {
-                    // 跳转到对应页面
-                    window.location.href = `/${item.page}`
-                  } else if (item.type === 'lesson') {
-                    // 打开课程详情抽屉
-                    openDrawer(true)
-                    setDrawerContent(<LessonDetail lesson={item} />)
-                  }
-                }}
-              >
-                <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-xl mr-3">
-                  {item.icon}
-                </div>
-                <div className="flex-1">
-                  <div className="font-medium">{item.title}</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">{item.desc || item.value}</div>
-                </div>
-                {item.progress && (
-                  <div className="text-right">
-                    <div className="text-sm font-medium">{item.progress}%</div>
-                    <div className="w-20 h-1 bg-gray-200 dark:bg-gray-700 rounded-full mt-1">
-                      <div 
-                        className="h-full bg-green-500 rounded-full"
-                        style={{ width: `${item.progress}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-
-      {/* 功能卡片 */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-4 text-white">
-          <div className="text-xl mb-2">🎤</div>
-          <div className="font-bold">口语评测</div>
-          <div className="text-sm opacity-90">AI实时评分</div>
-        </div>
-        <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-xl p-4 text-white">
-          <div className="text-xl mb-2">📊</div>
-          <div className="font-bold">模拟考试</div>
-          <div className="text-sm opacity-90">HSK全真模拟</div>
-        </div>
-        <div className="bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl p-4 text-white">
-          <div className="text-xl mb-2">📈</div>
-          <div className="font-bold">学习报告</div>
-          <div className="text-sm opacity-90">每周进步分析</div>
-        </div>
-        <div className="bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl p-4 text-white">
-          <div className="text-xl mb-2">👥</div>
-          <div className="font-bold">学习社区</div>
-          <div className="text-sm opacity-90">与同学交流</div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* =========================
-   拼音页面组件
-========================= */
-const PinyinPage = ({ openDrawer, setDrawerContent }) => {
-  const pinyinGroups = [
-    {
-      title: '声母',
-      items: ['b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'h', 'j', 'q', 'x', 'zh', 'ch', 'sh', 'r', 'z', 'c', 's']
-    },
-    {
-      title: '韵母',
-      items: ['a', 'o', 'e', 'i', 'u', 'ü', 'ai', 'ei', 'ui', 'ao', 'ou', 'iu', 'ie', 'üe', 'er', 'an', 'en', 'in', 'un', 'ün', 'ang', 'eng', 'ing', 'ong']
-    },
-    {
-      title: '声调',
-      items: ['ā á ǎ à', 'ō ó ǒ ò', 'ē é ě è', 'ī í ǐ ì', 'ū ú ǔ ù', 'ǖ ǘ ǚ ǜ']
-    }
-  ]
-
-  return (
-    <div className="p-4 space-y-6">
-      <div className="bg-gradient-to-r from-red-500 to-orange-500 rounded-2xl p-6 text-white">
-        <h1 className="text-2xl font-bold mb-2">拼音学习</h1>
-        <p className="opacity-90">掌握标准发音，打好中文基础</p>
-      </div>
-
-      {pinyinGroups.map((group, index) => (
-        <div key={index} className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-          <h2 className="text-lg font-bold mb-3">{group.title}</h2>
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-            {group.items.map((item, idx) => (
-              <button
-                key={idx}
-                className="aspect-square bg-blue-50 dark:bg-gray-700 rounded-lg flex items-center justify-center text-xl font-bold hover:bg-blue-100 dark:hover:bg-gray-600"
-                onClick={() => {
-                  openDrawer(true)
-                  setDrawerContent(<PinyinDetail pinyin={item} />)
-                }}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-        </div>
-      ))}
-
-      {/* 练习区 */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-        <h2 className="text-lg font-bold mb-3">发音练习</h2>
-        <div className="space-y-4">
-          <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-            <div className="text-2xl font-bold mb-2">bā</div>
-            <div className="text-gray-600 dark:text-gray-400">八 (eight)</div>
-            <div className="flex gap-2 mt-3">
-              <button className="flex-1 py-2 bg-blue-500 text-white rounded-lg">播放</button>
-              <button className="flex-1 py-2 bg-green-500 text-white rounded-lg">录音</button>
-            </div>
-          </div>
-          
-          <button className="w-full py-3 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-lg font-bold">
-            开始系统练习
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* =========================
-   HSK页面组件
-========================= */
-const HskPage = ({ openDrawer, setDrawerContent }) => {
-  const hskLevels = [
-    { level: 'HSK 1', words: 150, lessons: 15, color: 'from-green-500 to-emerald-500' },
-    { level: 'HSK 2', words: 300, lessons: 20, color: 'from-blue-500 to-cyan-500' },
-    { level: 'HSK 3', words: 600, lessons: 25, color: 'from-purple-500 to-pink-500' },
-    { level: 'HSK 4', words: 1200, lessons: 30, color: 'from-orange-500 to-red-500' },
-    { level: 'HSK 5', words: 2500, lessons: 35, color: 'from-indigo-500 to-purple-500' },
-    { level: 'HSK 6', words: 5000, lessons: 40, color: 'from-gray-600 to-slate-600' }
-  ]
-
-  return (
-    <div className="p-4 space-y-6">
-      <div className="bg-gradient-to-r from-purple-500 to-pink-600 rounded-2xl p-6 text-white">
-        <h1 className="text-2xl font-bold mb-2">HSK课程</h1>
-        <p className="opacity-90">国际汉语水平考试，分级学习</p>
-      </div>
-
-      {/* HSK级别列表 */}
-      <div className="space-y-4">
-        {hskLevels.map((hsk, index) => (
-          <div 
-            key={index}
-            className={`bg-gradient-to-r ${hsk.color} rounded-xl p-5 text-white shadow-lg`}
-            onClick={() => {
-              openDrawer(true)
-              setDrawerContent(<HskDetail level={hsk} />)
-            }}
-          >
-            <div className="flex justify-between items-center mb-3">
-              <h2 className="text-xl font-bold">{hsk.level}</h2>
-              <span className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-sm">
-                {index + 1}级
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className="text-sm opacity-90">单词数量</div>
-                <div className="text-lg font-bold">{hsk.words}</div>
-              </div>
-              <div>
-                <div className="text-sm opacity-90">课程数量</div>
-                <div className="text-lg font-bold">{hsk.lessons}</div>
-              </div>
-            </div>
-            <button className="w-full mt-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30">
-              开始学习
-            </button>
-          </div>
-        ))}
-      </div>
-
-      {/* 单词学习模式 */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-        <h2 className="text-lg font-bold mb-3">单词学习</h2>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-            <div>
-              <div className="font-bold">卡片模式</div>
-              <div className="text-sm text-gray-500">闪卡记忆</div>
-            </div>
-            <span>→</span>
-          </div>
-          <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-            <div>
-              <div className="font-bold">列表模式</div>
-              <div className="text-sm text-gray-500">浏览所有单词</div>
-            </div>
-            <span>→</span>
-          </div>
-          <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-            <div>
-              <div className="font-bold">测试模式</div>
-              <div className="text-sm text-gray-500">检测掌握程度</div>
-            </div>
-            <span>→</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* =========================
-   口语页面组件
-========================= */
-const SpeakingPage = ({ openDrawer, setDrawerContent }) => {
-  const speakingTopics = [
-    { title: '日常问候', sentences: 10, icon: '👋' },
-    { title: '餐厅点餐', sentences: 15, icon: '🍽️' },
-    { title: '购物交流', sentences: 12, icon: '🛍️' },
-    { title: '问路指路', sentences: 8, icon: '🗺️' },
-    { title: '旅游对话', sentences: 20, icon: '✈️' },
-    { title: '商务会谈', sentences: 18, icon: '💼' }
-  ]
-
-  return (
-    <div className="p-4 space-y-6">
-      <div className="bg-gradient-to-r from-cyan-500 to-blue-500 rounded-2xl p-6 text-white">
-        <h1 className="text-2xl font-bold mb-2">口语练习</h1>
-        <p className="opacity-90">AI实时评测，纠正发音</p>
-      </div>
-
-      {/* 口语练习区域 */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-        <div className="text-center mb-6">
-          <div className="text-4xl mb-2">🎤</div>
-          <h2 className="text-lg font-bold mb-2">实时跟读练习</h2>
-          <p className="text-gray-500 dark:text-gray-400">请跟读下面的句子</p>
-        </div>
-
-        <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-6 mb-6">
-          <div className="text-2xl font-bold mb-4 text-center">"你好，请问图书馆在哪里？"</div>
-          <div className="text-gray-600 dark:text-gray-400 text-center mb-6">Hello, where is the library?</div>
-          
-          <div className="flex justify-center gap-4 mb-6">
-            <button className="w-12 h-12 bg-blue-500 text-white rounded-full flex items-center justify-center">
-              🔊
-            </button>
-            <button className="w-16 h-16 bg-red-500 text-white rounded-full flex items-center justify-center text-xl">
-              🎤
-            </button>
-            <button className="w-12 h-12 bg-green-500 text-white rounded-full flex items-center justify-center">
-              ▶
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg p-4 text-white">
-          <div className="flex justify-between items-center">
-            <span>发音评分</span>
-            <span className="text-2xl font-bold">85/100</span>
-          </div>
-          <div className="text-sm mt-2 opacity-90">建议：注意"图书馆"的连读</div>
-        </div>
-      </div>
-
-      {/* 话题列表 */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-        <h2 className="text-lg font-bold mb-3">话题练习</h2>
-        <div className="grid grid-cols-2 gap-3">
-          {speakingTopics.map((topic, index) => (
-            <div 
-              key={index}
-              className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 text-center"
-              onClick={() => {
-                openDrawer(true)
-                setDrawerContent(<TopicDetail topic={topic} />)
-              }}
-            >
-              <div className="text-2xl mb-2">{topic.icon}</div>
-              <div className="font-bold">{topic.title}</div>
-              <div className="text-sm text-gray-500">{topic.sentences}个句子</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* =========================
-   练习页面组件
-========================= */
-const PracticePage = ({ openDrawer, setDrawerContent }) => {
-  const practiceTypes = [
-    { type: 'choice', title: '选择题', icon: '🔘', color: 'from-blue-500 to-cyan-500' },
-    { type: 'fill', title: '填空题', icon: '📝', color: 'from-green-500 to-emerald-500' },
-    { type: 'match', title: '连线题', icon: '🔗', color: 'from-purple-500 to-pink-500' },
-    { type: 'listen', title: '听力题', icon: '👂', color: 'from-orange-500 to-red-500' },
-    { type: 'speak', title: '口语题', icon: '🎤', color: 'from-indigo-500 to-purple-500' },
-    { type: 'write', title: '书写题', icon: '✍️', color: 'from-yellow-500 to-amber-500' }
-  ]
-
-  return (
-    <div className="p-4 space-y-6">
-      <div className="bg-gradient-to-r from-emerald-500 to-green-600 rounded-2xl p-6 text-white">
-        <h1 className="text-2xl font-bold mb-2">练习题</h1>
-        <p className="opacity-90">多种题型，巩固所学知识</p>
-      </div>
-
-      {/* 练习统计 */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-        <h2 className="text-lg font-bold mb-3">今日练习</h2>
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <span>已完成</span>
-            <span className="font-bold">5/10题</span>
-          </div>
-          <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full">
-            <div className="w-1/2 h-full bg-green-500 rounded-full"></div>
-          </div>
-          <div className="flex justify-between items-center">
-            <span>正确率</span>
-            <span className="font-bold">80%</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 练习题类型 */}
-      <div className="grid grid-cols-3 gap-3">
-        {practiceTypes.map((practice, index) => (
-          <div 
-            key={index}
-            className={`bg-gradient-to-br ${practice.color} rounded-xl p-4 text-white text-center`}
-            onClick={() => {
-              openDrawer(true)
-              setDrawerContent(<PracticeDetail type={practice.type} />)
-            }}
-          >
-            <div className="text-2xl mb-2">{practice.icon}</div>
-            <div className="font-bold text-sm">{practice.title}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* 当前练习题 */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
-        <h2 className="text-lg font-bold mb-4">选择题练习</h2>
-        <div className="space-y-4">
-          <div className="text-lg">我___学生。</div>
-          <div className="space-y-3">
-            {['A. 是', 'B. 有', 'C. 在', 'D. 要'].map((option, idx) => (
-              <button
-                key={idx}
-                className="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-lg text-left hover:bg-gray-100 dark:hover:bg-gray-600"
-              >
-                {option}
-              </button>
-            ))}
-          </div>
-          <button className="w-full py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg font-bold">
-            提交答案
-          </button>
-        </div>
-      </div>
-
-      {/* 历史记录 */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-        <h2 className="text-lg font-bold mb-3">练习记录</h2>
-        <div className="space-y-3">
-          {[
-            { date: '今天', score: '80%', count: 10 },
-            { date: '昨天', score: '75%', count: 8 },
-            { date: '前天', score: '85%', count: 12 },
-          ].map((record, idx) => (
-            <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <span>{record.date}</span>
-              <div className="text-right">
-                <div className="font-bold">{record.score}</div>
-                <div className="text-sm text-gray-500">{record.count}题</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* =========================
-   抽屉内容组件
-========================= */
-const MenuContent = () => {
-  const menuItems = [
-    { title: '个人中心', icon: '👤', href: '/profile' },
-    { title: '学习报告', icon: '📊', href: '/report' },
-    { title: '收藏夹', icon: '⭐', href: '/favorites' },
-    { title: '设置', icon: '⚙️', href: '/settings' },
-    { title: '帮助', icon: '❓', href: '/help' },
-    { title: '关于我们', icon: 'ℹ️', href: '/about' },
-  ]
-
-  return (
-    <div className="space-y-1">
-      {menuItems.map((item, index) => (
-        <a
-          key={index}
-          href={item.href}
-          className="flex items-center p-4 hover:bg-gray-100 dark:hover:bg-gray-700"
-        >
-          <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-xl mr-3">
-            {item.icon}
-          </div>
-          <span className="font-medium">{item.title}</span>
-        </a>
-      ))}
-      
-      {/* 分割线 */}
-      <div className="border-t border-gray-200 dark:border-gray-700 my-4"></div>
-      
-      {/* 学习计划 */}
-      <div className="p-4">
-        <h3 className="font-bold mb-3">学习计划</h3>
-        <div className="space-y-3">
-          {[
-            { plan: '免费版', price: '¥0', features: ['基础功能'] },
-            { plan: '标准版', price: '¥99/月', features: ['完整课程', '发音评测'] },
-            { plan: '专业版', price: '¥299/月', features: ['所有功能', '1对1辅导'] },
-          ].map((plan, idx) => (
-            <div key={idx} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-              <div className="flex justify-between items-center mb-2">
-                <span className="font-bold">{plan.plan}</span>
-                <span className="text-lg font-bold">{plan.price}</span>
-              </div>
-              <div className="text-sm text-gray-500">
-                {plan.features.join(' • ')}
-              </div>
-              <button className={`w-full mt-3 py-2 rounded-lg font-medium ${
-                idx === 1 
-                  ? 'bg-blue-500 text-white hover:bg-blue-600' 
-                  : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200'
-              }`}>
-                {idx === 0 ? '当前使用' : '升级'}
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-const PinyinDetail = ({ pinyin }) => {
-  return (
-    <div className="p-6">
-      <div className="text-center">
-        <div className="text-6xl font-bold mb-4">{pinyin}</div>
-        <div className="text-2xl text-gray-500 mb-6">标准发音</div>
-        
-        <div className="flex justify-center gap-4 mb-8">
-          <button className="px-6 py-3 bg-blue-500 text-white rounded-lg">播放</button>
-          <button className="px-6 py-3 bg-green-500 text-white rounded-lg">录音</button>
-          <button className="px-6 py-3 bg-purple-500 text-white rounded-lg">对比</button>
-        </div>
-      </div>
-      
-      <div className="space-y-4">
-        <h3 className="font-bold">相关单词</h3>
-        <div className="grid grid-cols-2 gap-3">
-          {['八', '爸', '吧', '巴'].map((word, idx) => (
-            <div key={idx} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold">{word}</div>
-              <div className="text-gray-500">bā</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-const HskDetail = ({ level }) => {
-  return (
-    <div className="p-6">
-      <h2 className="text-2xl font-bold mb-4">{level.level} 详情</h2>
-      <div className="space-y-4">
-        <div className="flex justify-between">
-          <span>单词数量</span>
-          <span className="font-bold">{level.words}个</span>
-        </div>
-        <div className="flex justify-between">
-          <span>课程数量</span>
-          <span className="font-bold">{level.lessons}课</span>
-        </div>
-        <div className="flex justify-between">
-          <span>建议学习时间</span>
-          <span className="font-bold">30小时</span>
-        </div>
-        
-        <div className="pt-4">
-          <h3 className="font-bold mb-3">课程大纲</h3>
-          <div className="space-y-2">
-            {['基础词汇', '日常对话', '语法讲解', '听力练习', '模拟考试'].map((item, idx) => (
-              <div key={idx} className="flex items-center p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
-                <span className="w-6 h-6 bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 rounded-full flex items-center justify-center text-sm mr-3">
-                  {idx + 1}
-                </span>
-                {item}
-              </div>
-            ))}
-          </div>
-        </div>
-        
-        <button className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-bold mt-6">
-          开始学习
-        </button>
-      </div>
-    </div>
-  )
-}
-
-const TopicDetail = ({ topic }) => {
-  return (
-    <div className="p-6">
-      <div className="text-center mb-6">
-        <div className="text-4xl mb-2">{topic.icon}</div>
-        <h2 className="text-2xl font-bold">{topic.title}</h2>
-        <p className="text-gray-500">{topic.sentences}个句子</p>
-      </div>
-      
-      <div className="space-y-4">
-        <h3 className="font-bold">示例句子</h3>
-        {[
-          { chinese: '你好吗？', english: 'How are you?' },
-          { chinese: '我很好，谢谢。', english: "I'm fine, thank you." },
-          { chinese: '你叫什么名字？', english: 'What is your name?' },
-        ].map((sentence, idx) => (
-          <div key={idx} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-            <div className="text-lg font-bold mb-2">{sentence.chinese}</div>
-            <div className="text-gray-500">{sentence.english}</div>
-            <div className="flex gap-2 mt-3">
-              <button className="flex-1 py-2 bg-blue-500 text-white rounded">播放</button>
-              <button className="flex-1 py-2 bg-green-500 text-white rounded">跟读</button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-const PracticeDetail = ({ type }) => {
-  const typeNames = {
-    choice: '选择题',
-    fill: '填空题',
-    match: '连线题',
-    listen: '听力题',
-    speak: '口语题',
-    write: '书写题'
-  }
+  }, [router.isReady, router.query.tab]);
   
-  return (
-    <div className="p-6">
-      <h2 className="text-2xl font-bold mb-4">{typeNames[type]} 练习</h2>
-      <div className="space-y-4">
-        <p>专项练习，提高你的{typeNames[type]}能力</p>
-        
-        <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-          <h3 className="font-bold mb-3">练习设置</h3>
-          <div className="space-y-3">
-            <div className="flex justify-between">
-              <span>题目数量</span>
-              <select className="border rounded px-2">
-                <option>10题</option>
-                <option>20题</option>
-                <option>50题</option>
-              </select>
-            </div>
-            <div className="flex justify-between">
-              <span>难度级别</span>
-              <select className="border rounded px-2">
-                <option>简单</option>
-                <option>中等</option>
-                <option>困难</option>
-              </select>
-            </div>
-            <div className="flex justify-between">
-              <span>时间限制</span>
-              <select className="border rounded px-2">
-                <option>无限制</option>
-                <option>10分钟</option>
-                <option>30分钟</option>
-              </select>
-            </div>
-          </div>
-        </div>
-        
-        <button className="w-full py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg font-bold">
-          开始练习
-        </button>
-      </div>
-    </div>
-  )
-}
+  const handleTabChange = (key) => {
+    router.push(`/?tab=${key}`, undefined, { shallow: true });
+    setActiveTabKey(key);
+  };
 
-const LessonDetail = ({ lesson }) => {
-  return (
-    <div className="p-6">
-      <div className="text-center mb-6">
-        <div className="text-4xl mb-2">{lesson.icon}</div>
-        <h2 className="text-2xl font-bold">{lesson.title}</h2>
-        <p className="text-gray-500">{lesson.desc}</p>
-      </div>
+  const [backgroundUrl, setBackgroundUrl] = useState('');
+  const scrollableContainerRef = useRef(null);
+  const stickySentinelRef = useRef(null);
+  const lastScrollY = useRef(0);
+  const [isStickyActive, setIsStickyActive] = useState(false);
+  const [isNavVisible, setIsNavVisible] = useState(true);
+  const mainContentRef = useRef(null);
+  
+  const sidebarWidth = 288;
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [sidebarX, setSidebarX] = useState(-sidebarWidth);
+  const [isDragging, setIsDragging] = useState(false);
+  const touchStartX = useRef(null);
+  const currentSidebarX = useRef(-sidebarWidth);
+
+  const [sentenceCardData, setSentenceCardData] = useState(null);
+  const [wordCardData, setWordCardData] = useState(null);
+  const isSentenceFavoritesCardOpen = isBrowser ? window.location.hash === '#favorite-sentences' : false;
+  const isWordFavoritesCardOpen = isBrowser ? window.location.hash === '#favorite-words' : false;
+  const [isContactPanelOpen, setIsContactPanelOpen] = useState(false);
+  
+  const handleOpenFavorites = useCallback(async (type) => {
+    if (type === 'sentences') {
+        const sentences = await getAllFavorites(SENTENCE_STORE_NAME);
+        if (sentences?.length > 0) {
+            setSentenceCardData(sentences.map(s => ({ id: s.id, sentence: s.chinese, translation: s.burmese, pinyin: s.pinyin, imageUrl: s.imageUrl })));
+            router.push('#favorite-sentences', undefined, { shallow: true });
+        } else {
+            alert('您还没有收藏任何短句。');
+        }
+    } else if (type === 'words') {
+        const words = await getAllFavorites(WORD_STORE_NAME);
+        if (words?.length > 0) {
+            setWordCardData(words);
+            router.push('#favorite-words', undefined, { shallow: true });
+        } else {
+            alert('您还没有收藏任何单词。');
+        }
+    } else if (type === 'grammar') {
+        alert('“收藏语法”功能正在开发中，敬请期待！');
+    }
+  }, [router]); 
+
+  const handleCloseFavorites = useCallback(() => {
+    router.push(router.pathname, undefined, { shallow: true });
+  }, [router]);
+
+  useEffect(() => {
+    const handlePopStateFavorites = () => {
+      if (!window.location.hash.startsWith('#favorite')) {
+        setSentenceCardData(null);
+        setWordCardData(null);
+      }
+    };
+    window.addEventListener('popstate', handlePopStateFavorites);
+
+    const backgrounds = [
+        'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto-format&fit-crop&q=80&w=2070',
+        'https://images.unsplash.com/photo-1519681393784-d120267933ba?auto-format&fit-crop&q=80&w=2070'
+    ];
+    setBackgroundUrl(backgrounds[Math.floor(Math.random() * backgrounds.length)]);
+
+    const container = scrollableContainerRef.current;
+    if (!container) return;
+
+    let ticking = false;
+    const handleScroll = () => {
+      if (!isStickyActive) {
+          lastScrollY.current = container.scrollTop;
+          return;
+      }
+      const currentY = container.scrollTop;
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const diff = currentY - lastScrollY.current;
+          if (Math.abs(diff) > 10) {
+            setIsNavVisible(diff <= 0);
+          }
+          lastScrollY.current = currentY;
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    
+    const observer = new IntersectionObserver(
+        ([entry]) => {
+            const shouldBeSticky = !entry.isIntersecting && entry.boundingClientRect.top < 0;
+            setIsStickyActive(shouldBeSticky);
+            if (!shouldBeSticky) setIsNavVisible(true);
+        }, { threshold: 0 }
+    );
       
-      <div className="space-y-4">
-        <h3 className="font-bold">课程内容</h3>
-        <div className="space-y-2">
-          {['视频讲解', '发音示范', '练习题目', '课后测试'].map((item, idx) => (
-            <div key={idx} className="flex items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <span className="w-8 h-8 bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 rounded-full flex items-center justify-center mr-3">
-                ✓
-              </span>
-              {item}
+    const currentSentinel = stickySentinelRef.current;
+    if (currentSentinel) observer.observe(currentSentinel);
+    
+    return () => { 
+        container.removeEventListener('scroll', handleScroll);
+        if (currentSentinel) observer.unobserve(currentSentinel);
+        window.removeEventListener('popstate', handlePopStateFavorites);
+    };
+  }, [isStickyActive, router]);
+
+  const contentSwipeHandlers = useSwipeable({
+      onSwipedLeft: () => {
+          const currentIndex = allTabs.findIndex(t => t.key === activeTabKey);
+          if (currentIndex !== -1 && currentIndex < allTabs.length - 1) {
+              handleTabChange(allTabs[currentIndex + 1].key);
+          }
+      },
+      onSwipedRight: () => {
+          const currentIndex = allTabs.findIndex(t => t.key === activeTabKey);
+          if (currentIndex > 0) {
+              handleTabChange(allTabs[currentIndex - 1].key);
+          }
+      },
+      preventDefaultTouchmoveEvent: true,
+      trackMouse: true,
+      delta: 50
+  });
+
+  const handleTouchStart = (e) => {
+    if (!isSidebarOpen && mainContentRef.current?.contains(e.target)) return;
+    const startX = e.touches[0].clientX;
+    if (!isSidebarOpen && startX > window.innerWidth * 0.4) return;
+    touchStartX.current = startX;
+    currentSidebarX.current = sidebarX;
+    setIsDragging(true);
+  };
+  const handleTouchMove = (e) => {
+    if (!isDragging || touchStartX.current === null) return;
+    const deltaX = e.touches[0].clientX - touchStartX.current;
+    const newX = Math.max(-sidebarWidth, Math.min(currentSidebarX.current + deltaX, 0));
+    setSidebarX(newX);
+  };
+  const handleTouchEnd = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    touchStartX.current = null;
+    if (sidebarX < -sidebarWidth / 2) closeSidebar();
+    else openSidebar();
+  };
+  const openSidebar = () => { setIsSidebarOpen(true); setSidebarX(0); };
+  const closeSidebar = () => { setIsSidebarOpen(false); setSidebarX(-sidebarWidth); };
+  
+  const renderTabButtons = () => allTabs.map(tab => (
+    <button key={tab.key} onClick={() => handleTabChange(tab.key)} className={`flex flex-col items-center justify-center w-1/4 pt-2.5 pb-1.5 transition-colors duration-300 focus:outline-none ${activeTabKey === tab.key ? 'text-blue-500' : 'text-gray-500 dark:text-gray-400'}`}>
+        {tab.icon}
+        <span className='text-xs font-semibold mt-1'>{tab.name}</span>
+        <div className={`w-6 h-0.5 mt-1 rounded-full transition-all duration-300 ${activeTabKey === tab.key ? 'bg-blue-500' : 'bg-transparent'}`}></div>
+    </button>
+  ));
+
+  if (!activeTabKey) {
+    return <div id='theme-heo' className={`${siteConfig('FONT_STYLE')} h-screen w-screen bg-black flex flex-col overflow-hidden`}></div>;
+  }
+
+  return (
+    <div id='theme-heo' className={`${siteConfig('FONT_STYLE')} h-screen w-screen bg-black flex flex-col overflow-hidden`}>
+        <Style/>
+        <CustomScrollbarStyle />
+        <HomeSidebar isOpen={isSidebarOpen} onClose={closeSidebar} sidebarX={sidebarX} isDragging={isDragging} />
+
+        <div onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} className='relative flex-grow w-full h-full'>
+            <div className='absolute inset-0 z-0 bg-cover bg-center' style={{ backgroundImage: `url(${backgroundUrl})` }} />
+            <div className='absolute inset-0 bg-black/20'></div>
+
+            <button onClick={openSidebar} className="absolute top-4 left-4 z-30 p-2 text-white bg-black/20 rounded-full hover:bg-black/40 transition-colors" aria-label="打开菜单">
+                <i className="fas fa-bars text-xl"></i>
+            </button>
+            
+            <div className='absolute top-0 left-0 right-0 h-[40vh] z-10 p-4 flex flex-col justify-end text-white pointer-events-none'>
+                <div className='pointer-events-auto'>
+                    <h1 className='text-4xl font-extrabold' style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>中缅文培训中心</h1>
+                    <p className='mt-2 text-lg w-full md:w-2/3' style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.7)' }}>在这里可以写很长的价格介绍、Slogan 或者其他描述文字。</p>
+                    <div className='mt-4 grid grid-cols-3 grid-rows-2 gap-2 h-40'>
+                        <a href="https://www.tiktok.com/@mmzh.onlione?_r=1&_t=ZS-91OzyDddPu8" target="_blank" rel="noopener noreferrer" className='col-span-1 row-span-1 rounded-xl overflow-hidden relative group bg-cover bg-center' style={{ backgroundImage: "url('/img/tiktok.jpg')" }}><div className='absolute top-1 left-1 bg-pink-500 text-white text-[8px] font-bold px-1 py-0.25 rounded'>LIVE</div><div className='absolute bottom-1 right-1 p-1 flex flex-col items-end text-white text-right'><FaTiktok size={18}/><span className='text-[10px] mt-0.5 font-semibold'>直播订阅</span></div></a>
+                        <a href="https://www.facebook.com/share/1ErXyBbrZ1" target="_blank" rel="noopener noreferrer" className='col-span-1 row-start-2 rounded-xl overflow-hidden relative group bg-cover bg-center' style={{ backgroundImage: "url('/img/facebook.jpg')" }}><div className='absolute top-1 left-1 bg-blue-600 text-white text-[8px] font-bold px-1 py-0.25 rounded'>LIVE</div><div className='absolute bottom-1 right-1 p-1 flex flex-col items-end text-white text-right'><FaFacebook size={18}/><span className='text-[10px] mt-0.5 font-semibold'>直播订阅</span></div></a>
+                        <div className='col-span-2 col-start-2 row-span-2 rounded-xl overflow-hidden bg-black'><iframe title="YouTube" width="100%" height="100%" src="https://www.you999tube.com/embed/your_video_id_here" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe></div>
+                    </div>
+                </div>
             </div>
-          ))}
+
+            <div ref={scrollableContainerRef} className='absolute inset-0 z-20 overflow-y-auto overscroll-y-contain custom-scrollbar'>
+                <div className='h-[40vh] flex-shrink-0' />
+                <div className='relative bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl pb-6 min-h-[calc(60vh+1px)]'>
+                    
+                    <div className='bg-violet-50 dark:bg-gray-800 rounded-t-2xl'>
+                        <div className='pt-6'>
+                           <div className='px-4 mb-6'><GlosbeSearchCard /></div>
+                           <div className='pb-6'><ActionButtons onOpenFavorites={handleOpenFavorites} onOpenContact={() => setIsContactPanelOpen(true)} /></div>
+                        </div>
+                        <div ref={stickySentinelRef}></div>
+                        
+                        <div className={`${isStickyActive ? 'opacity-0 pointer-events-none h-0 overflow-hidden' : ''} border-b border-violet-200 dark:border-gray-700 transition-all duration-200`}>
+                            <div className='flex justify-around'>{renderTabButtons()}</div>
+                       </div>
+                    </div>
+
+                    <div className={`transition-transform duration-300 ease-in-out fixed w-full top-0 z-30 ${isStickyActive ? 'block' : 'hidden'} ${isNavVisible ? 'translate-y-0' : '-translate-y-full'}`}>
+                        <div className='bg-violet-50/95 dark:bg-gray-800/95 backdrop-blur-lg border-b border-violet-200 dark:border-gray-700 shadow-sm'>
+                            <div className='flex justify-around max-w-[86rem] mx-auto'>{renderTabButtons()}</div>
+                        </div>
+                    </div>
+                    
+                    <main ref={mainContentRef} {...contentSwipeHandlers}>
+                        <div className='p-4'>
+                            {activeTabKey === 'pinyin' && <PinyinContentBlock />}
+                            {activeTabKey === 'words' && <WordsContentBlock />}
+                            {activeTabKey === 'speaking' && <KouyuPage />}
+                            {/* HSK 和 语法 的内容组件可以按需添加 */}
+                            {/* {activeTabKey === 'hsk' && <HskContentBlock />} */}
+                            {/* {activeTabKey === 'grammar' && <GrammarContentBlock />} */}
+                        </div>
+                    </main>
+                </div>
+            </div>
+            {/* 底部导航栏已移除 */}
         </div>
-        
-        <button className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg font-bold">
-          开始学习
-        </button>
-      </div>
+
+        {sentenceCardData && <ShortSentenceCard sentences={sentenceCardData} isOpen={isSentenceFavoritesCardOpen} onClose={handleCloseFavorites} progressKey="favorites-sentences" />}
+        {wordCardData && <WordCard words={wordCardData} isOpen={isWordFavoritesCardOpen} onClose={handleCloseFavorites} progressKey="favorites-words" />}
+        <ContactPanel isOpen={isContactPanelOpen} onClose={() => setIsContactPanelOpen(false)} />
+    </div>
+  );
+};
+
+// =================================================================================
+// ====================== 其他页面布局 (保持 HEO 主题原有功能) ========================
+// =================================================================================
+
+const LayoutBase = props => {
+  const { children, slotTop, className } = props
+  const { fullWidth, isDarkMode } = useGlobal()
+  const router = useRouter()
+  
+  // 首页布局由 LayoutIndex 接管，不使用 LayoutBase
+  if (router.route === '/') {
+    return <LayoutIndex {...props} />
+  }
+
+  const headerSlot = (
+    <header>
+      <Header {...props} />
+      {router.route === '/' ? <Hero {...props} /> : null}
+      {fullWidth ? null : <PostHeader {...props} isDarkMode={isDarkMode} />}
+    </header>
+  )
+
+  const slotRight = router.route === '/404' || fullWidth ? null : <SideRight {...props} />
+  const maxWidth = fullWidth ? 'max-w-[96rem] mx-auto' : 'max-w-[86rem]'
+  const HEO_LOADING_COVER = siteConfig('HEO_LOADING_COVER', true, CONFIG)
+
+  useEffect(() => { loadWowJS() }, [])
+
+  return (
+    <div id='theme-heo' className={`${siteConfig('FONT_STYLE')} bg-[#f7f9fe] dark:bg-[#18171d] h-full min-h-screen flex flex-col scroll-smooth`}>
+      <Style />
+      {headerSlot}
+      <main id='wrapper-outer' className={`flex-grow w-full ${maxWidth} mx-auto relative md:px-5`}>
+        <div id='container-inner' className='w-full mx-auto lg:flex justify-center relative z-10'>
+          <div className={`w-full h-auto ${className || ''}`}>{slotTop}{children}</div>
+          <div className='lg:px-2'></div>
+          <div className='hidden xl:block'>{slotRight}</div>
+        </div>
+      </main>
+      <Footer />
+      {HEO_LOADING_COVER && <LoadingCover />}
     </div>
   )
 }
 
-/* =========================
-   其他页面保持不变
-========================= */
 const LayoutPostList = props => (
-  <div className="px-5 md:px-0">
-    {siteConfig('POST_LIST_STYLE') === 'page' ? (
-      <BlogPostListPage {...props} />
-    ) : (
-      <BlogPostListScroll {...props} />
-    )}
-  </div>
+    <div id='post-outer-wrapper' className='px-5  md:px-0'>
+      <CategoryBar {...props} />
+      {siteConfig('POST_LIST_STYLE') === 'page' ? <BlogPostListPage {...props} /> : <BlogPostListScroll {...props} />}
+    </div>
 )
 
 const LayoutSearch = props => {
+  const { keyword } = props
   const router = useRouter()
-  const keyword = props.keyword || router.query?.s
+  const currentSearch = keyword || router?.query?.s
+
+  useEffect(() => {
+    if (currentSearch) {
+      setTimeout(() => {
+        replaceSearchResult({
+          doms: document.getElementsByClassName('replace'),
+          search: currentSearch,
+          target: { element: 'span', className: 'text-red-500 border-b border-dashed' }
+        })
+      }, 100)
+    }
+  }, [currentSearch])
 
   return (
-    <div className="px-5 md:px-0">
-      {!keyword ? <SearchNav {...props} /> : <LayoutPostList {...props} />}
+    <div>
+      <div id='post-outer-wrapper' className='px-5 md:px-0'>
+        {!currentSearch ? (
+          <SearchNav {...props} />
+        ) : (
+          <div id='posts-wrapper'>
+            {siteConfig('POST_LIST_STYLE') === 'page' ? <BlogPostListPage {...props} /> : <BlogPostListScroll {...props} />}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
 
 const LayoutArchive = props => {
   const { archivePosts } = props
-
   return (
-    <div className="bg-white dark:bg-[#1e1e1e] rounded-xl p-5">
-      {Object.keys(archivePosts || {}).map(year => (
-        <BlogPostArchive
-          key={year}
-          archiveTitle={year}
-          posts={archivePosts[year]}
-        />
-      ))}
+    <div className='p-5 rounded-xl border dark:border-gray-600 max-w-6xl w-full bg-white dark:bg-[#1e1e1e]'>
+      <CategoryBar {...props} border={false} />
+      <div className='px-3'>
+        {Object.keys(archivePosts).map(archiveTitle => (
+          <BlogPostArchive
+            key={archiveTitle}
+            posts={archivePosts[archiveTitle]}
+            archiveTitle={archiveTitle}
+          />
+        ))}
+      </div>
     </div>
   )
 }
 
 const LayoutSlug = props => {
   const { post, lock, validPassword } = props
-  const { fullWidth } = useGlobal()
+  const { locale, fullWidth } = useGlobal()
+  const router = useRouter()
+  
+  useEffect(() => {
+    if (!post) {
+      setTimeout(() => {
+        if (isBrowser) {
+          const article = document.getElementById('notion-article')
+          if (!article) {
+            router.push('/404').then(() => console.warn('找不到页面', router.asPath))
+          }
+        }
+      }, siteConfig('POST_WAITING_TIME_FOR_404') * 1000)
+    }
+  }, [post, router])
+
+  const commentEnable = siteConfig('COMMENT_TWIKOO_ENV_ID') || siteConfig('COMMENT_WALINE_SERVER_URL') || siteConfig('COMMENT_VALINE_APP_ID') || siteConfig('COMMENT_GISCUS_REPO') || siteConfig('COMMENT_CUSDIS_APP_ID') || siteConfig('COMMENT_UTTERRANCES_REPO') || siteConfig('COMMENT_GITALK_CLIENT_ID') || siteConfig('COMMENT_WEBMENTION_ENABLE')
 
   return (
     <>
-      <div
-        className={`bg-white dark:bg-[#18171d] rounded-xl p-5 ${
-          fullWidth ? '' : 'xl:max-w-5xl mx-auto'
-        }`}
-      >
+      <div className={`w-full ${fullWidth ? '' : 'xl:max-w-5xl lg:hover:shadow lg:border'} lg:px-2 lg:py-4 bg-white dark:bg-[#18171d] dark:border-gray-600 rounded-2xl`}>
         {lock && <PostLock validPassword={validPassword} />}
-
         {!lock && post && (
-          <>
-            <NotionPage post={post} />
-            <PostAdjacent {...props} />
-            <ShareBar post={post} />
-            <PostRecommend {...props} />
-            <Comment frontMatter={post} />
-          </>
+          <div id="article-wrapper" className='px-5'>
+            <article itemScope itemType='https://schema.org/Article'>
+              <ArticleExpirationNotice post={post} />
+              <AISummary aiSummary={post.aiSummary} />
+              <WWAds orientation='horizontal' className='w-full' />
+              {post && <NotionPage post={post} />}
+              <WWAds orientation='horizontal' className='w-full' />
+              <ShareBar post={post} />
+              <PostCopyright {...props} />
+              <PostRecommend {...props} />
+              <PostAdjacent {...props} />
+            </article>
+            {commentEnable && (
+              <div className='px-5'>
+                <hr className='my-4 border-dashed' />
+                <div className='py-2'><AdSlot /></div>
+                <div className='text-2xl dark:text-white'><i className='fas fa-comment mr-1' />{locale.COMMON.COMMENTS}</div>
+                <Comment frontMatter={post} />
+              </div>
+            )}
+          </div>
         )}
       </div>
-
       <FloatTocButton {...props} />
     </>
   )
 }
 
-const Layout404 = () => (
-  <div className="h-[70vh] flex flex-col items-center justify-center">
-    <h1 className="text-7xl font-black">404</h1>
-    <p className="mt-4 text-gray-500">Page Not Found</p>
-    <SmartLink
-      href="/"
-      className="mt-6 px-6 py-2 bg-indigo-600 text-white rounded-full"
-    >
-      Back Home
-    </SmartLink>
-  </div>
-)
+const Layout404 = (props) => {
+  const { onLoading } = useGlobal()
+  return (
+    <div id='error-wrapper' className='w-full mx-auto justify-center'>
+        <Transition
+          show={!onLoading} appear={true}
+          enter='transition ease-in-out duration-700 transform order-first' enterFrom='opacity-0 translate-y-16' enterTo='opacity-100'
+          leave='transition ease-in-out duration-300 transform' leaveFrom='opacity-100 translate-y-0' leaveTo='opacity-0 -translate-y-16'
+          unmount={false}>
+          <div className='error-content flex flex-col md:flex-row w-full mt-12 h-[30rem] md:h-96 justify-center items-center bg-white dark:bg-[#1B1C20] border dark:border-gray-800 rounded-3xl'>
+            <LazyImage className='error-img h-60 md:h-full p-4' src={'https://bu.dusays.com/2023/03/03/6401a7906aa4a.gif'}></LazyImage>
+            <div className='error-info flex-1 flex flex-col justify-center items-center space-y-4'>
+              <h1 className='error-title font-extrabold md:text-9xl text-7xl dark:text-white'>404</h1>
+              <div className='dark:text-white'>请尝试站内搜索寻找文章</div>
+              <SmartLink href='/'><button className='bg-blue-500 py-2 px-4 text-white shadow rounded-lg hover:bg-blue-600 hover:shadow-md duration-200 transition-all'>回到主页</button></SmartLink>
+            </div>
+          </div>
+           {/* 404页面底部显示最新文章 */}
+           <div className='mt-12'>
+              <LatestPostsGroup {...props} />
+            </div>
+        </Transition>
+    </div>
+  )
+}
+
+const LayoutCategoryIndex = props => {
+  const { categoryOptions } = props
+  const { locale } = useGlobal()
+  return (
+    <div id='category-outer-wrapper' className='mt-8 px-5 md:px-0'>
+      <div className='text-4xl font-extrabold dark:text-gray-200 mb-5'>{locale.COMMON.CATEGORY}</div>
+      <div id='category-list' className='duration-200 flex flex-wrap m-10 justify-center'>
+        {categoryOptions?.map(category => (
+          <SmartLink key={category.name} href={`/category/${category.name}`} passHref legacyBehavior>
+            <div className={'group mr-5 mb-5 flex flex-nowrap items-center border bg-white text-2xl rounded-xl dark:hover:text-white px-4 cursor-pointer py-3 hover:text-white hover:bg-indigo-600 transition-all hover:scale-110 duration-150'}>
+              <HashTag className={'w-5 h-5 stroke-gray-500 stroke-2'} />{category.name}
+              <div className='bg-[#f1f3f8] ml-1 px-2 rounded-lg group-hover:text-indigo-600 '>{category.count}</div>
+            </div>
+          </SmartLink>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+const LayoutTagIndex = props => {
+  const { tagOptions } = props
+  const { locale } = useGlobal()
+  return (
+    <div id='tag-outer-wrapper' className='px-5 mt-8 md:px-0'>
+      <div className='text-4xl font-extrabold dark:text-gray-200 mb-5'>{locale.COMMON.TAGS}</div>
+      <div id='tag-list' className='duration-200 flex flex-wrap space-x-5 space-y-5 m-10 justify-center'>
+        {tagOptions.map(tag => (
+          <SmartLink key={tag.name} href={`/tag/${tag.name}`} passHref legacyBehavior>
+            <div className={'group flex flex-nowrap items-center border bg-white text-2xl rounded-xl dark:hover:text-white px-4 cursor-pointer py-3 hover:text-white hover:bg-indigo-600 transition-all hover:scale-110 duration-150'}>
+              <HashTag className={'w-5 h-5 stroke-gray-500 stroke-2'} />{tag.name}
+              <div className='bg-[#f1f3f8] ml-1 px-2 rounded-lg group-hover:text-indigo-600 '>{tag.count}</div>
+            </div>
+          </SmartLink>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export {
-  LayoutBase,
-  LayoutIndex,
-  LayoutPostList,
-  LayoutSearch,
-  LayoutArchive,
-  LayoutSlug,
-  Layout404,
-  CONFIG as THEME_CONFIG
-                   }
+  Layout404, LayoutArchive, LayoutBase, LayoutCategoryIndex, LayoutIndex,
+  LayoutPostList, LayoutSearch, LayoutSlug, LayoutTagIndex, CONFIG as THEME_CONFIG
+}
