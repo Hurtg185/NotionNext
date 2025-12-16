@@ -1,3 +1,14 @@
+// pages/hsk/[level].js 文件的第一行
+
+// --- 补丁开始 ---
+if (typeof global.self === 'undefined') {
+  global.self = global;
+}
+// --- 补丁结束 ---
+
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
+// ... 下面接着写你的其他代码
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
