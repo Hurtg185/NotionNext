@@ -80,12 +80,11 @@ import { Style } from './style'
 // 请确保您在项目中创建了这些组件文件
 import PinyinContentBlock from '@/components/PinyinContentBlock'
 import WordsContentBlock from '@/components/WordsContentBlock'
-import KouyuPage from '@/components/kouyu'
-import HskContentBlock from '@/components/HskContentBlock'
+// import KouyuPage from '@/components/kouyu'
 
 // Dynamically imported heavy components for the new homepage
 const GlosbeSearchCard = dynamic(() => import('@/components/GlosbeSearchCard'), { ssr: false })
-//const ShortSentenceCard = dynamic(() => import('@/components/ShortSentenceCard'), { ssr: false })
+// const ShortSentenceCard = dynamic(() => import('@/components/ShortSentenceCard'), { ssr: false })
 const WordCard = dynamic(() => import('@/components/WordCard'), { ssr: false })
 
 // Helper function to check if running in browser
@@ -266,12 +265,12 @@ async function getAllFavorites(storeName) {
 const LayoutIndex = props => {
   const router = useRouter();
 
-  // 定义 Tab 导航，已移除“语法”分组
   const allTabs = [
     { name: '拼音', key: 'pinyin', icon: <Type size={22} /> },
     { name: '单词', key: 'words', icon: <BookText size={22} /> },
     { name: 'HSK', key: 'hsk', icon: <GraduationCap size={22} /> },
-    { name: '口语', key: 'speaking', icon: <Mic size={22} /> }
+    { name: '口语', key: 'speaking', icon: <Mic size={22} /> },
+    { name: '语法', key: 'grammar', icon: <SpellCheck2 size={22} /> }
   ];
   
   const [activeTabKey, setActiveTabKey] = useState('pinyin'); 
@@ -499,8 +498,10 @@ const LayoutIndex = props => {
                         <div className='p-4'>
                             {activeTabKey === 'pinyin' && <PinyinContentBlock />}
                             {activeTabKey === 'words' && <WordsContentBlock />}
-                            {activeTabKey === 'hsk' && <HskContentBlock />}
                             {activeTabKey === 'speaking' && <KouyuPage />}
+                            {/* HSK 和 语法 的内容组件可以按需添加 */}
+                            {/* {activeTabKey === 'hsk' && <HskContentBlock />} */}
+                            {/* {activeTabKey === 'grammar' && <GrammarContentBlock />} */}
                         </div>
                     </main>
                 </div>
@@ -739,4 +740,4 @@ const LayoutTagIndex = props => {
 export {
   Layout404, LayoutArchive, LayoutBase, LayoutCategoryIndex, LayoutIndex,
   LayoutPostList, LayoutSearch, LayoutSlug, LayoutTagIndex, CONFIG as THEME_CONFIG
-        }
+    }
