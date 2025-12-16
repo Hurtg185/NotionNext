@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// ✅ 必加补丁：防止 "self is not defined" 报错
+// 补丁：虽然 import 会提升，但保留这个补丁可以防止某些运行时错误
 // -----------------------------------------------------------------------------
 if (typeof global.self === 'undefined') {
   global.self = global;
@@ -8,22 +8,29 @@ if (typeof global.window === 'undefined') {
   global.window = {};
   global.document = {};
 }
-// -----------------------------------------------------------------------------
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
+import dynamic from 'next/dynamic'; // ✅ 引入 dynamic
 import { 
   ChevronLeft, Trophy, Star, BookOpen, 
-  GraduationCap, Dumbbell, Play, CheckCircle2, Lock 
+  GraduationCap, Dumbbell, Play, CheckCircle2 
 } from 'lucide-react';
 
-// 组件引用
-import WordCard from '../../components/WordCard';
-// 如果没有这两个组件，请确保有简单的占位符组件，或者注释掉相关引用
-// import GrammarModule from '../../components/GrammarModule'; 
-// import PracticeModule from '../../components/PracticeModule';
+// =========================================================================
+// ✅ 关键修复：使用 dynamic 引入 WordCard
+// 这样服务器构建时会直接跳过它，彻底解决 "self is not defined"
+// =========================================================================
+const WordCard = dynamic(() => import('../../components/WordCard'), {
+  ssr: false, // 禁止服务端渲染
+  loading: () => (
+    <div className="fixed inset-0 bg-white z-50 flex items-center justify-center">
+      <div className="animate-spin w-8 h-8 border-4 border-blue-500 rounded-full border-t-transparent"></div>
+    </div>
+  ),
+});
 
 // =========================================================================
 // 1. 数据导入
@@ -41,22 +48,22 @@ const hskDataMap = {
 };
 
 // =========================================================================
-// 2. 工具函数：自动分课
+// 2. 核心逻辑：自动分课算法
 // =========================================================================
-// 将大数组切割成小数组，每课 WORDS_PER_LESSON 个词
-const WORDS_PER_LESSON = 15; 
+const WORDS_PER_LESSON = 15; // 每课 15 个词
 
 const createLessons = (allWords) => {
   const lessons = [];
+  // 遍历切割数组
   for (let i = 0; i < allWords.length; i += WORDS_PER_LESSON) {
     const chunk = allWords.slice(i, i + WORDS_PER_LESSON);
+    const lessonNum = (i / WORDS_PER_LESSON) + 1;
     lessons.push({
-      id: i / WORDS_PER_LESSON + 1,
-      title: `第 ${i / WORDS_PER_LESSON + 1} 课`,
+      id: lessonNum,
+      title: `第 ${lessonNum} 课`,
       words: chunk,
-      // 模拟取这一课的第一个词作为“主题词”
-      topic: chunk[0]?.hanzi || '综合练习', 
-      isLocked: false // 实际逻辑可以根据用户进度来锁
+      // 取第一个词作为主题词，防止空数据报错
+      topic: chunk[0] ? `${chunk[0].hanzi} (${chunk[0].pinyin})` : '复习', 
     });
   }
   return lessons;
@@ -69,21 +76,23 @@ const LessonActionSheet = ({ lesson, onClose, onStartWords, onStartGrammar, onSt
   if (!lesson) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      {/* 点击背景关闭 */}
-      <div className="absolute inset-0" onClick={onClose}></div>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center animate-in fade-in duration-200">
+      {/* 黑色半透明背景 */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose}></div>
       
+      {/* 弹窗主体 */}
       <div className="relative w-full max-w-sm bg-white dark:bg-gray-900 rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom-10 duration-300">
-        {/* 把手 (仅手机端装饰) */}
+        {/* 顶部把手 */}
         <div className="w-12 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto mb-6 sm:hidden"></div>
 
         <div className="text-center mb-8">
           <div className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-2">Lesson {lesson.id}</div>
-          <h2 className="text-2xl font-extrabold text-gray-800 dark:text-white mb-2">{lesson.topic}</h2>
-          <p className="text-gray-500 text-sm">本课包含 {lesson.words.length} 个生词</p>
+          <h2 className="text-2xl font-extrabold text-gray-800 dark:text-white mb-2">{lesson.topic} 等</h2>
+          <p className="text-gray-500 text-sm">本课包含 {lesson.words.length} 个重点生词</p>
         </div>
 
         <div className="grid gap-3">
+          {/* 学习生词按钮 */}
           <button 
             onClick={() => onStartWords(lesson.words)}
             className="flex items-center p-4 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-xl font-bold hover:bg-blue-100 transition-colors active:scale-95"
@@ -92,11 +101,12 @@ const LessonActionSheet = ({ lesson, onClose, onStartWords, onStartGrammar, onSt
               <BookOpen size={20} />
             </div>
             学习生词
-            <span className="ml-auto bg-white dark:bg-blue-900 py-1 px-2 rounded-md text-xs font-mono">
-              {lesson.words.length}
+            <span className="ml-auto bg-white dark:bg-blue-900 py-1 px-2 rounded-md text-xs font-mono opacity-70">
+              {lesson.words.length} 词
             </span>
           </button>
 
+          {/* 语法按钮 */}
           <button 
             onClick={() => onStartGrammar(lesson.id)}
             className="flex items-center p-4 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 rounded-xl font-bold hover:bg-emerald-100 transition-colors active:scale-95"
@@ -107,6 +117,7 @@ const LessonActionSheet = ({ lesson, onClose, onStartWords, onStartGrammar, onSt
             语法重点
           </button>
 
+          {/* 练习按钮 */}
           <button 
             onClick={() => onStartPractice(lesson.words)}
             className="flex items-center p-4 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 rounded-xl font-bold hover:bg-orange-100 transition-colors active:scale-95"
@@ -119,7 +130,7 @@ const LessonActionSheet = ({ lesson, onClose, onStartWords, onStartGrammar, onSt
         </div>
 
         <button onClick={onClose} className="mt-6 w-full py-3 text-gray-400 font-medium hover:text-gray-600">
-          稍后再说
+          取消
         </button>
       </div>
     </div>
@@ -140,38 +151,33 @@ const HskLevelPage = () => {
   // 学习模式状态
   const [studyMode, setStudyMode] = useState(null); // 'words' | 'grammar' | 'practice'
   const [activeWords, setActiveWords] = useState([]);
-  const [isClient, setIsClient] = useState(false);
 
-  useEffect(() => { setIsClient(true); }, []);
-
-  // 加载并切分数据
+  // 加载数据
   useEffect(() => {
     if (level && hskDataMap[level]) {
       const rawData = hskDataMap[level];
+      // 兼容 JSON 格式 (数组或对象)
       const wordsArray = Array.isArray(rawData) ? rawData : (rawData.words || []);
       setLevelData(wordsArray);
       setLessons(createLessons(wordsArray));
     }
   }, [level]);
 
-  // 处理开始学习
+  // --- 交互处理 ---
   const handleStartWords = (words) => {
-    setSelectedLesson(null); // 关闭弹窗
+    setSelectedLesson(null); 
     setActiveWords(words);
     setStudyMode('words');
   };
 
   const handleStartGrammar = (lessonId) => {
     alert(`第 ${lessonId} 课的语法功能正在开发中...`);
-    // setStudyMode('grammar');
   };
 
   const handleStartPractice = (words) => {
     alert(`针对这 ${words.length} 个词的练习正在生成...`);
-    // setStudyMode('practice');
   };
 
-  // 震动反馈
   const vibrate = () => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(10);
   };
@@ -179,21 +185,21 @@ const HskLevelPage = () => {
   if (!level) return <div className="min-h-screen bg-[#F5F7FA] dark:bg-gray-950"/>;
 
   // ---------------------------------------------------------------------------
-  // 渲染：单词卡片模式 (全屏覆盖)
+  // 场景 1：全屏背单词模式
   // ---------------------------------------------------------------------------
-  if (studyMode === 'words' && isClient) {
+  if (studyMode === 'words') {
     return (
       <WordCard
         words={activeWords}
         isOpen={true}
         onClose={() => setStudyMode(null)}
-        progressKey={`hsk${level}_custom_session`}
+        progressKey={`hsk${level}_lesson_session`}
       />
     );
   }
 
   // ---------------------------------------------------------------------------
-  // 渲染：主界面 (课程列表)
+  // 场景 2：分课列表主页
   // ---------------------------------------------------------------------------
   return (
     <div className="min-h-screen bg-[#F5F7FA] dark:bg-gray-950 font-sans pb-safe">
@@ -212,7 +218,7 @@ const HskLevelPage = () => {
 
       <div className="px-5 pt-6 pb-20">
         
-        {/* 总览卡片 (适合期末复习) */}
+        {/* 总复习卡片 */}
         <div className="mb-8 p-6 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-3xl text-white shadow-xl shadow-indigo-500/20">
           <div className="flex justify-between items-start mb-4">
             <div>
@@ -228,9 +234,6 @@ const HskLevelPage = () => {
                className="flex-1 py-2.5 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-xl text-sm font-bold transition-colors border border-white/10"
              >
                全部 {levelData.length} 词
-             </button>
-             <button className="flex-1 py-2.5 bg-white text-indigo-600 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform">
-               模拟考试
              </button>
           </div>
         </div>
@@ -248,7 +251,7 @@ const HskLevelPage = () => {
               onClick={() => { vibrate(); setSelectedLesson(lesson); }}
               className="group w-full bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm flex items-center gap-4 text-left transition-all active:scale-[0.98]"
             >
-              {/* 左侧序号 */}
+              {/* 序号装饰 */}
               <div className="relative w-14 h-14 flex-shrink-0">
                 <div className={`absolute inset-0 rounded-2xl rotate-3 ${index % 2 === 0 ? 'bg-blue-100 dark:bg-blue-900' : 'bg-pink-100 dark:bg-pink-900'}`}></div>
                 <div className="absolute inset-0 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center justify-center z-10">
@@ -257,22 +260,21 @@ const HskLevelPage = () => {
                 </div>
               </div>
 
-              {/* 中间内容 */}
+              {/* 文本信息 */}
               <div className="flex-1">
                 <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-1">
-                   {lesson.topic} ...
+                   {lesson.title}
                 </h3>
                 <div className="flex items-center gap-3 text-xs text-gray-500 font-medium">
                   <span className="flex items-center gap-1">
                     <BookOpen size={12} /> {lesson.words.length} 词
                   </span>
                   <span className="flex items-center gap-1">
-                    <Star size={12} /> 3 语法
+                    <Star size={12} /> 核心必考
                   </span>
                 </div>
               </div>
 
-              {/* 右侧状态图标 */}
               <div className="w-8 h-8 rounded-full bg-gray-50 dark:bg-gray-800 flex items-center justify-center text-gray-300 group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors">
                 <Play size={16} fill="currentColor" />
               </div>
@@ -286,7 +288,7 @@ const HskLevelPage = () => {
 
       </div>
 
-      {/* 底部弹窗：课程详情 */}
+      {/* 底部操作面板 */}
       <LessonActionSheet 
         lesson={selectedLesson}
         onClose={() => setSelectedLesson(null)}
