@@ -3,13 +3,10 @@ import { createPortal } from 'react-dom';
 import { pinyin } from 'pinyin-pro';
 import { 
     ChevronLeft, Search, Mic, Loader2, Volume2, 
-    Settings2, X, PlayCircle, StopCircle, BookOpen 
+    Settings2, X, PlayCircle, BookOpen 
 } from 'lucide-react';
-
-// 引入结构配置
+// 引入结构文件 (保持现状)
 import { speakingCategories } from '@/data/speaking-structure';
-// 引入刚刚创建的数据索引 (解决打包失败的核心)
-import { SPEAKING_DATA_MAP } from '@/data/speaking/index';
 
 // --- 全局音频控制器 ---
 const GlobalAudioController = {
@@ -27,7 +24,6 @@ const GlobalAudioController = {
 
     play(url, id) {
         return new Promise((resolve, reject) => {
-            // 切歌逻辑
             if (this.currentId !== id) {
                 this.stop();
             } else if (this.currentAudio) {
@@ -39,9 +35,7 @@ const GlobalAudioController = {
             this.currentId = id;
             audio.preload = 'auto';
 
-            audio.onended = () => {
-                if (this.currentId === id) resolve();
-            };
+            audio.onended = () => { if (this.currentId === id) resolve(); };
             audio.onerror = (e) => reject(e);
 
             const playPromise = audio.play();
@@ -52,7 +46,7 @@ const GlobalAudioController = {
     }
 };
 
-// --- 精美开关组件 ---
+// --- 开关组件 ---
 const ToggleSwitch = ({ label, checked, onChange, activeColor = "bg-blue-500" }) => (
     <div className="flex items-center justify-between py-3">
         <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{label}</span>
@@ -65,7 +59,7 @@ const ToggleSwitch = ({ label, checked, onChange, activeColor = "bg-blue-500" })
     </div>
 );
 
-// --- 全屏传送门 (防止滚动穿透) ---
+// --- 全屏传送门 ---
 const FullScreenPortal = ({ children }) => {
     const [mounted, setMounted] = useState(false);
     useEffect(() => {
@@ -84,7 +78,6 @@ const FullScreenPortal = ({ children }) => {
 
 // --- 短句列表页面 ---
 const PhraseListPage = ({ phrases, title, onBack }) => {
-    // 语速状态 (-100% ~ 50%)
     const [chineseRate, setChineseRate] = useState(-30); 
     const [burmeseRate, setBurmeseRate] = useState(-20);
     const [readChinese, setReadChinese] = useState(true);
@@ -92,7 +85,7 @@ const PhraseListPage = ({ phrases, title, onBack }) => {
     const [showSettings, setShowSettings] = useState(false);
     const [playingId, setPlayingId] = useState(null);
 
-    // 手势返回逻辑
+    // 手势返回支持
     useEffect(() => {
         const pushState = () => window.history.pushState({ panel: 'list' }, '', window.location.pathname + '#list');
         pushState();
@@ -104,7 +97,6 @@ const PhraseListPage = ({ phrases, title, onBack }) => {
         };
     }, [onBack]);
 
-    // 给数据添加拼音
     const processedData = useMemo(() => {
         if (!phrases) return [];
         return phrases.map(p => ({
@@ -113,7 +105,6 @@ const PhraseListPage = ({ phrases, title, onBack }) => {
         }));
     }, [phrases]);
 
-    // 播放核心逻辑
     const handlePlay = async (item) => {
         if (playingId === item.id) {
             GlobalAudioController.stop();
@@ -124,22 +115,16 @@ const PhraseListPage = ({ phrases, title, onBack }) => {
         setPlayingId(item.id);
 
         try {
-            // 1. 中文
             if (readChinese) {
-                // Edge TTS 支持 -100%，这里做个保底 -95% 防止无声
                 const rateVal = chineseRate <= -100 ? -95 : chineseRate;
                 const cnUrl = `https://t.leftsite.cn/tts?t=${encodeURIComponent(item.chinese)}&v=zh-CN-XiaoyanNeural&r=${rateVal}%`;
                 await GlobalAudioController.play(cnUrl, item.id);
             }
 
             if (GlobalAudioController.currentId !== item.id) return;
-
-            // 间隔
             if (readChinese && readBurmese) await new Promise(r => setTimeout(r, 400));
-
             if (GlobalAudioController.currentId !== item.id) return;
 
-            // 2. 缅文
             if (readBurmese) {
                 const rateVal = burmeseRate <= -100 ? -95 : burmeseRate;
                 const myUrl = `https://t.leftsite.cn/tts?t=${encodeURIComponent(item.burmese)}&v=my-MM-ThihaNeural&r=${rateVal}%`;
@@ -157,7 +142,6 @@ const PhraseListPage = ({ phrases, title, onBack }) => {
 
     return (
         <FullScreenPortal>
-            {/* 顶部导航 */}
             <div className="flex-none bg-white/90 dark:bg-[#1e1e1e]/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 z-50 sticky top-0">
                 <div className="px-4 h-14 flex items-center justify-between">
                     <button onClick={() => window.history.back()} className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
@@ -169,15 +153,12 @@ const PhraseListPage = ({ phrases, title, onBack }) => {
                     </button>
                 </div>
                 
-                {/* 设置面板 */}
                 <div className={`overflow-hidden transition-all duration-300 ease-in-out bg-white dark:bg-[#1e1e1e] border-b dark:border-gray-800 ${showSettings ? 'max-h-96 opacity-100 shadow-lg' : 'max-h-0 opacity-0'}`}>
                     <div className="p-6 space-y-6">
                         <div className="grid grid-cols-2 gap-8">
                             <ToggleSwitch label="朗读中文" checked={readChinese} onChange={setReadChinese} activeColor="bg-blue-600" />
                             <ToggleSwitch label="朗读缅文" checked={readBurmese} onChange={setReadBurmese} activeColor="bg-green-600" />
                         </div>
-                        
-                        {/* 语速控制 */}
                         {[
                             { label: '中文语速', val: chineseRate, set: setChineseRate, color: 'accent-blue-600' },
                             { label: '缅文语速', val: burmeseRate, set: setBurmeseRate, color: 'accent-green-600' }
@@ -198,7 +179,6 @@ const PhraseListPage = ({ phrases, title, onBack }) => {
                 </div>
             </div>
 
-            {/* 列表区域 */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24 bg-gray-50 dark:bg-[#121212]">
                 {processedData.map((item) => {
                     const isPlaying = playingId === item.id;
@@ -215,27 +195,19 @@ const PhraseListPage = ({ phrases, title, onBack }) => {
                                 }
                             `}
                         >
-                            {/* 播放按钮 */}
                             <div className={`absolute top-4 right-4 p-2 rounded-full transition-all ${isPlaying ? 'bg-blue-50 text-blue-600' : 'text-gray-300 dark:text-gray-600'}`}>
                                 {isPlaying ? <Loader2 size={20} className="animate-spin" /> : <PlayCircle size={20} />}
                             </div>
 
-                            {/* 拼音 */}
                             <div className="text-xs font-medium text-gray-400 dark:text-gray-500 mb-2 font-mono">
                                 {item.pinyin}
                             </div>
-                            
-                            {/* 中文 */}
                             <h3 className="text-xl font-extrabold text-gray-800 dark:text-gray-100 mb-3 pr-10">
                                 {item.chinese}
                             </h3>
-                            
-                            {/* 缅文 */}
                             <p className="text-lg text-blue-600 dark:text-blue-400 font-medium mb-3 leading-loose font-burmese">
                                 {item.burmese}
                             </p>
-                            
-                            {/* 谐音 */}
                             {item.xieyin && (
                                 <div className="inline-block px-3 py-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 rounded-lg">
                                     <span className="text-xs font-bold text-amber-600 dark:text-amber-500">
@@ -253,49 +225,70 @@ const PhraseListPage = ({ phrases, title, onBack }) => {
 
 // --- 主页面 ---
 export default function KouyuPage() {
-    // 视图状态
     const [activeSub, setActiveSub] = useState(null);
     const [activeCat, setActiveCat] = useState(null);
-    
-    // 搜索状态
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState([]);
+    const [loading, setLoading] = useState(false);
 
-    // 处理子分类点击
-    const handleSubClick = (cat, sub) => {
-        // 直接从 MAP 中获取数据，无需 await import
-        const data = SPEAKING_DATA_MAP[sub.file];
-        if (data) {
-            setActiveCat(cat);
-            setActiveSub({ ...sub, data }); // 将数据注入
-        } else {
-            console.warn(`未找到文件对应的 Key: ${sub.file}, 请检查 index.js`);
-            alert("该分类暂无数据");
+    // 核心修复点：使用相对路径 + 字符串拼接
+    // 这样 Webpack 才能正确扫描 ../data/speaking 目录
+    const handleSubClick = async (cat, sub) => {
+        setLoading(true);
+        try {
+            // 关键修改：不要用 @，用相对路径 ../data/speaking/
+            const module = await import('../data/speaking/' + sub.file + '.js');
+            
+            if (module && module.default) {
+                setActiveCat(cat);
+                setActiveSub({ ...sub, data: module.default });
+            } else {
+                throw new Error("Data file empty");
+            }
+        } catch (e) {
+            console.error("加载数据失败:", e);
+            alert("数据文件加载失败，请检查文件是否存在: data/speaking/" + sub.file + ".js");
+        } finally {
+            setLoading(false);
         }
     };
 
-    // 处理搜索
+    // 搜索逻辑预加载 (也需要修正路径)
     useEffect(() => {
-        if (!searchTerm) {
-            setSearchResults([]);
-            return;
-        }
-        
-        // 聚合所有数据进行搜索 (因为现在数据是同步的，非常快)
-        const allData = Object.values(SPEAKING_DATA_MAP).flat();
-        const lowerTerm = searchTerm.toLowerCase();
-        
-        const results = allData.filter(item => 
-            (item.chinese && item.chinese.includes(lowerTerm)) || 
-            (item.burmese && item.burmese.includes(lowerTerm))
-        );
-        setSearchResults(results);
+        const loadSearch = async () => {
+            if (searchTerm && searchResults.length === 0) {
+                try {
+                    const promises = [];
+                    speakingCategories.forEach(cat => {
+                        cat.subcategories.forEach(sub => {
+                            // 同样使用相对路径
+                            promises.push(
+                                import('../data/speaking/' + sub.file + '.js')
+                                .then(m => m.default)
+                                .catch(() => [])
+                            );
+                        });
+                    });
+                    
+                    const results = await Promise.all(promises);
+                    // 扁平化结果
+                    setSearchResults(results.flat().filter(item => 
+                        item && (item.chinese.includes(searchTerm) || item.burmese.includes(searchTerm))
+                    ));
+                } catch(e) { console.log(e); }
+            }
+        };
+        if(searchTerm) loadSearch();
     }, [searchTerm]);
 
-    // 渲染主内容
     return (
         <div className="min-h-screen bg-gray-50/50 dark:bg-[#121212] pb-20">
-            {/* 标题区 */}
+            {loading && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-white/50 dark:bg-black/50 backdrop-blur-sm">
+                    <Loader2 className="animate-spin text-blue-500" size={40} />
+                </div>
+            )}
+
             {!activeSub && !searchTerm && (
                 <div className="pt-8 pb-6 px-6 text-center animate-fade-in-down">
                     <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">口语练习</h1>
@@ -303,7 +296,6 @@ export default function KouyuPage() {
                 </div>
             )}
 
-            {/* 搜索框 */}
             {!activeSub && (
                 <div className="sticky top-0 z-10 px-4 pb-4 pt-2 bg-gray-50/90 dark:bg-[#121212]/90 backdrop-blur-md">
                     <div className="relative group">
@@ -326,9 +318,7 @@ export default function KouyuPage() {
                 </div>
             )}
 
-            {/* 内容区 */}
             <div className="px-4 animate-fade-in-up">
-                {/* 1. 搜索结果模式 */}
                 {searchTerm && (
                     <PhraseListPage 
                         phrases={searchResults} 
@@ -337,7 +327,6 @@ export default function KouyuPage() {
                     />
                 )}
 
-                {/* 2. 详情页模式 */}
                 {!searchTerm && activeSub && (
                     <PhraseListPage 
                         phrases={activeSub.data} 
@@ -346,7 +335,6 @@ export default function KouyuPage() {
                     />
                 )}
 
-                {/* 3. 分类列表模式 */}
                 {!searchTerm && !activeSub && (
                     <div className="space-y-6">
                         {speakingCategories.map((cat, i) => (
@@ -375,4 +363,4 @@ export default function KouyuPage() {
             </div>
         </div>
     );
-                        }
+                            }
