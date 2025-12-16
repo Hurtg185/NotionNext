@@ -81,12 +81,10 @@ import { Style } from './style'
 import PinyinContentBlock from '@/components/PinyinContentBlock'
 import WordsContentBlock from '@/components/WordsContentBlock'
 // import KouyuPage from '@/components/kouyu'
-// [修复 1] 引入 HskContentBlock
 import HskContentBlock from '@/components/HskContentBlock'
 
 // Dynamically imported heavy components for the new homepage
 const GlosbeSearchCard = dynamic(() => import('@/components/GlosbeSearchCard'), { ssr: false })
-// [修复 2] 取消注释 ShortSentenceCard，因为底部用到了它
 const ShortSentenceCard = dynamic(() => import('@/components/ShortSentenceCard'), { ssr: false })
 const WordCard = dynamic(() => import('@/components/WordCard'), { ssr: false })
 
@@ -502,7 +500,6 @@ const LayoutIndex = props => {
                             {activeTabKey === 'pinyin' && <PinyinContentBlock />}
                             {activeTabKey === 'words' && <WordsContentBlock />}
                             {activeTabKey === 'speaking' && <KouyuPage />}
-                            {/* [修复 3] HSK 内容现在可以显示了 */}
                             {activeTabKey === 'hsk' && <HskContentBlock />}
                             {/* {activeTabKey === 'grammar' && <GrammarContentBlock />} */}
                         </div>
@@ -678,3 +675,70 @@ const Layout404 = (props) => {
   const { onLoading } = useGlobal()
   return (
     <div id='error-wrapper' className='w-full mx-auto justify-center'>
+        <Transition
+          show={!onLoading} appear={true}
+          enter='transition ease-in-out duration-700 transform order-first' enterFrom='opacity-0 translate-y-16' enterTo='opacity-100'
+          leave='transition ease-in-out duration-300 transform' leaveFrom='opacity-100 translate-y-0' leaveTo='opacity-0 -translate-y-16'
+          unmount={false}>
+          <div className='error-content flex flex-col md:flex-row w-full mt-12 h-[30rem] md:h-96 justify-center items-center bg-white dark:bg-[#1B1C20] border dark:border-gray-800 rounded-3xl'>
+            {/* [修复] 将 LazyImage 改为自闭合标签 */}
+            <LazyImage className='error-img h-60 md:h-full p-4' src={'https://bu.dusays.com/2023/03/03/6401a7906aa4a.gif'} />
+            <div className='error-info flex-1 flex flex-col justify-center items-center space-y-4'>
+              <h1 className='error-title font-extrabold md:text-9xl text-7xl dark:text-white'>404</h1>
+              <div className='dark:text-white'>请尝试站内搜索寻找文章</div>
+              <SmartLink href='/'><button className='bg-blue-500 py-2 px-4 text-white shadow rounded-lg hover:bg-blue-600 hover:shadow-md duration-200 transition-all'>回到主页</button></SmartLink>
+            </div>
+          </div>
+           {/* 404页面底部显示最新文章 */}
+           <div className='mt-12'>
+              <LatestPostsGroup {...props} />
+            </div>
+        </Transition>
+    </div>
+  )
+}
+
+const LayoutCategoryIndex = props => {
+  const { categoryOptions } = props
+  const { locale } = useGlobal()
+  return (
+    <div id='category-outer-wrapper' className='mt-8 px-5 md:px-0'>
+      <div className='text-4xl font-extrabold dark:text-gray-200 mb-5'>{locale.COMMON.CATEGORY}</div>
+      <div id='category-list' className='duration-200 flex flex-wrap m-10 justify-center'>
+        {categoryOptions?.map(category => (
+          <SmartLink key={category.name} href={`/category/${category.name}`} passHref legacyBehavior>
+            <div className={'group mr-5 mb-5 flex flex-nowrap items-center border bg-white text-2xl rounded-xl dark:hover:text-white px-4 cursor-pointer py-3 hover:text-white hover:bg-indigo-600 transition-all hover:scale-110 duration-150'}>
+              <HashTag className={'w-5 h-5 stroke-gray-500 stroke-2'} />{category.name}
+              <div className='bg-[#f1f3f8] ml-1 px-2 rounded-lg group-hover:text-indigo-600 '>{category.count}</div>
+            </div>
+          </SmartLink>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+const LayoutTagIndex = props => {
+  const { tagOptions } = props
+  const { locale } = useGlobal()
+  return (
+    <div id='tag-outer-wrapper' className='px-5 mt-8 md:px-0'>
+      <div className='text-4xl font-extrabold dark:text-gray-200 mb-5'>{locale.COMMON.TAGS}</div>
+      <div id='tag-list' className='duration-200 flex flex-wrap space-x-5 space-y-5 m-10 justify-center'>
+        {tagOptions.map(tag => (
+          <SmartLink key={tag.name} href={`/tag/${tag.name}`} passHref legacyBehavior>
+            <div className={'group flex flex-nowrap items-center border bg-white text-2xl rounded-xl dark:hover:text-white px-4 cursor-pointer py-3 hover:text-white hover:bg-indigo-600 transition-all hover:scale-110 duration-150'}>
+              <HashTag className={'w-5 h-5 stroke-gray-500 stroke-2'} />{tag.name}
+              <div className='bg-[#f1f3f8] ml-1 px-2 rounded-lg group-hover:text-indigo-600 '>{tag.count}</div>
+            </div>
+          </SmartLink>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export {
+  Layout404, LayoutArchive, LayoutBase, LayoutCategoryIndex, LayoutIndex,
+  LayoutPostList, LayoutSearch, LayoutSlug, LayoutTagIndex, CONFIG as THEME_CONFIG
+        }
