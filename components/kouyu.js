@@ -1,7 +1,9 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { pinyin } from 'pinyin-pro';
-import { ChevronLeft, Search, Mic, Loader2, PlayCircle, Settings2, X, StopCircle, Volume2 } from 'lucide-react';
+import { ChevronLeft, Search, Mic, Loader2, Volume2, Settings2, X, PlayCircle } from 'lucide-react';
+// 注意：如果您的 speaking-structure.js 确实在 data 目录下，请保持此引用
+// 如果构建仍提示找不到，尝试改为 import { speakingCategories } from '../data/speaking-structure';
 import { speakingCategories } from '@/data/speaking-structure';
 
 // --- 全局音频控制器 ---
@@ -362,13 +364,14 @@ export default function KouyuPage() {
         setSelectedSubcategory(subcategory);
         
         try {
-            // 动态导入数据
-            const module = await import(`@/data/speaking/${subcategory.file}.js`);
+            // FIX: 使用相对路径，解决 Webpack 构建时无法解析别名的问题
+            // 确保 components/kouyu.js 和 data/speaking 文件夹的相对层级正确
+            const module = await import(`../data/speaking/${subcategory.file}.js`);
             setPhrases(module.default);
             setView('phrases'); 
         } catch (e) {
             console.error("加载失败:", e);
-            alert("加载数据失败，请检查网络或联系管理员");
+            alert("数据文件加载失败，请检查 data/speaking 目录下是否存在对应文件");
             setPhrases([]);
         } finally {
             setIsLoading(false);
@@ -391,7 +394,8 @@ export default function KouyuPage() {
                 try {
                     const allPromises = speakingCategories.flatMap(cat => 
                         cat.subcategories.map(sub => 
-                            import(`@/data/speaking/${sub.file}.js`).then(m => m.default).catch(() => [])
+                            // FIX: 使用相对路径
+                            import(`../data/speaking/${sub.file}.js`).then(m => m.default).catch(() => [])
                         )
                     );
                     const results = (await Promise.all(allPromises)).flat();
@@ -476,4 +480,4 @@ export default function KouyuPage() {
             </div>
         </div>
     );
-                                        }
+                                    }
