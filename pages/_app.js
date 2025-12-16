@@ -1,3 +1,14 @@
+// ✅ 1. 核心修复补丁：必须放在文件最最最顶部 (所有 import 之前)
+if (typeof window === 'undefined') {
+  // 模拟浏览器环境对象，防止第三方库(如 react-use-gesture, howler 等)在服务端构建时报错 "self is not defined"
+  global.self = {};
+  global.window = {};
+  global.document = {};
+  global.navigator = { userAgent: 'node' };
+  global.cancelAnimationFrame = (callback) => setTimeout(callback, 0);
+  global.requestAnimationFrame = (callback) => setTimeout(callback, 0);
+}
+
 // import '@/styles/animate.css' // @see https://animate.style/
 import '@/styles/globals.css'
 import '@/styles/utility-patterns.css'
@@ -19,6 +30,7 @@ import ExternalPlugins from '@/components/ExternalPlugins'
 import SEO from '@/components/SEO'
 import { zhCN } from '@clerk/localizations'
 import dynamic from 'next/dynamic'
+
 // import { ClerkProvider } from '@clerk/nextjs'
 const ClerkProvider = dynamic(() =>
   import('@clerk/nextjs').then(m => m.ClerkProvider)
