@@ -1,15 +1,32 @@
 import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { pinyin } from 'pinyin-pro';
-import { 
-    ChevronLeft, Search, Mic, Loader2, Volume2, 
-    Settings2, X, PlayCircle 
-} from 'lucide-react';
+import { ChevronLeft, Search, Mic, Loader2, Volume2, Settings2, X, PlayCircle } from 'lucide-react';
 
-// 1. 引入结构配置
+// 引入结构配置
 import { speakingCategories } from '@/data/speaking-structure';
-// 2. 引入数据地图 (这就是不再报错的关键)
-import { SPEAKING_DATA } from '@/data/speaking/index';
+
+// ★★★ 核心修改：显式引入所有数据文件，不要让 Webpack 去猜路径 ★★★
+// 假设您的文件在 data/speaking/ 下，请确保文件名对应
+import dazhaohu from '@/data/speaking/dazhaohu';
+import diancan from '@/data/speaking/diancan';
+import chucimian from '@/data/speaking/chucimian';
+import jiubiechongfeng from '@/data/speaking/jiubiechongfeng';
+import guanxinyuhuiying from '@/data/speaking/guanxinyuhuiying';
+import zhaorenshuohua from '@/data/speaking/zhaorenshuohua';
+import dianhuayuxinxi from '@/data/speaking/dianhuayuxinxi';
+import jieshuyugaobie from '@/data/speaking/jieshuyugaobie';
+import yudingzuowei from '@/data/speaking/yudingzuowei';
+import jiezhang from '@/data/speaking/jiezhang';
+import dache from '@/data/speaking/dache';
+import wenlu from '@/data/speaking/wenlu';
+
+// 建立映射表
+const ALL_DATA = {
+  dazhaohu, diancan, chucimian, jiubiechongfeng, guanxinyuhuiying,
+  zhaorenshuohua, dianhuayuxinxi, jieshuyugaobie, yudingzuowei,
+  jiezhang, dache, wenlu
+};
 
 // --- 全局音频控制器 ---
 const GlobalAudioController = {
@@ -88,7 +105,6 @@ const PhraseListPage = ({ phrases, title, onBack }) => {
     const [showSettings, setShowSettings] = useState(false);
     const [playingId, setPlayingId] = useState(null);
 
-    // 手势返回支持
     useEffect(() => {
         const pushState = () => window.history.pushState({ panel: 'list' }, '', window.location.pathname + '#list');
         pushState();
@@ -100,16 +116,14 @@ const PhraseListPage = ({ phrases, title, onBack }) => {
         };
     }, [onBack]);
 
-    // 数据处理
     const processedData = useMemo(() => {
-        if (!phrases) return [];
+        if (!phrases || !Array.isArray(phrases)) return [];
         return phrases.map(p => ({
             ...p,
             pinyin: pinyin(p.chinese, { toneType: 'symbol', v: true, nonZh: 'consecutive' })
         }));
     }, [phrases]);
 
-    // 播放逻辑
     const handlePlay = async (item) => {
         if (playingId === item.id) {
             GlobalAudioController.stop();
@@ -120,9 +134,7 @@ const PhraseListPage = ({ phrases, title, onBack }) => {
         setPlayingId(item.id);
 
         try {
-            // 1. 中文
             if (readChinese) {
-                // 防止 -100% 完全静音，设置下限 -95%
                 const rateVal = chineseRate <= -100 ? -95 : chineseRate;
                 const cnUrl = `https://t.leftsite.cn/tts?t=${encodeURIComponent(item.chinese)}&v=zh-CN-XiaoyanNeural&r=${rateVal}%`;
                 await GlobalAudioController.play(cnUrl, item.id);
@@ -132,7 +144,6 @@ const PhraseListPage = ({ phrases, title, onBack }) => {
             if (readChinese && readBurmese) await new Promise(r => setTimeout(r, 400));
             if (GlobalAudioController.currentId !== item.id) return;
 
-            // 2. 缅文
             if (readBurmese) {
                 const rateVal = burmeseRate <= -100 ? -95 : burmeseRate;
                 const myUrl = `https://t.leftsite.cn/tts?t=${encodeURIComponent(item.burmese)}&v=my-MM-ThihaNeural&r=${rateVal}%`;
@@ -150,7 +161,6 @@ const PhraseListPage = ({ phrases, title, onBack }) => {
 
     return (
         <FullScreenPortal>
-            {/* 顶部导航 */}
             <div className="flex-none bg-white/90 dark:bg-[#1e1e1e]/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 z-50 sticky top-0">
                 <div className="px-4 h-14 flex items-center justify-between">
                     <button onClick={() => window.history.back()} className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
@@ -162,7 +172,6 @@ const PhraseListPage = ({ phrases, title, onBack }) => {
                     </button>
                 </div>
                 
-                {/* 设置面板 */}
                 <div className={`overflow-hidden transition-all duration-300 ease-in-out bg-white dark:bg-[#1e1e1e] border-b dark:border-gray-800 ${showSettings ? 'max-h-96 opacity-100 shadow-lg' : 'max-h-0 opacity-0'}`}>
                     <div className="p-6 space-y-6">
                         <div className="grid grid-cols-2 gap-8">
@@ -189,7 +198,6 @@ const PhraseListPage = ({ phrases, title, onBack }) => {
                 </div>
             </div>
 
-            {/* 列表内容 */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24 bg-gray-50 dark:bg-[#121212]">
                 {processedData.map((item) => {
                     const isPlaying = playingId === item.id;
@@ -199,7 +207,7 @@ const PhraseListPage = ({ phrases, title, onBack }) => {
                             onClick={() => handlePlay(item)}
                             className={`
                                 relative p-5 rounded-2xl bg-white dark:bg-[#1e1e1e]
-                                border transition-all duration-200 cursor-pointer
+                                border transition-all duration-200 cursor-pointer select-none
                                 ${isPlaying 
                                     ? 'border-blue-500 shadow-xl ring-2 ring-blue-500/10 dark:shadow-none' 
                                     : 'border-transparent shadow-sm hover:border-gray-200 dark:hover:border-gray-700'
@@ -241,27 +249,25 @@ export default function KouyuPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState([]);
 
-    const handleSubClick = (cat, sub) => {
-        // 直接从映射表读取，无需 import，绝对稳
-        const data = SPEAKING_DATA[sub.file];
+    const handleSubcategoryClick = (category, subcategory) => {
+        // 直接从映射表里取，不发请求，不动态导入，绝对稳
+        const data = ALL_DATA[subcategory.file];
         
         if (data) {
-            setActiveCat(cat);
-            setActiveSub({ ...sub, data });
+            setActiveCat(category);
+            setActiveSub({ ...subcategory, data });
         } else {
-            console.error(`Missing data for key: ${sub.file}`);
-            alert(`找不到数据文件: ${sub.file}，请检查 index.js`);
+            console.error(`Missing data for file key: ${subcategory.file}`);
+            alert(`找不到数据文件: ${subcategory.file}.js`);
         }
     };
 
-    // 搜索逻辑
     useEffect(() => {
         if (!searchTerm) {
             setSearchResults([]);
             return;
         }
-        // 搜索也很简单了，因为数据已经都在内存里了
-        const allData = Object.values(SPEAKING_DATA).flat();
+        const allData = Object.values(ALL_DATA).flat();
         const lowerTerm = searchTerm.toLowerCase();
         
         const results = allData.filter(item => 
@@ -271,41 +277,50 @@ export default function KouyuPage() {
         setSearchResults(results);
     }, [searchTerm]);
 
+    const [selectedCategory, setSelectedCategory] = useState(null);
+    const [selectedSubcategory, setSelectedSubcategory] = useState(null);
+    const [view, setView] = useState('main');
+    const [allPhrasesForSearch, setAllPhrasesForSearch] = useState([]);
+    const [isSearching, setIsSearching] = useState(false);
+
+    const handleBackToMain = () => {
+        setActiveSub(null);
+        setSearchTerm('');
+        GlobalAudioController.stop();
+    };
+
     return (
-        <div className="min-h-screen bg-gray-50/50 dark:bg-[#121212] pb-20">
-            {/* 标题 */}
-            {!activeSub && !searchTerm && (
-                <div className="pt-8 pb-6 px-6 text-center animate-fade-in-down">
-                    <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">口语练习</h1>
-                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">日常对话 · 基础交流 · 发音纠正</p>
+        <div className="w-full max-w-2xl mx-auto min-h-screen bg-gray-50/50 dark:bg-gray-900">
+             {!activeSub && !searchTerm && (
+                <div className='text-center pt-8 pb-4 px-4'>
+                    <h1 className='text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight'>口语练习</h1>
+                    <p className='mt-2 text-sm text-gray-500 dark:text-gray-400'>地道中文口语 · 缅文谐音助记</p>
                 </div>
             )}
-
-            {/* 搜索栏 */}
+            
             {!activeSub && (
-                <div className="sticky top-0 z-10 px-4 pb-4 pt-2 bg-gray-50/90 dark:bg-[#121212]/90 backdrop-blur-md">
+                <div className="sticky top-0 z-10 px-4 pb-2 bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur-sm pt-2">
                     <div className="relative group">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <Search className="h-5 w-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                        </div>
-                        <input
-                            type="text"
-                            className="block w-full pl-10 pr-10 py-3.5 border-none rounded-2xl bg-white dark:bg-[#1e1e1e] text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 shadow-sm transition-all"
-                            placeholder="搜索句子..."
-                            value={searchTerm}
+                        <input 
+                            type="text" 
+                            placeholder="搜索中文或缅文..." 
+                            value={searchTerm} 
                             onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-11 pr-4 py-3.5 bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-2xl shadow-sm focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
                         />
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                            <Search size={20} className="text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                        </div>
                         {searchTerm && (
-                            <button onClick={() => setSearchTerm('')} className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600">
-                                <X size={18} />
+                            <button onClick={() => setSearchTerm('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                                <X size={20}/>
                             </button>
                         )}
                     </div>
                 </div>
             )}
-
-            <div className="px-4 animate-fade-in-up">
-                {/* 搜索结果 */}
+            
+            <div className="px-4">
                 {searchTerm && (
                     <PhraseListPage 
                         phrases={searchResults} 
@@ -314,34 +329,30 @@ export default function KouyuPage() {
                     />
                 )}
 
-                {/* 详情页 */}
                 {!searchTerm && activeSub && (
                     <PhraseListPage 
                         phrases={activeSub.data} 
                         title={activeSub.name} 
-                        onBack={() => setActiveSub(null)} 
+                        onBack={handleBackToMain} 
                     />
                 )}
 
-                {/* 首页分类 */}
                 {!searchTerm && !activeSub && (
-                    <div className="space-y-6">
-                        {speakingCategories.map((cat, i) => (
-                            <div key={i} className="bg-white dark:bg-[#1e1e1e] rounded-3xl p-5 shadow-sm border border-gray-100 dark:border-gray-800">
-                                <div className="flex items-center gap-4 mb-4 pb-3 border-b border-gray-50 dark:border-gray-800">
-                                    <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-xl">
-                                        {cat.icon}
-                                    </div>
-                                    <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100">{cat.category}</h2>
+                    <div className="space-y-6 pb-10">
+                        {speakingCategories.map(category => (
+                            <div key={category.category} className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
+                                <div className="flex items-center gap-3 mb-4 border-b border-gray-100 dark:border-gray-700 pb-3">
+                                    <span className="text-3xl filter drop-shadow-sm">{category.icon}</span>
+                                    <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">{category.category}</h2>
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
-                                    {cat.subcategories.map((sub, j) => (
+                                    {category.subcategories.map(subcategory => (
                                         <button 
-                                            key={j}
-                                            onClick={() => handleSubClick(cat, sub)}
-                                            className="text-left px-4 py-3 bg-gray-50 dark:bg-gray-800/50 rounded-2xl text-sm font-bold text-gray-600 dark:text-gray-300 hover:bg-blue-500 hover:text-white dark:hover:bg-blue-600 transition-all duration-200 border border-transparent hover:shadow-lg hover:-translate-y-0.5 active:scale-95"
+                                            key={subcategory.name} 
+                                            onClick={() => handleSubcategoryClick(category, subcategory)}
+                                            className="px-3 py-4 text-sm font-bold text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-blue-500 hover:text-white dark:hover:bg-blue-600 hover:shadow-md transition-all duration-200 text-center border border-gray-100 dark:border-gray-700 truncate"
                                         >
-                                            {sub.name}
+                                            {subcategory.name}
                                         </button>
                                     ))}
                                 </div>
@@ -352,4 +363,4 @@ export default function KouyuPage() {
             </div>
         </div>
     );
-                    }
+                            }
