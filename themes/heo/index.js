@@ -79,7 +79,7 @@ import WordsContentBlock from '@/components/WordsContentBlock'
 const KouyuPage = dynamic(() => import('@/components/kouyu'), { ssr: false, loading: () => <div className="p-10 text-center">加载口语模块...</div> })
 const HskContentBlock = dynamic(() => import('@/components/HskContentBlock'), { ssr: false })
 const GlosbeSearchCard = dynamic(() => import('@/components/GlosbeSearchCard'), { ssr: false })
-const ShortSentenceCard = dynamic(() => import('@/components/ShortSentenceCard'), { ssr: false })
+// const ShortSentenceCard = dynamic(() => import('@/components/ShortSentenceCard'), { ssr: false })
 const WordCard = dynamic(() => import('@/components/WordCard'), { ssr: false })
 
 const isBrowser = typeof window !== 'undefined';
