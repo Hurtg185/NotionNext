@@ -1,7 +1,11 @@
 /**
- *   HEO 主题说明 (SSR 修复版 + 功能删减)
+ *   HEO 主题说明
+ *  > 主题设计者 [张洪](https://zhheo.com/)
+ *  > 主题开发者 [tangly1024](https://github.com/tangly1024)
+ *  > 此文件已根据用户需求进行定制修改，整合了新的主页布局。
  */
 
+// React & Next.js
 import { useRouter } from 'next/router'
 import { useEffect, useState, useRef, useCallback, Fragment } from 'react'
 import dynamic from 'next/dynamic'
@@ -33,11 +37,12 @@ import {
     Heart,
     List,
     BookText,
+    SpellCheck2,
     Type
 } from 'lucide-react'
 import { HashTag } from '@/components/HeroIcons'
 
-// Base Components
+// Base Components from NotionNext
 import Comment from '@/components/Comment'
 import { AdSlot } from '@/components/GoogleAdsense'
 import LazyImage from '@/components/LazyImage'
@@ -46,11 +51,12 @@ import replaceSearchResult from '@/components/Mark'
 import NotionPage from '@/components/NotionPage'
 import SmartLink from '@/components/SmartLink'
 import WWAds from '@/components/WWAds'
-import ShareBar from '@/components/ShareBar'
 import AISummary from '@/components/AISummary'
 import ArticleExpirationNotice from '@/components/ArticleExpirationNotice'
+import ShareBar from '@/components/ShareBar'
 
-// Original HEO Components
+
+// Original HEO Theme Components (for other pages)
 import BlogPostArchive from './components/BlogPostArchive'
 import BlogPostListPage from './components/BlogPostListPage'
 import BlogPostListScroll from './components/BlogPostListScroll'
@@ -70,24 +76,24 @@ import SearchNav from './components/SearchNav'
 import SideRight from './components/SideRight'
 import { Style } from './style'
 
-// Custom Components
+// Custom Content Block Components for the new homepage
+// 请确保您在项目中创建了这些组件文件
 import PinyinContentBlock from '@/components/PinyinContentBlock'
 import WordsContentBlock from '@/components/WordsContentBlock'
+import KouyuPage from '@/components/kouyu'
+import HskContentBlock from '@/components/HskContentBlock'
 
-// ★★★ 核心修复：将 KouyuPage 改为纯客户端渲染，避免构建时路径分析 ★★★
-const KouyuPage = dynamic(() => import('@/components/kouyu'), { 
-    ssr: false,
-    loading: () => <div className="p-10 text-center text-gray-500">正在加载口语模块...</div>
-})
-
-const HskContentBlock = dynamic(() => import('@/components/HskContentBlock'), { ssr: false })
+// Dynamically imported heavy components for the new homepage
 const GlosbeSearchCard = dynamic(() => import('@/components/GlosbeSearchCard'), { ssr: false })
-const ShortSentenceCard = dynamic(() => import('@/components/ShortSentenceCard'), { ssr: false })
+//const ShortSentenceCard = dynamic(() => import('@/components/ShortSentenceCard'), { ssr: false })
 const WordCard = dynamic(() => import('@/components/WordCard'), { ssr: false })
 
+// Helper function to check if running in browser
 const isBrowser = typeof window !== 'undefined';
 
-// ======================  辅助组件 ========================
+// =================================================================================
+// ======================  辅助组件 (for new homepage)  ========================
+// =================================================================================
 
 const CustomScrollbarStyle = () => (
     <style jsx global>{`
@@ -101,16 +107,25 @@ const CustomScrollbarStyle = () => (
 const HomeSidebar = ({ isOpen, onClose, sidebarX, isDragging }) => {
   const { isDarkMode, toggleDarkMode } = useGlobal();
   const sidebarWidth = 288;
+
   const sidebarLinks = [
     { icon: <Settings size={20} />, text: '通用设置', href: '/settings' },
     { icon: <LifeBuoy size={20} />, text: '帮助中心', href: '/help' },
   ];
+
   const transitionClass = isDragging ? '' : 'transition-transform duration-300 ease-in-out';
 
   return (
     <>
-      <div className={`fixed inset-0 bg-black z-30 transition-opacity duration-300 ${isOpen ? 'opacity-50' : 'opacity-0 pointer-events-none'}`} onClick={onClose} style={{ opacity: isOpen ? 0.5 : (sidebarX + sidebarWidth) / sidebarWidth * 0.5 }} />
-      <div className={`fixed inset-y-0 left-0 w-72 bg-white/95 dark:bg-gray-900/95 backdrop-blur-lg shadow-2xl z-40 transform ${transitionClass}`} style={{ transform: `translateX(${sidebarX}px)` }}>
+      <div
+        className={`fixed inset-0 bg-black z-30 transition-opacity duration-300 ${isOpen ? 'opacity-50' : 'opacity-0 pointer-events-none'}`}
+        onClick={onClose}
+        style={{ opacity: isOpen ? 0.5 : (sidebarX + sidebarWidth) / sidebarWidth * 0.5 }}
+      />
+      <div
+        className={`fixed inset-y-0 left-0 w-72 bg-white/95 dark:bg-gray-900/95 backdrop-blur-lg shadow-2xl z-40 transform ${transitionClass}`}
+        style={{ transform: `translateX(${sidebarX}px)` }}
+      >
         <div className="flex flex-col h-full">
             <div className="p-6 flex items-center gap-4 border-b dark:border-gray-700">
                 <UserCircle size={48} className="text-gray-500" />
@@ -122,12 +137,16 @@ const HomeSidebar = ({ isOpen, onClose, sidebarX, isDragging }) => {
             <nav className="flex-grow p-4 space-y-2">
                 {sidebarLinks.map((link, index) => (
                     <SmartLink key={index} href={link.href} className="flex items-center gap-4 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors">
-                        {link.icon} <span className="font-medium">{link.text}</span>
+                        {link.icon}
+                        <span className="font-medium">{link.text}</span>
                     </SmartLink>
                 ))}
             </nav>
             <div className="p-4 border-t dark:border-gray-700">
-                <button onClick={toggleDarkMode} className="w-full flex items-center gap-4 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors">
+                <button
+                    onClick={toggleDarkMode}
+                    className="w-full flex items-center gap-4 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors"
+                >
                     {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
                     <span className="font-medium">{isDarkMode ? '切换到日间模式' : '切换到夜间模式'}</span>
                 </button>
@@ -171,6 +190,7 @@ const ContactPanel = ({ isOpen, onClose }) => {
         { name: 'TikTok', href: 'https://www.tiktok.com/@mmzh.onlione?_r=1&_t=ZS-91OzyDddPu8', icon: <FaTiktok size={32} />, color: 'text-black dark:text-white' },
         { name: 'Telegram', href: 'https://t.me/hurt8888', icon: <FaTelegramPlane size={32} />, color: 'text-sky-500' }
     ];
+
     return (
         <Transition show={isOpen} as={Fragment}>
             <Dialog as="div" className="relative z-50" onClose={onClose}>
@@ -203,10 +223,11 @@ const ContactPanel = ({ isOpen, onClose }) => {
     );
 };
 
-// IndexedDB Helper
+// IndexedDB Helper Functions
 const DB_NAME = 'ChineseLearningDB';
 const SENTENCE_STORE_NAME = 'favoriteSentences';
 const WORD_STORE_NAME = 'favoriteWords';
+
 function openDB() {
   return new Promise((resolve, reject) => {
     if (!isBrowser) return resolve(null);
@@ -220,6 +241,7 @@ function openDB() {
     };
   });
 }
+
 async function getAllFavorites(storeName) {
     try {
         const db = await openDB();
@@ -237,11 +259,14 @@ async function getAllFavorites(storeName) {
     }
 }
 
-// ======================  LayoutIndex 组件  ========================
+
+// =================================================================================
+// ======================  新主页布局 (LayoutIndex) ========================
+// =================================================================================
 const LayoutIndex = props => {
   const router = useRouter();
-  
-  // 1. 简化的 Tab，移除了书籍和练习
+
+  // 定义 Tab 导航，已移除“语法”分组
   const allTabs = [
     { name: '拼音', key: 'pinyin', icon: <Type size={22} /> },
     { name: '单词', key: 'words', icon: <BookText size={22} /> },
@@ -319,19 +344,29 @@ const LayoutIndex = props => {
       }
     };
     window.addEventListener('popstate', handlePopStateFavorites);
-    const backgrounds = ['https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto-format&fit-crop&q=80&w=2070', 'https://images.unsplash.com/photo-1519681393784-d120267933ba?auto-format&fit-crop&q=80&w=2070'];
+
+    const backgrounds = [
+        'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto-format&fit-crop&q=80&w=2070',
+        'https://images.unsplash.com/photo-1519681393784-d120267933ba?auto-format&fit-crop&q=80&w=2070'
+    ];
     setBackgroundUrl(backgrounds[Math.floor(Math.random() * backgrounds.length)]);
 
     const container = scrollableContainerRef.current;
     if (!container) return;
+
     let ticking = false;
     const handleScroll = () => {
-      if (!isStickyActive) { lastScrollY.current = container.scrollTop; return; }
+      if (!isStickyActive) {
+          lastScrollY.current = container.scrollTop;
+          return;
+      }
       const currentY = container.scrollTop;
       if (!ticking) {
         window.requestAnimationFrame(() => {
           const diff = currentY - lastScrollY.current;
-          if (Math.abs(diff) > 10) setIsNavVisible(diff <= 0);
+          if (Math.abs(diff) > 10) {
+            setIsNavVisible(diff <= 0);
+          }
           lastScrollY.current = currentY;
           ticking = false;
         });
@@ -339,13 +374,18 @@ const LayoutIndex = props => {
       }
     };
     container.addEventListener('scroll', handleScroll, { passive: true });
-    const observer = new IntersectionObserver(([entry]) => {
-        const shouldBeSticky = !entry.isIntersecting && entry.boundingClientRect.top < 0;
-        setIsStickyActive(shouldBeSticky);
-        if (!shouldBeSticky) setIsNavVisible(true);
-    }, { threshold: 0 });
+    
+    const observer = new IntersectionObserver(
+        ([entry]) => {
+            const shouldBeSticky = !entry.isIntersecting && entry.boundingClientRect.top < 0;
+            setIsStickyActive(shouldBeSticky);
+            if (!shouldBeSticky) setIsNavVisible(true);
+        }, { threshold: 0 }
+    );
+      
     const currentSentinel = stickySentinelRef.current;
     if (currentSentinel) observer.observe(currentSentinel);
+    
     return () => { 
         container.removeEventListener('scroll', handleScroll);
         if (currentSentinel) observer.unobserve(currentSentinel);
@@ -356,13 +396,19 @@ const LayoutIndex = props => {
   const contentSwipeHandlers = useSwipeable({
       onSwipedLeft: () => {
           const currentIndex = allTabs.findIndex(t => t.key === activeTabKey);
-          if (currentIndex !== -1 && currentIndex < allTabs.length - 1) handleTabChange(allTabs[currentIndex + 1].key);
+          if (currentIndex !== -1 && currentIndex < allTabs.length - 1) {
+              handleTabChange(allTabs[currentIndex + 1].key);
+          }
       },
       onSwipedRight: () => {
           const currentIndex = allTabs.findIndex(t => t.key === activeTabKey);
-          if (currentIndex > 0) handleTabChange(allTabs[currentIndex - 1].key);
+          if (currentIndex > 0) {
+              handleTabChange(allTabs[currentIndex - 1].key);
+          }
       },
-      preventDefaultTouchmoveEvent: true, trackMouse: true, delta: 50
+      preventDefaultTouchmoveEvent: true,
+      trackMouse: true,
+      delta: 50
   });
 
   const handleTouchStart = (e) => {
@@ -383,7 +429,8 @@ const LayoutIndex = props => {
     if (!isDragging) return;
     setIsDragging(false);
     touchStartX.current = null;
-    if (sidebarX < -sidebarWidth / 2) closeSidebar(); else openSidebar();
+    if (sidebarX < -sidebarWidth / 2) closeSidebar();
+    else openSidebar();
   };
   const openSidebar = () => { setIsSidebarOpen(true); setSidebarX(0); };
   const closeSidebar = () => { setIsSidebarOpen(false); setSidebarX(-sidebarWidth); };
@@ -396,6 +443,10 @@ const LayoutIndex = props => {
     </button>
   ));
 
+  if (!activeTabKey) {
+    return <div id='theme-heo' className={`${siteConfig('FONT_STYLE')} h-screen w-screen bg-black flex flex-col overflow-hidden`}></div>;
+  }
+
   return (
     <div id='theme-heo' className={`${siteConfig('FONT_STYLE')} h-screen w-screen bg-black flex flex-col overflow-hidden`}>
         <Style/>
@@ -406,7 +457,9 @@ const LayoutIndex = props => {
             <div className='absolute inset-0 z-0 bg-cover bg-center' style={{ backgroundImage: `url(${backgroundUrl})` }} />
             <div className='absolute inset-0 bg-black/20'></div>
 
-            <button onClick={openSidebar} className="absolute top-4 left-4 z-30 p-2 text-white bg-black/20 rounded-full hover:bg-black/40 transition-colors"><i className="fas fa-bars text-xl"></i></button>
+            <button onClick={openSidebar} className="absolute top-4 left-4 z-30 p-2 text-white bg-black/20 rounded-full hover:bg-black/40 transition-colors" aria-label="打开菜单">
+                <i className="fas fa-bars text-xl"></i>
+            </button>
             
             <div className='absolute top-0 left-0 right-0 h-[40vh] z-10 p-4 flex flex-col justify-end text-white pointer-events-none'>
                 <div className='pointer-events-auto'>
@@ -422,23 +475,26 @@ const LayoutIndex = props => {
 
             <div ref={scrollableContainerRef} className='absolute inset-0 z-20 overflow-y-auto overscroll-y-contain custom-scrollbar'>
                 <div className='h-[40vh] flex-shrink-0' />
-                {/* 这里的 pb-6 确保了底部没有多余的空白 */}
                 <div className='relative bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl pb-6 min-h-[calc(60vh+1px)]'>
+                    
                     <div className='bg-violet-50 dark:bg-gray-800 rounded-t-2xl'>
                         <div className='pt-6'>
                            <div className='px-4 mb-6'><GlosbeSearchCard /></div>
                            <div className='pb-6'><ActionButtons onOpenFavorites={handleOpenFavorites} onOpenContact={() => setIsContactPanelOpen(true)} /></div>
                         </div>
                         <div ref={stickySentinelRef}></div>
+                        
                         <div className={`${isStickyActive ? 'opacity-0 pointer-events-none h-0 overflow-hidden' : ''} border-b border-violet-200 dark:border-gray-700 transition-all duration-200`}>
                             <div className='flex justify-around'>{renderTabButtons()}</div>
                        </div>
                     </div>
+
                     <div className={`transition-transform duration-300 ease-in-out fixed w-full top-0 z-30 ${isStickyActive ? 'block' : 'hidden'} ${isNavVisible ? 'translate-y-0' : '-translate-y-full'}`}>
                         <div className='bg-violet-50/95 dark:bg-gray-800/95 backdrop-blur-lg border-b border-violet-200 dark:border-gray-700 shadow-sm'>
                             <div className='flex justify-around max-w-[86rem] mx-auto'>{renderTabButtons()}</div>
                         </div>
                     </div>
+                    
                     <main ref={mainContentRef} {...contentSwipeHandlers}>
                         <div className='p-4'>
                             {activeTabKey === 'pinyin' && <PinyinContentBlock />}
@@ -449,7 +505,9 @@ const LayoutIndex = props => {
                     </main>
                 </div>
             </div>
+            {/* 底部导航栏已移除 */}
         </div>
+
         {sentenceCardData && <ShortSentenceCard sentences={sentenceCardData} isOpen={isSentenceFavoritesCardOpen} onClose={handleCloseFavorites} progressKey="favorites-sentences" />}
         {wordCardData && <WordCard words={wordCardData} isOpen={isWordFavoritesCardOpen} onClose={handleCloseFavorites} progressKey="favorites-words" />}
         <ContactPanel isOpen={isContactPanelOpen} onClose={() => setIsContactPanelOpen(false)} />
@@ -681,4 +739,4 @@ const LayoutTagIndex = props => {
 export {
   Layout404, LayoutArchive, LayoutBase, LayoutCategoryIndex, LayoutIndex,
   LayoutPostList, LayoutSearch, LayoutSlug, LayoutTagIndex, CONFIG as THEME_CONFIG
-                                                                                             }
+        }
