@@ -84,7 +84,7 @@ import KouyuPage from '@/components/kouyu'
 
 // Dynamically imported heavy components for the new homepage
 const GlosbeSearchCard = dynamic(() => import('@/components/GlosbeSearchCard'), { ssr: false })
-const ShortSentenceCard = dynamic(() => import('@/components/ShortSentenceCard'), { ssr: false })
+//const ShortSentenceCard = dynamic(() => import('@/components/ShortSentenceCard'), { ssr: false })
 const WordCard = dynamic(() => import('@/components/WordCard'), { ssr: false })
 
 // Helper function to check if running in browser
