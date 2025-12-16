@@ -18,72 +18,71 @@ const WordCard = dynamic(
 // 1. 数据中心 (Data Center)
 // ==========================================
 
-// --- 拼音数据 (视觉调整：去除背景块配置，改用图标颜色) ---
+// --- 拼音数据 (视觉配置：无背景框风格) ---
 
-// 第一排：2个
+// 第一排：2个 (声母、韵母)
 const pinyinRow1 = [
   { 
     id: 'initials',
-    title: 'ဗျည်း', // 声母
+    title: 'ဗျည်း', // 缅语：声母
     href: '/pinyin/initials', 
     icon: Mic2, 
-    // 整个卡片的背景（极淡）
-    bg: 'bg-blue-50 dark:bg-blue-900/10',
-    // 边框
-    borderColor: 'border-blue-100 dark:border-blue-800',
-    // 图标本身的颜色
+    // 图标颜色
     iconColor: 'text-blue-500', 
-    // 文字颜色
-    textColor: 'text-blue-900 dark:text-blue-100'
+    // 卡片背景 (极淡的蓝色)
+    cardBg: 'bg-blue-50/50 dark:bg-blue-900/10',
+    borderColor: 'border-blue-100 dark:border-blue-800',
+    shadowColor: 'shadow-blue-200/50'
   },
   { 
     id: 'finals',
-    title: 'သရ', // 韵母
+    title: 'သရ', // 缅语：韵母
     href: '/pinyin/finals', 
     icon: Music4, 
-    bg: 'bg-emerald-50 dark:bg-emerald-900/10',
-    borderColor: 'border-emerald-100 dark:border-emerald-800',
     iconColor: 'text-emerald-500',
-    textColor: 'text-emerald-900 dark:text-emerald-100'
+    cardBg: 'bg-emerald-50/50 dark:bg-emerald-900/10',
+    borderColor: 'border-emerald-100 dark:border-emerald-800',
+    shadowColor: 'shadow-emerald-200/50'
   }
 ];
 
-// 第二排：3个
+// 第二排：3个 (声调、整体认读、技巧)
 const pinyinRow2 = [
   { 
     id: 'tones',
-    title: 'အသံ', // 声调
+    title: 'အသံ', // 缅语：声调
     href: '/pinyin/tones', 
     icon: BookText, 
-    bg: 'bg-amber-50 dark:bg-amber-900/10',
-    borderColor: 'border-amber-100 dark:border-amber-800',
     iconColor: 'text-amber-500',
-    textColor: 'text-amber-900 dark:text-amber-100'
+    cardBg: 'bg-amber-50/50 dark:bg-amber-900/10',
+    borderColor: 'border-amber-100 dark:border-amber-800',
+    shadowColor: 'shadow-amber-200/50'
   },
   { 
     id: 'whole',
-    title: 'အသံတွဲ', // 整体认读
+    title: 'အသံတွဲ', // 缅语：整体认读
     href: '/pinyin/whole', 
     icon: Layers, 
-    bg: 'bg-purple-50 dark:bg-purple-900/10',
-    borderColor: 'border-purple-100 dark:border-purple-800',
     iconColor: 'text-purple-500',
-    textColor: 'text-purple-900 dark:text-purple-100'
+    cardBg: 'bg-purple-50/50 dark:bg-purple-900/10',
+    borderColor: 'border-purple-100 dark:border-purple-800',
+    shadowColor: 'shadow-purple-200/50'
   },
   { 
     id: 'tips',
-    title: 'နည်းလမ်း', // 技巧
+    title: 'နည်းလမ်း', // 缅语：技巧
     href: '/pinyin/tips', 
     icon: Lightbulb, 
-    bg: 'bg-rose-50 dark:bg-rose-900/10',
-    borderColor: 'border-rose-100 dark:border-rose-800',
     iconColor: 'text-rose-500',
-    textColor: 'text-rose-900 dark:text-rose-100'
+    cardBg: 'bg-rose-50/50 dark:bg-rose-900/10',
+    borderColor: 'border-rose-100 dark:border-rose-800',
+    shadowColor: 'shadow-rose-200/50'
   }
 ];
 
 // --- HSK 词汇数据加载 ---
 let hskWordsData = {};
+// 提示：生产环境中建议使用 import static 方式加载，此处为了兼容保持 require
 try { hskWordsData[1] = require('@/data/hsk/hsk1.json'); } catch (e) {}
 try { hskWordsData[2] = require('@/data/hsk/hsk2.json'); } catch (e) {}
 try { hskWordsData[3] = require('@/data/hsk/hsk3.json'); } catch (e) {}
@@ -327,7 +326,7 @@ const PinyinSection = () => {
     visible: { y: 0, opacity: 1 }
   };
 
-  // 渲染单个拼音模块的辅助函数 - 方形磁贴风格
+  // 渲染单个拼音模块的辅助函数 - 纯净磁贴风格 (图标+文字悬浮，无背景块)
   const renderCard = (module) => (
     <Link key={module.id} href={module.href} passHref>
         <motion.a
@@ -336,16 +335,21 @@ const PinyinSection = () => {
             className={`
                 aspect-square 
                 flex flex-col items-center justify-center 
-                rounded-[24px] border ${module.borderColor} ${module.bg} 
+                rounded-[24px] 
+                bg-white dark:bg-gray-800
+                border ${module.borderColor} 
                 shadow-sm hover:shadow-md transition-all duration-300
                 group relative overflow-hidden
             `}
         >
-            {/* 图标 - 无背景框，直接染色，加大尺寸 */}
-            <module.icon className={`${module.iconColor} mb-3 group-hover:scale-110 transition-transform duration-300`} size={36} />
+            {/* 图标：直接显示颜色，去掉了外面的 div 容器 */}
+            <module.icon 
+                size={38} 
+                className={`${module.iconColor} mb-2 transition-transform duration-300 group-hover:scale-110 drop-shadow-sm`} 
+            />
             
-            {/* 缅甸语标题 - 加粗 */}
-            <h3 className={`font-bold text-base ${module.textColor} tracking-wide text-center leading-tight px-1`}>
+            {/* 缅甸语标题 */}
+            <h3 className="font-bold text-base text-gray-700 dark:text-gray-200 tracking-wide text-center leading-tight">
                 {module.title}
             </h3>
         </motion.a>
@@ -445,9 +449,9 @@ export default function HskPageClient() {
               backgroundImage: 'url(https://images.unsplash.com/photo-1519120944692-1a8d8cfc107f?auto=format&fit=crop&q=80&w=2000)',
               backgroundSize: 'cover',
               backgroundPosition: 'center',
-              backgroundAttachment: 'fixed'
           }}
       >
+          {/* 使用 absolute 背景，防止移动端 fixed 掉帧问题 */}
           <div className="absolute inset-0 bg-white/95 dark:bg-black/90 backdrop-blur-sm z-0"></div>
 
           <div className="relative z-10 max-w-4xl mx-auto px-4 py-10 space-y-10">
