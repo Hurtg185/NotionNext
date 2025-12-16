@@ -18,29 +18,26 @@ const WordCard = dynamic(
 // 1. 数据中心 (Data Center)
 // ==========================================
 
-// --- 拼音数据 (缅甸语版本) ---
+// --- 拼音数据 (缅甸语版本 - 视觉配置更新) ---
 // 第一排：2个 (声母、韵母)
 const pinyinRow1 = [
   { 
     id: 'initials',
-    title: 'ဗျည်း', // 缅语：声母 (Consonants)
+    title: 'ဗျည်း', // 声母
     href: '/pinyin/initials', 
     icon: Mic2, 
-    // 使用更柔和的渐变背景色
-    bg: 'bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-900/20 dark:to-blue-800/20',
-    borderColor: 'border-blue-200 dark:border-blue-700',
-    iconBg: 'bg-blue-500',
-    textColor: 'text-blue-900 dark:text-blue-100'
+    // 图标背景渐变
+    iconGradient: 'from-blue-500 to-cyan-500',
+    // 装饰性光晕颜色
+    shadowColor: 'shadow-blue-500/30'
   },
   { 
     id: 'finals',
-    title: 'သရ', // 缅语：韵母 (Vowels)
+    title: 'သရ', // 韵母
     href: '/pinyin/finals', 
     icon: Music4, 
-    bg: 'bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-900/20 dark:to-emerald-800/20',
-    borderColor: 'border-emerald-200 dark:border-emerald-700',
-    iconBg: 'bg-emerald-500',
-    textColor: 'text-emerald-900 dark:text-emerald-100'
+    iconGradient: 'from-emerald-500 to-teal-500',
+    shadowColor: 'shadow-emerald-500/30'
   }
 ];
 
@@ -48,33 +45,27 @@ const pinyinRow1 = [
 const pinyinRow2 = [
   { 
     id: 'tones',
-    title: 'အသံ', // 缅语：声调 (Tones)
+    title: 'အသံ', // 声调
     href: '/pinyin/tones', 
     icon: BookText, 
-    bg: 'bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-900/20 dark:to-amber-800/20',
-    borderColor: 'border-amber-200 dark:border-amber-700',
-    iconBg: 'bg-amber-500',
-    textColor: 'text-amber-900 dark:text-amber-100'
+    iconGradient: 'from-amber-500 to-orange-500',
+    shadowColor: 'shadow-amber-500/30'
   },
   { 
     id: 'whole',
-    title: 'အသံတွဲ', // 缅语：整体认读/音节 (Syllables)
+    title: 'အသံတွဲ', // 整体认读
     href: '/pinyin/whole', 
     icon: Layers, 
-    bg: 'bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-900/20 dark:to-purple-800/20',
-    borderColor: 'border-purple-200 dark:border-purple-700',
-    iconBg: 'bg-purple-500',
-    textColor: 'text-purple-900 dark:text-purple-100'
+    iconGradient: 'from-purple-500 to-violet-500',
+    shadowColor: 'shadow-purple-500/30'
   },
   { 
     id: 'tips',
-    title: 'နည်းလမ်း', // 缅语：技巧/方法 (Methods/Tips)
+    title: 'နည်းလမ်း', // 技巧
     href: '/pinyin/tips', 
     icon: Lightbulb, 
-    bg: 'bg-gradient-to-br from-rose-50 to-rose-100/50 dark:from-rose-900/20 dark:to-rose-800/20',
-    borderColor: 'border-rose-200 dark:border-rose-700',
-    iconBg: 'bg-rose-500',
-    textColor: 'text-rose-900 dark:text-rose-100'
+    iconGradient: 'from-rose-500 to-pink-500',
+    shadowColor: 'shadow-rose-500/30'
   }
 ];
 
@@ -87,7 +78,7 @@ try { hskWordsData[4] = require('@/data/hsk/hsk4.json'); } catch (e) {}
 try { hskWordsData[5] = require('@/data/hsk/hsk5.json'); } catch (e) {}
 try { hskWordsData[6] = require('@/data/hsk/hsk6.json'); } catch (e) {}
 
-// --- HSK 课程列表数据 (包含完整的 HSK 4) ---
+// --- HSK 课程列表数据 ---
 const hskData = [
     { 
         level: 1, 
@@ -323,22 +314,23 @@ const PinyinSection = () => {
     visible: { y: 0, opacity: 1 }
   };
 
-  // 渲染单个拼音模块的辅助函数 - 美化版
+  // 渲染单个拼音模块的辅助函数 - App 风格卡片
   const renderCard = (module) => (
     <Link key={module.id} href={module.href} passHref>
         <motion.a
             variants={itemVariants}
             whileTap={{ scale: 0.95 }}
-            className={`flex flex-col items-center justify-center p-4 rounded-2xl border ${module.borderColor} ${module.bg} relative overflow-hidden h-full shadow-sm hover:shadow-md transition-shadow duration-300`}
+            className="flex flex-col items-center justify-center p-5 rounded-2xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-lg transition-all duration-300 h-full relative overflow-hidden group"
         >
-            <div className={`p-3.5 rounded-full ${module.iconBg} text-white shadow-lg mb-3 ring-4 ring-white/50 dark:ring-white/10`}>
-                <module.icon size={22} />
+            {/* 图标容器：大圆角矩形，带鲜艳渐变背景 */}
+            <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${module.iconGradient} text-white shadow-lg ${module.shadowColor} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300`}>
+                <module.icon size={26} />
             </div>
-            <h3 className={`font-bold text-lg ${module.textColor} tracking-wide`}>
+            
+            {/* 缅甸语标题：在下方，加粗，稍大字体 */}
+            <h3 className="font-bold text-lg text-gray-700 dark:text-gray-200 tracking-wide text-center">
                 {module.title}
             </h3>
-            {/* 装饰性背景光晕 */}
-            <div className="absolute -top-4 -right-4 w-16 h-16 bg-white/20 rounded-full blur-2xl pointer-events-none"></div>
         </motion.a>
     </Link>
   );
@@ -358,10 +350,10 @@ const PinyinSection = () => {
          initial="hidden"
          whileInView="visible"
          viewport={{ once: true, amount: 0.2 }}
-         className="space-y-3"
+         className="space-y-4"
        >
          {/* 第一排：2个 */}
-         <div className="grid grid-cols-2 gap-3">
+         <div className="grid grid-cols-2 gap-4">
             {pinyinRow1.map(renderCard)}
          </div>
 
