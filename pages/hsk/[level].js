@@ -1,28 +1,9 @@
-// pages/hsk/[level].js 文件的第一行
-
-// --- 补丁开始 ---
-if (typeof global.self === 'undefined') {
-  global.self = global;
-}
-// --- 补丁结束 ---
-
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-// ... 下面接着写你的其他代码
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
-import Link from 'next/link';
-import dynamic from 'next/dynamic'; // 1. 引入 dynamic
-import { BookOpen, GraduationCap, Dumbbell, ChevronLeft, Trophy } from 'lucide-react';
+import WordCard from '../../components/WordCard'; // 路径可能需要根据你的结构调整
 
-import HskContentBlock from '../../components/HskContentBlock'; 
-
-// 2. 使用 dynamic 动态导入 WordCard，彻底解决 self is not defined
-const WordCard = dynamic(() => import('../../components/WordCard'), {
-  ssr: false, // 关键：禁止在服务端构建此组件
-});
-
-// --- 数据导入 ---
+// --- 数据中心：一次性导入所有单词数据 ---
+// 确保这些 JSON 文件都存在于你的 data/hsk 目录下
 import hsk1Words from '../../data/hsk/hsk1.json';
 import hsk2Words from '../../data/hsk/hsk2.json';
 import hsk3Words from '../../data/hsk/hsk3.json';
@@ -30,6 +11,7 @@ import hsk4Words from '../../data/hsk/hsk4.json';
 import hsk5Words from '../../data/hsk/hsk5.json';
 import hsk6Words from '../../data/hsk/hsk6.json';
 
+// 创建一个映射，方便根据 URL 中的 level 动态查找数据
 const hskWordsData = {
   '1': hsk1Words,
   '2': hsk2Words,
@@ -38,110 +20,81 @@ const hskWordsData = {
   '5': hsk5Words,
   '6': hsk6Words,
 };
+// -------------------------------------------
 
 const HskLevelPage = () => {
   const router = useRouter();
-  const { level } = router.query;
+  const { level } = router.query; // 从 URL 中获取 level 参数，例如 "1", "3"
+
   const [words, setWords] = useState([]);
   const [isCardOpen, setIsCardOpen] = useState(false);
 
-  // 震动函数（安全的写法）
-  const vibrate = () => {
-    // 再次确保只在浏览器端执行
-    if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate(15);
-    }
-  };
-
+  // 使用 useEffect 来在 level 参数可用时加载数据
   useEffect(() => {
+    // 确保 level 存在，并且是 hskWordsData 中的一个有效键
     if (level && hskWordsData[level]) {
-      const data = hskWordsData[level];
-      setWords(Array.isArray(data) ? data : (data.words || []));
+      setWords(hskWordsData[level]);
     } else {
-      setWords([]);
+      setWords([]); // 如果 level 无效，则清空单词
     }
-  }, [level]);
+  }, [level]); // 这个 effect 会在 level 改变时重新运行
 
-  const handleOpenWords = () => {
-    vibrate();
+  const handleStart = () => {
     if (words.length > 0) {
       setIsCardOpen(true);
     } else {
-      alert("数据加载中...");
+      alert("没有加载到任何生词数据！请检查链接是否正确。");
     }
   };
 
-  const handleOtherClick = (type) => {
-    vibrate();
-    console.log(`Open ${type}`);
-  };
+  // 在路由准备好并且数据加载完成之前，可以显示一个加载状态
+  if (!level || (router.isReady && words.length === 0)) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <h1>加载中或未找到 HSK {level} 的单词数据...</h1>
+      </div>
+    );
+  }
 
-  // 等待路由参数就绪
-  if (!level) return <div className="min-h-screen bg-[#F5F7FA]" />;
-
-  // 打开生词卡片
+  // 如果卡片已经打开，渲染 WordCard 组件
   if (isCardOpen) {
     return (
       <WordCard
         words={words}
         isOpen={isCardOpen}
         onClose={() => setIsCardOpen(false)}
-        progressKey={`hsk${level}_study_page`}
+        progressKey={`hsk${level}_study_page`} // 创建一个动态且唯一的进度键
       />
     );
   }
 
+  // 默认显示开始学习的界面
   return (
-    <div className="min-h-screen bg-[#F5F7FA] dark:bg-gray-950 pb-safe">
-      
-      {/* 顶部导航 */}
-      <div className="sticky top-0 z-10 px-4 py-3 bg-[#F5F7FA]/90 dark:bg-gray-950/90 backdrop-blur-md flex items-center justify-between">
-        <Link href="/hsk" onClick={vibrate} className="p-2 -ml-2 rounded-full text-gray-600 dark:text-gray-300">
-          <ChevronLeft size={24} />
-        </Link>
-        <span className="font-bold text-gray-800 dark:text-white text-lg">HSK {level}</span>
-        <div className="w-8" />
-      </div>
-
-      <div className="px-5 pt-2 pb-10">
-        {/* Banner */}
-        <div className="mb-8 mt-2 flex flex-col items-center">
-          <div className="w-20 h-20 rounded-3xl bg-blue-500 shadow-lg shadow-blue-500/30 flex items-center justify-center mb-4 text-white">
-            <Trophy size={36} />
-          </div>
-          <h1 className="text-2xl font-extrabold text-gray-800 dark:text-white">HSK {level} 级</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">共 {words.length} 个生词等待挑战</p>
-        </div>
-
-        {/* 功能卡片列表 */}
-        <div className="grid grid-cols-1 gap-4">
-          
-          <HskContentBlock 
-            icon={BookOpen}
-            title="生词学习"
-            subtitle={`Words • ${words.length} 词`}
-            color="blue"
-            onClick={handleOpenWords}
-          />
-
-          <HskContentBlock 
-            icon={GraduationCap}
-            title="语法重点"
-            subtitle="Grammar • 45 个语法点"
-            color="emerald"
-            onClick={() => handleOtherClick('grammar')}
-          />
-
-          <HskContentBlock 
-            icon={Dumbbell}
-            title="模拟练习"
-            subtitle="Practice • 听力/阅读"
-            color="orange"
-            onClick={() => handleOtherClick('practice')}
-          />
-
-        </div>
-      </div>
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: '100vh',
+      textAlign: 'center',
+      padding: '20px'
+    }}>
+      <h1>HSK {level} 学习</h1>
+      <p>准备好开始学习 {words.length} 个新单词了吗？</p>
+      <button 
+        onClick={handleStart} 
+        style={{ 
+          padding: '12px 25px', 
+          fontSize: '1.2rem', 
+          cursor: 'pointer',
+          borderRadius: '12px',
+          border: 'none',
+          color: 'white',
+          background: 'linear-gradient(135deg, #4299e1, #3182ce)'
+        }}
+      >
+        开始学习
+      </button>
     </div>
   );
 };
