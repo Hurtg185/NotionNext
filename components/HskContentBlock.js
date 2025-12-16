@@ -3,9 +3,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { 
   ChevronDown, ChevronUp, Mic2, Music4, BookText, 
-  ListTodo, Layers, Info, Keyboard 
+  ListTodo, Layers, Lightbulb, ArrowRight 
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import dynamic from 'next/dynamic';
 
 // 动态导入 WordCard 组件
@@ -18,45 +18,54 @@ const WordCard = dynamic(
 // 1. 数据中心 (Data Center)
 // ==========================================
 
-// --- 拼音模块数据 ---
-const pinyinModules = [
+// --- 拼音模块数据 (分离声调表) ---
+const pinyinTopModules = [
   { 
+    id: 'initials',
     title: '声母表 (Initials)', 
-    description: '汉语拼音的辅音部分，如 b, p, m, f',
+    description: 'b, p, m, f 等辅音',
     href: '/pinyin/initials', 
     icon: Mic2, 
-    color: 'text-blue-500', 
+    color: 'text-blue-600 dark:text-blue-400', 
     bg: 'bg-blue-50 dark:bg-blue-900/20',
-    borderColor: 'border-blue-200 dark:border-blue-800' 
+    borderColor: 'border-blue-200 dark:border-blue-800',
+    gradient: 'from-blue-500 to-cyan-500'
   },
   { 
+    id: 'finals',
     title: '韵母表 (Finals)', 
-    description: '汉语拼音的元音部分，如 a, o, e, i',
+    description: 'a, o, e, i 等元音',
     href: '/pinyin/finals', 
     icon: Music4, 
-    color: 'text-green-500', 
-    bg: 'bg-green-50 dark:bg-green-900/20',
-    borderColor: 'border-green-200 dark:border-green-800' 
+    color: 'text-emerald-600 dark:text-emerald-400', 
+    bg: 'bg-emerald-50 dark:bg-emerald-900/20',
+    borderColor: 'border-emerald-200 dark:border-emerald-800',
+    gradient: 'from-emerald-500 to-teal-500'
   },
   { 
-    title: '声调表 (Tones)', 
-    description: '汉语的四个声调，决定字义',
-    href: '/pinyin/tones', 
-    icon: BookText, 
-    color: 'text-yellow-500', 
-    bg: 'bg-yellow-50 dark:bg-yellow-900/20',
-    borderColor: 'border-yellow-200 dark:border-yellow-800' 
-  },
-  { 
-    title: '整体认读 (Whole Syllables)', 
-    description: '不需拼读，直接作为一个整体朗读',
+    id: 'whole',
+    title: '整体认读 (Whole)', 
+    description: 'zi, ci, si 等整体音节',
     href: '/pinyin/whole', 
     icon: Layers, 
-    color: 'text-purple-500', 
+    color: 'text-purple-600 dark:text-purple-400', 
     bg: 'bg-purple-50 dark:bg-purple-900/20',
-    borderColor: 'border-purple-200 dark:border-purple-800' 
+    borderColor: 'border-purple-200 dark:border-purple-800',
+    gradient: 'from-purple-500 to-violet-500'
   },
 ];
+
+const toneModule = { 
+    id: 'tones',
+    title: '声调表 (Tones)', 
+    description: '掌握汉语的四个声调，精准表达字义 (mā, má, mǎ, mà)',
+    href: '/pinyin/tones', 
+    icon: BookText, 
+    color: 'text-amber-600 dark:text-amber-400', 
+    bg: 'bg-amber-50 dark:bg-amber-900/20',
+    borderColor: 'border-amber-200 dark:border-amber-800',
+    gradient: 'from-amber-500 to-orange-500'
+};
 
 // --- HSK 词汇数据加载 ---
 let hskWordsData = {};
@@ -232,44 +241,47 @@ const HskCard = ({ level, onVocabularyClick }) => {
     return (
         <motion.div
             variants={cardVariants}
-            className="relative rounded-2xl shadow-xl overflow-hidden group hover:shadow-2xl transition-all duration-300 bg-white dark:bg-gray-800"
+            className="flex flex-col h-full relative rounded-[2rem] shadow-xl overflow-hidden group hover:shadow-2xl hover:shadow-cyan-900/10 transition-all duration-500 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700"
         >
-            {/* 背景图片区域 */}
-            <div className="h-48 relative overflow-hidden">
+            {/* 背景图片区域 - 加高 */}
+            <div className="h-60 relative overflow-hidden shrink-0">
                 <img 
                   src={level.imageUrl} 
                   alt={level.title} 
-                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent z-10" />
-                <div className="absolute bottom-4 left-6 z-20 text-white">
-                    <h2 className="font-extrabold text-3xl tracking-tight">HSK {level.level}</h2>
-                    <p className="font-medium opacity-90">{level.title}</p>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10" />
+                <div className="absolute bottom-5 left-8 z-20 text-white">
+                    <div className="flex items-center gap-3 mb-1">
+                        <span className="bg-white/20 backdrop-blur-md px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">Level {level.level}</span>
+                    </div>
+                    <h2 className="font-extrabold text-4xl tracking-tight mb-1">HSK {level.level}</h2>
+                    <p className="font-medium text-lg text-white/90">{level.title}</p>
                 </div>
             </div>
             
-            <div className="p-6 flex flex-col relative z-20">
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 h-10 line-clamp-2">{level.description}</p>
+            <div className="p-8 flex flex-col flex-grow relative z-20">
+                <p className="text-base text-gray-500 dark:text-gray-400 mb-6 line-clamp-2 leading-relaxed">{level.description}</p>
                 
-                <div className="space-y-2 mb-6">
+                <div className="space-y-2.5 mb-8 flex-grow">
                     {visibleLessons.map(lesson => (
                         <Link key={lesson.id} href={`/hsk/${level.level}/lessons/${lesson.id}`} passHref>
-                            <a className="block px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-cyan-50 dark:hover:bg-cyan-900/30 text-gray-700 dark:text-gray-200 transition-colors text-sm font-medium truncate flex items-center group/item">
-                                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 mr-2 group-hover/item:scale-125 transition-transform" />
+                            <a className="block px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-700/40 hover:bg-cyan-50 dark:hover:bg-cyan-900/20 text-gray-700 dark:text-gray-200 transition-all duration-200 text-[15px] font-medium truncate flex items-center group/item border border-transparent hover:border-cyan-100 dark:hover:border-cyan-800">
+                                <span className="w-2 h-2 rounded-full bg-cyan-400 mr-3 group-hover/item:scale-125 transition-transform" />
                                 {lesson.title}
                             </a>
                         </Link>
                     ))}
                 </div>
                 
-                <div className="mt-auto space-y-3 pt-2 border-t border-gray-100 dark:border-gray-700">
+                <div className="mt-auto space-y-4 pt-4 border-t border-gray-100 dark:border-gray-700">
                     {hasMore && (
                         <button 
                             onClick={() => setIsExpanded(!isExpanded)} 
-                            className="w-full text-xs py-2 text-gray-500 hover:text-cyan-600 dark:text-gray-400 dark:hover:text-cyan-400 transition-colors flex items-center justify-center gap-1 font-semibold"
+                            className="w-full text-sm py-2 text-gray-500 hover:text-cyan-600 dark:text-gray-400 dark:hover:text-cyan-400 transition-colors flex items-center justify-center gap-1 font-semibold group/btn"
                         >
                             {isExpanded ? '收起列表' : `查看全部 ${level.lessons.length} 门课程`}
-                            {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} className="group-hover/btn:translate-y-0.5 transition-transform"/>}
                         </button>
                     )}
                     <button 
@@ -277,10 +289,10 @@ const HskCard = ({ level, onVocabularyClick }) => {
                             e.stopPropagation(); 
                             onVocabularyClick(level);
                         }} 
-                        className="w-full text-center py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white rounded-lg transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 font-bold text-sm"
+                        className="w-full text-center py-3.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl transition-all shadow-lg hover:shadow-cyan-500/30 flex items-center justify-center gap-2 font-bold text-base tracking-wide"
                     >
-                        <ListTodo size={18} />
-                        全屏背单词
+                        <ListTodo size={20} />
+                        全屏背单词模式
                     </button>
                 </div>
             </div>
@@ -291,7 +303,7 @@ const HskCard = ({ level, onVocabularyClick }) => {
 const PinyinSection = () => {
   const containerVariants = {
     hidden: { opacity: 0 },
-    visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
+    visible: { opacity: 1, transition: { staggerChildren: 0.08 } }
   };
 
   const itemVariants = {
@@ -301,10 +313,20 @@ const PinyinSection = () => {
 
   return (
     <div className="space-y-6">
-       <div className="flex items-center gap-3 mb-2">
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">汉语拼音基础</h2>
-            <div className="h-px flex-grow bg-gray-200 dark:bg-gray-700"></div>
-            <span className="text-xs font-semibold px-2 py-1 bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300 rounded uppercase">Basics</span>
+       <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+                <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">拼音学习</h2>
+                <span className="text-xs font-bold px-2.5 py-1 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-full uppercase shadow-sm">Foundation</span>
+            </div>
+            
+            {/* 拼音技巧按钮 */}
+            <Link href="/pinyin/tips" passHref>
+                <a className="hidden sm:flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition-colors group">
+                    <Lightbulb size={18} className="text-yellow-500 group-hover:scale-110 transition-transform" />
+                    发音技巧与秘籍
+                    <ArrowRight size={16} className="opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all" />
+                </a>
+            </Link>
        </div>
        
        <motion.div 
@@ -312,52 +334,89 @@ const PinyinSection = () => {
          initial="hidden"
          whileInView="visible"
          viewport={{ once: true, amount: 0.2 }}
-         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
+         className="space-y-6"
        >
-         {pinyinModules.map((module) => (
-           <Link key={module.title} href={module.href} passHref>
-             <motion.a
-               variants={itemVariants}
-               whileHover={{ y: -5, transition: { duration: 0.2 } }}
-               whileTap={{ scale: 0.98 }}
-               className={`block p-6 rounded-2xl border ${module.borderColor} ${module.bg} cursor-pointer transition-shadow hover:shadow-lg relative overflow-hidden group`}
-             >
-               <div className="flex flex-col items-center text-center z-10 relative">
-                 <div className={`p-4 rounded-full bg-white dark:bg-gray-800 shadow-sm mb-4 ${module.color}`}>
-                   <module.icon size={28} />
-                 </div>
-                 <h3 className="font-bold text-base text-gray-800 dark:text-gray-100 mb-2">
-                   {module.title}
-                 </h3>
-                 <p className="text-xs text-gray-500 dark:text-gray-400 px-1 leading-relaxed line-clamp-2">
-                   {module.description}
-                 </p>
-               </div>
-             </motion.a>
-           </Link>
-         ))}
-       </motion.div>
-
-       {/* 底部补充信息小卡片 */}
-       <motion.div 
-         initial={{ opacity: 0, y: 10 }}
-         whileInView={{ opacity: 1, y: 0 }}
-         viewport={{ once: true }}
-         transition={{ delay: 0.3 }}
-         className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-100 dark:border-gray-700 shadow-sm mt-4"
-       >
-         <div className="flex items-center gap-2 mb-3">
-             <Info className="text-blue-500" size={18}/>
-             <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">拼音小贴士</h3>
+         {/* 第一排：3个基础模块 */}
+         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {pinyinTopModules.map((module) => (
+            <Link key={module.title} href={module.href} passHref>
+                <motion.a
+                variants={itemVariants}
+                whileHover={{ y: -6, transition: { duration: 0.2 } }}
+                whileTap={{ scale: 0.98 }}
+                className={`block p-6 rounded-2xl border ${module.borderColor} ${module.bg} cursor-pointer transition-shadow hover:shadow-xl hover:shadow-gray-200 dark:hover:shadow-black/30 relative overflow-hidden group h-full`}
+                >
+                <div className="flex flex-col items-center text-center z-10 relative h-full">
+                    <div className={`p-4 rounded-2xl bg-gradient-to-br ${module.gradient} text-white shadow-lg mb-4 transform group-hover:rotate-6 transition-transform duration-300`}>
+                    <module.icon size={28} />
+                    </div>
+                    <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2">
+                    {module.title}
+                    </h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 px-1 leading-relaxed">
+                    {module.description}
+                    </p>
+                </div>
+                </motion.a>
+            </Link>
+            ))}
          </div>
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-gray-500 dark:text-gray-400">
-             <div className="flex gap-2">
-                 <span className="mt-1 w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span> 
-                 <p>拼音是学习汉语的第一把钥匙，掌握它能帮助你正确读出汉字。</p>
+
+         {/* 第二排：声调表 (加强版) + 移动端显示的技巧按钮 */}
+         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* 声调表占据前两格 (或全宽，取决于设计，这里设为占据 2/3 或全宽更合适，为了对齐我们让它占满) */}
+             <div className="md:col-span-3">
+                 <Link href={toneModule.href} passHref>
+                    <motion.a
+                        variants={itemVariants}
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                        className={`flex flex-col md:flex-row items-center md:items-start p-6 rounded-2xl border ${toneModule.borderColor} ${toneModule.bg} cursor-pointer transition-all hover:shadow-lg group relative overflow-hidden`}
+                    >
+                         <div className={`shrink-0 p-4 rounded-2xl bg-gradient-to-br ${toneModule.gradient} text-white shadow-lg mb-4 md:mb-0 md:mr-6`}>
+                             <toneModule.icon size={32} />
+                         </div>
+                         <div className="text-center md:text-left flex-grow">
+                             <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100 mb-2 flex items-center justify-center md:justify-start gap-2">
+                                 {toneModule.title}
+                                 <span className="hidden md:inline-block px-2 py-0.5 rounded text-xs bg-white/50 dark:bg-black/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300">Core</span>
+                             </h3>
+                             <p className="text-gray-600 dark:text-gray-300 mb-3">{toneModule.description}</p>
+                             
+                             {/* 声调可视化小条 */}
+                             <div className="flex justify-center md:justify-start gap-4 text-center mt-2">
+                                 {['mā', 'má', 'mǎ', 'mà'].map((t, i) => (
+                                     <div key={i} className="bg-white dark:bg-gray-800 rounded-lg px-4 py-2 shadow-sm border border-amber-100 dark:border-amber-900/50">
+                                         <span className="text-lg font-serif font-bold text-gray-800 dark:text-gray-100">{t}</span>
+                                     </div>
+                                 ))}
+                             </div>
+                         </div>
+                         <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity hidden md:block">
+                             <div className="bg-white dark:bg-gray-800 p-2 rounded-full shadow-md text-amber-500">
+                                 <ArrowRight size={20} />
+                             </div>
+                         </div>
+                    </motion.a>
+                 </Link>
              </div>
-             <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-900/50 px-3 py-2 rounded-lg">
-                <span>尝试使用拼音输入法进行练习</span>
-                <Keyboard size={14} className="text-gray-400"/>
+
+             {/* 移动端显示的技巧按钮 (在桌面端隐藏，因为上面已经有了) */}
+             <div className="md:hidden">
+                 <Link href="/pinyin/tips" passHref>
+                     <motion.a 
+                        variants={itemVariants}
+                        className="flex items-center justify-between p-4 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl cursor-pointer"
+                     >
+                         <div className="flex items-center gap-3">
+                             <div className="bg-yellow-100 dark:bg-yellow-900/50 p-2 rounded-lg text-yellow-600 dark:text-yellow-400">
+                                 <Lightbulb size={20} />
+                             </div>
+                             <span className="font-bold text-gray-800 dark:text-gray-200">发音技巧与秘籍</span>
+                         </div>
+                         <ArrowRight size={18} className="text-gray-400" />
+                     </motion.a>
+                 </Link>
              </div>
          </div>
        </motion.div>
@@ -413,46 +472,46 @@ export default function HskPageClient() {
       <div 
           className="relative min-h-screen bg-gray-50 dark:bg-gray-900"
           style={{
-              backgroundImage: 'url(https://images.unsplash.com/photo-1534777367048-a53b2d1ac68e?fit=crop&w=1600&q=80)',
+              backgroundImage: 'url(https://images.unsplash.com/photo-1516541196182-6bdb0516ed27?auto=format&fit=crop&q=80&w=2000)',
               backgroundSize: 'cover',
               backgroundPosition: 'center',
               backgroundAttachment: 'fixed'
           }}
       >
-          {/* 背景遮罩，确保内容可读性 */}
-          <div className="absolute inset-0 bg-white/90 dark:bg-black/80 backdrop-blur-sm z-0"></div>
+          {/* 背景遮罩 */}
+          <div className="absolute inset-0 bg-white/95 dark:bg-gray-950/90 backdrop-blur-sm z-0"></div>
 
-          <div className="relative z-10 max-w-6xl mx-auto px-4 py-12 space-y-12">
+          <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-16 space-y-16">
               
               {/* 1. 页面头部 */}
               <motion.div
                   initial={{ opacity: 0, y: -20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6 }}
-                  className="text-center space-y-4 mb-8"
+                  transition={{ duration: 0.7 }}
+                  className="text-center space-y-6"
               >
-                  <h1 className="text-4xl sm:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-500 dark:from-blue-400 dark:to-cyan-300">
+                  <h1 className="text-5xl sm:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-cyan-500 to-teal-400 dark:from-blue-400 dark:via-cyan-300 dark:to-teal-200 tracking-tight pb-2">
                     汉语学习中心
                   </h1>
-                  <p className="text-lg sm:text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-                    从拼音基础到 HSK 高级课程，开启你的中文进阶之旅
+                  <p className="text-xl sm:text-2xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto font-light leading-relaxed">
+                    从拼音基础到 HSK 高级课程<br className="sm:hidden"/>开启你的中文进阶之旅
                   </p>
               </motion.div>
         
               {/* 2. 拼音部分 */}
-              <div className="bg-white/70 dark:bg-gray-800/60 backdrop-blur-md rounded-3xl p-6 sm:p-8 shadow-xl border border-white/20 dark:border-gray-700/50">
+              <div className="bg-white/80 dark:bg-gray-900/60 backdrop-blur-xl rounded-[2rem] p-8 sm:p-10 shadow-2xl shadow-blue-900/5 border border-white/50 dark:border-gray-700/50">
                   <PinyinSection />
               </div>
 
               {/* 3. HSK 等级部分 */}
-              <div className="space-y-8">
-                  <div className="flex items-center gap-3">
-                        <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">HSK 等级课程</h2>
-                        <div className="h-px flex-grow bg-gray-300 dark:bg-gray-700"></div>
-                        <span className="text-xs font-semibold px-2 py-1 bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-300 rounded uppercase">Levels</span>
+              <div className="space-y-10">
+                  <div className="flex items-center gap-4 pl-2">
+                        <div className="h-8 w-1.5 bg-gradient-to-b from-purple-500 to-pink-500 rounded-full"></div>
+                        <h2 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">HSK 等级课程</h2>
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                  {/* HSK Grid - 改为 2 列布局，卡片更大 */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10">
                       {hskData.map(level => (
                         <HskCard 
                           key={level.level} 
