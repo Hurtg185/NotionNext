@@ -1,5 +1,5 @@
 /**
- *   HEO 主题说明
+ *   HEO 主题说明 (SSR 修复版 + 功能删减)
  */
 
 import { useRouter } from 'next/router'
@@ -74,12 +74,15 @@ import { Style } from './style'
 import PinyinContentBlock from '@/components/PinyinContentBlock'
 import WordsContentBlock from '@/components/WordsContentBlock'
 
-// ★★★ 关键修复：复杂组件改为动态导入 (SSR: false) ★★★
-// 这里的 ssr: false 是关键，防止构建时因为 window/audio 不存在而报错
-const KouyuPage = dynamic(() => import('@/components/kouyu'), { ssr: false, loading: () => <div className="p-10 text-center">加载口语模块...</div> })
+// ★★★ 核心修复：将 KouyuPage 改为纯客户端渲染，避免构建时路径分析 ★★★
+const KouyuPage = dynamic(() => import('@/components/kouyu'), { 
+    ssr: false,
+    loading: () => <div className="p-10 text-center text-gray-500">正在加载口语模块...</div>
+})
+
 const HskContentBlock = dynamic(() => import('@/components/HskContentBlock'), { ssr: false })
 const GlosbeSearchCard = dynamic(() => import('@/components/GlosbeSearchCard'), { ssr: false })
-// const ShortSentenceCard = dynamic(() => import('@/components/ShortSentenceCard'), { ssr: false })
+const ShortSentenceCard = dynamic(() => import('@/components/ShortSentenceCard'), { ssr: false })
 const WordCard = dynamic(() => import('@/components/WordCard'), { ssr: false })
 
 const isBrowser = typeof window !== 'undefined';
@@ -419,6 +422,7 @@ const LayoutIndex = props => {
 
             <div ref={scrollableContainerRef} className='absolute inset-0 z-20 overflow-y-auto overscroll-y-contain custom-scrollbar'>
                 <div className='h-[40vh] flex-shrink-0' />
+                {/* 这里的 pb-6 确保了底部没有多余的空白 */}
                 <div className='relative bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl pb-6 min-h-[calc(60vh+1px)]'>
                     <div className='bg-violet-50 dark:bg-gray-800 rounded-t-2xl'>
                         <div className='pt-6'>
@@ -677,4 +681,4 @@ const LayoutTagIndex = props => {
 export {
   Layout404, LayoutArchive, LayoutBase, LayoutCategoryIndex, LayoutIndex,
   LayoutPostList, LayoutSearch, LayoutSlug, LayoutTagIndex, CONFIG as THEME_CONFIG
-}
+                                                                                             }
