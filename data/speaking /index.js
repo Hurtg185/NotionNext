@@ -1,5 +1,7 @@
-// 1. 引入您所有的口语数据文件
-// 请根据您实际的文件名添加或修改
+// data/speaking/index.js
+
+// 1. 引入所有数据文件
+// 如果您有新文件，请在这里加一行 import
 import dazhaohu from './dazhaohu';
 import diancan from './diancan';
 import chucimian from './chucimian';
@@ -13,9 +15,9 @@ import jiezhang from './jiezhang';
 import dache from './dache';
 import wenlu from './wenlu';
 
-// 2. 将它们导出为一个总对象
-// 键名 (key) 必须对应您 speaking-structure.js 里写的 "file" 字段
-export const SPEAKING_DATA_MAP = {
+// 2. 导出映射表
+// 这里的 Key (左边的名字) 必须对应您 speaking-structure.js 里的 `file` 字段
+export const SPEAKING_DATA = {
   dazhaohu,
   diancan,
   chucimian,
