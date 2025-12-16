@@ -81,7 +81,7 @@ import HskContentBlock from '@/components/HskContentBlock'
 
 // Dynamically imported heavy components
 const GlosbeSearchCard = dynamic(() => import('@/components/GlosbeSearchCard'), { ssr: false })
-const ShortSentenceCard = dynamic(() => import('@/components/ShortSentenceCard'), { ssr: false })
+//const ShortSentenceCard = dynamic(() => import('@/components/ShortSentenceCard'), { ssr: false })
 const WordCard = dynamic(() => import('@/components/WordCard'), { ssr: false })
 
 const isBrowser = typeof window !== 'undefined';
