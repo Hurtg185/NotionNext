@@ -81,6 +81,7 @@ import { Style } from './style'
 import PinyinContentBlock from '@/components/PinyinContentBlock'
 import WordsContentBlock from '@/components/WordsContentBlock'
 // import KouyuPage from '@/components/kouyu'
+import HskContentBlock from '@/components/HskContentBlock'
 
 // Dynamically imported heavy components for the new homepage
 const GlosbeSearchCard = dynamic(() => import('@/components/GlosbeSearchCard'), { ssr: false })
@@ -500,7 +501,7 @@ const LayoutIndex = props => {
                             {activeTabKey === 'words' && <WordsContentBlock />}
                             {activeTabKey === 'speaking' && <KouyuPage />}
                             {/* HSK 和 语法 的内容组件可以按需添加 */}
-                            {/* {activeTabKey === 'hsk' && <HskContentBlock />} */}
+                            {activeTabKey === 'hsk' && <HskContentBlock />}
                             {/* {activeTabKey === 'grammar' && <GrammarContentBlock />} */}
                         </div>
                     </main>
