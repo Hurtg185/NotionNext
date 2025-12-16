@@ -1,304 +1,350 @@
-import { useState, useMemo, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { pinyin } from 'pinyin-pro';
-import { ChevronLeft, Search, Mic, Loader2, Volume2, Settings2, X, PlayCircle } from 'lucide-react';
 
-// 引入结构配置
+import { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom'; // 引入 Portal
+import { pinyin } from 'pinyin-pro';
+import { ChevronLeft, Search, Languages, Mic, Loader2, Volume2, Settings2, PlayCircle, StopCircle, X } from 'lucide-react';
 import { speakingCategories } from '@/data/speaking-structure';
 
-// ★★★ 核心修改：显式引入所有数据文件，不要让 Webpack 去猜路径 ★★★
-// 假设您的文件在 data/speaking/ 下，请确保文件名对应
-import dazhaohu from '@/data/speaking/dazhaohu';
-import diancan from '@/data/speaking/diancan';
-import chucimian from '@/data/speaking/chucimian';
-// import jiubiechongfeng from '@/data/speaking/jiubiechongfeng';
-// import guanxinyuhuiying from '@/data/speaking/guanxinyuhuiying';
-import zhaorenshuohua from '@/data/speaking/zhaorenshuohua';
-import dianhuayuxinxi from '@/data/speaking/dianhuayuxinxi';
-import jieshuyugaobie from '@/data/speaking/jieshuyugaobie';
-import yudingzuowei from '@/data/speaking/yudingzuowei';
-import jiezhang from '@/data/speaking/jiezhang';
-import dache from '@/data/speaking/dache';
-import wenlu from '@/data/speaking/wenlu';
-
-// 建立映射表
-const ALL_DATA = {
-  dazhaohu, diancan, chucimian, jiubiechongfeng, guanxinyuhuiying,
-  zhaorenshuohua, dianhuayuxinxi, jieshuyugaobie, yudingzuowei,
-  jiezhang, dache, wenlu
+// --- TTS 模块 (保持不变) ---
+const ttsCache = new Map();
+const getTTSAudio = async (text, voice, rate = 0) => {
+    const cacheKey = `${text}|${voice}|${rate}`;
+    if (ttsCache.has(cacheKey)) return ttsCache.get(cacheKey);
+    try {
+        const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${voice}&r=${rate}`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('TTS API Error');
+        const blob = await response.blob();
+        const audio = new Audio(URL.createObjectURL(blob));
+        ttsCache.set(cacheKey, audio);
+        return audio;
+    } catch (e) { console.error(`获取TTS失败: "${text}"`, e); return null; }
 };
 
-// --- 全局音频控制器 ---
-const GlobalAudioController = {
-    currentAudio: null,
-    currentId: null,
-
-    stop() {
-        if (this.currentAudio) {
-            this.currentAudio.pause();
-            this.currentAudio.currentTime = 0;
-            this.currentAudio = null;
-            this.currentId = null;
-        }
-    },
-
-    play(url, id) {
-        return new Promise((resolve, reject) => {
-            if (this.currentId !== id) {
-                this.stop();
-            } else if (this.currentAudio) {
-                this.currentAudio.pause();
-            }
-
-            const audio = new Audio(url);
-            this.currentAudio = audio;
-            this.currentId = id;
-            audio.preload = 'auto';
-
-            audio.onended = () => { if (this.currentId === id) resolve(); };
-            audio.onerror = (e) => reject(e);
-
-            const playPromise = audio.play();
-            if (playPromise !== undefined) {
-                playPromise.catch(error => reject(error));
-            }
-        });
-    }
-};
-
-// --- iOS 风格开关 ---
-const ToggleSwitch = ({ label, checked, onChange, activeColor = "bg-blue-500" }) => (
-    <div className="flex items-center justify-between py-3">
-        <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{label}</span>
-        <button 
-            onClick={() => onChange(!checked)}
-            className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors duration-300 focus:outline-none ${checked ? activeColor : 'bg-gray-200 dark:bg-gray-600'}`}
-        >
-            <span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-lg transition duration-300 ease-spring ${checked ? 'translate-x-7' : 'translate-x-1'}`} />
-        </button>
-    </div>
-);
-
-// --- 全屏传送门 ---
+// --- 全屏传送门组件 (关键修改：实现真全屏) ---
 const FullScreenPortal = ({ children }) => {
     const [mounted, setMounted] = useState(false);
     useEffect(() => {
         setMounted(true);
+        // 锁定背景滚动
         document.body.style.overflow = 'hidden';
         return () => { document.body.style.overflow = ''; };
     }, []);
+    
     if (!mounted || typeof document === 'undefined') return null;
+    
     return createPortal(
-        <div className="fixed inset-0 z-[99999] bg-gray-50 dark:bg-[#121212] flex flex-col animate-in slide-in-from-right duration-300">
+        <div className="fixed inset-0 z-[99999] bg-gray-50 dark:bg-gray-900 flex flex-col animate-in fade-in duration-200">
             {children}
         </div>,
         document.body
     );
 };
 
-// --- 短句列表页面 ---
-const PhraseListPage = ({ phrases, title, onBack }) => {
-    const [chineseRate, setChineseRate] = useState(-30); 
-    const [burmeseRate, setBurmeseRate] = useState(-20);
-    const [readChinese, setReadChinese] = useState(true);
-    const [readBurmese, setReadBurmese] = useState(true);
+// --- 短句列表页面组件 ---
+const PhraseListPage = ({ phrases, category, subcategory, onBack }) => {
+    // 音频设置状态
+    const [isReadingChinese, setIsReadingChinese] = useState(true);
+    const [isReadingBurmese, setIsReadingBurmese] = useState(true);
+    const [chineseRate, setChineseRate] = useState(0);
+    const [burmeseRate, setBurmeseRate] = useState(-0.3);
     const [showSettings, setShowSettings] = useState(false);
-    const [playingId, setPlayingId] = useState(null);
+    
+    // 播放状态
+    const [playingId, setPlayingId] = useState(null); // 当前正在播放的卡片ID
 
-    useEffect(() => {
-        const pushState = () => window.history.pushState({ panel: 'list' }, '', window.location.pathname + '#list');
-        pushState();
-        const handlePop = () => onBack();
-        window.addEventListener('popstate', handlePop);
-        return () => {
-            window.removeEventListener('popstate', handlePop);
-            GlobalAudioController.stop();
-        };
-    }, [onBack]);
+    // 处理数据：拼音符号化
+    const processedPhrases = useMemo(() => phrases.map(phrase => ({
+        ...phrase,
+        pinyin: pinyin(phrase.chinese, { toneType: 'symbol', v: true, nonZh: 'consecutive' }),
+    })), [phrases]);
 
-    const processedData = useMemo(() => {
-        if (!phrases || !Array.isArray(phrases)) return [];
-        return phrases.map(p => ({
-            ...p,
-            pinyin: pinyin(p.chinese, { toneType: 'symbol', v: true, nonZh: 'consecutive' })
-        }));
-    }, [phrases]);
+    // 播放逻辑
+    const handleCardClick = async (phrase) => {
+        // 如果点击的是当前正在播放的，则停止（可选逻辑，这里简单处理为重播或忽略）
+        if (playingId === phrase.id) return;
 
-    const handlePlay = async (item) => {
-        if (playingId === item.id) {
-            GlobalAudioController.stop();
-            setPlayingId(null);
-            return;
-        }
-
-        setPlayingId(item.id);
-
+        setPlayingId(phrase.id);
         try {
-            if (readChinese) {
-                const rateVal = chineseRate <= -100 ? -95 : chineseRate;
-                const cnUrl = `https://t.leftsite.cn/tts?t=${encodeURIComponent(item.chinese)}&v=zh-CN-XiaoyanNeural&r=${rateVal}%`;
-                await GlobalAudioController.play(cnUrl, item.id);
+            if (isReadingChinese) {
+                const audioZh = await getTTSAudio(phrase.chinese, 'zh-CN-XiaoyanNeural', chineseRate);
+                if (audioZh) {
+                    await new Promise(resolve => { 
+                        audioZh.onended = resolve; 
+                        audioZh.play().catch(() => resolve()); // 捕获播放错误防止卡死
+                    });
+                }
             }
-
-            if (GlobalAudioController.currentId !== item.id) return;
-            if (readChinese && readBurmese) await new Promise(r => setTimeout(r, 400));
-            if (GlobalAudioController.currentId !== item.id) return;
-
-            if (readBurmese) {
-                const rateVal = burmeseRate <= -100 ? -95 : burmeseRate;
-                const myUrl = `https://t.leftsite.cn/tts?t=${encodeURIComponent(item.burmese)}&v=my-MM-ThihaNeural&r=${rateVal}%`;
-                await GlobalAudioController.play(myUrl, item.id);
+            if (isReadingBurmese) {
+                // 中文读完稍微停顿
+                if (isReadingChinese) await new Promise(r => setTimeout(r, 300));
+                
+                const audioMy = await getTTSAudio(phrase.burmese, 'my-MM-ThihaNeural', burmeseRate);
+                if (audioMy) {
+                    await new Promise(resolve => { 
+                        audioMy.onended = resolve; 
+                        audioMy.play().catch(() => resolve());
+                    });
+                }
             }
-        } catch (e) {
-            console.error(e);
+        } catch (error) {
+            console.error("播放出错", error);
         } finally {
-            if (GlobalAudioController.currentId === item.id) {
-                setPlayingId(null);
-                GlobalAudioController.currentId = null;
-            }
+            setPlayingId(null); // 播放结束，重置状态
         }
     };
 
     return (
         <FullScreenPortal>
-            <div className="flex-none bg-white/90 dark:bg-[#1e1e1e]/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 z-50 sticky top-0">
-                <div className="px-4 h-14 flex items-center justify-between">
-                    <button onClick={() => window.history.back()} className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                        <ChevronLeft size={24} className="text-gray-700 dark:text-gray-200"/>
+            {/* 顶部固定导航栏 */}
+            <div className="flex-none bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 z-10 shadow-sm">
+                <div className="px-4 py-3 flex items-center justify-between">
+                    <button 
+                        onClick={onBack} 
+                        className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 active:scale-95 transition-all text-gray-600 dark:text-gray-300"
+                    >
+                        <ChevronLeft size={28} />
                     </button>
-                    <h1 className="font-bold text-lg text-gray-800 dark:text-white truncate max-w-[200px]">{title}</h1>
-                    <button onClick={() => setShowSettings(!showSettings)} className={`p-2 -mr-2 rounded-full transition-colors ${showSettings ? 'bg-blue-50 text-blue-600' : 'text-gray-600 dark:text-gray-400'}`}>
-                        <Settings2 size={24}/>
-                    </button>
-                </div>
-                
-                <div className={`overflow-hidden transition-all duration-300 ease-in-out bg-white dark:bg-[#1e1e1e] border-b dark:border-gray-800 ${showSettings ? 'max-h-96 opacity-100 shadow-lg' : 'max-h-0 opacity-0'}`}>
-                    <div className="p-6 space-y-6">
-                        <div className="grid grid-cols-2 gap-8">
-                            <ToggleSwitch label="朗读中文" checked={readChinese} onChange={setReadChinese} activeColor="bg-blue-600" />
-                            <ToggleSwitch label="朗读缅文" checked={readBurmese} onChange={setReadBurmese} activeColor="bg-green-600" />
-                        </div>
-                        {[
-                            { label: '中文语速', val: chineseRate, set: setChineseRate, color: 'accent-blue-600' },
-                            { label: '缅文语速', val: burmeseRate, set: setBurmeseRate, color: 'accent-green-600' }
-                        ].map((s, i) => (
-                            <div key={i}>
-                                <div className="flex justify-between mb-2 text-xs font-bold text-gray-500 uppercase">
-                                    <span>{s.label}</span>
-                                    <span>{s.val > 0 ? `+${s.val}` : s.val}%</span>
-                                </div>
-                                <input 
-                                    type="range" min="-100" max="50" step="5"
-                                    value={s.val} onChange={e => s.set(Number(e.target.value))}
-                                    className={`w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer ${s.color}`}
-                                />
-                            </div>
-                        ))}
+                    
+                    <div className="flex flex-col items-center">
+                        <h1 className="font-bold text-lg text-gray-800 dark:text-white">{subcategory.name}</h1>
+                        <span className="text-xs text-gray-500">{category.category} · {processedPhrases.length}句</span>
                     </div>
+
+                    <button 
+                        onClick={() => setShowSettings(!showSettings)} 
+                        className={`p-2 -mr-2 rounded-full transition-colors ${showSettings ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}`}
+                    >
+                        <Settings2 size={24} />
+                    </button>
                 </div>
+
+                {/* 设置面板 (可折叠) */}
+                {showSettings && (
+                    <div className="px-4 pb-4 pt-2 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700 animate-in slide-in-from-top-2 duration-200">
+                         <div className="flex gap-3 mb-4">
+                            <button 
+                                onClick={() => setIsReadingChinese(!isReadingChinese)} 
+                                className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-all flex items-center justify-center gap-2 ${isReadingChinese ? 'bg-blue-500 text-white border-blue-500 shadow-md shadow-blue-200' : 'bg-white text-gray-600 border-gray-200'}`}
+                            >
+                                <Languages size={16}/> 中文朗读
+                            </button>
+                            <button 
+                                onClick={() => setIsReadingBurmese(!isReadingBurmese)} 
+                                className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-all flex items-center justify-center gap-2 ${isReadingBurmese ? 'bg-green-500 text-white border-green-500 shadow-md shadow-green-200' : 'bg-white text-gray-600 border-gray-200'}`}
+                            >
+                                <Mic size={16}/> 缅文朗读
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-6">
+                            <div>
+                                <div className="flex justify-between mb-1.5">
+                                    <label className="text-xs font-medium text-gray-500">中文语速</label>
+                                    <span className="text-xs text-blue-500 font-bold">{chineseRate}</span>
+                                </div>
+                                <input type="range" min="-0.5" max="0.5" step="0.1" value={chineseRate} onChange={e => setChineseRate(parseFloat(e.target.value))} className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                            </div>
+                            <div>
+                                <div className="flex justify-between mb-1.5">
+                                    <label className="text-xs font-medium text-gray-500">缅文语速</label>
+                                    <span className="text-xs text-green-500 font-bold">{burmeseRate}</span>
+                                </div>
+                                <input type="range" min="-0.5" max="0.5" step="0.1" value={burmeseRate} onChange={e => setBurmeseRate(parseFloat(e.target.value))} className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-500" />
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24 bg-gray-50 dark:bg-[#121212]">
-                {processedData.map((item) => {
-                    const isPlaying = playingId === item.id;
+            {/* 列表内容区 (可滚动) */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-20 bg-gray-50 dark:bg-gray-900">
+                {processedPhrases.map((phrase) => {
+                    const isPlaying = playingId === phrase.id;
                     return (
                         <div 
-                            key={item.id} 
-                            onClick={() => handlePlay(item)}
+                            key={phrase.id} 
+                            onClick={() => handleCardClick(phrase)}
                             className={`
-                                relative p-5 rounded-2xl bg-white dark:bg-[#1e1e1e]
-                                border transition-all duration-200 cursor-pointer select-none
+                                relative bg-white dark:bg-gray-800 rounded-2xl p-6 
+                                shadow-sm transition-all duration-300 cursor-pointer border-2
+                                flex flex-col items-center text-center
                                 ${isPlaying 
-                                    ? 'border-blue-500 shadow-xl ring-2 ring-blue-500/10 dark:shadow-none' 
-                                    : 'border-transparent shadow-sm hover:border-gray-200 dark:hover:border-gray-700'
+                                    ? 'border-blue-400 dark:border-blue-500 shadow-lg scale-[1.01]' 
+                                    : 'border-transparent hover:border-gray-100 dark:hover:border-gray-700 active:scale-[0.98]'
                                 }
                             `}
                         >
-                            <div className={`absolute top-4 right-4 p-2 rounded-full transition-all ${isPlaying ? 'bg-blue-50 text-blue-600' : 'text-gray-300 dark:text-gray-600'}`}>
-                                {isPlaying ? <Loader2 size={20} className="animate-spin" /> : <PlayCircle size={20} />}
+                            {/* 播放状态图标 */}
+                            <div className={`absolute top-4 right-4 transition-colors duration-300 ${isPlaying ? 'text-blue-500' : 'text-gray-200 dark:text-gray-700'}`}>
+                                {isPlaying ? <Loader2 size={20} className="animate-spin" /> : <Volume2 size={20} />}
                             </div>
 
-                            <div className="text-xs font-medium text-gray-400 dark:text-gray-500 mb-2 font-mono">
-                                {item.pinyin}
+                            {/* 1. 拼音 (上方) */}
+                            <div className="text-sm text-gray-400 dark:text-gray-500 font-sans mb-1 tracking-wider">
+                                {phrase.pinyin}
                             </div>
-                            <h3 className="text-xl font-extrabold text-gray-800 dark:text-gray-100 mb-3 pr-10 leading-snug">
-                                {item.chinese}
+                            
+                            {/* 2. 中文 (居中, 加大) */}
+                            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 leading-relaxed">
+                                {phrase.chinese}
                             </h3>
-                            <p className="text-lg text-blue-600 dark:text-blue-400 font-medium mb-3 leading-loose font-burmese">
-                                {item.burmese}
+                            
+                            {/* 3. 缅文 (下方, 蓝色) */}
+                            <p className="text-lg text-blue-600 dark:text-blue-400 font-medium mb-3 leading-relaxed">
+                                {phrase.burmese}
                             </p>
-                            {item.xieyin && (
-                                <div className="inline-block px-3 py-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 rounded-lg">
-                                    <span className="text-xs font-bold text-amber-600 dark:text-amber-500">
-                                        谐音: {item.xieyin}
-                                    </span>
+                            
+                            {/* 4. 谐音 (底部, 黄色背景高亮) */}
+                            {phrase.xieyin && (
+                                <div className="inline-block px-4 py-1.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/30 rounded-full">
+                                    <p className="text-sm font-medium text-amber-700 dark:text-amber-500">
+                                        {phrase.xieyin}
+                                    </p>
                                 </div>
                             )}
                         </div>
-                    )
+                    );
                 })}
+                
+                <div className="h-10"></div> {/* 底部占位 */}
             </div>
         </FullScreenPortal>
     );
 };
 
-// --- 主页面 ---
+// --- 主页/分类列表视图 ---
+const MainView = ({ onSubcategoryClick }) => {
+    return (
+        <div className="space-y-6 pb-10">
+            {speakingCategories.map(category => (
+                <div key={category.category} className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center gap-3 mb-4 border-b border-gray-100 dark:border-gray-700 pb-3">
+                        <span className="text-3xl filter drop-shadow-sm">{category.icon}</span>
+                        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">{category.category}</h2>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        {category.subcategories.map(subcategory => (
+                            <button 
+                                key={subcategory.name} 
+                                onClick={() => onSubcategoryClick(category, subcategory)}
+                                className="px-3 py-4 text-sm font-bold text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-blue-500 hover:text-white dark:hover:bg-blue-600 hover:shadow-md transition-all duration-200 text-center border border-gray-100 dark:border-gray-700 truncate"
+                            >
+                                {subcategory.name}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+};
+
+// --- 根组件 KouyuPage ---
 export default function KouyuPage() {
-    const [activeSub, setActiveSub] = useState(null);
-    const [activeCat, setActiveCat] = useState(null);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [searchResults, setSearchResults] = useState([]);
-
-    const handleSubcategoryClick = (category, subcategory) => {
-        // 直接从映射表里取，不发请求，不动态导入，绝对稳
-        const data = ALL_DATA[subcategory.file];
-        
-        if (data) {
-            setActiveCat(category);
-            setActiveSub({ ...subcategory, data });
-        } else {
-            console.error(`Missing data for file key: ${subcategory.file}`);
-            alert(`找不到数据文件: ${subcategory.file}.js`);
-        }
-    };
-
-    useEffect(() => {
-        if (!searchTerm) {
-            setSearchResults([]);
-            return;
-        }
-        const allData = Object.values(ALL_DATA).flat();
-        const lowerTerm = searchTerm.toLowerCase();
-        
-        const results = allData.filter(item => 
-            (item.chinese && item.chinese.includes(lowerTerm)) || 
-            (item.burmese && item.burmese.includes(lowerTerm))
-        );
-        setSearchResults(results);
-    }, [searchTerm]);
-
+    const [view, setView] = useState('main'); 
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [selectedSubcategory, setSelectedSubcategory] = useState(null);
-    const [view, setView] = useState('main');
+    const [phrases, setPhrases] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+    
+    // 搜索
+    const [searchTerm, setSearchTerm] = useState('');
     const [allPhrasesForSearch, setAllPhrasesForSearch] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
 
+    const handleSubcategoryClick = async (category, subcategory) => {
+        setIsLoading(true);
+        // 这里设置为 phrases 视图，但在 renderContent 中会通过 Portal 渲染覆盖全屏
+        setView('phrases');
+        setSelectedCategory(category);
+        setSelectedSubcategory(subcategory);
+        try {
+            const module = await import(`@/data/speaking/${subcategory.file}.js`);
+            setPhrases(module.default);
+        } catch (e) {
+            console.error("加载失败:", e);
+            setPhrases([]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // 返回主界面：重置所有状态
     const handleBackToMain = () => {
-        setActiveSub(null);
-        setSearchTerm('');
-        GlobalAudioController.stop();
+        setView('main');
+        setSelectedCategory(null);
+        setSelectedSubcategory(null);
+        setPhrases([]);
+    };
+
+    // 搜索逻辑
+    useEffect(() => {
+        const loadSearchData = async () => {
+            if (searchTerm && allPhrasesForSearch.length === 0) {
+                setIsSearching(true);
+                const allPromises = speakingCategories.flatMap(cat => 
+                    cat.subcategories.map(sub => 
+                        import(`@/data/speaking/${sub.file}.js`).then(m => m.default).catch(() => [])
+                    )
+                );
+                const results = (await Promise.all(allPromises)).flat();
+                setAllPhrasesForSearch(results);
+                setIsSearching(false);
+            }
+        };
+        if(searchTerm) loadSearchData();
+    }, [searchTerm, allPhrasesForSearch]);
+
+    const searchResults = useMemo(() => {
+        if (!searchTerm) return [];
+        const term = searchTerm.toLowerCase();
+        return allPhrasesForSearch.filter(p => 
+            p.chinese.includes(term) || p.burmese.includes(term)
+        );
+    }, [searchTerm, allPhrasesForSearch]);
+
+    const renderContent = () => {
+        if (isLoading) {
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
+                    <Loader2 className="animate-spin text-blue-500" size={40} />
+                </div>
+            );
+        }
+
+        // 搜索结果页 (使用相同的 PhraseListPage，但参数略有不同)
+        if (searchTerm) {
+            return isSearching 
+                ? <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-blue-500" /></div>
+                : <PhraseListPage 
+                    phrases={searchResults} 
+                    category={{category: '搜索结果'}} 
+                    subcategory={{name: `"${searchTerm}"`}} 
+                    onBack={() => setSearchTerm('')} 
+                  />;
+        }
+        
+        // 短句列表页 (Portal 渲染)
+        if (view === 'phrases') {
+            return <PhraseListPage phrases={phrases} category={selectedCategory} subcategory={selectedSubcategory} onBack={handleBackToMain} />;
+        }
+
+        // 默认显示分类列表
+        return <MainView onSubcategoryClick={handleSubcategoryClick} />;
     };
 
     return (
         <div className="w-full max-w-2xl mx-auto min-h-screen bg-gray-50/50 dark:bg-gray-900">
-             {!activeSub && !searchTerm && (
+             {/* 仅在主页显示标题 */}
+             {view === 'main' && !searchTerm && (
                 <div className='text-center pt-8 pb-4 px-4'>
                     <h1 className='text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight'>口语练习</h1>
                     <p className='mt-2 text-sm text-gray-500 dark:text-gray-400'>地道中文口语 · 缅文谐音助记</p>
                 </div>
             )}
             
-            {!activeSub && (
+            {/* 仅在主页显示搜索框 */}
+            {view === 'main' && (
                 <div className="sticky top-0 z-10 px-4 pb-2 bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur-sm pt-2">
                     <div className="relative group">
                         <input 
@@ -320,47 +366,9 @@ export default function KouyuPage() {
                 </div>
             )}
             
-            <div className="px-4">
-                {searchTerm && (
-                    <PhraseListPage 
-                        phrases={searchResults} 
-                        title={`"${searchTerm}" 的结果`} 
-                        onBack={() => setSearchTerm('')} 
-                    />
-                )}
-
-                {!searchTerm && activeSub && (
-                    <PhraseListPage 
-                        phrases={activeSub.data} 
-                        title={activeSub.name} 
-                        onBack={handleBackToMain} 
-                    />
-                )}
-
-                {!searchTerm && !activeSub && (
-                    <div className="space-y-6 pb-10">
-                        {speakingCategories.map(category => (
-                            <div key={category.category} className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
-                                <div className="flex items-center gap-3 mb-4 border-b border-gray-100 dark:border-gray-700 pb-3">
-                                    <span className="text-3xl filter drop-shadow-sm">{category.icon}</span>
-                                    <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">{category.category}</h2>
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    {category.subcategories.map(subcategory => (
-                                        <button 
-                                            key={subcategory.name} 
-                                            onClick={() => handleSubcategoryClick(category, subcategory)}
-                                            className="px-3 py-4 text-sm font-bold text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-blue-500 hover:text-white dark:hover:bg-blue-600 hover:shadow-md transition-all duration-200 text-center border border-gray-100 dark:border-gray-700 truncate"
-                                        >
-                                            {subcategory.name}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
+            <div className={view === 'main' ? 'px-4' : ''}>
+                {renderContent()}
             </div>
         </div>
     );
-                            }
+                              }
