@@ -4,12 +4,12 @@ import WordCard from '../../components/WordCard'; // 路径可能需要根据你
 
 // --- 数据中心：一次性导入所有单词数据 ---
 // 确保这些 JSON 文件都存在于你的 data/hsk 目录下
-// import hsk1Words from '../../data/hsk/hsk1.json';
-// import hsk2Words from '../../data/hsk/hsk2.json';
-// import hsk3Words from '../../../data/hsk/hsk3.json';
-// import hsk4Words from '../../../data/hsk/hsk4.json';
-// import hsk5Words from '../../../data/hsk/hsk5.json';
-// import hsk6Words from '../../../data/hsk/hsk6.json';
+import hsk1Words from '../../data/hsk/hsk1.json';
+import hsk2Words from '../../data/hsk/hsk2.json';
+import hsk3Words from '../../../data/hsk/hsk3.json';
+import hsk4Words from '../../../data/hsk/hsk4.json';
+import hsk5Words from '../../../data/hsk/hsk5.json';
+import hsk6Words from '../../../data/hsk/hsk6.json';
 
 // 创建一个映射，方便根据 URL 中的 level 动态查找数据
 const hskWordsData = {
