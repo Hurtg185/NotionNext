@@ -7,4 +7,4 @@ pages_build_output_dir = ".next"
 [[d1_databases]]
 binding = "DB"
 database_name = "hsk-db"
-database_id = "你的-D1-数据库-ID" # 运行 npx wrangler d1 create hsk-db 获取
+database_id = "48979418-85fb-4b67-9f1f-d2c709102e4" # 运行 npx wrangler d1 create hsk-db 获取
