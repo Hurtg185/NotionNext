@@ -1,9 +1,10 @@
-export const hskLessonData = {
+// 注意：文件名现在是 1.js，不再是 1.json
+export default {
   id: "hsk1_01",
   title: "第1课：你是哪国人？",
   blocks: [
     // ==========================================
-    // 1. 单词学习 (Word Study) - 已适配新版播放器字段
+    // 1. 单词学习 (Word Study)
     // ==========================================
     {
       type: "word_study",
@@ -12,14 +13,14 @@ export const hskLessonData = {
         words: [
           {
             id: 1,
-            hsk_level: 1, // 必须：用于 R2 音频
+            hsk_level: 1, 
             word: "你好",
             pinyin: "nǐ hǎo",
-            decomposition: ["你", "好"], // 必须：用于拆解显示
+            decomposition: ["你", "好"], 
             similar_sound: "尼好",
             burmese: "မင်္ဂလာပါ",
-            definition: "Hello / Hi", // 英文定义
-            explanation: "用于打招呼，任何时间都可以说。", // 中文详解
+            definition: "Hello / Hi", 
+            explanation: "用于打招呼，任何时间都可以说。", 
             example: "你好！你是老师吗？",
             example_burmese: "မင်္ဂလာပါ၊ သင်က ဆရာလား။",
             example2: "老师，你好！",
@@ -122,18 +123,16 @@ export const hskLessonData = {
     {
       type: "choice",
       content: {
-        // 注意：question 变成了对象结构
         question: {
           text: "How do you say 'China' in Chinese?",
-          imageUrl: null // 无图
+          imageUrl: null 
         },
         options: [
           { id: "opt1", text: "美国 (Měi guó)" },
           { id: "opt2", text: "老师 (Lǎo shī)" },
-          { id: "opt3", text: "中国 (Zhōng guó)" }, // 正确
+          { id: "opt3", text: "中国 (Zhōng guó)" }, 
           { id: "opt4", text: "你好 (Nǐ hǎo)" }
         ],
-        // 注意：correctAnswer 是数组，对应 option 的 id
         correctAnswer: ["opt3"]
       }
     },
@@ -144,12 +143,11 @@ export const hskLessonData = {
       content: {
         question: {
           text: "这张图片是什么职业？(What is this person's job?)",
-          // 这是一个老师的图片链接
           imageUrl: "https://cdn-icons-png.flaticon.com/512/1995/1995574.png"
         },
         options: [
           { id: "opt1", text: "学生 (Xué sheng)" },
-          { id: "opt2", text: "老师 (Lǎo shī)" }, // 正确
+          { id: "opt2", text: "老师 (Lǎo shī)" }, 
           { id: "opt3", text: "医生 (Yī shēng)" },
           { id: "opt4", text: "人 (Rén)" }
         ],
@@ -168,7 +166,7 @@ export const hskLessonData = {
         options: [
           { id: "opt1", text: "是 (shì)" },
           { id: "opt2", text: "不 (bù)" },
-          { id: "opt3", text: "不是 (bú shì)" }, // 正确
+          { id: "opt3", text: "不是 (bú shì)" }, 
           { id: "opt4", text: "哪 (nǎ)" }
         ],
         correctAnswer: ["opt3"]
@@ -193,7 +191,7 @@ export const hskLessonData = {
             id: "opt2", 
             text: "USA", 
             imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Flag_of_the_United_States.svg/200px-Flag_of_the_United_States.svg.png" 
-          }, // 正确
+          }, 
           { 
             id: "opt3", 
             text: "UK", 
