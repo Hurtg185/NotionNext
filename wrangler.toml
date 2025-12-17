@@ -1,0 +1,10 @@
+name = "my-hsk-platform"
+compatibility_date = "2024-06-01"
+pages_build_output_dir = ".next"
+
+# ⚠️ 关键：绑定 D1 数据库
+# binding 名称必须叫 "DB"，因为后面的代码里我们用的是 env.DB
+[[d1_databases]]
+binding = "DB"
+database_name = "hsk-db"
+database_id = "你的-D1-数据库-ID" # 运行 npx wrangler d1 create hsk-db 获取
