@@ -2,13 +2,14 @@
  *   HEO 主题说明
  *  > 主题设计者 [张洪](https://zhheo.com/)
  *  > 主题开发者 [tangly1024](https://github.com/tangly1024)
- *  > 此文件已根据用户需求进行定制修改，整合了新的主页布局。
+ *  > 此文件已根据用户需求进行定制修改，整合了新的主页布局及 Cloudflare D1 权限系统。
  */
 
 // React & Next.js
 import { useRouter } from 'next/router'
 import { useEffect, useState, useRef, useCallback, Fragment } from 'react'
 import dynamic from 'next/dynamic'
+import Script from 'next/script' // <--- 新增：用于加载 Google 登录脚本
 
 // UI & Animation
 import { Transition, Dialog } from '@headlessui/react'
@@ -77,7 +78,6 @@ import SideRight from './components/SideRight'
 import { Style } from './style'
 
 // Custom Content Block Components for the new homepage
-// 请确保您在项目中创建了这些组件文件
 import PinyinContentBlock from '@/components/PinyinContentBlock'
 import WordsContentBlock from '@/components/WordsContentBlock'
 // import KouyuPage from '@/components/kouyu'
@@ -92,9 +92,10 @@ const WordCard = dynamic(() => import('@/components/WordCard'), { ssr: false })
 const isBrowser = typeof window !== 'undefined';
 
 // =================================================================================
-// ======================  辅助组件 (for new homepage)  ========================
+// ======================  辅助组件 & 工具函数  ========================
 // =================================================================================
 
+// 滚动条样式
 const CustomScrollbarStyle = () => (
     <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
@@ -104,9 +105,157 @@ const CustomScrollbarStyle = () => (
     `}</style>
 );
 
+// 激活码校验逻辑 (第一道防线)
+const validateActivationCode = (code) => {
+    if (!code) return { isValid: false, error: "请输入激活码" };
+    const trimmedCode = code.trim().toUpperCase();
+    
+    // 1. 核心标识检查
+    if (!trimmedCode.includes('-JHM-')) {
+        return { isValid: false, error: "格式错误 (缺少标识)" };
+    }
+    
+    const parts = trimmedCode.split('-');
+    if (parts.length < 3) {
+        return { isValid: false, error: "激活码不完整" };
+    }
+
+    // 2. 等级白名单检查
+    const VALID_LEVELS = ['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'H7-9'];
+    if (!VALID_LEVELS.includes(parts[0])) {
+        return { isValid: false, error: `不支持的等级: ${parts[0]}` };
+    }
+
+    return { isValid: true, level: parts[0] };
+};
+
+// =================================================================================
+// ======================  核心组件: 智能侧边栏 (HomeSidebar)  =====================
+// =================================================================================
+
 const HomeSidebar = ({ isOpen, onClose, sidebarX, isDragging }) => {
   const { isDarkMode, toggleDarkMode } = useGlobal();
   const sidebarWidth = 288;
+  const router = useRouter(); 
+
+  // --- 状态管理 ---
+  const [user, setUser] = useState(null);
+  const [code, setCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [isGoogleLoaded, setIsGoogleLoaded] = useState(false); // Google SDK 加载状态
+
+  // --- 1. 初始化：检查本地缓存 ---
+  useEffect(() => {
+    const cachedUser = localStorage.getItem('hsk_user');
+    if (cachedUser) {
+      try {
+        setUser(JSON.parse(cachedUser));
+      } catch (e) {
+        localStorage.removeItem('hsk_user');
+      }
+    }
+  }, []);
+
+  // --- 2. Google 登录回调 ---
+  const handleGoogleCallback = async (response) => {
+    try {
+      // 请求后端验证 Token 并获取/注册用户信息
+      const res = await fetch('/api/verify-google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: response.credential }),
+      });
+      
+      if (!res.ok) throw new Error('Login failed');
+      
+      const userData = await res.json();
+      // 登录成功：更新状态 + 写入缓存
+      setUser(userData);
+      localStorage.setItem('hsk_user', JSON.stringify(userData));
+      setMsg('');
+    } catch (err) {
+      console.error(err);
+      setMsg('登录失败，请刷新重试');
+    }
+  };
+
+  // --- 3. 渲染 Google 按钮 ---
+  useEffect(() => {
+    // 仅在 SDK 加载完成、用户未登录且侧边栏打开时渲染按钮
+    if (window.google && !user && isOpen) {
+      try {
+        window.google.accounts.id.initialize({
+          client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID, // ⚠️ 确保 .env.local 已配置
+          callback: handleGoogleCallback,
+          auto_select: false,
+        });
+        window.google.accounts.id.renderButton(
+          document.getElementById('google-btn-container'),
+          { 
+              theme: isDarkMode ? 'filled_black' : 'outline', 
+              size: 'large', 
+              width: '240',
+              shape: 'pill'
+          }
+        );
+      } catch (e) {
+        console.error("Google button render error:", e);
+      }
+    }
+  }, [user, isOpen, isDarkMode, isGoogleLoaded]);
+
+  // --- 4. 激活逻辑 (省流核心) ---
+  const handleActivate = async () => {
+    setMsg('');
+    
+    // [省流] 前端 JS 纯计算校验，不符合规则坚决不发请求
+    const validation = validateActivationCode(code);
+    if (!validation.isValid) {
+      setMsg(`❌ ${validation.error}`);
+      return;
+    }
+
+    // [省流] 检查本地已拥有的权限
+    if (user.unlocked_levels && user.unlocked_levels.split(',').includes(validation.level)) {
+      setMsg(`⚠️ 您已经解锁了 ${validation.level}`);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/activate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email, code: code.trim().toUpperCase() }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setMsg(`❌ ${data.error}`);
+      } else {
+        setMsg(`✅ 成功解锁 ${data.level}！`);
+        setCode('');
+        // 更新用户信息
+        const updatedUser = { ...user, unlocked_levels: data.new_unlocked_levels };
+        setUser(updatedUser);
+        localStorage.setItem('hsk_user', JSON.stringify(updatedUser));
+      }
+    } catch (e) {
+      setMsg('❌ 网络错误');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- 5. 退出登录 ---
+  const handleLogout = () => {
+      localStorage.removeItem('hsk_user');
+      setUser(null);
+      setMsg('');
+      setCode('');
+  };
 
   const sidebarLinks = [
     { icon: <Settings size={20} />, text: '通用设置', href: '/settings' },
@@ -117,45 +266,118 @@ const HomeSidebar = ({ isOpen, onClose, sidebarX, isDragging }) => {
 
   return (
     <>
+      {/* 异步加载 Google Identity Services */}
+      <Script 
+        src="https://accounts.google.com/gsi/client" 
+        strategy="lazyOnload" 
+        onLoad={() => setIsGoogleLoaded(true)}
+      />
+
       <div
         className={`fixed inset-0 bg-black z-30 transition-opacity duration-300 ${isOpen ? 'opacity-50' : 'opacity-0 pointer-events-none'}`}
         onClick={onClose}
         style={{ opacity: isOpen ? 0.5 : (sidebarX + sidebarWidth) / sidebarWidth * 0.5 }}
       />
       <div
-        className={`fixed inset-y-0 left-0 w-72 bg-white/95 dark:bg-gray-900/95 backdrop-blur-lg shadow-2xl z-40 transform ${transitionClass}`}
+        className={`fixed inset-y-0 left-0 w-72 bg-white/95 dark:bg-gray-900/95 backdrop-blur-lg shadow-2xl z-40 transform ${transitionClass} overflow-y-auto custom-scrollbar`}
         style={{ transform: `translateX(${sidebarX}px)` }}
       >
-        <div className="flex flex-col h-full">
-            <div className="p-6 flex items-center gap-4 border-b dark:border-gray-700">
-                <UserCircle size={48} className="text-gray-500" />
-                <div>
-                    <p className="font-semibold text-lg text-gray-800 dark:text-gray-100">访客</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">欢迎来到本站</p>
-                </div>
+        <div className="flex flex-col min-h-full">
+            
+            {/* --- 用户信息区域 --- */}
+            <div className="p-6 border-b dark:border-gray-700 bg-gray-50/50 dark:bg-black/20">
+                {!user ? (
+                    /* 未登录视图 */
+                    <div className="flex flex-col items-center gap-4 animate-fade-in">
+                         <div className="flex items-center gap-3 w-full mb-2">
+                            <UserCircle size={48} className="text-gray-400" />
+                            <div>
+                                <p className="font-semibold text-lg text-gray-800 dark:text-gray-100">访客</p>
+                                <p className="text-xs text-gray-500">请登录以同步进度</p>
+                            </div>
+                        </div>
+                        {/* Google 按钮挂载点 */}
+                        <div id="google-btn-container" className="w-full flex justify-center min-h-[40px]"></div>
+                    </div>
+                ) : (
+                    /* 已登录视图 */
+                    <div className="flex flex-col gap-4 animate-fade-in">
+                        <div className="flex items-center gap-3">
+                            {user.avatar_url ? (
+                                <img src={user.avatar_url} alt="avatar" className="w-12 h-12 rounded-full border-2 border-white shadow-sm" />
+                            ) : (
+                                <UserCircle size={48} className="text-blue-500" />
+                            )}
+                            <div className="overflow-hidden">
+                                <p className="font-bold text-gray-800 dark:text-white truncate">{user.name}</p>
+                                <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                                   已解锁: {user.unlocked_levels || '无'}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* 激活码输入框 */}
+                        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-600 shadow-sm">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">课程激活</label>
+                            <input
+                                type="text"
+                                value={code}
+                                onChange={(e) => setCode(e.target.value)}
+                                placeholder="HSK1-JHM-XXXX"
+                                className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 text-sm mb-2 focus:ring-2 focus:ring-blue-500 outline-none uppercase transition-all"
+                            />
+                            <button
+                                onClick={handleActivate}
+                                disabled={loading || !code}
+                                className="w-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white py-1.5 rounded-lg text-sm font-medium transition-all disabled:bg-gray-400 disabled:scale-100"
+                            >
+                                {loading ? '验证中...' : '立即激活'}
+                            </button>
+                            {msg && <p className={`text-xs mt-2 font-medium text-center ${msg.includes('✅') ? 'text-green-600' : 'text-red-500'}`}>{msg}</p>}
+                        </div>
+                    </div>
+                )}
             </div>
+
+            {/* --- 菜单链接 --- */}
             <nav className="flex-grow p-4 space-y-2">
                 {sidebarLinks.map((link, index) => (
-                    <SmartLink key={index} href={link.href} className="flex items-center gap-4 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors">
+                    <SmartLink key={index} href={link.href} className="flex items-center gap-4 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                         {link.icon}
                         <span className="font-medium">{link.text}</span>
                     </SmartLink>
                 ))}
             </nav>
-            <div className="p-4 border-t dark:border-gray-700">
+            
+            {/* --- 底部操作 --- */}
+            <div className="p-4 border-t dark:border-gray-700 space-y-2">
                 <button
                     onClick={toggleDarkMode}
-                    className="w-full flex items-center gap-4 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors"
+                    className="w-full flex items-center gap-4 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                 >
                     {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-                    <span className="font-medium">{isDarkMode ? '切换到日间模式' : '切换到夜间模式'}</span>
+                    <span className="font-medium">{isDarkMode ? '切换日间模式' : '切换夜间模式'}</span>
                 </button>
+
+                {user && (
+                    <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-4 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    >
+                        <i className="fas fa-sign-out-alt w-5 text-center text-lg"></i>
+                        <span className="font-medium">退出登录</span>
+                    </button>
+                )}
             </div>
         </div>
       </div>
     </>
   );
 };
+
+// =================================================================================
+// ======================  其他辅助组件 (ActionButtons, ContactPanel)  =============
+// =================================================================================
 
 const ActionButtons = ({ onOpenFavorites, onOpenContact }) => {
   const actions = [
