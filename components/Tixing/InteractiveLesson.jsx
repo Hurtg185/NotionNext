@@ -15,7 +15,7 @@ import GrammarPointPlayer from './GrammarPointPlayer';
 
 // --- 学习卡片 ---
 import WordCard from '../WordCard';
-import PhraseCard from '../PhraseCard';
+//import PhraseCard from '../PhraseCard';
 
 // --- Audio Manager (无需改动) ---
 const ttsVoices = { zh: 'zh-CN-XiaoyouNeural', my: 'my-MM-NilarNeural' };
