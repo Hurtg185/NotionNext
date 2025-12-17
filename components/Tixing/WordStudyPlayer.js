@@ -1,17 +1,27 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FaVolumeUp, FaChevronLeft, FaChevronRight, FaTimes, FaMagic } from "react-icons/fa";
 import { pinyin } from 'pinyin-pro';
-import { Howl } from 'howler';
+// ✅ 修复点1：引入 Howler 全局对象
+import { Howl, Howler } from 'howler';
 
 // --- 1. 音频控制工具 ---
 
 // 停止所有正在播放的声音
 const stopAllAudio = () => {
-  Howl.unload(); // 卸载所有 Howl 实例
-  // 停止所有原生 Audio 元素 (如果有)
+  // ✅ 修复点2：使用 Howler.unload() 而不是 Howl.unload()
+  try {
+    Howler.unload(); 
+  } catch (e) {
+    console.warn("Howler unload failed:", e);
+  }
+
+  // 停止所有原生 Audio 元素
   const audioElements = document.getElementsByTagName('audio');
   for (let i = 0; i < audioElements.length; i++) {
-    audioElements[i].pause();
+    try {
+      audioElements[i].pause();
+      audioElements[i].currentTime = 0;
+    } catch (e) {}
   }
 };
 
@@ -26,7 +36,7 @@ const playR2Audio = (wordObj) => {
     return;
   }
 
-  // 2. 构建 R2 URL (例如 hsk1/0001.mp3)
+  // 2. 构建 R2 URL
   const formattedId = String(wordObj.id).padStart(4, '0');
   const level = wordObj.hsk_level;
   const audioUrl = `https://audio.886.best/chinese-vocab-audio/hsk${level}/${formattedId}.mp3`;
@@ -34,10 +44,11 @@ const playR2Audio = (wordObj) => {
   // 3. 播放
   const sound = new Howl({
     src: [audioUrl],
-    html5: true, // 强制 HTML5 Audio，支持流式和跨域
+    html5: true, 
     volume: 1.0,
     onloaderror: (id, err) => {
       console.warn("R2 Audio missing, fallback to TTS:", err);
+      // 如果加载失败，播放 TTS
       playTTS(wordObj.word || wordObj.chinese);
     },
     onplayerror: (id, err) => {
@@ -49,10 +60,9 @@ const playR2Audio = (wordObj) => {
   sound.play();
 };
 
-// 播放拼读单字音频 (拼音文件名)
+// 播放拼读单字音频
 const playSpellingAudio = (pyWithTone) => {
   return new Promise((resolve) => {
-    // URL 编码处理特殊字符
     const filename = encodeURIComponent(pyWithTone); 
     const url = `https://audio.886.best/chinese-vocab-audio/%E6%8B%BC%E8%AF%BB%E9%9F%B3%E9%A2%91/${filename}.mp3`;
     
@@ -61,7 +71,6 @@ const playSpellingAudio = (pyWithTone) => {
       html5: true,
       onend: resolve,
       onloaderror: () => {
-        // 如果拼读音频缺失，尝试用 TTS 补救，或者直接跳过
         resolve(); 
       },
       onplayerror: () => {
@@ -72,10 +81,15 @@ const playSpellingAudio = (pyWithTone) => {
   });
 };
 
-// 播放 TTS (用于例句或回退)
+// 播放 TTS (微软语音库)
 const playTTS = (text) => {
   if (!text) return;
-  stopAllAudio();
+  // 不要在 TTS 前强制 stopAllAudio，因为原生 Audio 和 Howler 有时会冲突
+  // 让 stopAllAudio 在 playR2Audio 里处理即可，或者只停止 Howler
+  try {
+    Howler.unload(); 
+  } catch(e){}
+
   const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=zh-CN-XiaoyouNeural`;
   const audio = new Audio(url);
   audio.play().catch(e => console.error("TTS play failed", e));
@@ -84,38 +98,28 @@ const playTTS = (text) => {
 // --- 2. 拼读弹窗组件 ---
 const SpellingModal = ({ wordObj, onClose }) => {
   const [activeCharIndex, setActiveCharIndex] = useState(-1);
-  const word = wordObj.word || wordObj.chinese || "";
+  const rawText = wordObj.word || wordObj.chinese || "";
 
   useEffect(() => {
     let isCancelled = false;
 
     const runSpellingSequence = async () => {
-      const chars = word.split('');
+      const chars = rawText.split('');
       
-      // 1. 逐字朗读拼音
       for (let i = 0; i < chars.length; i++) {
         if (isCancelled) return;
         setActiveCharIndex(i);
         
-        // 获取单字拼音 (带声调)
         const charPinyin = pinyin(chars[i], { toneType: 'symbol' });
-        
-        // 播放对应的拼读音频文件
         await playSpellingAudio(charPinyin);
-
-        // 稍微停顿
         await new Promise(r => setTimeout(r, 150));
       }
 
       if (isCancelled) return;
 
-      // 2. 拼读结束后，播放单词原音 (R2音频)
       setActiveCharIndex('all');
       playR2Audio(wordObj);
 
-      // 3. 播放完单词音频后延迟关闭
-      // 这里没办法精确知道 playR2Audio 什么时候结束(除非改造 playR2Audio 返回 Promise)
-      // 所以给一个估算时间，或者让用户手动关闭也可以，这里设置 1.5秒后自动关闭
       setTimeout(() => {
         if (!isCancelled) onClose();
       }, 1500);
@@ -127,7 +131,7 @@ const SpellingModal = ({ wordObj, onClose }) => {
       isCancelled = true;
       stopAllAudio();
     };
-  }, [word, wordObj, onClose]);
+  }, [rawText, wordObj, onClose]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/95 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -138,7 +142,7 @@ const SpellingModal = ({ wordObj, onClose }) => {
         <h3 className="text-sm font-bold text-slate-400 mb-10 tracking-[0.3em] uppercase">Spelling Mode</h3>
         
         <div className="flex flex-wrap justify-center gap-6">
-          {word.split('').map((char, idx) => {
+          {rawText.split('').map((char, idx) => {
              const py = pinyin(char, { toneType: 'symbol' });
              const isActive = idx === activeCharIndex || activeCharIndex === 'all';
              return (
@@ -163,19 +167,22 @@ const SpellingModal = ({ wordObj, onClose }) => {
 
 // --- 3. 主组件 ---
 export default function WordStudyPlayer({ data, onNext, onPrev, isFirstBlock }) {
+  if (!data) return <div className="p-10 text-center text-red-500">Error: No Data</div>;
+
   const words = data.words || [];
+  if (words.length === 0) return <div className="p-10 text-center text-slate-400">No words found.</div>;
+
   const [index, setIndex] = useState(0);
   const [showSpelling, setShowSpelling] = useState(false);
 
   const currentWord = words[index];
   const total = words.length;
 
-  // 切换单词时自动播放 R2 音频
   useEffect(() => {
     if (currentWord) {
       const timer = setTimeout(() => {
         playR2Audio(currentWord);
-      }, 500); // 延迟 500ms 播放，体验更柔和
+      }, 500); 
       return () => clearTimeout(timer);
     }
   }, [index, currentWord]);
@@ -190,32 +197,31 @@ export default function WordStudyPlayer({ data, onNext, onPrev, isFirstBlock }) 
     else onPrev && onPrev();
   };
 
-  if (!currentWord) return <div className="p-10 text-center text-slate-400">Loading words...</div>;
+  if (!currentWord) return <div className="p-10 text-center text-slate-400">Loading...</div>;
 
-  const displayPinyin = currentWord.pinyin || pinyin(currentWord.word || currentWord.chinese);
-  const displayWord = currentWord.word || currentWord.chinese;
+  // 属性名兼容
+  const rawText = currentWord.word || currentWord.chinese || currentWord.hanzi;
+  if (!rawText) return <div className="p-10 text-center text-red-400">Word data missing field</div>;
+
+  const displayPinyin = currentWord.pinyin || pinyin(rawText, { toneType: 'symbol' });
+  const displayWord = rawText;
 
   return (
-    // 使用 bg-white 实现全屏扁平化，去除所有阴影和圆角边框
     <div className="w-full h-[100dvh] flex flex-col bg-white text-slate-800 relative overflow-hidden">
       
-      {/* 1. 顶部区域 (移除进度条，只保留简单的计数，或者留白) */}
+      {/* 顶部 */}
       <div className="flex-none h-14 px-6 flex items-center justify-end z-10">
         <div className="text-slate-300 text-xs font-bold font-mono bg-slate-50 px-2 py-1 rounded">
           {index + 1} / {total}
         </div>
       </div>
 
-      {/* 2. 主内容区域 (垂直分布，居中) */}
+      {/* 主内容 */}
       <div className="flex-1 flex flex-col items-center w-full px-6 overflow-y-auto pb-32 no-scrollbar">
-        
-        {/* 上半部分：单词核心展示 */}
         <div className="w-full flex flex-col items-center pt-4 pb-8">
           
-          {/* 拼音 */}
           <div className="text-xl text-orange-500 font-medium font-mono mb-2">{displayPinyin}</div>
           
-          {/* 大字 */}
           <h1 
             className="text-7xl font-black text-slate-900 tracking-tight leading-none mb-4 cursor-pointer active:scale-95 transition-transform" 
             onClick={() => playR2Audio(currentWord)}
@@ -223,30 +229,25 @@ export default function WordStudyPlayer({ data, onNext, onPrev, isFirstBlock }) 
             {displayWord}
           </h1>
 
-          {/* 谐音 (如果存在) */}
           {currentWord.similar_sound && (
             <div className="mb-6 px-3 py-1 bg-yellow-50 text-yellow-600 text-sm font-bold rounded-full border border-yellow-100">
               谐音: {currentWord.similar_sound}
             </div>
           )}
 
-          {/* 释义 (重点突出缅语) */}
           <div className="text-center w-full max-w-md mb-8">
              {currentWord.burmese && (
                <div className="text-2xl font-bold text-slate-800 mb-2 font-['Padauk'] leading-snug">
                  {currentWord.burmese}
                </div>
              )}
-             {(currentWord.explanation || currentWord.definition) && (
-               <div className="text-slate-500 text-base leading-relaxed">
-                 {currentWord.explanation || currentWord.definition}
-               </div>
-             )}
+             <div className="text-slate-500 text-base leading-relaxed space-y-1">
+               {currentWord.explanation && <p>{currentWord.explanation}</p>}
+               {currentWord.definition && <p className="text-slate-400 text-sm">{currentWord.definition}</p>}
+             </div>
           </div>
 
-          {/* 功能按钮组 */}
           <div className="flex items-center gap-4 mb-8">
-             {/* 拼读按钮 - 显著样式 */}
              <button 
                 onClick={(e) => { e.stopPropagation(); setShowSpelling(true); }}
                 className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-full shadow-lg shadow-blue-200 hover:shadow-blue-300 hover:scale-105 active:scale-95 transition-all font-bold"
@@ -254,7 +255,6 @@ export default function WordStudyPlayer({ data, onNext, onPrev, isFirstBlock }) 
                <FaMagic className="animate-pulse" /> 拼读演示
              </button>
 
-             {/* 普通播放按钮 */}
              <button 
                 onClick={() => playR2Audio(currentWord)} 
                 className="w-12 h-12 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center hover:bg-slate-200 transition-colors"
@@ -264,10 +264,8 @@ export default function WordStudyPlayer({ data, onNext, onPrev, isFirstBlock }) 
           </div>
         </div>
 
-        {/* 分隔线 */}
         <div className="w-24 h-px bg-slate-100 mb-8 flex-none"></div>
 
-        {/* 下半部分：例句列表 (居中显示，带TTS) */}
         <div className="w-full max-w-lg space-y-6 text-center">
             {currentWord.example && (
               <ExampleRow 
@@ -282,10 +280,9 @@ export default function WordStudyPlayer({ data, onNext, onPrev, isFirstBlock }) 
               />
             )}
         </div>
-
       </div>
 
-      {/* 3. 底部固定按钮 (扁平化) */}
+      {/* 底部导航 */}
       <div 
         className="fixed bottom-0 left-0 right-0 z-20 bg-white/90 backdrop-blur-md border-t border-slate-50 px-6 pt-4"
         style={{ paddingBottom: 'max(24px, env(safe-area-inset-bottom))' }}
@@ -311,39 +308,33 @@ export default function WordStudyPlayer({ data, onNext, onPrev, isFirstBlock }) 
         </div>
       </div>
 
-      {/* 拼读模态框 */}
       {showSpelling && (
         <SpellingModal wordObj={currentWord} onClose={() => setShowSpelling(false)} />
       )}
-
     </div>
   );
 }
 
-// 辅助组件：例句行 (增加拼音显示，居中对齐)
+// 辅助组件：例句行
 const ExampleRow = ({ text, translation }) => {
   const py = pinyin(text, { toneType: 'symbol' });
   
   return (
     <div 
       className="flex flex-col items-center py-2 cursor-pointer group active:scale-[0.99] transition-transform"
-      onClick={() => playTTS(text)} // 点击例句播放 TTS
+      onClick={() => playTTS(text)}
     >
-      {/* 拼音行 */}
       <div className="text-sm text-orange-400 mb-1 font-mono leading-none opacity-80 group-hover:opacity-100">
         {py}
       </div>
-      {/* 汉字行 */}
       <div className="text-xl text-slate-700 font-medium leading-relaxed">
         {text}
       </div>
-      {/* 翻译行 */}
       {translation && (
         <div className="text-base text-slate-400 mt-1 font-['Padauk']">
           {translation}
         </div>
       )}
-      {/* 小喇叭图标提示 */}
       <div className="mt-1 opacity-0 group-hover:opacity-100 transition-opacity text-blue-400 text-xs flex items-center gap-1">
         <FaVolumeUp /> 点击朗读
       </div>
