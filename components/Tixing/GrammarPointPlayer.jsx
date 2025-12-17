@@ -8,9 +8,6 @@ import {
 } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// ⚠️ 请确保这个路径下有您的 AI 聊天组件，如果没有可注释掉
-import AiChatAssistant from '../AiChatAssistant';
-
 // =================================================================================
 // ===== 1. IndexedDB 工具函数 (缓存音频，减少请求) =====
 // =================================================================================
