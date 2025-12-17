@@ -5,11 +5,9 @@ import { FaChevronLeft, FaChevronRight, FaArrowRight } from "react-icons/fa";
 
 // --- 外部题型组件 ---
 import XuanZeTi from './XuanZeTi';
-import PanDuanTi from './PanDuanTi';
 import PaiXuTi from './PaiXuTi';
 import LianXianTi from './LianXianTi';
 import GaiCuoTi from './GaiCuoTi';
-import DuiHua from './DuiHua';
 import TianKongTi from './TianKongTi';
 import GrammarPointPlayer from './GrammarPointPlayer';
 
