@@ -23,7 +23,7 @@ export default function LessonPage() {
     async function loadData() {
       try {
         // 动态导入: data/hsk/hsk1/1.json
-        const mod = await import(`@/data/hsk/hsk${level}/${id}.json`);
+        const mod = await import(`@/data/hsk/hsk${level}/${id}.js`);
         // 兼容 export default 和 纯 JSON
         setLessonData(mod.default || mod);
       } catch (err) {
