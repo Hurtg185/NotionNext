@@ -4,7 +4,7 @@ import { HiSpeakerWave } from "react-icons/hi2";
 import { FaChevronLeft, FaChevronRight, FaArrowRight } from "react-icons/fa";
 
 // --- 1. 引入新写的全屏单词播放器 (确保文件路径正确) ---
-import WordStudyPlayer from '../WordStudyPlayer';
+import WordStudyPlayer from './WordStudyPlayer';
 
 // --- 外部题型组件 ---
 import XuanZeTi from './XuanZeTi';
@@ -13,10 +13,6 @@ import GaiCuoTi from './GaiCuoTi';
 import TianKongTi from './TianKongTi'; // image_match_blanks
 import GrammarPointPlayer from './GrammarPointPlayer';
 // 补充根据下方 switch case 推断出的组件引用，防止报错
-import PaiXuTi from './PaiXuTi';
-import PanDuanTi from './PanDuanTi';
-import DuiHua from './DuiHua';
-
 // --- 学习卡片 (用于旧版渲染或短句) ---
 import WordCard from '../WordCard';
 // 如果你有 PhraseCard 请取消注释，否则下面 CardListRenderer 里的 PhraseCard 会报错
