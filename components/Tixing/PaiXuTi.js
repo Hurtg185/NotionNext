@@ -3,8 +3,8 @@
 import React, { useState, useMemo, useEffect, useCallback, forwardRef } from 'react';
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, rectSortingStrategy } from '@dnd-kit/sortable';
-import { restrictToParentElement, restrictToHorizontalAxis } from '@dnd-kit/modifiers';
-import { CSS } from '@dnd-kit/utilities';
+// import { restrictToParentElement, restrictToHorizontalAxis } from '@dnd-kit/modifiers';
+// import { CSS } from '@dnd-kit/utilities';
 import { Howl } from 'howler';
 import { FaVolumeUp, FaCheck, FaTimes, FaRedo, FaSpinner, FaCommentAlt, FaLightbulb } from 'react-icons/fa';
 // import confetti from 'canvas-confetti'; // Parent handles confetti now
