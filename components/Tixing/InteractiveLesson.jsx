@@ -3,16 +3,24 @@ import { useRouter } from 'next/router';
 import { HiSpeakerWave } from "react-icons/hi2";
 import { FaChevronLeft, FaChevronRight, FaArrowRight } from "react-icons/fa";
 
+// --- 1. 引入新写的全屏单词播放器 (确保文件路径正确) ---
+import WordStudyPlayer from '../WordStudyPlayer';
+
 // --- 外部题型组件 ---
 import XuanZeTi from './XuanZeTi';
 import LianXianTi from './LianXianTi';
 import GaiCuoTi from './GaiCuoTi';
-import TianKongTi from './TianKongTi';
+import TianKongTi from './TianKongTi'; // image_match_blanks
 import GrammarPointPlayer from './GrammarPointPlayer';
+// 补充根据下方 switch case 推断出的组件引用，防止报错
+import PaiXuTi from './PaiXuTi';
+import PanDuanTi from './PanDuanTi';
+import DuiHua from './DuiHua';
 
-// --- 学习卡片 ---
+// --- 学习卡片 (用于旧版渲染或短句) ---
 import WordCard from '../WordCard';
-//import PhraseCard from '../PhraseCard';
+// 如果你有 PhraseCard 请取消注释，否则下面 CardListRenderer 里的 PhraseCard 会报错
+// import PhraseCard from '../PhraseCard'; 
 
 // --- Audio Manager (无需改动) ---
 const ttsVoices = { zh: 'zh-CN-XiaoyouNeural', my: 'my-MM-NilarNeural' };
@@ -36,7 +44,7 @@ const audioManager = (() => {
 })();
 
 
-// --- 列表容器适配器 (无需改动) ---
+// --- 列表容器适配器 (旧版渲染器，用于短句或兼容) ---
 const CardListRenderer = ({ data, type, onComplete }) => {
   const isPhrase = type === 'phrase_study' || type === 'sentences';
   const list = data.words || data.sentences || data.vocabulary || []; 
@@ -53,12 +61,14 @@ const CardListRenderer = ({ data, type, onComplete }) => {
         <div className={`grid gap-4 ${isPhrase ? 'grid-cols-1' : 'grid-cols-2'}`}>
           {list.map((item, i) => (
             isPhrase ? (
-              <PhraseCard 
-                key={item.id || i} 
-                phrase={item} 
-                data={item}
-                onPlay={() => audioManager.playTTS(item.sentence || item.chinese)}
-              />
+              // 如果没有 import PhraseCard，这里会报错。请确保文件存在或临时注释掉
+              // <PhraseCard 
+              //   key={item.id || i} 
+              //   phrase={item} 
+              //   data={item}
+              //   onPlay={() => audioManager.playTTS(item.sentence || item.chinese)}
+              // />
+              <div key={i} className="p-4 bg-white rounded-xl">PhraseCard Missing</div>
             ) : (
               <WordCard 
                 key={item.id || i} 
@@ -129,7 +139,6 @@ export default function InteractiveLesson({ lesson }) {
       const saved = localStorage.getItem(`lesson-progress-${lesson.id}`); 
       if (saved) {
         const savedIndex = parseInt(saved, 10);
-        // 读取时多加一层判断：如果保存的进度已经是最后一页或超出范围，则重置为0
         if (savedIndex < totalBlocks) {
           setCurrentIndex(savedIndex); 
         } else {
@@ -140,19 +149,15 @@ export default function InteractiveLesson({ lesson }) {
     } 
   }, [lesson, hasMounted, totalBlocks]);
 
-  // ✅ 2. FIX: 修复进度保存逻辑
-  // 这里的改动是核心：如果当前已经是完成状态，则清除进度，而不是保存进度
+  // 2. 修复进度保存逻辑
   useEffect(() => { 
     if (hasMounted && lesson?.id) {
-        // 判断是否是完成状态（索引超出，或者当前块类型是 complete/end）
         const isFinished = currentIndex >= totalBlocks || 
                            ['complete', 'end'].includes(blocks[currentIndex]?.type);
 
         if (isFinished) {
-            // 如果完成了，清除进度！这样下次进来就是从 0 开始
             localStorage.removeItem(`lesson-progress-${lesson.id}`);
         } else {
-            // 只有未完成时，才保存当前进度
             localStorage.setItem(`lesson-progress-${lesson.id}`, currentIndex.toString());
         }
     }
@@ -183,13 +188,16 @@ export default function InteractiveLesson({ lesson }) {
     if (!currentBlock) return <div className="text-slate-400 mt-20">Loading...</div>;
     const type = (currentBlock.type || '').toLowerCase();
     
+    // 准备通用属性
     const commonProps = { 
       key: `${lesson.id}-${currentIndex}`, 
       data: currentBlock.content, 
       onCorrect: delayedNextStep, 
       onComplete: goNext, 
       onNext: goNext, 
-      settings: { playTTS: audioManager?.playTTS } 
+      settings: { playTTS: audioManager?.playTTS },
+      // 传入 isFirstBlock 供 WordStudyPlayer 使用
+      isFirstBlock: currentIndex === 0
     };
     
     const CommonWrapper = ({ children }) => <div className="w-full h-full flex flex-col items-center justify-center pt-4">{children}</div>;
@@ -199,7 +207,20 @@ export default function InteractiveLesson({ lesson }) {
       switch (type) {
         case 'teaching': return null; 
 
+        // ===============================================
+        // 修改点：word_study 使用新的全屏播放器
+        // ===============================================
         case 'word_study': 
+          return (
+            <WordStudyPlayer 
+              data={commonProps.data} 
+              onNext={goNext} 
+              onPrev={goPrev}
+              isFirstBlock={commonProps.isFirstBlock}
+            />
+          );
+
+        // 短句学习保留旧版渲染器 (直到你也写了 PhraseStudyPlayer)
         case 'phrase_study': 
         case 'sentences':
           return <FullHeightWrapper><CardListRenderer {...commonProps} type={type} /></FullHeightWrapper>;
@@ -248,8 +269,11 @@ export default function InteractiveLesson({ lesson }) {
 
   const type = currentBlock?.type?.toLowerCase();
 
+  // WordStudyPlayer 自带底部导航，所以在这里隐藏主布局的底部导航
   const hideBottomNav = ['word_study', 'phrase_study', 'sentences', 'grammar_study', 'teaching', 'complete', 'end'].includes(type);
-  const hideTopProgressBar = ['grammar_study', 'choice', 'panduan', 'lianxian', 'paixu', 'gaicuo', 'image_match_blanks', 'dialogue_cinematic', 'complete', 'end'].includes(type);
+  
+  // 同样隐藏顶部的简单进度条，因为 WordStudyPlayer 全屏显示
+  const hideTopProgressBar = ['word_study', 'grammar_study', 'choice', 'panduan', 'lianxian', 'paixu', 'gaicuo', 'image_match_blanks', 'dialogue_cinematic', 'complete', 'end'].includes(type);
 
   return (
     <div className="fixed inset-0 w-screen h-screen bg-slate-50 flex flex-col overflow-hidden font-sans select-none" style={{ touchAction: 'none' }}>
