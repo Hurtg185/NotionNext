@@ -77,6 +77,7 @@
     "hanzi-writer": "^3.7.3",
     "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^10.0.0",
+    "canvas-confetti": "^1.9.3",
     "@headlessui/react": "^1.7.19",
     "react-facebook": "^8.1.4",
     "react-hotkeys-hook": "^4.6.2",
