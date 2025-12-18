@@ -12,37 +12,12 @@ import InteractiveLesson from '@/components/Tixing/InteractiveLesson';
 const hskLessonsIndex = {
   // HSK 1 课程
   '1_1': require('@/data/hsk/hsk1/1.js').default || require('@/data/hsk/hsk1/1.js'),
-  '1_2': require('@/data/hsk/hsk1/2.js').default || require('@/data/hsk/hsk1/2.js'),
-  '1_3': require('@/data/hsk/hsk1/3.js').default || require('@/data/hsk/hsk1/3.js'),
-  '1_4': require('@/data/hsk/hsk1/4.js').default || require('@/data/hsk/hsk1/4.js'),
-  '1_5': require('@/data/hsk/hsk1/5.js').default || require('@/data/hsk/hsk1/5.js'),
-  '1_6': require('@/data/hsk/hsk1/6.js').default || require('@/data/hsk/hsk1/6.js'),
-  '1_7': require('@/data/hsk/hsk1/7.js').default || require('@/data/hsk/hsk1/7.js'),
-  '1_8': require('@/data/hsk/hsk1/8.js').default || require('@/data/hsk/hsk1/8.js'),
-  '1_9': require('@/data/hsk/hsk1/9.js').default || require('@/data/hsk/hsk1/9.js'),
-  '1_10': require('@/data/hsk/hsk1/10.js').default || require('@/data/hsk/hsk1/10.js'),
-  '1_11': require('@/data/hsk/hsk1/11.js').default || require('@/data/hsk/hsk1/11.js'),
-  '1_12': require('@/data/hsk/hsk1/12.js').default || require('@/data/hsk/hsk1/12.js'),
-  '1_13': require('@/data/hsk/hsk1/13.js').default || require('@/data/hsk/hsk1/13.js'),
-  '1_14': require('@/data/hsk/hsk1/14.js').default || require('@/data/hsk/hsk1/14.js'),
-  '1_15': require('@/data/hsk/hsk1/15.js').default || require('@/data/hsk/hsk1/15.js'),
-
+  '1_6': require('@/data/hsk/hsk1/6.js').default || require('@/data/hsk/hsk1/2.js'),
+  '1_7': require('@/data/hsk/hsk1/7.js').default || require('@/data/hsk/hsk1/3.js'),
   // HSK 2 课程
   '2_1': require('@/data/hsk/hsk2/1.js').default || require('@/data/hsk/hsk2/1.js'),
-  '2_2': require('@/data/hsk/hsk2/2.js').default || require('@/data/hsk/hsk2/2.js'),
-  '2_3': require('@/data/hsk/hsk2/3.js').default || require('@/data/hsk/hsk2/3.js'),
-  '2_4': require('@/data/hsk/hsk2/4.js').default || require('@/data/hsk/hsk2/4.js'),
-  '2_5': require('@/data/hsk/hsk2/5.js').default || require('@/data/hsk/hsk2/5.js'),
-  '2_6': require('@/data/hsk/hsk2/6.js').default || require('@/data/hsk/hsk2/6.js'),
-  '2_7': require('@/data/hsk/hsk2/7.js').default || require('@/data/hsk/hsk2/7.js'),
-  '2_8': require('@/data/hsk/hsk2/8.js').default || require('@/data/hsk/hsk2/8.js'),
-  '2_9': require('@/data/hsk/hsk2/9.js').default || require('@/data/hsk/hsk2/9.js'),
-  '2_10': require('@/data/hsk/hsk2/10.js').default || require('@/data/hsk/hsk2/10.js'),
-  '2_11': require('@/data/hsk/hsk2/11.js').default || require('@/data/hsk/hsk2/11.js'),
-  '2_12': require('@/data/hsk/hsk2/12.js').default || require('@/data/hsk/hsk2/12.js'),
-  '2_13': require('@/data/hsk/hsk2/13.js').default || require('@/data/hsk/hsk2/13.js'),
-  '2_14': require('@/data/hsk/hsk2/14.js').default || require('@/data/hsk/hsk2/14.js'),
-  '2_15': require('@/data/hsk/hsk2/15.js').default || require('@/data/hsk/hsk2/15.js'),
+  '2_5': require('@/data/hsk/hsk2/5.js').default || require('@/data/hsk/hsk2/2.js'),
+  '
 
   // 如果有更多等级（HSK 3, 4...），请按此格式继续 require
 };
