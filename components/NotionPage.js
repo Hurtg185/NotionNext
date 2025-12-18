@@ -130,7 +130,12 @@ const NotionPage = ({ post, className }) => {
           Equation,
           Modal,
           Pdf,
-          Tweet
+          Tweet,
+          // 自定义组件映射逻辑
+          CustomComponent: ({ componentPath, parsedProps }) => {
+            if (componentPath === '/components/PhraseCard.js') return <PhraseCard {...parsedProps} />;
+            return null;
+          }
         }}
       />
 
@@ -294,5 +299,12 @@ const Modal = dynamic(
 const Tweet = ({ id }) => {
   return <TweetEmbed tweetId={id} />
 }
+
+/**
+ * PhraseCard 金句卡片
+ */
+const PhraseCard = dynamic(() => import('@/components/PhraseCard'), {
+  ssr: false
+})
 
 export default NotionPage
