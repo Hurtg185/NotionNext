@@ -10,10 +10,10 @@ const PinyinChartClient = dynamic(
   { 
     ssr: false,
     loading: () => (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-cyan-500 mx-auto mb-4"></div>
-          <p className="text-gray-500 font-myanmar">ခေတ္တစောင့်ဆိုင်းပါ...</p>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-slate-400 font-myanmar">ခေတ္တစောင့်ဆိုင်းပါ...</p>
         </div>
       </div>
     )
@@ -48,10 +48,9 @@ const burmeseMap = {
 };
 
 // ==========================================
-// 2. 数据中心 (全扁平化处理)
+// 2. 数据处理中心 (全扁平化)
 // ==========================================
 
-// 辅助函数：将多维声调数据打平
 const flattenTones = () => {
     const categories = [
         { folder: '单韵母', rows: [['ā','á','ǎ','à'], ['ō','ó','ǒ','ò'], ['ē','é','ě','è'], ['ī','í','ǐ','ì'], ['ū','ú','ǔ','ù'], ['ǖ','ǘ','ǚ','ǜ']] },
@@ -78,7 +77,6 @@ const flattenTones = () => {
 };
 
 const pinyinData = {
-  // 1. 声母表
   initials: { 
     title: 'ဗျည်းများ (Initials)', 
     type: 'grid',
@@ -88,36 +86,24 @@ const pinyinData = {
       burmese: burmeseMap[l] || '' 
     })) 
   },
-
-  // 2. 韵母表
   finals: { 
     title: 'သရများ (Finals)',
     type: 'grid',
-    items: [
-        'a','o','e','i','u','ü', 'ai','ei','ui','ao','ou','iu','ie','üe','er',
-        'an','en','in','un','ün', 'ang','eng','ing','ong'
-    ].map(l => ({
+    items: ['a','o','e','i','u','ü','ai','ei','ui','ao','ou','iu','ie','üe','er','an','en','in','un','ün','ang','eng','ing','ong'].map(l => ({
         letter: l,
         audio: getAudioUrl(FINALS_FOLDER, null, `${l}.mp3`),
         burmese: burmeseMap[l] || ''
     }))
   },
-
-  // 3. 整体认读表
   whole: {
-    title: 'တစ်ဆက်တည်းဖတ်သံများ (Whole Syllables)',
+    title: 'တစ်ဆက်တည်းဖတ်သံများ',
     type: 'grid',
-    items: [
-        'zhi','chi','shi','ri','zi','ci','si',
-        'yi','wu','yu','ye','yue','yuan','yin','yun','ying'
-    ].map(l => ({
+    items: ['zhi','chi','shi','ri','zi','ci','si','yi','wu','yu','ye','yue','yuan','yin','yun','ying'].map(l => ({
         letter: l,
         audio: getAudioUrl(WHOLE_FOLDER, null, `${l}.mp3`),
         burmese: burmeseMap[l] || ''
     }))
   },
-
-  // 4. 声调表 (现在也是网格布局)
   tones: { 
     title: 'အသံအနိမ့်အမြင့် (Tones)',
     type: 'grid',
@@ -130,13 +116,15 @@ const pinyinData = {
 // ==========================================
 
 export async function getStaticPaths() {
-    const paths = [
-        { params: { chartType: 'initials' } },
-        { params: { chartType: 'finals' } },
-        { params: { chartType: 'whole' } },
-        { params: { chartType: 'tones' } }
-    ];
-    return { paths, fallback: false };
+    return { 
+        paths: [
+            { params: { chartType: 'initials' } },
+            { params: { chartType: 'finals' } },
+            { params: { chartType: 'whole' } },
+            { params: { chartType: 'tones' } }
+        ], 
+        fallback: false 
+    };
 }
 
 export async function getStaticProps({ params }) {
@@ -152,59 +140,56 @@ export default function PinyinChartPage({ chartType: initialType }) {
   const chartType = initialType || router.query.chartType;
   
   if (!chartType || !pinyinData[chartType]) {
-    return <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">Loading...</div>;
+    return <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center">Loading...</div>;
   }
 
   const chartData = pinyinData[chartType]; 
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+    <div className="min-h-screen bg-[#f8fafc] dark:bg-[#0f172a]">
       <Head>
         <title>{chartData.title}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
       </Head>
 
-      {/* 顶部标题栏 - 高端毛玻璃效果 */}
-      <div className="fixed top-0 left-0 right-0 h-16 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl z-50 flex items-center justify-center px-4 border-b border-slate-200 dark:border-slate-800">
-         <h1 className="text-lg font-black text-slate-800 dark:text-slate-100 tracking-tight font-myanmar">
+      {/* 顶部标题栏 */}
+      <div className="fixed top-0 left-0 right-0 h-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md z-50 flex items-center justify-center px-4 border-b border-slate-200 dark:border-slate-800">
+         <h1 className="text-[1.1rem] font-black text-slate-800 dark:text-slate-100 font-myanmar">
             {chartData.title}
          </h1>
       </div>
 
-      {/* 内容区域 */}
-      <div className="pt-20 pb-16 max-w-2xl mx-auto px-3">
-         {/* 这里的 PinyinChartClient 将渲染 4 列布局 */}
+      {/* 网格内容 */}
+      <div className="pt-20 pb-16 max-w-2xl mx-auto px-4">
          <PinyinChartClient initialData={chartData} />
       </div>
 
       <style jsx global>{`
-        /* 全局美化样式 */
-        
-        /* 拼音字符对齐与优化 */
+        /* 🔥 核心修复：应用 WordCard 的字体对齐逻辑 */
         .pinyin-letter {
-            font-family: 'Inter', system-ui, sans-serif;
+            /* 使用 WordCard 同款字体栈，这是对齐声调的关键 */
+            font-family: 'Roboto', 'Segoe UI', 'Arial', sans-serif !important;
             font-weight: 700;
-            line-height: 1 !important;
+            line-height: 1.1 !important;
             display: inline-block;
-            /* 修复第一声偏移 */
-            font-variant-ligatures: none;
+            text-shadow: none !important; /* 禁用阴影防止视觉位移 */
             -webkit-font-smoothing: antialiased;
+            font-variant-ligatures: none;
         }
 
-        /* 缅文字体 */
         .font-myanmar {
-            font-family: 'Pyidaungsu', 'Inter', sans-serif;
-            line-height: 1.6;
+            font-family: 'Padauk', 'Myanmar Text', 'Pyidaungsu', sans-serif;
+            line-height: 1.5;
         }
 
-        /* 卡片容器网格控制 (强制 4 列) */
+        /* 强制 4 列网格布局 */
         .pinyin-grid-container {
             display: grid !important;
             grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-            gap: 0.75rem !important;
+            gap: 12px !important;
         }
 
-        /* 单个卡片美化 */
+        /* 卡片精细美化 */
         .pinyin-card {
             aspect-ratio: 1 / 1;
             display: flex;
@@ -212,31 +197,47 @@ export default function PinyinChartPage({ chartType: initialType }) {
             align-items: center;
             justify-content: center;
             background: #ffffff;
-            border-radius: 1.25rem;
-            border: 1px solid #f1f5f9;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border-radius: 20px;
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.03);
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
             cursor: pointer;
             position: relative;
-            overflow: hidden;
+            padding: 8px;
         }
 
         .dark .pinyin-card {
             background: #1e293b;
             border-color: #334155;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
         }
 
-        /* 点击反馈 */
+        /* 点击交互动画 */
         .pinyin-card:active {
-            scale: 0.92;
-            background: #f8fafc;
+            transform: scale(0.9);
+            background: #f1f5f9;
         }
         .dark .pinyin-card:active {
             background: #0f172a;
         }
 
-        /* 移除多余的返回键和不必要的间距 */
+        /* 拼音字母大小调整 */
+        .pinyin-card-letter {
+            font-size: 1.6rem;
+            color: #1e293b;
+            margin-bottom: 2px;
+        }
+        .dark .pinyin-card-letter {
+            color: #f1f5f9;
+        }
+
+        /* 缅文备注大小 */
+        .pinyin-card-burmese {
+            font-size: 0.75rem;
+            color: #64748b;
+            font-weight: 500;
+        }
+
         * {
             -webkit-tap-highlight-color: transparent;
         }
