@@ -6,20 +6,18 @@ import Head from 'next/head';
 import InteractiveLesson from '@/components/Tixing/InteractiveLesson';
 
 // ==========================================
-// 核心逻辑：静态数据注册表
-// 这种方式能确保 Cloudflare Pages 100% 不会因为路径问题导致白屏
+// 核心逻辑：静态数据注册表 (Static Registry)
+// 只有在这里 require 的课程才会被打包，解决 CF Pages 页面空白问题
 // ==========================================
 const hskLessonsIndex = {
-  // HSK 1 课程
+  // HSK 1 课程数据
   '1_1': require('@/data/hsk/hsk1/1.js').default || require('@/data/hsk/hsk1/1.js'),
-  '1_6': require('@/data/hsk/hsk1/6.js').default || require('@/data/hsk/hsk1/2.js'),
-  '1_7': require('@/data/hsk/hsk1/7.js').default || require('@/data/hsk/hsk1/3.js'),
-  // HSK 2 课程
-  '2_1': require('@/data/hsk/hsk2/1.js').default || require('@/data/hsk/hsk2/1.js'),
-  '2_5': require('@/data/hsk/hsk2/5.js').default || require('@/data/hsk/hsk2/2.js'),
-  '
+  '1_6': require('@/data/hsk/hsk1/6.js').default || require('@/data/hsk/hsk1/6.js'),
+  '1_7': require('@/data/hsk/hsk1/7.js').default || require('@/data/hsk/hsk1/7.js'),
 
-  // 如果有更多等级（HSK 3, 4...），请按此格式继续 require
+  // HSK 2 课程数据
+  '2_1': require('@/data/hsk/hsk2/1.js').default || require('@/data/hsk/hsk2/1.js'),
+  '2_5': require('@/data/hsk/hsk2/5.js').default || require('@/data/hsk/hsk2/5.js')
 };
 
 export default function LessonPage() {
@@ -30,23 +28,23 @@ export default function LessonPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  // 1. 同步加载数据
+  // 1. 同步加载数据：通过 level 和 id 从索引表中提取数据
   useEffect(() => {
     if (!router.isReady) return;
     
     setLoading(true);
     setError(false);
 
-    // 构建索引 Key，例如 "1_1"
+    // 构建索引 Key，例如 HSK1 第6课 对应 "1_6"
     const dataKey = `${level}_${id}`;
     const data = hskLessonsIndex[dataKey];
 
     if (data) {
-      // 成功获取静态索引中的数据
+      // 成功获取数据
       setLessonData(data);
       setLoading(false);
     } else {
-      // 如果索引表中不存在该课程
+      // 如果索引表中不存在该课程（例如你输入了 HSK1 第2课，但代码里没 require）
       console.error(`课程数据未在索引表中注册: ${dataKey}`);
       setError(true);
       setLoading(false);
@@ -57,15 +55,15 @@ export default function LessonPage() {
   const formattedLesson = useMemo(() => {
     if (!lessonData) return null;
 
-    // 如果 JSON 里已经写好了 blocks，直接使用
+    // 如果 JSON 数据里已经包含预定义的 blocks 结构，则优先直接使用
     if (lessonData.blocks && lessonData.blocks.length > 0) {
       return lessonData;
     }
 
-    // 否则，自动根据 newWords 和 dialogues 生成课程块
+    // 自动适配逻辑：将 newWords 和 dialogues 转换为互动块
     const generatedBlocks = [];
 
-    // --- 模块 1: 课程介绍 (如果有 description) ---
+    // --- 模块 1: 教学引导 (如果有 description) ---
     if (lessonData.description) {
         generatedBlocks.push({
             type: 'teaching',
@@ -84,11 +82,11 @@ export default function LessonPage() {
           title: "核心生词学习",
           words: lessonData.newWords.map((w, idx) => ({
             id: `word-${idx}`,
-            word: w.hanzi || w.word,   // 汉字
-            chinese: w.hanzi || w.word, // 用于 TTS 朗读
-            pinyin: w.pinyin,          // 拼音
-            meaning: w.meaning,        // 释义
-            type: w.type               // 词性
+            word: w.hanzi || w.word || "",   // 汉字
+            chinese: w.hanzi || w.word || "", // TTS 朗读内容
+            pinyin: w.pinyin || "",          // 拼音
+            meaning: w.meaning || "",        // 释义
+            type: w.type || ""               // 词性
           }))
         }
       });
@@ -102,22 +100,22 @@ export default function LessonPage() {
           title: "课文朗读与跟读",
           sentences: lessonData.dialogues.map((d, idx) => ({
             id: `sen-${idx}`,
-            chinese: d.content,      // 文本内容
-            pinyin: d.pinyin,        // 拼音
-            meaning: d.translation,  // 翻译内容
-            avatar: d.avatar || null, // 角色头像
-            role: d.role || ""       // 角色名称
+            chinese: d.content || "",        // 文本
+            pinyin: d.pinyin || "",          // 拼音
+            meaning: d.translation || "",    // 翻译
+            avatar: d.avatar || null,        // 头像
+            role: d.role || ""               // 角色名
           }))
         }
       });
     }
 
-    // --- 模块 4: 恭喜完成页 ---
+    // --- 模块 4: 完成页 ---
     generatedBlocks.push({
       type: 'complete',
       content: {
         title: "本课学习已完成！",
-        message: "太棒了！你已经掌握了本课的所有内容。点击下方按钮返回目录。"
+        message: "你已经完成了本课的所有内容。掌握得不错，继续加油！"
       }
     });
 
@@ -129,7 +127,7 @@ export default function LessonPage() {
   }, [lessonData]);
 
 
-  // 3. 渲染状态处理 (Loading)
+  // 3. 渲染状态：加载中
   if (loading) {
     return (
       <div className="w-screen h-screen flex flex-col items-center justify-center bg-white">
@@ -138,21 +136,21 @@ export default function LessonPage() {
             <div className="w-3 h-3 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
             <div className="w-3 h-3 bg-blue-500 rounded-full animate-bounce"></div>
         </div>
-        <p className="text-slate-400 font-medium text-sm">正在加载课程内容...</p>
+        <p className="text-slate-400 font-medium text-sm tracking-widest">正在加载课程内容...</p>
       </div>
     );
   }
 
-  // 4. 渲染状态处理 (Error)
+  // 4. 渲染状态：错误或未找到
   if (error || !formattedLesson) {
     return (
       <div className="w-screen h-screen flex flex-col items-center justify-center bg-slate-50 px-6 text-center">
         <div className="w-20 h-20 bg-slate-200 rounded-full flex items-center justify-center mb-6">
             <span className="text-3xl">🚫</span>
         </div>
-        <h1 className="text-xl font-bold text-slate-800 mb-2">未找到课程数据</h1>
-        <p className="text-slate-500 mb-8 max-w-xs">
-            抱歉，系统未能加载 HSK {level} 第 {id} 课的内容。请确保文件路径正确且已在索引中注册。
+        <h1 className="text-xl font-bold text-slate-800 mb-2">未找到课程</h1>
+        <p className="text-slate-500 mb-8 max-w-xs leading-relaxed">
+            抱歉，系统未能加载 HSK {level} 第 {id} 课的内容。如果你是管理员，请检查该课程是否已在静态索引表中注册。
         </p>
         <button 
           onClick={() => router.push('/hsk')}
@@ -164,7 +162,7 @@ export default function LessonPage() {
     );
   }
 
-  // 5. 渲染全屏互动组件
+  // 5. 渲染页面逻辑
   return (
     <>
       <Head>
@@ -172,7 +170,7 @@ export default function LessonPage() {
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
       </Head>
       
-      {/* 渲染互动学习组件 */}
+      {/* 渲染全屏互动学习组件 */}
       <InteractiveLesson lesson={formattedLesson} />
     </>
   );
