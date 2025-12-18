@@ -137,6 +137,47 @@ export default {
       }
     },
 
+ {
+    type: "choice",
+    content: {
+      question: "Select the character for 'Years old'.",
+      options: [
+        { id: "1", text: "岁 (suì)" },
+        { id: "2", text: "多 (duō)" },
+        { id: "3", text: "大 (dà)" },
+        { id: "4", text: "家 (jiā)" }
+      ],
+      correctAnswer: ["1"]
+    }
+  },
+  {
+    type: "choice",
+    content: {
+      question: "Translate: 'He is 20 years old.'",
+      options: [
+        { id: "1", text: "他二十岁。" },
+        { id: "2", text: "他是二十岁。" },
+        { id: "3", text: "他岁二十。" },
+        { id: "4", text: "二十岁他。" }
+      ],
+      correctAnswer: ["1"],
+      explanation: "陈述年龄时，不需要加'是'，直接说'数字+岁'。"
+    }
+  },
+  {
+    type: "choice",
+    content: {
+      question: "Which one means 'Family' or 'Home'?",
+      options: [
+        { id: "1", text: "有 (yǒu)" },
+        { id: "2", text: "家 (jiā)" },
+        { id: "3", text: "口 (kǒu)" },
+        { id: "4", text: "几 (jǐ)" }
+      ],
+      correctAnswer: ["2"]
+    }
+  },
+    
     // --- 练习 2：看图选词 (题干有图) ---
     {
       type: "choice",
