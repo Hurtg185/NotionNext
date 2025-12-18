@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { useTransition, animated } from '@react-spring/web';
-import { pinyin as pinyinConverter } from 'pinyin-pro';
+import { pinyin } from 'pinyin-pro';
 import { 
   FaVolumeUp, FaSpinner, FaChevronLeft, FaChevronRight, 
-  FaRobot, FaTimes, FaPause, FaPlay, FaFacebookMessenger 
+  FaPause, FaPlay, FaTimes, FaCog, FaUserCircle
 } from 'react-icons/fa';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 
 // =================================================================================
-// ===== 1. IndexedDB 工具函数 (缓存音频，减少请求) =====
+// ===== 1. IndexedDB 工具函数 (缓存音频) =====
 // =================================================================================
-const DB_NAME = 'MixedTTSCache';
+const DB_NAME = 'MixedTTSCache_V2';
 const STORE_NAME = 'audio_blobs';
 const DB_VERSION = 1;
 
@@ -38,23 +38,13 @@ const idb = {
     try {
       await this.init();
     } catch (e) {
-      console.warn('idb.init failed', e);
       return null;
     }
     return new Promise((resolve) => {
       const tx = this.db.transaction(STORE_NAME, 'readonly');
       const store = tx.objectStore(STORE_NAME);
       const req = store.get(key);
-      req.onsuccess = () => {
-        const blob = req.result;
-        if (blob && blob.size > 100) {
-          resolve(blob);
-        } else {
-          // 如果缓存了无效的小文件，清理掉
-          if (blob) { this.del(key).catch(() => {}); }
-          resolve(null);
-        }
-      };
+      req.onsuccess = () => resolve(req.result || null);
       req.onerror = () => resolve(null);
     });
   },
@@ -71,473 +61,425 @@ const idb = {
       req.onsuccess = () => resolve();
       req.onerror = () => resolve();
     });
-  },
-  async del(key) {
-    try { await this.init(); } catch (e) { return; }
-    return new Promise((resolve) => {
-      const tx = this.db.transaction(STORE_NAME, 'readwrite');
-      const req = tx.objectStore(STORE_NAME).delete(key);
-      req.onsuccess = () => resolve();
-      req.onerror = () => resolve();
-    });
   }
 };
 
 const inFlightRequests = new Map();
 
 // =================================================================================
-// ===== 2. 混合 TTS Hook (核心修复版) =====
+// ===== 2. 混合 TTS Hook (支持进度、语速) =====
 // =================================================================================
 function useMixedTTS() {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [loadingId, setLoadingId] = useState(null);
-  const [playingId, setPlayingId] = useState(null);
+  const [playerState, setPlayerState] = useState({
+    isPlaying: false,
+    isPaused: false,
+    loadingId: null,
+    playingId: null, // 当前播放的任务ID
+    duration: 0,
+    currentTime: 0,
+    playbackRate: 0.6, // 默认慢速 -40%
+  });
 
-  const audioQueueRef = useRef([]);
-  const currentAudioRef = useRef(null);
-  const createdObjectURLsRef = useRef(new Set());
+  const audioObjRef = useRef(null); // 当前正在播放的 Audio 对象
+  const requestRef = useRef(null); // 用于 requestAnimationFrame 更新进度
+  const audioQueueRef = useRef([]); // 如果有分段，存储队列
+  const currentSegmentIndexRef = useRef(0);
   const latestRequestIdRef = useRef(0);
-  const playingIdRef = useRef(null);
 
-  useEffect(() => {
-    return () => {
-      stop();
-      for (const url of createdObjectURLsRef.current) {
-        try { URL.revokeObjectURL(url); } catch (e) {}
-      }
-      createdObjectURLsRef.current.clear();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  // 清理函数
   const stop = useCallback(() => {
-    latestRequestIdRef.current++;
-    if (currentAudioRef.current) {
-      try {
-        currentAudioRef.current.pause();
-        currentAudioRef.current.currentTime = 0;
-      } catch (e) {}
-      currentAudioRef.current = null;
+    if (requestRef.current) cancelAnimationFrame(requestRef.current);
+    
+    if (audioObjRef.current) {
+      audioObjRef.current.pause();
+      audioObjRef.current.currentTime = 0;
+      audioObjRef.current = null;
     }
-    if (audioQueueRef.current && audioQueueRef.current.length) {
-      audioQueueRef.current.forEach(a => {
-        try { a.pause(); } catch (e) {}
-        try { a.src = ''; } catch (e) {}
-      });
-      audioQueueRef.current = [];
-    }
-    if (window.speechSynthesis) {
-      try { window.speechSynthesis.cancel(); } catch (e) {}
-    }
-    // 稍后清理 URL，避免立即清理导致某些浏览器报错
-    setTimeout(() => {
-        for (const url of createdObjectURLsRef.current) {
-            try { URL.revokeObjectURL(url); } catch (e) {}
-        }
-        createdObjectURLsRef.current.clear();
-    }, 500);
+    
+    // 清理队列
+    audioQueueRef.current.forEach(a => {
+      try { a.pause(); } catch(e){}
+    });
+    audioQueueRef.current = [];
 
-    setIsPlaying(false);
-    setIsPaused(false);
-    setPlayingId(null);
-    playingIdRef.current = null;
-    setLoadingId(null);
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+
+    setPlayerState(prev => ({
+      ...prev,
+      isPlaying: false,
+      isPaused: false,
+      playingId: null,
+      loadingId: null,
+      currentTime: 0,
+      duration: 0
+    }));
   }, []);
 
+  // 更新进度循环
+  const updateProgress = useCallback(() => {
+    if (audioObjRef.current && !audioObjRef.current.paused) {
+      setPlayerState(prev => ({
+        ...prev,
+        currentTime: audioObjRef.current.currentTime,
+        duration: audioObjRef.current.duration || 0
+      }));
+      requestRef.current = requestAnimationFrame(updateProgress);
+    }
+  }, []);
+
+  // 改变语速
+  const setRate = useCallback((rate) => {
+    setPlayerState(prev => ({ ...prev, playbackRate: rate }));
+    if (audioObjRef.current) {
+      audioObjRef.current.playbackRate = rate;
+    }
+  }, []);
+
+  // 拖动进度条跳转
+  const seek = useCallback((time) => {
+    if (audioObjRef.current) {
+      audioObjRef.current.currentTime = time;
+      setPlayerState(prev => ({ ...prev, currentTime: time }));
+    }
+  }, []);
+
+  // 暂停/继续
   const toggle = useCallback((uniqueId) => {
-    if (playingIdRef.current !== uniqueId) return;
+    if (playerState.playingId !== uniqueId) return;
 
-    if (currentAudioRef.current) {
-      if (currentAudioRef.current.paused) {
-        currentAudioRef.current.play().catch(e => console.error('Resume failed', e));
-        setIsPaused(false);
+    if (audioObjRef.current) {
+      if (audioObjRef.current.paused) {
+        audioObjRef.current.play().catch(console.warn);
+        audioObjRef.current.playbackRate = playerState.playbackRate;
+        setPlayerState(prev => ({ ...prev, isPaused: false }));
+        requestRef.current = requestAnimationFrame(updateProgress);
       } else {
-        currentAudioRef.current.pause();
-        setIsPaused(true);
-      }
-    } else if (window.speechSynthesis && window.speechSynthesis.speaking) {
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-        setIsPaused(false);
-      } else {
-        window.speechSynthesis.pause();
-        setIsPaused(true);
+        audioObjRef.current.pause();
+        if (requestRef.current) cancelAnimationFrame(requestRef.current);
+        setPlayerState(prev => ({ ...prev, isPaused: true }));
       }
     }
-  }, []);
+  }, [playerState.playingId, playerState.playbackRate, updateProgress]);
 
-  // 降级使用浏览器自带 TTS
-  const fallbackToNativeTTS = (text, onEnd) => {
-    if (!window.speechSynthesis) {
-      if (onEnd) onEnd();
-      return;
-    }
-    try {
-      window.speechSynthesis.cancel();
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.lang = 'zh-CN';
-      utter.rate = 0.9;
-      utter.onend = () => { if (onEnd) onEnd(); };
-      utter.onerror = () => { if (onEnd) onEnd(); };
-      window.speechSynthesis.speak(utter);
-    } catch (e) {
-      console.warn("Native TTS failed:", e);
-      if (onEnd) onEnd();
-    }
-  };
-
+  // 获取音频 Blob
   const fetchAudioBlob = async (text, lang) => {
-    if (!text || !text.trim()) throw new Error('Empty text');
-
-    // 缅甸语使用专用引擎，其他（中文/英文/混合）使用强大的多语言引擎
     const voice = lang === 'my' ? 'my-MM-NilarNeural' : 'zh-CN-XiaoyouMultilingualNeural';
-    const cacheKey = `tts-blob-${voice}-${text}`;
+    const cacheKey = `tts-v2-${voice}-${text}`;
 
-    try {
-      const cached = await idb.get(cacheKey);
-      if (cached) return cached;
-    } catch (e) {}
+    const cached = await idb.get(cacheKey);
+    if (cached) return cached;
 
-    if (inFlightRequests.has(cacheKey)) {
-      return inFlightRequests.get(cacheKey);
-    }
+    if (inFlightRequests.has(cacheKey)) return inFlightRequests.get(cacheKey);
 
     const promise = (async () => {
-      try {
-        const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${voice}`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`TTS Fetch Failed: ${res.status}`);
-        
-        const blob = await res.blob();
-        if (!blob || blob.size < 100) throw new Error('TTS Response too small');
-        
-        idb.set(cacheKey, blob).catch(() => {});
-        return blob;
-      } catch (e) {
-        try { idb.del(cacheKey).catch(()=>{}); } catch (_) {}
-        throw e;
-      } finally {
-        inFlightRequests.delete(cacheKey);
-      }
+      // 这里的 API 仅为示例，实际需替换为可用服务
+      const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${voice}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Network err');
+      const blob = await res.blob();
+      if (blob.size > 100) idb.set(cacheKey, blob);
+      return blob;
     })();
 
     inFlightRequests.set(cacheKey, promise);
     return promise;
   };
 
+  // 播放核心逻辑
   const play = useCallback(async (text, uniqueId) => {
-    // 1. 基础检查
-    if (!text) return;
-    
-    // 2. 暂停/继续逻辑
-    if (playingIdRef.current === uniqueId) {
+    if (playerState.playingId === uniqueId) {
       toggle(uniqueId);
       return;
     }
 
-    stop(); 
-    setLoadingId(uniqueId);
-    const myRequestId = ++latestRequestIdRef.current;
-
-    // 3. 清理文本 (保留文字本身，去除HTML标签和模板符号)
-    let cleanText = String(text)
-      .replace(/<[^>]+>/g, '') 
-      .replace(/\{\{|\}\}/g, '') 
-      .trim();
+    stop();
+    setPlayerState(prev => ({ ...prev, loadingId: uniqueId }));
     
+    const reqId = ++latestRequestIdRef.current;
+    
+    // 清理文本
+    let cleanText = String(text).replace(/<[^>]+>/g, '').replace(/\{\{|\}\}/g, '').trim();
     if (!cleanText) {
-      setLoadingId(null);
+      setPlayerState(prev => ({ ...prev, loadingId: null }));
       return;
     }
 
     try {
-      // 4. 智能分段逻辑 (修复版)
+      // 简单切分逻辑：如果有缅甸语，必须拆分，否则视为一段中文/混合
       const segments = [];
       const hasBurmese = /[\u1000-\u109F]/.test(cleanText);
 
       if (!hasBurmese) {
-        // ✅ 场景 A: 只有中文、英文、拼音、标点 -> **不要切分**
-        // 直接作为一个整体发送，AI 引擎会自动处理语调和停顿，不会读错拼音，也不会因为标点报错
         segments.push({ text: cleanText, lang: 'zh' });
       } else {
-        // ✅ 场景 B: 包含缅甸语 -> 必须切分，因为缅甸语需要特定 Voice
         const regex = /([\u1000-\u109F]+)|([^\u1000-\u109F]+)/g;
         let match;
         while ((match = regex.exec(cleanText)) !== null) {
-          const chunk = match[0];
-          if (chunk && chunk.trim()) {
-            const isMy = /[\u1000-\u109F]/.test(chunk);
-            segments.push({ text: chunk.trim(), lang: isMy ? 'my' : 'zh' });
+          if (match[0].trim()) {
+            segments.push({ text: match[0].trim(), lang: /[\u1000-\u109F]/.test(match[0]) ? 'my' : 'zh' });
           }
         }
       }
 
-      // 5. 并行请求音频
-      const blobPromises = segments.map(seg => fetchAudioBlob(seg.text, seg.lang));
-      const blobs = await Promise.all(blobPromises);
+      // 获取所有音频
+      const blobs = await Promise.all(segments.map(s => fetchAudioBlob(s.text, s.lang)));
+      if (reqId !== latestRequestIdRef.current) return;
 
-      if (myRequestId !== latestRequestIdRef.current) return;
+      const audios = blobs.map(b => new Audio(URL.createObjectURL(b)));
+      audioQueueRef.current = audios;
 
-      // 6. 准备播放队列
-      const audioObjects = blobs.map((blob, idx) => {
-        const objectURL = URL.createObjectURL(blob);
-        createdObjectURLsRef.current.add(objectURL);
-        const audio = new Audio(objectURL);
-        audio.playbackRate = 1.0; 
-        return audio;
-      });
-
-      audioQueueRef.current = audioObjects;
-      setLoadingId(null);
-      setPlayingId(uniqueId);
-      playingIdRef.current = uniqueId;
-      setIsPlaying(true);
-      setIsPaused(false);
-
-      // 7. 递归播放
-      const playNext = (index) => {
-        if (myRequestId !== latestRequestIdRef.current) return;
-        
-        if (index >= audioObjects.length) {
+      const playSegment = (index) => {
+        if (reqId !== latestRequestIdRef.current) return;
+        if (index >= audios.length) {
           stop();
           return;
         }
 
-        const audio = audioObjects[index];
-        currentAudioRef.current = audio;
+        const audio = audios[index];
+        audioObjRef.current = audio;
+        currentSegmentIndexRef.current = index;
 
-        // 播放结束或出错时，继续下一段
-        const onFinish = () => playNext(index + 1);
+        // 设置播放状态
+        audio.playbackRate = playerState.playbackRate; // 应用当前语速
+        
+        audio.onloadedmetadata = () => {
+             setPlayerState(prev => ({ 
+               ...prev, 
+               duration: audio.duration,
+               currentTime: 0
+             }));
+        };
 
-        audio.onended = onFinish;
-        audio.onerror = (e) => {
-          console.error('Audio play error', e);
-          onFinish();
+        audio.onended = () => {
+          playSegment(index + 1);
         };
         
-        audio.play().catch((e) => {
-          console.warn('Play prevented', e);
-          onFinish();
-        });
+        audio.onerror = () => playSegment(index + 1);
+
+        audio.play()
+          .then(() => {
+            setPlayerState(prev => ({ 
+              ...prev, 
+              isPlaying: true, 
+              isPaused: false, 
+              playingId: uniqueId,
+              loadingId: null
+            }));
+            requestRef.current = requestAnimationFrame(updateProgress);
+          })
+          .catch(e => {
+            console.error(e);
+            playSegment(index + 1);
+          });
       };
 
-      playNext(0);
+      playSegment(0);
 
     } catch (e) {
-      console.warn('云端 TTS 失败，尝试降级:', e);
-      if (myRequestId === latestRequestIdRef.current) {
-        setLoadingId(null);
-        setPlayingId(uniqueId);
-        playingIdRef.current = uniqueId;
-        setIsPlaying(true);
-        // 降级到浏览器原生朗读
-        fallbackToNativeTTS(cleanText, () => stop());
-      }
+      console.error("TTS Error", e);
+      setPlayerState(prev => ({ ...prev, loadingId: null }));
     }
-  }, [stop, toggle]);
+  }, [playerState.playingId, playerState.playbackRate, stop, toggle, updateProgress]);
 
-  const preload = useCallback((text) => {
-    if (!text) return;
-    let cleanText = String(text).replace(/<[^>]+>/g, '').replace(/\{\{|\}\}/g, '').trim();
-    if (!cleanText) return;
-    // 预加载默认为中文引擎，除非明显是缅甸语（简化处理）
-    const lang = /[\u1000-\u109F]/.test(cleanText) ? 'my' : 'zh';
-    fetchAudioBlob(cleanText, lang).catch(()=>{});
-  }, []);
-
-  return { play, stop, toggle, isPlaying, isPaused, playingId, loadingId, preload };
+  return { 
+    ...playerState, 
+    play, 
+    stop, 
+    toggle, 
+    seek, 
+    setRate 
+  };
 }
 
 // =================================================================================
-// ===== 3. 辅助组件与格式化工具 =====
+// ===== 3. 辅助组件：拼音与 Markdown =====
 // =================================================================================
 
-const generateRubyHTML = (text) => {
-  if (!text) return '';
-  // 排除 {{}}，仅对中文加注音
-  return text.replace(/[\u4e00-\u9fff]+/g, word => {
-    try {
-      const pinyin = pinyinConverter(word, { toneType: 'numeric', type: 'array', multiple: false });
-      const rt = Array.isArray(pinyin) ? pinyin.join(' ') : pinyin || '';
-      return `<ruby>${word}<rt>${rt}</rt></ruby>`;
-    } catch (e) {
-      return word;
-    }
-  });
+// 自动生成带拼音的 HTML
+const renderTextWithPinyin = (text, isPattern = false) => {
+  if (!text) return null;
+  
+  // 识别 {{...}} 视为中文重点，或者自动检测中文字符
+  // 策略：分割非中文和中文。中文部分用 pinyin-pro 处理
+  
+  // 移除 {{ }} 标记，直接处理内容
+  const clean = text.replace(/\{\{|\}\}/g, '');
+  
+  // 简单分词逻辑：按连续汉字或非汉字分割
+  const parts = clean.match(/([\u4e00-\u9fff]+)|([^\u4e00-\u9fff]+)/g) || [];
+
+  return (
+    <span style={{ lineHeight: '2.2', wordBreak: 'break-word' }}>
+      {parts.map((part, idx) => {
+        // 如果是中文
+        if (/[\u4e00-\u9fff]/.test(part)) {
+          const pyArray = pinyin(part, { type: 'array', toneType: 'symbol' });
+          // 将每个字和它的拼音对应起来
+          const charArray = part.split('');
+          return charArray.map((char, cIdx) => (
+            <ruby key={`${idx}-${cIdx}`} style={styles.ruby}>
+              {char}
+              <rt style={styles.rt}>{pyArray[cIdx] || ''}</rt>
+            </ruby>
+          ));
+        } else {
+          // 非中文（缅文或标点）
+          const isMy = /[\u1000-\u109F]/.test(part);
+          return (
+            <span key={idx} style={isMy ? styles.textBurmese : styles.textNeutral}>
+              {part}
+            </span>
+          );
+        }
+      })}
+    </span>
+  );
 };
 
-const simpleMarkdownToHtml = (markdown) => {
-  if (!markdown) return '';
-  let html = markdown;
-  // 简单处理 Markdown 语法
+// 简单 Markdown 转 HTML
+const simpleMarkdownToHtml = (md) => {
+  if (!md) return '';
+  let html = md;
+  // 标题
   html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
   html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+  // 加粗
   html = html.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
-  html = html.replace(/^> (.*$)/gim, '<blockquote>$1</blockquote>');
-  
-  if (html.includes('|')) {
-    const lines = html.split('\n');
-    let inTable = false;
-    let tableHtml = '';
-    let resultLines = [];
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (line.startsWith('|')) {
-            if (!inTable) { inTable = true; tableHtml = '<table class="md-table">'; }
-            if (line.includes('---')) continue; 
-            const cells = line.split('|').filter(c => c.length > 0);
-            tableHtml += '<tr>';
-            cells.forEach(cell => { tableHtml += `<td>${cell.trim()}</td>`; });
-            tableHtml += '</tr>';
-        } else {
-            if (inTable) { tableHtml += '</table>'; resultLines.push(tableHtml); inTable = false; }
-            resultLines.push(line);
-        }
-    }
-    if (inTable) resultLines.push(tableHtml + '</table>');
-    html = resultLines.join('\n');
-  }
+  // 列表
+  html = html.replace(/^\- (.*$)/gim, '<li>$1</li>');
+  html = html.replace(/((<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+  // 换行
   html = html.replace(/\n/g, '<br/>');
   return html;
 };
 
-const DraggableAiBtn = ({ contextText }) => {
-  const [isOpen, setIsOpen] = useState(false);
+// =================================================================================
+// ===== 4. 悬浮播放器组件 (FloatingPlayer) =====
+// =================================================================================
+const FloatingPlayer = ({ 
+  isPlaying, isPaused, duration, currentTime, 
+  onToggle, onSeek, onRateChange, playbackRate, label 
+}) => {
   const constraintsRef = useRef(null);
+
+  if (!isPlaying && !isPaused) return null;
+
+  const formatTime = (t) => {
+    const min = Math.floor(t / 60);
+    const sec = Math.floor(t % 60);
+    return `${min}:${sec < 10 ? '0' + sec : sec}`;
+  };
 
   return (
     <>
-      <div ref={constraintsRef} style={{ position: 'absolute', top: 20, left: 20, right: 20, bottom: 100, pointerEvents: 'none', zIndex: 90 }} />
-      <motion.button
-        drag dragConstraints={constraintsRef} dragElastic={0.08} dragMomentum={false}
-        whileHover={{ scale: 1.06 }} whileTap={{ scale: 0.96 }}
-        onClick={(e) => { e.stopPropagation(); setIsOpen(true); }}
-        style={{
-          position: 'absolute', bottom: '120px', right: '20px', width: '56px', height: '56px',
-          borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-          boxShadow: '0 4px 15px rgba(37, 99, 235, 0.4)', color: 'white', display: 'flex',
-          alignItems: 'center', justifyContent: 'center', zIndex: 100, cursor: 'pointer',
-          border: 'none', touchAction: 'none', outline: 'none'
-        }}
+      <div ref={constraintsRef} style={styles.dragConstraints} />
+      <motion.div 
+        drag 
+        dragConstraints={constraintsRef}
+        dragElastic={0.1}
+        initial={{ y: 100, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 100, opacity: 0 }}
+        style={styles.floatPlayerContainer}
       >
-        <FaRobot size={26} />
-      </motion.button>
-      <AnimatePresence>
-        {isOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={(e) => { e.stopPropagation(); setIsOpen(false); }}
-              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 1001, backdropFilter: 'blur(3px)' }}
-            />
-            <motion.div
-              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                position: 'fixed', bottom: 0, left: 0, right: 0, height: '72vh',
-                background: 'white', borderTopLeftRadius: '20px', borderTopRightRadius: '20px',
-                boxShadow: '0 -4px 30px rgba(0,0,0,0.12)', zIndex: 1002, display: 'flex',
-                flexDirection: 'column', overflow: 'hidden'
-              }}
+        {/* 左侧头像 (可拖动) */}
+        <div className="drag-handle" style={styles.floatAvatar}>
+          <FaUserCircle size={32} color="white" />
+        </div>
+
+        {/* 中间内容 */}
+        <div style={styles.floatContent}>
+          <div style={styles.floatHeader}>
+            <span style={styles.floatLabel}>{label || '正在播放...'}</span>
+            <span style={styles.floatTime}>{formatTime(currentTime)} / {formatTime(duration)}</span>
+          </div>
+          
+          {/* 进度条 */}
+          <input 
+            type="range" 
+            min="0" 
+            max={duration || 100} 
+            value={currentTime} 
+            onChange={(e) => onSeek(Number(e.target.value))}
+            style={styles.floatSlider}
+          />
+
+          {/* 控制区 */}
+          <div style={styles.floatControls}>
+            <button 
+              onClick={(e) => { e.stopPropagation(); onToggle(); }} 
+              style={styles.floatPlayBtn}
             >
-              <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff' }}>
-                <div style={{ fontWeight: '700', fontSize: '1rem', color: '#0f172a' }}>AI 语法助手</div>
-                <button onClick={(e) => { e.stopPropagation(); setIsOpen(false); }} style={{ padding: '8px', background: '#f8fafc', borderRadius: '50%', border: 'none', color: '#64748b', cursor: 'pointer' }}><FaTimes size={14} /></button>
-              </div>
-              <div style={{ flex: 1, overflow: 'hidden', position: 'relative', background: '#fbfdff' }}>
-                {AiChatAssistant ? <AiChatAssistant context={contextText} /> : <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>AI 组件未加载</div>}
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+              {isPaused ? <FaPlay size={12} /> : <FaPause size={12} />}
+            </button>
+            
+            {/* 语速选择 */}
+            <div style={styles.rateControl}>
+               <span style={{fontSize: '10px', color: '#cbd5e1', marginRight: 4}}>Speed:</span>
+               {[0.6, 0.8, 1.0].map(r => (
+                 <button
+                   key={r}
+                   onClick={() => onRateChange(r)}
+                   style={{
+                     ...styles.rateBtn,
+                     background: Math.abs(playbackRate - r) < 0.05 ? '#3b82f6' : 'rgba(255,255,255,0.1)'
+                   }}
+                 >
+                   {r === 0.6 ? '-40%' : r === 0.8 ? '-20%' : '1.0x'}
+                 </button>
+               ))}
+            </div>
+          </div>
+        </div>
+      </motion.div>
     </>
   );
 };
 
 // =================================================================================
-// ===== 4. 主组件: GrammarPointPlayer =====
+// ===== 5. 主组件 (GrammarPointPlayer) =====
 // =================================================================================
 const GrammarPointPlayer = ({ grammarPoints, onComplete = () => {} }) => {
-  const FACEBOOK_APP_ID = ''; 
-
-  // 数据标准化
+  
+  // 标准化数据
   const normalizedPoints = useMemo(() => {
     if (!Array.isArray(grammarPoints)) return [];
-    
-    const stripHtml = (html) => {
-      if (!html) return '';
-      return html.replace(/<[^>]+>/g, '').replace(/\{\{|}\}/g, '').trim();
-    };
-
-    return grammarPoints.map(item => {
-      const rawTitle = item['语法标题'] || item.grammarPoint || '';
-      const rawPattern = item['句型结构'] || item.pattern || '';
-      const rawExplanation = item['语法详解'] || item.visibleExplanation || '';
-      
-      const fallbackScript = `${rawTitle}。${rawPattern}。${stripHtml(rawExplanation)}`;
-      const narrationScript = item['讲解脚本'] || item.narrationScript || fallbackScript;
-
-      return {
-        id: item.id,
-        grammarPoint: rawTitle,
-        pattern: rawPattern,
-        visibleExplanation: rawExplanation,
-        usage: item['适用场景'] || item.usage,
-        attention: item['注意事项'] || item.attention,
-        narrationScript: narrationScript,
-        examples: (item['例句列表'] || item.examples || []).map(ex => {
-          const sentence = ex['句子'] || ex.sentence || '';
-          const exampleScript = ex['例句发音'] || ex.narrationScript || sentence;
-          return {
-            id: ex.id,
-            sentence: sentence,
-            translation: ex['翻译'] || ex.translation,
-            narrationScript: exampleScript
-          };
-        })
-      };
-    });
+    return grammarPoints.map((item, idx) => ({
+      id: item.id || idx,
+      title: item['语法标题'] || item.grammarPoint || '',
+      pattern: item['句型结构'] || item.pattern || '',
+      explanation: item['语法详解'] || item.visibleExplanation || '',
+      explanationScript: item['讲解脚本'] || item.narrationScript || (item['语法详解'] || '').replace(/<[^>]+>/g, ''),
+      dialogues: (item['例句列表'] || item.examples || []).map((ex, i) => ({
+        id: ex.id || i,
+        speaker: i % 2 === 0 ? 'A' : 'B', // 模拟 A/B 对话
+        sentence: ex['句子'] || ex.sentence || '',
+        translation: ex['翻译'] || ex.translation || '',
+        script: ex['例句发音'] || ex.narrationScript || ex['句子'] || ''
+      }))
+    }));
   }, [grammarPoints]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
-  const lastDirection = useRef(0);
+  const [direction, setDirection] = useState(0); // 1: next, -1: prev
   const contentRef = useRef(null);
   
-  // 使用修复后的 Hook
-  const { play, stop, playingId, isPaused, loadingId, preload } = useMixedTTS();
+  // TTS Hook
+  const { 
+    play, stop, toggle, seek, setRate,
+    isPlaying, isPaused, loadingId, playingId, currentTime, duration, playbackRate 
+  } = useMixedTTS();
 
   useEffect(() => {
-    stop();
+    // 切页停止播放
+    stop(); 
     if (contentRef.current) contentRef.current.scrollTop = 0;
   }, [currentIndex, stop]);
 
-  useEffect(() => {
-    // 预加载下一条
-    const nextIndex = currentIndex + 1;
-    if (nextIndex < normalizedPoints.length) {
-       const nextGp = normalizedPoints[nextIndex];
-       if (nextGp.narrationScript) preload(nextGp.narrationScript);
-    }
-  }, [currentIndex, normalizedPoints, preload]);
-
-  const handleMessengerShare = () => {
-    const link = typeof window !== 'undefined' ? window.location.href : '';
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (isMobile) {
-        window.location.href = `fb-messenger://share/?link=${encodeURIComponent(link)}`;
-    } else {
-        if (!FACEBOOK_APP_ID) { alert("请配置 FACEBOOK_APP_ID"); return; }
-        window.open(`https://www.facebook.com/dialog/send?app_id=${FACEBOOK_APP_ID}&link=${encodeURIComponent(link)}&redirect_uri=${encodeURIComponent(link)}`, '_blank', 'width=600,height=500');
-    }
-  };
-
   const handleNext = () => {
     if (currentIndex < normalizedPoints.length - 1) {
-      lastDirection.current = 1;
-      setCurrentIndex(prev => prev + 1);
+      setDirection(1);
+      setCurrentIndex(p => p + 1);
     } else {
       onComplete();
     }
@@ -545,172 +487,147 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete = () => {} }) => {
 
   const handlePrev = () => {
     if (currentIndex > 0) {
-      lastDirection.current = -1;
-      setCurrentIndex(prev => prev - 1);
+      setDirection(-1);
+      setCurrentIndex(p => p - 1);
     }
   };
 
+  // 动画配置
   const transitions = useTransition(currentIndex, {
-    key: normalizedPoints[currentIndex]?.id || currentIndex,
-    from: { opacity: 0, transform: `translateX(${lastDirection.current > 0 ? '100%' : '-100%'})` },
-    enter: { opacity: 1, transform: 'translateX(0%)' },
-    leave: { opacity: 0, transform: `translateX(${lastDirection.current > 0 ? '-100%' : '100%'})`, position: 'absolute' },
-    config: { mass: 1, tension: 280, friction: 30 },
+    key: currentIndex,
+    from: { opacity: 0, transform: `translate3d(${direction > 0 ? '100%' : '-100%'},0,0)` },
+    enter: { opacity: 1, transform: 'translate3d(0%,0,0)' },
+    leave: { opacity: 0, transform: `translate3d(${direction > 0 ? '-100%' : '100%'},0,0)`, position: 'absolute' },
+    config: { tension: 280, friction: 30 }
   });
 
-  const renderMixedText = (text, isPattern = false) => {
-    if (!text) return null;
-    const parts = text.match(/\{\{.*?\}\}|[^{}]+/g) || [];
-    return parts.map((part, pIndex) => {
-      const isChinese = part.startsWith('{{') && part.endsWith('}}');
-      const content = isChinese ? part.slice(2, -2) : part;
-      const trimmed = String(content);
-      const partStyle = isPattern
-        ? (isChinese ? styles.patternChinese : styles.patternMyanmar)
-        : (isChinese ? styles.textChinese : styles.textBurmese);
-      
-      if (isChinese) {
-        return <span key={pIndex} style={partStyle} dangerouslySetInnerHTML={{ __html: generateRubyHTML(trimmed) }} />;
-      } else {
-        return <span key={pIndex} style={partStyle}>{trimmed}</span>;
-      }
-    });
-  };
-
-  const renderPlayButton = (script, id, isSmall = false) => {
-    const isCurrentPlaying = playingId === id;
-    const isLoading = loadingId === id;
-    let Icon = FaVolumeUp;
-    if (isLoading) Icon = FaSpinner;
-    else if (isCurrentPlaying) Icon = isPaused ? FaPlay : FaPause;
-
-    const isDisabled = !script || script.trim() === '';
-
-    return (
-      <button
-        className={`play-button ${isCurrentPlaying && !isPaused ? 'playing' : ''}`}
-        style={{
-          ...(isSmall ? styles.playButtonSmall : styles.playButton),
-          opacity: isDisabled ? 0.5 : 1,
-          cursor: isDisabled ? 'not-allowed' : 'pointer'
-        }}
-        onClick={(e) => { 
-          e.stopPropagation(); 
-          if (!isDisabled) play(script, id); 
-        }}
-        disabled={isDisabled}
-      >
-        <Icon className={isLoading ? "spin" : ""} />
-      </button>
-    );
-  };
-
-  if (!normalizedPoints || normalizedPoints.length === 0) {
-    return <div className="flex h-full items-center justify-center text-gray-400">暂无语法数据</div>;
-  }
-
   const currentGp = normalizedPoints[currentIndex];
-  const contextText = currentGp ? 
-    `语法：${currentGp.grammarPoint}\n句型：${currentGp.pattern}\n详解：${(currentGp.visibleExplanation || '').slice(0, 100)}...` 
-    : '';
+
+  if (!normalizedPoints.length) return <div style={styles.center}>暂无数据</div>;
 
   return (
     <div style={styles.container}>
-      <DraggableAiBtn contextText={contextText} />
+      {/* 悬浮播放器 - 仅当播放“讲解”时显示完整大播放器，或者一直显示当前播放内容 */}
+      <AnimatePresence>
+        {(isPlaying || isPaused) && (
+           <FloatingPlayer 
+             isPlaying={isPlaying}
+             isPaused={isPaused}
+             currentTime={currentTime}
+             duration={duration}
+             playbackRate={playbackRate}
+             onToggle={() => toggle(playingId)}
+             onSeek={seek}
+             onRateChange={setRate}
+             label={playingId && playingId.startsWith('narration') ? '语法讲解' : '例句朗读'}
+           />
+        )}
+      </AnimatePresence>
 
       {transitions((style, i) => {
         const gp = normalizedPoints[i];
         if (!gp) return null;
+        
         const narrationId = `narration_${gp.id}`;
 
         return (
-          <animated.div style={{ ...styles.page, ...style }} key={gp.id || i}>
+          <animated.div style={{ ...styles.page, ...style }}>
             <div style={styles.scrollContainer} ref={contentRef}>
               <div style={styles.contentWrapper}>
                 
-                <div style={styles.header}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-                    <h2 style={styles.grammarPointTitle}>{gp.grammarPoint}</h2>
+                {/* 标题 */}
+                <h2 style={styles.title}>{gp.title}</h2>
+
+                {/* 句型卡片 */}
+                {gp.pattern && (
+                  <div style={styles.card}>
+                    <div style={styles.cardLabel}>核心句型</div>
+                    <div style={styles.patternText}>
+                      {renderTextWithPinyin(gp.pattern, true)}
+                    </div>
+                    {/* 句型也支持朗读 */}
                     <button 
-                      onClick={handleMessengerShare}
-                      style={{ background: 'transparent', border: 'none', color: '#0084FF', cursor: 'pointer', padding: '6px', borderRadius: '50%' }}
+                      style={styles.textPlayBtn}
+                      onClick={() => play(gp.pattern, `pattern_${gp.id}`)}
                     >
-                      <FaFacebookMessenger size={22} />
+                      {loadingId === `pattern_${gp.id}` ? <FaSpinner className="spin" /> : <FaVolumeUp />} 朗读句型
                     </button>
                   </div>
+                )}
+
+                {/* 详解 (支持悬浮播放器) */}
+                <div style={styles.section}>
+                  <div style={styles.sectionHeader}>
+                    <span style={styles.sectionTitle}>📝 语法详解</span>
+                    <button 
+                       onClick={() => play(gp.explanationScript, narrationId)}
+                       style={styles.playBtnCircle}
+                       disabled={loadingId === narrationId}
+                    >
+                      {loadingId === narrationId ? <FaSpinner className="spin"/> : (playingId === narrationId && !isPaused ? <FaPause/> : <FaPlay/>)}
+                    </button>
+                  </div>
+                  <div style={styles.richText} dangerouslySetInnerHTML={{__html: simpleMarkdownToHtml(gp.explanation)}} />
                 </div>
 
-                {gp.pattern && (
-                  <div style={styles.patternBox}>
-                    <div style={styles.boxLabel}>句型结构</div>
-                    <div style={styles.patternContent}>{renderMixedText(gp.pattern, true)}</div>
-                  </div>
-                )}
-
-                <div style={styles.sectionContainer}>
+                {/* 对话式例句 */}
+                <div style={styles.section}>
                   <div style={styles.sectionHeader}>
-                    <span style={styles.sectionTitleText}>💡 详解</span>
-                    {renderPlayButton(gp.narrationScript, narrationId, false)}
+                    <span style={styles.sectionTitle}>💬 场景对话</span>
                   </div>
-                  <div style={styles.textBlock} dangerouslySetInnerHTML={{__html: simpleMarkdownToHtml(gp.visibleExplanation)}} />
-                </div>
-
-                {gp.usage && (
-                  <div style={styles.sectionContainer}>
-                    <div style={styles.sectionHeader}>
-                      <span style={{ ...styles.sectionTitleText, color: '#059669' }}>📌 适用场景</span>
-                    </div>
-                    <div style={{ ...styles.textBlock, background: '#ecfdf5', border: '1px solid #a7f3d0' }} dangerouslySetInnerHTML={{__html: simpleMarkdownToHtml(gp.usage)}} />
-                  </div>
-                )}
-
-                {gp.attention && (
-                  <div style={styles.sectionContainer}>
-                    <div style={styles.sectionHeader}>
-                      <span style={{ ...styles.sectionTitleText, color: '#ef4444' }}>⚠️ 易错点</span>
-                    </div>
-                    <div style={{ ...styles.textBlock, background: '#fff1f2', border: '1px solid #fecaca' }} dangerouslySetInnerHTML={{__html: simpleMarkdownToHtml(gp.attention)}} />
-                  </div>
-                )}
-
-                <div style={styles.sectionContainer}>
-                  <div style={styles.sectionHeader}>
-                    <span style={styles.sectionTitleText}>🗣️ 例句</span>
-                  </div>
-                  <div style={styles.examplesList}>
-                    {Array.isArray(gp.examples) && gp.examples.map((ex) => {
-                      const exId = `example_${ex.id}`;
+                  <div style={styles.dialogueContainer}>
+                    {gp.dialogues.map((ex, idx) => {
+                      const exId = `ex_${gp.id}_${idx}`;
+                      const isLeft = ex.speaker === 'A';
                       return (
-                        <div key={ex.id} style={styles.exampleItem}>
-                          <div style={styles.exampleMain}>
-                            <div style={styles.exampleSentence}>
-                              {renderMixedText(ex.sentence)}
-                            </div>
-                            <div style={styles.exampleTranslation}>{ex.translation}</div>
+                        <div key={idx} style={{ 
+                          ...styles.dialogueRow, 
+                          flexDirection: isLeft ? 'row' : 'row-reverse' 
+                        }}>
+                          <div style={{
+                            ...styles.avatar,
+                            background: isLeft ? '#3b82f6' : '#ec4899'
+                          }}>
+                            {ex.speaker}
                           </div>
-                          {renderPlayButton(ex.narrationScript, exId, true)}
+                          
+                          <div style={{
+                             ...styles.bubble,
+                             background: isLeft ? '#eff6ff' : '#fff1f2',
+                             border: isLeft ? '1px solid #dbeafe' : '1px solid #fce7f3',
+                             borderRadius: isLeft ? '16px 16px 16px 4px' : '16px 16px 4px 16px'
+                          }}>
+                             <div style={styles.bubbleText}>
+                               {renderTextWithPinyin(ex.sentence)}
+                             </div>
+                             <div style={styles.bubbleTrans}>{ex.translation}</div>
+                             <button 
+                               style={styles.bubblePlayBtn}
+                               onClick={() => play(ex.script, exId)}
+                             >
+                               {loadingId === exId ? <FaSpinner className="spin" size={12}/> : <FaVolumeUp size={12}/>}
+                             </button>
+                          </div>
                         </div>
                       );
                     })}
                   </div>
                 </div>
 
-                <div style={{ height: '120px' }} />
+                <div style={{height: 100}} /> {/* 底部垫高 */}
               </div>
             </div>
 
+            {/* 底部导航 */}
             <div style={styles.bottomBar}>
-              <button
-                style={{ ...styles.navButton, visibility: i === 0 ? 'hidden' : 'visible', background: '#f1f5f9', color: '#64748b' }}
+              <button 
+                style={{...styles.navBtn, visibility: i === 0 ? 'hidden' : 'visible'}} 
                 onClick={handlePrev}
               >
                 <FaChevronLeft /> 上一条
               </button>
-              <button
-                style={{ ...styles.navButton, background: '#2563eb', color: 'white', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)' }}
-                onClick={handleNext}
-              >
-                {i === normalizedPoints.length - 1 ? '完成学习' : '下一条'} <FaChevronRight />
+              <button style={styles.navBtnPrimary} onClick={handleNext}>
+                {i === normalizedPoints.length -1 ? '完成' : '下一条'} <FaChevronRight />
               </button>
             </div>
           </animated.div>
@@ -722,57 +639,84 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete = () => {} }) => {
 
 GrammarPointPlayer.propTypes = {
   grammarPoints: PropTypes.array.isRequired,
-  onComplete: PropTypes.func,
+  onComplete: PropTypes.func
 };
 
 // =================================================================================
-// ===== 5. 样式 =====
+// ===== 6. 样式定义 =====
 // =================================================================================
 const styles = {
-  container: { position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#f8fafc', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", sans-serif' },
-  page: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'white', willChange: 'transform, opacity' },
-  scrollContainer: { flex: 1, overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', padding: '0 16px' },
-  contentWrapper: { maxWidth: '840px', margin: '0 auto', paddingTop: '20px', minHeight: '100%' },
-  header: { textAlign: 'center', marginTop: '10px', marginBottom: '20px' },
-  grammarPointTitle: { fontSize: '1.5rem', fontWeight: '800', color: '#0f172a', margin: 0, lineHeight: 1.3 },
-  patternBox: { background: '#f8fafc', borderRadius: '12px', padding: '16px', marginBottom: '24px', border: '1px solid #e2e8f0', textAlign: 'center' },
-  boxLabel: { fontSize: '0.8rem', color: '#64748b', marginBottom: '8px', fontWeight: '600', letterSpacing: '1px' },
-  patternContent: { fontSize: '1.2rem', fontWeight: '700', display: 'inline-block' },
-  patternChinese: { color: '#2563eb', margin: '0 4px' },
-  patternMyanmar: { color: '#059669', margin: '0 4px' },
-  sectionContainer: { marginBottom: '24px' },
-  sectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' },
-  sectionTitleText: { fontSize: '1rem', fontWeight: '700', color: '#0f172a' },
-  playButton: { background: 'rgba(37, 99, 235, 0.08)', color: '#2563eb', border: 'none', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.18s' },
-  playButtonSmall: { background: 'transparent', border: '1px solid #e2e8f0', color: '#64748b', borderRadius: '50%', width: '36px', height: '36px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.18s' },
-  textBlock: { background: '#ffffff', borderRadius: '12px', padding: '16px', border: '1px solid #e6eef8', fontSize: '1rem', lineHeight: 1.75, color: '#475569', wordWrap: 'break-word' },
-  examplesList: { display: 'flex', flexDirection: 'column', gap: '12px' },
-  exampleItem: { background: '#f8fafc', borderRadius: '12px', padding: '12px', display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid #e2e8f0' },
-  exampleMain: { flex: 1 },
-  exampleSentence: { fontSize: '1.05rem', fontWeight: 500, marginBottom: '6px', lineHeight: 1.5 },
-  exampleTranslation: { fontSize: '0.9rem', color: '#64748b' },
-  textChinese: { color: '#0f172a' },
-  textBurmese: { color: '#064e3b' },
-  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '86px', background: 'rgba(255,255,255,0.96)', backdropFilter: 'blur(8px)', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 20px', paddingBottom: '20px', zIndex: 50 },
-  navButton: { border: 'none', borderRadius: '30px', padding: '12px 22px', fontSize: '1rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.22s' }
+  container: { position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#f8fafc', fontFamily: 'system-ui, sans-serif' },
+  center: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' },
+  page: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'white' },
+  scrollContainer: { flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 16px' },
+  contentWrapper: { maxWidth: '800px', margin: '0 auto', paddingTop: '20px' },
+  
+  title: { fontSize: '1.6rem', fontWeight: '800', textAlign: 'center', color: '#1e293b', marginBottom: '20px' },
+  
+  card: { background: 'white', borderRadius: '12px', padding: '16px', marginBottom: '24px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03)', border: '1px solid #e2e8f0' },
+  cardLabel: { fontSize: '0.85rem', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '8px' },
+  patternText: { fontSize: '1.25rem', fontWeight: '600', color: '#0f172a', lineHeight: 1.6 },
+  textPlayBtn: { marginTop: '10px', fontSize: '0.9rem', color: '#3b82f6', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' },
+
+  section: { marginBottom: '30px' },
+  sectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' },
+  sectionTitle: { fontSize: '1.1rem', fontWeight: '700', color: '#334155' },
+  playBtnCircle: { width: 32, height: 32, borderRadius: '50%', background: '#3b82f6', color: 'white', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
+  
+  richText: { fontSize: '1rem', lineHeight: 1.8, color: '#475569', background: '#f8fafc', padding: '16px', borderRadius: '12px' },
+
+  // Ruby (注音) 样式
+  ruby: { rubyPosition: 'over', margin: '0 2px' },
+  rt: { fontSize: '0.6em', color: '#64748b' },
+  textBurmese: { fontSize: '1.1em', color: '#059669' },
+  textNeutral: { color: '#334155' },
+
+  // 对话样式
+  dialogueContainer: { display: 'flex', flexDirection: 'column', gap: '16px' },
+  dialogueRow: { display: 'flex', alignItems: 'flex-start', gap: '10px' },
+  avatar: { width: 36, height: 36, borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '14px', flexShrink: 0 },
+  bubble: { padding: '12px 16px', maxWidth: '80%', position: 'relative' },
+  bubbleText: { fontSize: '1rem', color: '#1e293b', marginBottom: '4px' },
+  bubbleTrans: { fontSize: '0.85rem', color: '#64748b' },
+  bubblePlayBtn: { position: 'absolute', top: '8px', right: '8px', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' },
+
+  // 底部导航
+  bottomBar: { height: '80px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 20px', background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(5px)', zIndex: 10 },
+  navBtn: { border: 'none', background: 'transparent', color: '#64748b', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' },
+  navBtnPrimary: { border: 'none', background: '#2563eb', color: 'white', padding: '10px 24px', borderRadius: '30px', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '600' },
+
+  // 悬浮播放器
+  dragConstraints: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none', zIndex: 90 },
+  floatPlayerContainer: {
+    position: 'absolute', bottom: '100px', right: '20px', width: '280px',
+    background: 'rgba(15, 23, 42, 0.9)', backdropFilter: 'blur(10px)',
+    borderRadius: '16px', padding: '12px', display: 'flex', alignItems: 'center', gap: '12px',
+    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3)', zIndex: 100, color: 'white'
+  },
+  floatAvatar: {
+    width: 40, height: 40, cursor: 'grab', display: 'flex', alignItems: 'center', justifyContent: 'center'
+  },
+  floatContent: { flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' },
+  floatHeader: { display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#94a3b8' },
+  floatLabel: { fontWeight: 'bold', color: 'white' },
+  floatSlider: { width: '100%', height: '4px', borderRadius: '2px', accentColor: '#3b82f6', cursor: 'pointer' },
+  floatControls: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  floatPlayBtn: { width: 28, height: 28, borderRadius: '50%', background: '#3b82f6', border: 'none', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
+  rateControl: { display: 'flex', gap: '4px', alignItems: 'center' },
+  rateBtn: { padding: '2px 6px', borderRadius: '4px', border: 'none', color: 'white', fontSize: '9px', cursor: 'pointer' }
 };
 
-const styleTag = typeof document !== 'undefined' ? (document.getElementById('grammar-player-styles') || document.createElement('style')) : null;
-if (styleTag) {
-  styleTag.id = 'grammar-player-styles';
-  styleTag.innerHTML = `
+// 注入动画与全局样式
+if (typeof document !== 'undefined' && !document.getElementById('gp-player-style')) {
+  const style = document.createElement('style');
+  style.id = 'gp-player-style';
+  style.innerHTML = `
     .spin { animation: spin 1s linear infinite; }
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-    .play-button:active { transform: scale(0.94); }
-    .playing { animation: pulse-ring 2s infinite; background-color: rgba(37, 99, 235, 0.12) !important; color: #2563eb !important; border-color: #2563eb !important; }
-    @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.45); } 70% { box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); } 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); } }
-    .md-table { width: 100%; border-collapse: collapse; margin: 1em 0; font-size: 0.9em; }
-    .md-table td, .md-table th { border: 1px solid #e2e8f0; padding: 8px; }
-    .md-table tr:nth-child(even) { background-color: #f8fafc; }
-    blockquote { border-left: 4px solid #3b82f6; background: #eff6ff; margin: 1em 0; padding: 0.5em 1em; color: #1e40af; }
-    ruby rt { font-size: 0.6em; color: #64748b; user-select: none; }
+    ruby { ruby-align: center; }
   `;
-  if (!document.getElementById('grammar-player-styles')) document.head.appendChild(styleTag);
+  document.head.appendChild(style);
 }
 
 export default GrammarPointPlayer;
