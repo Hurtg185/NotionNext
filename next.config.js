@@ -322,6 +322,7 @@ const nextConfig = {
     return config
   },
   experimental: {
+    runtime: 'edge', // <--
     scrollRestoration: true,
     // 性能优化实验性功能
     optimizePackageImports: ['@heroicons/react', 'lodash']
