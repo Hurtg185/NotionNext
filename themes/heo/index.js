@@ -105,7 +105,7 @@ const CustomScrollbarStyle = () => (
     `}</style>
 );
 
-// 激活码校验逻辑 (第一道防线)
+// 激活码校验逻辑 (第一道防线 - 省流关键)
 const validateActivationCode = (code) => {
     if (!code) return { isValid: false, error: "请输入激活码" };
     const trimmedCode = code.trim().toUpperCase();
@@ -120,7 +120,7 @@ const validateActivationCode = (code) => {
         return { isValid: false, error: "激活码不完整" };
     }
 
-    // 2. 等级白名单检查
+    // 2. 等级白名单检查 (根据你的业务调整)
     const VALID_LEVELS = ['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'H7-9'];
     if (!VALID_LEVELS.includes(parts[0])) {
         return { isValid: false, error: `不支持的等级: ${parts[0]}` };
@@ -152,6 +152,7 @@ const HomeSidebar = ({ isOpen, onClose, sidebarX, isDragging }) => {
       try {
         setUser(JSON.parse(cachedUser));
       } catch (e) {
+        console.error("Local storage error", e);
         localStorage.removeItem('hsk_user');
       }
     }
@@ -963,4 +964,4 @@ const LayoutTagIndex = props => {
 export {
   Layout404, LayoutArchive, LayoutBase, LayoutCategoryIndex, LayoutIndex,
   LayoutPostList, LayoutSearch, LayoutSlug, LayoutTagIndex, CONFIG as THEME_CONFIG
-     }
+}
