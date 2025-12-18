@@ -12,7 +12,7 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 // 扫描项目 /themes 下的目录名
 const themes = scanSubdirectories(path.resolve(__dirname, 'themes'))
 
-// 检测多语言逻辑
+// 检测用户开启的多语言
 const locales = (function () {
   const langs = [BLOG.LANG]
   if (BLOG.NOTION_PAGE_ID.indexOf(',') > 0) {
@@ -61,17 +61,17 @@ function scanSubdirectories(directory) {
   return subdirectories
 }
 
-// 判定是否为导出模式（Cloudflare 部署环境强制开启）
-const isExport = true // Cloudflare Pages 必须使用静态导出
+// 判定是否为导出模式（Cloudflare 部署必备）
+const isExport = process.env.EXPORT === 'true' || process.env.npm_lifecycle_event === 'export' || true
 
 /**
  * @type {import('next').NextConfig}
  */
 const nextConfig = {
-  // 1. 强制设为静态导出模式，解决 Cloudflare 兼容性
+  // 1. 强制为静态导出
   output: 'export',
   
-  // 2. 核心：强制添加斜杠。解决刷新 404 和“拼音课程数据收不到”的问题
+  // 2. 核心修复：添加斜杠。解决拼音课程页面刷新空白、数据加载不到的问题
   trailingSlash: true,
 
   eslint: {
@@ -84,12 +84,15 @@ const nextConfig = {
   generateEtags: true,
   swcMinify: true,
 
+  // 构建优化：模块化导入
   modularizeImports: {
     '@heroicons/react/24/outline': { transform: '@heroicons/react/24/outline/{{member}}' },
     '@heroicons/react/24/solid': { transform: '@heroicons/react/24/solid/{{member}}' }
   },
 
-  // 【彻底修复部署失败】在 Export 模式下物理移除 i18n 属性
+  // 【物理级修复部署报错】
+  // 使用展开运算符。如果是导出模式，完全不向对象中注入 i18n 属性。
+  // 即使 i18n: undefined 也会报错，必须彻底让这个“键”消失。
   ...(isExport ? {} : {
     i18n: {
       defaultLocale: BLOG.LANG,
@@ -98,7 +101,7 @@ const nextConfig = {
   }),
 
   images: {
-    // 静态导出模式下必须禁用图片优化，否则部署必崩
+    // 静态导出必须开启 unoptimized，否则 CF Pages 无法加载图片
     unoptimized: true,
     formats: ['image/avif', 'image/webp'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
@@ -114,15 +117,36 @@ const nextConfig = {
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;"
   },
 
-  // 物理移除 Export 模式不支持的键名
+  // 物理移除导出模式不支持的配置
   ...(isExport ? {} : {
     redirects: async () => [{ source: '/feed', destination: '/rss/feed.xml', permanent: true }],
     rewrites: async () => {
-      const langsRewrites = []
-      // (这里保留你原始的 rewrites 逻辑...)
-      return [...langsRewrites, { source: '/:path*.html', destination: '/:path*' }]
+        const langsRewrites = []
+        if (BLOG.NOTION_PAGE_ID.indexOf(',') > 0) {
+          const siteIds = BLOG.NOTION_PAGE_ID.split(',')
+          const langs = []
+          for (let index = 0; index < siteIds.length; index++) {
+            const siteId = siteIds[index]
+            const prefix = extractLangPrefix(siteId)
+            if (prefix) langs.push(prefix)
+          }
+          langsRewrites.push(
+            { source: `/:locale(${langs.join('|')})/:path*`, destination: '/:path*' },
+            { source: `/:locale(${langs.join('|')})`, destination: '/' },
+            { source: `/:locale(${langs.join('|')})/`, destination: '/' }
+          )
+        }
+        return [...langsRewrites, { source: '/:path*.html', destination: '/:path*' }]
     },
-    headers: async () => [{ source: '/:path*{/}?', headers: [{ key: 'Access-Control-Allow-Origin', value: '*' }] }]
+    headers: async () => [{ 
+        source: '/:path*{/}?', 
+        headers: [
+            { key: 'Access-Control-Allow-Credentials', value: 'true' },
+            { key: 'Access-Control-Allow-Origin', value: '*' },
+            { key: 'Access-Control-Allow-Methods', value: 'GET,OPTIONS,PATCH,DELETE,POST,PUT' },
+            { key: 'Access-Control-Allow-Headers', value: 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version' }
+        ] 
+    }]
   }),
 
   webpack: (config, { dev, isServer }) => {
