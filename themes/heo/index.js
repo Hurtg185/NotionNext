@@ -36,7 +36,8 @@ import {
     BookOpen,
     MessageCircle,
     Maximize2,
-    Sparkles
+    Sparkles,
+    Gem
 } from 'lucide-react'
 import { HashTag } from '@/components/HeroIcons'
 
@@ -84,15 +85,6 @@ const CustomScrollbarStyle = () => (
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(150, 150, 150, 0.3); border-radius: 10px; }
         .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(100, 100, 100, 0.4); }
-        
-        /* 隐藏价格图的滚动条，保持美观 */
-        .hide-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
-        .hide-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
         
         #theme-heo footer, 
         #theme-heo .footer-wrapper, 
@@ -263,106 +255,76 @@ const HomeSidebar = ({ isOpen, onClose, sidebarX }) => {
 };
 
 // =================================================================================
-// ======================  价格表组件 (可拖动 - 豪华大图版)  ========================
+// ======================  价格表组件 (三合一展示版)  ========================
 // =================================================================================
 
-const DraggablePriceChart = () => {
-    const scrollRef = useRef(null);
-    const [isDragging, setIsDragging] = useState(false);
-    const [startX, setStartX] = useState(0);
-    const [scrollLeft, setScrollLeft] = useState(0);
-
-    // 课程数据定义 - 按照要求修改了价格和图片
+const PriceChartDisplay = () => {
+    // 课程数据定义
     const courses = [
         {
             id: 1,
-            title: '七天搞定hsk',
+            title: 'HSK 1',
             price: '10,000 Ks',
             image: 'https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/IMG_20251219_162925.png'
         },
         {
             id: 2,
-            title: '汉语日常会话10000句',
-            price: '60,000 Ks',
-            image: 'https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/IMG_20251219_163032.png'
+            title: 'HSK 2',
+            price: '30,000 Ks',
+            image: 'https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/IMG_20251219_162958.png'
         },
         {
             id: 3,
-            title: 'hsk2速成',
-            price: '30,000 Ks',
+            title: '口语课',
+            price: '60,000 Ks',
             image: 'https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/IMG_20251219_162958.png'
         }
     ];
 
-    // 鼠标按下
-    const handleMouseDown = (e) => {
-        setIsDragging(true);
-        setStartX(e.pageX - scrollRef.current.offsetLeft);
-        setScrollLeft(scrollRef.current.scrollLeft);
-    };
-
-    // 鼠标离开或松开
-    const handleMouseUpOrLeave = () => {
-        setIsDragging(false);
-    };
-
-    // 鼠标移动
-    const handleMouseMove = (e) => {
-        if (!isDragging) return;
-        e.preventDefault();
-        const x = e.pageX - scrollRef.current.offsetLeft;
-        const walk = (x - startX) * 2; // 滚动速度系数
-        scrollRef.current.scrollLeft = scrollLeft - walk;
-    };
-
     return (
-        <div className="w-full max-w-4xl px-4 pointer-events-auto">
+        <div className="w-full max-w-5xl px-2 md:px-4 pointer-events-auto">
              {/* 容器：深色磨砂玻璃背景，营造高端感 */}
-            <div className="bg-black/30 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-2xl ring-1 ring-white/5">
+            <div className="bg-black/30 backdrop-blur-xl border border-white/20 rounded-3xl p-4 md:p-6 shadow-[0_8px_32px_rgba(0,0,0,0.3)] ring-1 ring-white/10">
                  <div className="flex items-center justify-between px-2 mb-4">
                      <span className="text-sm font-bold text-white/90 flex items-center gap-2 tracking-wider">
-                        <Sparkles size={14} className="text-yellow-400" /> 精选课程
+                        <Sparkles size={14} className="text-yellow-400" /> 热门课程
                      </span>
                      <span className="text-[10px] text-white/40 uppercase tracking-widest flex items-center gap-1">
-                        <Maximize2 size={10} /> 左右滑动查看
+                        <Gem size={10} /> 官方认证
                      </span>
                  </div>
                  
-                {/* 滚动区域 */}
-                <div 
-                    ref={scrollRef}
-                    className="overflow-x-auto hide-scrollbar cursor-grab active:cursor-grabbing select-none flex gap-6 pb-2"
-                    onMouseDown={handleMouseDown}
-                    onMouseLeave={handleMouseUpOrLeave}
-                    onMouseUp={handleMouseUpOrLeave}
-                    onMouseMove={handleMouseMove}
-                >
+                {/* 网格布局：强制3列，确保所有图片完整显示 */}
+                <div className="grid grid-cols-3 gap-3 md:gap-6 lg:gap-8">
                     {courses.map((course) => (
-                        <div key={course.id} className="relative flex-shrink-0 w-44 md:w-56 group">
-                            {/* 卡片容器：默认微光边框，悬停高亮 */}
-                            <div className="aspect-[3/4] overflow-hidden rounded-2xl bg-gray-900/50 shadow-xl relative border border-white/10 transition-all duration-500 group-hover:border-yellow-500/50 group-hover:shadow-[0_0_20px_rgba(234,179,8,0.2)]">
-                                {/* 图片 - 关键：draggable=false 修复拖动问题 */}
+                        <div key={course.id} className="relative group cursor-pointer">
+                            {/* 
+                                卡片外围边框容器 
+                                高端大气：悬停时带金色发光阴影 + 上浮效果 
+                            */}
+                            <div className="aspect-[3/4] overflow-hidden rounded-xl bg-gray-900/40 relative border border-white/10 transition-all duration-500 ease-out group-hover:border-yellow-500/60 group-hover:shadow-[0_10px_30px_-5px_rgba(234,179,8,0.3)] group-hover:-translate-y-2">
+                                
+                                {/* 图片 */}
                                 <img 
                                     src={course.image} 
                                     alt={course.title} 
-                                    draggable="false" 
                                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
                                 />
                                 
                                 {/* 底部渐变遮罩 */}
-                                <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80 group-hover:opacity-60 transition-opacity" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-80 group-hover:opacity-70 transition-opacity" />
 
                                 {/* 内容区域 */}
-                                <div className="absolute bottom-0 left-0 right-0 p-4 transform translate-y-1 group-hover:translate-y-0 transition-transform duration-300">
-                                    <div className="w-8 h-1 bg-yellow-500 mb-2 rounded-full shadow-[0_0_8px_rgba(234,179,8,0.8)]"></div>
-                                    <h3 className="text-white text-lg font-bold leading-tight drop-shadow-md">{course.title}</h3>
-                                    <p className="text-yellow-400 text-xl font-black mt-1 tracking-wide">{course.price}</p>
+                                <div className="absolute bottom-0 left-0 right-0 p-2 md:p-4 text-center">
+                                    <h3 className="text-white text-xs md:text-lg font-bold leading-tight drop-shadow-md mb-0.5 md:mb-1">{course.title}</h3>
+                                    <p className="text-yellow-400 text-xs md:text-xl font-black tracking-wide">{course.price}</p>
                                 </div>
+                                
+                                {/* 高光流光效果 */}
+                                <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none mix-blend-overlay"></div>
                             </div>
                         </div>
                     ))}
-                    {/* 右侧留白，防止最后一个卡片贴边 */}
-                    <div className="w-2 flex-shrink-0" />
                 </div>
             </div>
         </div>
@@ -445,24 +407,24 @@ const LayoutIndex = props => {
             </button>
             
             {/* Hero 区域：包含文字和价格表 */}
-            <div className='absolute top-0 left-0 right-0 h-[68vh] z-10 pt-20 px-6 flex flex-col items-center text-center text-white pointer-events-none'>
-                <div className='max-w-4xl w-full flex flex-col items-center'>
-                    <h1 className='text-5xl md:text-6xl font-black tracking-tight mb-4 drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]'>中缅文培训中心</h1>
-                    <div className='mb-6'>
-                        <p className='text-lg md:text-xl font-bold leading-relaxed mb-2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] opacity-95'>
+            <div className='absolute top-0 left-0 right-0 h-[68vh] z-10 pt-16 md:pt-20 px-4 flex flex-col items-center text-center text-white pointer-events-none'>
+                <div className='max-w-5xl w-full flex flex-col items-center'>
+                    <h1 className='text-4xl md:text-6xl font-black tracking-tight mb-3 md:mb-4 drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]'>中缅文培训中心</h1>
+                    <div className='mb-4 md:mb-6'>
+                        <p className='text-base md:text-xl font-bold leading-relaxed mb-1 md:mb-2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] opacity-95'>
                             专业中缅双语教学，连接文化与机遇的桥梁。
                         </p>
-                        <p className='text-sm md:text-md font-bold text-blue-300 tracking-widest drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]'>
+                        <p className='text-xs md:text-md font-bold text-blue-300 tracking-widest drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]'>
                             မြန်မာ-တရုတ် နှစ်ဘာသာစကား သင်ကြားရေး ကျွမ်းကျင်သူ။
                         </p>
                     </div>
                     
                     {/* 
-                        DraggablePriceChart 容器
-                        z-30 保证层级高于滚动层，pointer-events-auto 保证可拖动
+                        PriceChartDisplay 容器
+                        z-30 保证层级高于滚动层，pointer-events-auto 保证可交互
                     */}
-                    <div className="z-30 w-full flex justify-center mt-2 pointer-events-auto">
-                        <DraggablePriceChart />
+                    <div className="z-30 w-full flex justify-center mt-1 md:mt-2 pointer-events-auto">
+                        <PriceChartDisplay />
                     </div>
                 </div>
             </div>
@@ -470,9 +432,9 @@ const LayoutIndex = props => {
             {/* 内容滚动层 */}
             <div ref={scrollableContainerRef} className='absolute inset-0 z-20 overflow-y-auto overscroll-y-contain custom-scrollbar'>
                 {/* 增加Spacer高度以容纳更大的图片卡片 */}
-                <div className='h-[65vh] flex-shrink-0' />
+                <div className='h-[62vh] md:h-[65vh] flex-shrink-0' />
                 
-                <div className='relative bg-white dark:bg-gray-900 rounded-t-[40px] shadow-[0_-15px_35px_rgba(0,0,0,0.3)] pb-10 min-h-[calc(35vh+1px)] transition-all'>
+                <div className='relative bg-white dark:bg-gray-900 rounded-t-[40px] shadow-[0_-15px_35px_rgba(0,0,0,0.3)] pb-10 min-h-[calc(40vh+1px)] transition-all'>
                     <div className='w-16 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto my-6'></div>
 
                     <main className="max-w-5xl mx-auto px-4 py-2">
