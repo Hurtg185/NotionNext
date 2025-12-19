@@ -4,7 +4,7 @@ import { useRouter } from 'next/router';
 import {
   Mic2, Music4, Layers, BookText, Lightbulb,
   Sparkles, PlayCircle, Gem, MessageCircle,
-  Crown, Heart, ChevronRight, Star, List
+  Crown, Heart, ChevronRight, Star
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
@@ -83,7 +83,7 @@ const MembershipModal = ({ isOpen, onClose, targetLevel }) => {
         className="relative w-full max-w-sm bg-white rounded-[2rem] shadow-2xl overflow-hidden p-6"
       >
         <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full text-slate-400 hover:bg-slate-200 transition-colors">
-            <MessageCircle className="rotate-45" size={20} />
+          <MessageCircle className="rotate-45" size={20} />
         </button>
         <div className="text-center mt-2">
           <div className="bg-amber-100 w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -149,14 +149,15 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
 
       {/* 底部功能区 */}
       <div className="px-4 pb-5 pt-1">
-        {/* 全部课程 - 修复：改为Link以便点击跳转 */}
-        <Link href="/courses" passHref>
-          <a className="w-full py-2 flex items-center justify-center text-xs font-bold text-slate-400 gap-1 bg-slate-50/50 rounded-xl mb-3 hover:bg-slate-100 transition-colors active:scale-95">
-            全部课程 <ChevronRight size={12} />
-          </a>
-        </Link>
+        {/* 全部课程 - 强制使用 onClick 跳转，修复 Link 无效问题 */}
+        <div 
+          onClick={() => router.push('/courses')}
+          className="w-full py-2 flex items-center justify-center text-xs font-bold text-slate-400 gap-1 bg-slate-50/50 rounded-xl mb-3 hover:bg-slate-100 transition-colors active:scale-95 cursor-pointer"
+        >
+          全部课程 <ChevronRight size={12} />
+        </div>
 
-        {/* 生词本按钮 - 修复：增加 z-index 和点击处理 */}
+        {/* 生词本按钮 */}
         <button
           onClick={(e) => {
             e.preventDefault();
@@ -174,8 +175,11 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
   );
 };
 
-// 拼音面板组件 - 修复：增加收藏按钮并排显示
+// 拼音面板组件
 const PinyinSection = () => {
+  // 必须在这里引入 router 才能在内部跳转
+  const router = useRouter();
+
   return (
     <div className="space-y-3">
       {/* 拼音 4 格 - 紧凑型 */}
@@ -194,35 +198,37 @@ const PinyinSection = () => {
 
       {/* 底部功能区：发音技巧 + 单词收藏 (并排) */}
       <div className="grid grid-cols-2 gap-3">
-        {/* 发音技巧 */}
-        <Link href="/pinyin/tips" passHref>
-          <a className="flex items-center justify-between px-3 py-3 bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl border border-orange-100/50 active:scale-95 transition-transform">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-white rounded-full text-orange-500 shadow-sm shrink-0">
-                <Lightbulb size={14} fill="currentColor" />
-              </div>
-              <div className="text-left leading-tight">
-                <span className="block text-xs font-black text-slate-700">发音技巧</span>
-              </div>
+        {/* 发音技巧 - 使用 div onClick 方式跳转 */}
+        <div 
+          onClick={() => router.push('/pinyin/tips')}
+          className="flex items-center justify-between px-3 py-3 bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl border border-orange-100/50 active:scale-95 transition-transform cursor-pointer"
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-white rounded-full text-orange-500 shadow-sm shrink-0">
+              <Lightbulb size={14} fill="currentColor" />
             </div>
-            <ChevronRight size={14} className="text-orange-300" />
-          </a>
-        </Link>
+            <div className="text-left leading-tight">
+              <span className="block text-xs font-black text-slate-700">发音技巧</span>
+            </div>
+          </div>
+          <ChevronRight size={14} className="text-orange-300" />
+        </div>
 
-        {/* 单词收藏 - 新增按钮 */}
-        <Link href="/vocabulary/collection" passHref>
-          <a className="flex items-center justify-between px-3 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100/50 active:scale-95 transition-transform">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-white rounded-full text-blue-500 shadow-sm shrink-0">
-                <Star size={14} fill="currentColor" />
-              </div>
-              <div className="text-left leading-tight">
-                <span className="block text-xs font-black text-slate-700">单词收藏</span>
-              </div>
+        {/* 单词收藏 - 使用 div onClick 方式跳转，修复无法打开问题 */}
+        <div 
+          onClick={() => router.push('/vocabulary/collection')}
+          className="flex items-center justify-between px-3 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100/50 active:scale-95 transition-transform cursor-pointer"
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-white rounded-full text-blue-500 shadow-sm shrink-0">
+              <Star size={14} fill="currentColor" />
             </div>
-            <ChevronRight size={14} className="text-blue-300" />
-          </a>
-        </Link>
+            <div className="text-left leading-tight">
+              <span className="block text-xs font-black text-slate-700">单词收藏</span>
+            </div>
+          </div>
+          <ChevronRight size={14} className="text-blue-300" />
+        </div>
       </div>
     </div>
   );
