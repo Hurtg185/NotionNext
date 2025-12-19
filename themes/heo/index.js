@@ -33,8 +33,7 @@ import {
     Heart,
     Star,
     CheckCircle,
-    BookOpen,
-    MessageCircle
+    BookOpen
 } from 'lucide-react'
 import { HashTag } from '@/components/HeroIcons'
 
@@ -256,16 +255,19 @@ const HomeSidebar = ({ isOpen, onClose, sidebarX }) => {
 // =================================================================================
 
 const ActionButtons = ({ onOpenFavorites }) => {
+  // 您可以在此处替换 img 标签中的 src 链接
   const actions = [
     { 
-        icon: <MessageCircle size={22} />, 
+        // 替换此链接为您的一键私信图标
+        imgSrc: 'https://cdn-icons-png.flaticon.com/512/5968/5968771.png', 
         text: '一键私信', 
         type: 'contact', 
         color: 'from-blue-600 to-sky-500',
         onClick: () => window.open('https://m.me/61575187883357', '_blank')
     },
     { 
-        icon: <Heart size={22} />, 
+        // 替换此链接为您的收藏生词图标
+        imgSrc: 'https://cdn-icons-png.flaticon.com/512/833/833472.png', 
         text: '收藏生词', 
         type: 'words', 
         color: 'from-orange-500 to-amber-500',
@@ -274,15 +276,16 @@ const ActionButtons = ({ onOpenFavorites }) => {
   ];
 
   return (
-    <div className="flex justify-center gap-4 md:gap-8 px-4 pointer-events-auto">
+    <div className="flex justify-center gap-4 md:gap-6 px-4 pointer-events-auto">
       {actions.map((action, index) => (
         <button 
             key={index} 
             onClick={action.onClick} 
-            className={`flex items-center gap-2 px-6 py-3 rounded-full shadow-2xl text-white bg-gradient-to-br ${action.color} transition-all duration-300 transform hover:-translate-y-1 hover:brightness-110 active:scale-95`}
+            className={`flex items-center gap-3 pl-4 pr-6 py-3 rounded-full shadow-2xl text-white bg-gradient-to-br ${action.color} border border-white/20 backdrop-blur-sm transition-all duration-300 transform hover:-translate-y-1 hover:brightness-110 active:scale-95`}
         >
-          {action.icon}
-          <span className="text-sm font-bold whitespace-nowrap">{action.text}</span>
+          {/* 图片图标 - 您可以替换上面的链接 */}
+          <img src={action.imgSrc} alt={action.text} className="w-6 h-6 object-contain drop-shadow-md" />
+          <span className="text-base font-bold whitespace-nowrap drop-shadow-sm">{action.text}</span>
         </button>
       ))}
     </div>
@@ -366,14 +369,17 @@ const LayoutIndex = props => {
             <div className='absolute inset-0 z-0 bg-cover bg-center transition-opacity duration-1000' style={{ backgroundImage: `url(${backgroundUrl})` }} />
             <div className='absolute inset-0 bg-black/40 backdrop-blur-[1px]'></div>
 
-            {/* 汉堡按钮 - 提高层级并微调位置 */}
-            <button onClick={openSidebar} className="absolute top-5 left-5 z-30 p-3 text-white bg-white/20 backdrop-blur-md rounded-full hover:bg-white/30 transition-all shadow-lg">
+            {/* 汉堡按钮 - 固定在左上角，z-index 高，确保可点击 */}
+            <button 
+                onClick={openSidebar} 
+                className="absolute top-6 left-6 z-50 p-3 text-white bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all shadow-lg border border-white/10"
+            >
                 <i className="fas fa-bars text-xl"></i>
             </button>
             
-            {/* Hero 区域：包含文字和按钮，确保在背景图上可见 */}
-            <div className='absolute top-0 left-0 right-0 h-[50vh] z-10 pt-20 px-6 flex flex-col items-center text-center text-white pointer-events-none'>
-                <div className='max-w-4xl'>
+            {/* Hero 区域：包含文字和操作按钮，背景透明，点击穿透处理 */}
+            <div className='absolute top-0 left-0 right-0 h-[60vh] z-10 pt-24 px-6 flex flex-col items-center text-center text-white pointer-events-none'>
+                <div className='max-w-4xl w-full'>
                     <h1 className='text-5xl md:text-6xl font-black tracking-tight mb-4 drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]'>中缅文培训中心</h1>
                     <div className='mb-8'>
                         <p className='text-lg md:text-xl font-bold leading-relaxed mb-2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] opacity-95'>
@@ -383,8 +389,9 @@ const LayoutIndex = props => {
                             မြန်မာ-တရုတ် နှစ်ဘာသာစကား သင်ကြားရေး ကျွမ်းကျင်သူ။
                         </p>
                     </div>
-                    {/* 操作按钮：直接放在 Hero 文字下方，背景图上 */}
-                    <div className='mt-2'>
+                    
+                    {/* 操作按钮：放在 Hero 背景上，必须开启 pointer-events-auto */}
+                    <div className='mt-4 flex justify-center pointer-events-auto'>
                         <ActionButtons onOpenFavorites={handleOpenFavorites} />
                     </div>
                 </div>
@@ -392,13 +399,13 @@ const LayoutIndex = props => {
 
             {/* 内容滚动层 */}
             <div ref={scrollableContainerRef} className='absolute inset-0 z-20 overflow-y-auto overscroll-y-contain custom-scrollbar'>
-                {/* 增加背景与内容之间的空隙 (Spacer)，确保背景按钮不被立即挡住 */}
-                <div className='h-[48vh] flex-shrink-0' />
+                {/* 增加背景与内容之间的空隙 (Spacer) */}
+                <div className='h-[55vh] flex-shrink-0' />
                 
-                <div className='relative bg-white dark:bg-gray-900 rounded-t-[40px] shadow-[0_-15px_35px_rgba(0,0,0,0.3)] pb-10 min-h-[calc(52vh+1px)] transition-all'>
+                <div className='relative bg-white dark:bg-gray-900 rounded-t-[40px] shadow-[0_-15px_35px_rgba(0,0,0,0.3)] pb-10 min-h-[calc(45vh+1px)] transition-all'>
                     <div className='w-16 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto my-6'></div>
 
-                    <main className="max-w-5xl mx-auto px-4 py-4">
+                    <main className="max-w-5xl mx-auto px-4 py-2">
                         <div className='mb-6 px-4'>
                             <h2 className='text-2xl font-black text-gray-800 dark:text-gray-100 flex items-center gap-3'>
                                 <GraduationCap className='text-blue-600' /> HSK 标准课程
