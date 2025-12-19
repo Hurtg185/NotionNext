@@ -8,7 +8,6 @@ import XuanZeTi from './XuanZeTi';
 import PaiXuTi from './PaiXuTi';
 import LianXianTi from './LianXianTi';
 import GaiCuoTi from './GaiCuoTi';
-import DuiHua from './DuiHua';
 import TianKongTi from './TianKongTi';
 import GrammarPointPlayer from './GrammarPointPlayer';
 
