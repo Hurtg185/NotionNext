@@ -181,7 +181,7 @@ export default {
           { id: "3", text: "缅甸 (Miǎndiàn)" },
           { id: "4", text: "英国 (Yīngguó)" }
         ],
-        correctAnswer: "3","1"
+        correctAnswer: "3",
       }
     },
 
