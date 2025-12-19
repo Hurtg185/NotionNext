@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import { HiSpeakerWave } from "react-icons/hi2";
-import { FaChevronLeft, FaChevronRight, FaPlay } from "react-icons/fa";
+import { FaChevronLeft, FaChevronRight, FaPlay, FaHome, FaRedo } from "react-icons/fa";
 
 // --- 1. 核心全屏播放器组件 ---
 import WordStudyPlayer from './WordStudyPlayer';
@@ -115,7 +115,7 @@ const CardListRenderer = ({ data, type, onComplete }) => {
   );
 };
 
-// 2. 重构首页：全屏背景 + 动态居中按钮
+// 2. 重构首页：移除动态特效，改为静态布局
 const CoverBlock = ({ data, onNext }) => {
   return (
     <div className="w-full h-full flex flex-col items-center justify-center relative bg-slate-900 overflow-hidden">
@@ -129,42 +129,48 @@ const CoverBlock = ({ data, onNext }) => {
       
       {/* 内容居中 */}
       <div className="relative z-10 w-full px-8 text-center flex flex-col items-center">
-        <h1 className="text-4xl md:text-5xl font-black text-white mb-4 leading-tight drop-shadow-lg">
+        <h1 className="text-4xl md:text-5xl font-black text-white mb-6 leading-tight drop-shadow-lg">
           {data.title || "开始学习"}
         </h1>
-        <p className="text-white/80 text-lg max-w-xs mb-12 font-medium drop-shadow-md">
+        <p className="text-white/80 text-lg max-w-xs mb-16 font-medium drop-shadow-md">
           {data.description || "准备好了吗？让我们开始今天的课程吧！"}
         </p>
 
-        {/* 动态样式按钮 */}
+        {/* 静态按钮 */}
         <button 
           onClick={onNext}
-          className="group relative flex items-center justify-center"
+          className="flex items-center gap-3 px-10 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-full font-bold text-lg shadow-xl shadow-blue-900/50 active:scale-95 transition-all"
         >
-          {/* 呼吸灯光环特效 */}
-          <div className="absolute inset-0 bg-blue-500 rounded-full blur-xl opacity-50 animate-pulse group-active:opacity-80" />
-          
-          <div className="relative w-24 h-24 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(37,99,235,0.6)] group-hover:scale-110 group-active:scale-90 transition-all duration-300">
-            <FaPlay size={32} className="ml-2" />
-          </div>
-          <span className="absolute -bottom-10 text-white font-black tracking-widest text-sm animate-bounce">
-            TOUCH TO START
-          </span>
+          <FaPlay size={18} />
+          <span>开始学习</span>
         </button>
       </div>
     </div>
   );
 };
 
-// 3. 完成页面
-const CompletionBlock = ({ data, router }) => { 
+// 3. 完成页面：修复再学一次和返回按钮
+const CompletionBlock = ({ data, router, onRestart }) => { 
   return (
     <div className="flex flex-col items-center justify-center h-full bg-slate-50 p-6 text-center">
       <div className="text-8xl mb-6 animate-bounce">🎉</div>
-      <h2 className="text-3xl font-black text-slate-800 mb-2">{data.title||"课程完成！"}</h2>
-      <div className="flex gap-4 mt-10">
-         <button onClick={() => router.back()} className="px-8 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold">返回列表</button>
-         <button onClick={() => window.location.reload()} className="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold">再学一次</button>
+      <h2 className="text-3xl font-black text-slate-800 mb-2">{data.title || "课程完成！"}</h2>
+      <p className="text-slate-500 mb-10">你已经完成了本节课的所有内容</p>
+      
+      <div className="flex flex-col gap-4 w-full max-w-xs">
+         <button 
+           onClick={onRestart} 
+           className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-200 active:scale-[0.98] transition-all"
+         >
+           <FaRedo /> 再学一次
+         </button>
+         
+         <button 
+           onClick={() => router.push('/')} 
+           className="w-full py-4 bg-white border-2 border-slate-200 text-slate-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-50 active:scale-[0.98] transition-all"
+         >
+           <FaHome /> 返回主页
+         </button>
       </div>
     </div>
   ); 
@@ -186,6 +192,7 @@ export default function InteractiveLesson({ lesson }) {
 
   useEffect(() => { setHasMounted(true); }, []);
   
+  // 初始化加载进度
   useEffect(() => { 
     if (lesson?.id && hasMounted) { 
       const saved = localStorage.getItem(`lesson-progress-${lesson.id}`); 
@@ -193,10 +200,21 @@ export default function InteractiveLesson({ lesson }) {
     } 
   }, [lesson, hasMounted, totalBlocks]);
 
+  // 保存进度
   useEffect(() => { 
-    if (hasMounted && lesson?.id) localStorage.setItem(`lesson-progress-${lesson.id}`, currentIndex.toString());
+    if (hasMounted && lesson?.id) {
+      localStorage.setItem(`lesson-progress-${lesson.id}`, currentIndex.toString());
+    }
     audioManager?.stop(); 
   }, [currentIndex, lesson?.id, hasMounted]);
+
+  // 重置课程逻辑
+  const resetLesson = useCallback(() => {
+    if (lesson?.id) {
+      localStorage.removeItem(`lesson-progress-${lesson.id}`);
+    }
+    setCurrentIndex(0);
+  }, [lesson?.id]);
 
   const goNext = useCallback(() => { 
     if (currentIndex < totalBlocks - 1) setCurrentIndex(prev => prev + 1);
@@ -215,9 +233,14 @@ export default function InteractiveLesson({ lesson }) {
     if (!currentBlock) return null;
     const type = (currentBlock.type || '').toLowerCase();
     const commonProps = { 
-      key: `${lesson.id}-${currentIndex}`, data: currentBlock.content, 
-      onCorrect: delayedNextStep, onComplete: goNext, onNext: goNext, onPrev: goPrev,
-      settings: { playTTS: audioManager?.playTTS }, isFirstBlock: currentIndex === 0
+      key: `${lesson.id}-${currentIndex}`, 
+      data: currentBlock.content, 
+      onCorrect: delayedNextStep, 
+      onComplete: goNext, 
+      onNext: goNext, 
+      onPrev: goPrev,
+      settings: { playTTS: audioManager?.playTTS }, 
+      isFirstBlock: currentIndex === 0
     };
     
     switch (type) {
@@ -234,7 +257,9 @@ export default function InteractiveLesson({ lesson }) {
       case 'panduan': return <PanDuanTi {...commonProps} />;
       case 'gaicuo': return <GaiCuoTi {...commonProps} />;
       case 'image_match_blanks': return <TianKongTi {...commonProps} />;
-      case 'complete': case 'end': return <CompletionBlock data={commonProps.data} router={router} />;
+      case 'complete': 
+      case 'end': 
+        return <CompletionBlock data={commonProps.data} router={router} onRestart={resetLesson} />;
       default: return <div className="p-10 text-center">未知题型: {type}</div>;
     }
   };
@@ -242,7 +267,7 @@ export default function InteractiveLesson({ lesson }) {
   if (!hasMounted) return null;
   const type = currentBlock?.type?.toLowerCase();
 
-  // 哪些页面隐藏通用的辅助按钮 (封面、播放器、结束页不需要)
+  // 哪些页面隐藏底部导航
   const hideBottomNav = ['cover', 'start_page', 'word_study', 'complete', 'end'].includes(type);
   const hideTopProgressBar = ['cover', 'start_page', 'complete', 'end'].includes(type);
 
@@ -272,33 +297,35 @@ export default function InteractiveLesson({ lesson }) {
         {renderBlock()}
       </main>
 
-      {/* 左右导航按钮：位置靠上，避开地址栏 */}
+      {/* 底部导航按钮 - 只有左右按钮，无背景无指示器 */}
       {!hideBottomNav && (
-        <div className="absolute bottom-[15%] left-0 right-0 px-6 z-40 flex justify-between items-center pointer-events-none">
+        <div 
+          className="fixed bottom-0 left-0 right-0 z-40 px-6 py-4 flex items-center justify-between pointer-events-none"
+          style={{ paddingBottom: 'max(24px, env(safe-area-inset-bottom))' }}
+        >
             {/* 上一个 */}
             <button 
-                onClick={goPrev} 
-                className={`pointer-events-auto w-14 h-14 rounded-full bg-white/80 shadow-lg border border-slate-100 text-slate-600 flex items-center justify-center backdrop-blur-xl active:scale-90 transition-all ${currentIndex === 0 ? 'opacity-0' : 'opacity-100'}`}
+              onClick={goPrev}
+              disabled={currentIndex === 0}
+              className={`pointer-events-auto w-14 h-14 rounded-full flex items-center justify-center border border-slate-100 shadow-lg transition-all
+                ${currentIndex === 0
+                  ? 'bg-slate-50 text-slate-200 opacity-0 cursor-not-allowed' 
+                  : 'bg-white text-slate-600 hover:bg-slate-50 active:scale-95'}`}
             >
-                <FaChevronLeft size={20} />
+              <FaChevronLeft size={20} />
             </button>
-            
-            {/* 进度指示器 */}
-            <button onClick={() => setIsJumping(true)} className="pointer-events-auto px-4 py-2 rounded-full bg-black/5 backdrop-blur-md">
-              <span className="text-xs font-black text-slate-500 tracking-widest">{currentIndex + 1} / {totalBlocks}</span>
-            </button>
-            
+
             {/* 下一个 */}
             <button 
-                onClick={goNext} 
-                className={`pointer-events-auto w-14 h-14 rounded-full bg-white/80 shadow-lg border border-slate-100 text-slate-600 flex items-center justify-center backdrop-blur-xl active:scale-90 transition-all ${currentIndex === totalBlocks - 1 ? 'opacity-0' : 'opacity-100'}`}
+              onClick={goNext}
+              className="pointer-events-auto px-8 h-14 bg-slate-900 text-white rounded-full font-bold text-lg shadow-xl shadow-slate-200 active:scale-[0.98] transition-all flex items-center gap-3 hover:bg-slate-800"
             >
-                <FaChevronRight size={20} />
+              继续 <FaChevronRight size={16} />
             </button>
         </div>
       )}
       
-      {/* 跳转弹窗 */}
+      {/* 跳转弹窗 - 逻辑保留，但触发入口已移除 */}
       {isJumping && (
         <div className="absolute inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center" onClick={() => setIsJumping(false)}>
             <div onClick={e => e.stopPropagation()} className="bg-white p-8 rounded-[2rem] shadow-2xl w-72 text-center animate-in zoom-in-95 duration-200">
