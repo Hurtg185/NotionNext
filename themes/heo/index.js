@@ -33,7 +33,8 @@ import {
     Heart,
     Star,
     CheckCircle,
-    BookOpen
+    BookOpen,
+    MessageCircle
 } from 'lucide-react'
 import { HashTag } from '@/components/HeroIcons'
 
@@ -67,7 +68,6 @@ import { Style } from './style'
 import HskContentBlock from '@/components/HskContentBlock'
 
 // Dynamically imported heavy components
-const GlosbeSearchCard = dynamic(() => import('@/components/GlosbeSearchCard'), { ssr: false })
 const WordCard = dynamic(() => import('@/components/WordCard'), { ssr: false })
 
 const isBrowser = typeof window !== 'undefined';
@@ -252,56 +252,41 @@ const HomeSidebar = ({ isOpen, onClose, sidebarX }) => {
 };
 
 // =================================================================================
-// ======================  其他辅助组件 (ActionButtons, ContactPanel)  =============
+// ======================  主页操作按钮 (ActionButtons)  ========================
 // =================================================================================
 
-const ActionButtons = ({ onOpenFavorites, onOpenContact }) => {
+const ActionButtons = ({ onOpenFavorites }) => {
   const actions = [
-    { icon: <Phone size={24} />, text: '联系我们', type: 'contact', color: 'from-blue-500 to-sky-500' },
-    { icon: <Heart size={24} />, text: '收藏生词', type: 'words', color: 'from-orange-500 to-amber-500' },
+    { 
+        icon: <MessageCircle size={26} />, 
+        text: '一键私信', 
+        type: 'contact', 
+        color: 'from-blue-600 to-sky-500',
+        onClick: () => window.open('https://m.me/61575187883357', '_blank')
+    },
+    { 
+        icon: <Heart size={26} />, 
+        text: '收藏生词', 
+        type: 'words', 
+        color: 'from-orange-500 to-amber-500',
+        onClick: () => onOpenFavorites('words')
+    },
   ];
+
   return (
     <div className="flex justify-center gap-8 px-4">
       {actions.map((action, index) => (
-        <button key={index} onClick={() => action.type === 'contact' ? onOpenContact() : onOpenFavorites(action.type)} className={`flex flex-col items-center justify-center p-4 min-w-[120px] rounded-2xl shadow-lg hover:shadow-xl text-white bg-gradient-to-br ${action.color} transition-all duration-300 transform hover:-translate-y-1`}>
-          <div className="mb-2">{action.icon}</div> <span className="text-sm font-bold">{action.text}</span>
+        <button 
+            key={index} 
+            onClick={action.onClick} 
+            className={`flex flex-col items-center justify-center p-4 min-w-[140px] rounded-2xl shadow-lg hover:shadow-xl text-white bg-gradient-to-br ${action.color} transition-all duration-300 transform hover:-translate-y-1`}
+        >
+          <div className="mb-2">{action.icon}</div> 
+          <span className="text-sm font-bold">{action.text}</span>
         </button>
       ))}
     </div>
   );
-};
-
-const ContactPanel = ({ isOpen, onClose }) => {
-    const socialLinks = [
-        { name: 'Facebook', href: 'https://www.facebook.com/share/1ErXyBbrZ1', icon: <FaFacebook size={32} />, color: 'text-blue-600' },
-        { name: 'TikTok', href: 'https://www.tiktok.com/@mmzh.onlione?_r=1&_t=ZS-91OzyDddPu8', icon: <FaTiktok size={32} />, color: 'text-black dark:text-white' },
-        { name: 'Telegram', href: 'https://t.me/hurt8888', icon: <FaTelegramPlane size={32} />, color: 'text-sky-500' }
-    ];
-    return (
-        <Transition show={isOpen} as={Fragment}>
-            <Dialog as="div" className="relative z-50" onClose={onClose}>
-                <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0"><div className="fixed inset-0 bg-black/30 backdrop-blur-sm" /></Transition.Child>
-                <div className="fixed inset-0 overflow-y-auto">
-                    <div className="flex min-h-full items-center justify-center p-4 text-center">
-                        <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100" leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95">
-                            <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 p-6 text-left align-middle shadow-xl transition-all">
-                                <Dialog.Title as="h3" className="text-lg font-bold text-gray-900 dark:text-gray-100">联系我们</Dialog.Title>
-                                <div className="mt-6 space-y-4">
-                                    {socialLinks.map(link => (
-                                        <a key={link.name} href={link.href} target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 p-4 rounded-lg bg-gray-100 dark:bg-gray-700/50 hover:bg-gray-200 transition-colors">
-                                            <div className={link.color}>{link.icon}</div>
-                                            <div><p className="font-semibold text-gray-800 dark:text-gray-200">{link.name}</p><p className="text-xs text-gray-500">点击跳转</p></div>
-                                        </a>
-                                    ))}
-                                </div>
-                                <div className="mt-6"><button type="button" className="w-full bg-blue-100 dark:bg-blue-900/50 py-2 rounded-md text-sm font-medium text-blue-900 dark:text-blue-200" onClick={onClose}>关闭</button></div>
-                            </Dialog.Panel>
-                        </Transition.Child>
-                    </div>
-                </div>
-            </Dialog>
-        </Transition>
-    );
 };
 
 // IndexedDB Helper
@@ -345,10 +330,8 @@ const LayoutIndex = props => {
 
   const [wordCardData, setWordCardData] = useState(null);
   const isWordFavoritesCardOpen = isBrowser ? window.location.hash === '#favorite-words' : false;
-  const [isContactPanelOpen, setIsContactPanelOpen] = useState(false);
 
   useEffect(() => {
-    // 采用更具文化与教育气息的背景图
     const backgrounds = [
         'https://images.unsplash.com/photo-1543165796-5426273eaec3?q=80&w=2070&auto=format&fit=crop',
         'https://images.unsplash.com/photo-1519491050282-cf00c82424b4?q=80&w=2072&auto=format&fit=crop'
@@ -388,8 +371,8 @@ const LayoutIndex = props => {
                 <i className="fas fa-bars text-xl"></i>
             </button>
             
-            {/* Hero 文字部分 - 移除了黑色半透明背景框，增加了顶部间距 */}
-            <div className='absolute top-0 left-0 right-0 h-[45vh] z-10 pt-28 px-6 flex flex-col items-center text-center text-white pointer-events-none'>
+            {/* Hero 文字部分 */}
+            <div className='absolute top-0 left-0 right-0 h-[40vh] z-10 pt-32 px-6 flex flex-col items-center text-center text-white pointer-events-none'>
                 <div className='max-w-4xl'>
                     <h1 className='text-5xl md:text-6xl font-black tracking-tight mb-4 drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]'>中缅文培训中心</h1>
                     <div className='mb-8'>
@@ -400,49 +383,26 @@ const LayoutIndex = props => {
                             မြန်မာ-တရုတ် နှစ်ဘာသာစကား သင်ကြားရေး ကျွမ်းကျင်သူ။
                         </p>
                     </div>
-                    
-                    {/* 小图标介绍栏 */}
-                    <div className='mt-4 flex justify-center gap-4 w-full max-w-2xl mx-auto'>
-                        <div className='flex flex-col items-center gap-2 group'>
-                            <div className='w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-lg group-hover:bg-white/20 transition-all'>
-                                <Star className='text-yellow-400' size={24} />
-                            </div>
-                            <span className='text-[10px] font-bold text-white drop-shadow-md'>互动学习</span>
-                        </div>
-                        <div className='flex flex-col items-center gap-2 group'>
-                            <div className='w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-lg group-hover:bg-white/20 transition-all'>
-                                <BookOpen className='text-blue-400' size={24} />
-                            </div>
-                            <span className='text-[10px] font-bold text-white drop-shadow-md'>标准课程</span>
-                        </div>
-                        <div className='flex flex-col items-center gap-2 group'>
-                            <div className='w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-lg group-hover:bg-white/20 transition-all'>
-                                <CheckCircle className='text-green-400' size={24} />
-                            </div>
-                            <span className='text-[10px] font-bold text-white drop-shadow-md'>证书保障</span>
-                        </div>
-                    </div>
                 </div>
             </div>
 
             {/* 内容滚动层 */}
             <div ref={scrollableContainerRef} className='absolute inset-0 z-20 overflow-y-auto overscroll-y-contain custom-scrollbar'>
                 {/* 增加背景与内容之间的空隙 (Spacer) */}
-                <div className='h-[48vh] flex-shrink-0' />
+                <div className='h-[42vh] flex-shrink-0' />
                 
-                <div className='relative bg-white dark:bg-gray-900 rounded-t-[40px] shadow-[0_-15px_35px_rgba(0,0,0,0.3)] pb-10 min-h-[calc(52vh+1px)] transition-all'>
+                <div className='relative bg-white dark:bg-gray-900 rounded-t-[40px] shadow-[0_-15px_35px_rgba(0,0,0,0.3)] pb-10 min-h-[calc(58vh+1px)] transition-all'>
                     <div className='bg-gradient-to-b from-blue-50/50 to-white dark:from-gray-800/50 dark:to-gray-900 rounded-t-[40px] pt-10'>
-                       {/* 搜索框 */}
-                       <div className='px-6 mb-8 max-w-3xl mx-auto'><GlosbeSearchCard /></div>
                        
-                       {/* 操作按钮 */}
-                       <div className='pb-10'><ActionButtons onOpenFavorites={handleOpenFavorites} onOpenContact={() => setIsContactPanelOpen(true)} /></div>
+                       {/* 操作按钮：联系和收藏单词 */}
+                       <div className='pb-10'>
+                            <ActionButtons onOpenFavorites={handleOpenFavorites} />
+                       </div>
 
                        <div className='w-16 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto mb-8'></div>
                     </div>
 
                     <main className="max-w-5xl mx-auto px-4 py-4">
-                        {/* 移除了 Tab 切换逻辑，直接展示 HSK 课程内容 */}
                         <div className='mb-6 px-4'>
                             <h2 className='text-2xl font-black text-gray-800 dark:text-gray-100 flex items-center gap-3'>
                                 <GraduationCap className='text-blue-600' /> HSK 标准课程
@@ -455,7 +415,6 @@ const LayoutIndex = props => {
             </div>
         </div>
         {wordCardData && <WordCard words={wordCardData} isOpen={isWordFavoritesCardOpen} onClose={handleCloseFavorites} progressKey="favorites-words" />}
-        <ContactPanel isOpen={isContactPanelOpen} onClose={() => setIsContactPanelOpen(false)} />
     </div>
   );
 };
