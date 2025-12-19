@@ -3,13 +3,11 @@ import PropTypes from 'prop-types';
 import { useTransition, animated } from '@react-spring/web';
 import { pinyin } from 'pinyin-pro';
 import { 
-  FaVolumeUp, FaSpinner, FaChevronRight, 
-  FaPause, FaPlay, FaCheckCircle, FaRedo, FaTachometerAlt
+  FaPause, FaPlay, FaChevronRight, FaTachometerAlt, FaUserCircle
 } from 'react-icons/fa';
-import { motion, AnimatePresence } from 'framer-motion';
 
 // =================================================================================
-// ===== 1. TTS 核心逻辑 (内存缓存 + API) =====
+// ===== 1. TTS 核心逻辑 (保持不变) =====
 // =================================================================================
 
 const ttsCache = new Map();
@@ -38,9 +36,6 @@ const getTTSAudio = async (text, lang = 'zh') => {
   }
 };
 
-// =================================================================================
-// ===== 2. TTS Hook (默认语速 1.0) =====
-// =================================================================================
 function useSimpleTTS() {
   const [playerState, setPlayerState] = useState({
     isPlaying: false,
@@ -49,7 +44,7 @@ function useSimpleTTS() {
     playingId: null,
     duration: 0,
     currentTime: 0,
-    playbackRate: 1.0, // 修改：默认语速正常
+    playbackRate: 1.0, 
   });
 
   const audioObjRef = useRef(null);
@@ -214,18 +209,24 @@ function useSimpleTTS() {
 }
 
 // =================================================================================
-// ===== 3. 辅助组件：拼音与文本解析 =====
+// ===== 3. 富文本与拼音解析 =====
 // =================================================================================
 
-// 渲染带拼音的文本 (支持颜色)
-const renderTextWithPinyin = (text, colorStyle = 'inherit') => {
+// 拼音渲染器
+const renderTextWithPinyin = (text, colorStyle = 'inherit', isBold = false) => {
   if (!text) return null;
   // 移除标记符号进行显示
   const displayable = text.replace(/^[❌✅XV×√]\s*/i, '').replace(/\{\{|\}\}/g, '');
   const parts = displayable.match(/([\u4e00-\u9fff]+)|([^\u4e00-\u9fff]+)/g) || [];
 
   return (
-    <span style={{ lineHeight: '2.4', wordBreak: 'break-word', color: colorStyle, fontSize: '1.05rem' }}>
+    <span style={{ 
+      lineHeight: '2.2', 
+      wordBreak: 'break-word', 
+      color: colorStyle, 
+      fontWeight: isBold ? '700' : '400',
+      fontSize: '1.05rem' 
+    }}>
       {parts.map((part, idx) => {
         if (/[\u4e00-\u9fff]/.test(part)) {
           const pyArray = pinyin(part, { type: 'array', toneType: 'symbol' });
@@ -246,26 +247,40 @@ const renderTextWithPinyin = (text, colorStyle = 'inherit') => {
   );
 };
 
-// 交互式文本块组件：处理换行、点击朗读、红字/黑字判断
+// 简单的 Markdown 转 HTML 解析器 (处理标题、表格、粗体)
+const processRichText = (text) => {
+  if (!text) return '';
+  let html = text;
+  // 标题
+  html = html.replace(/^### (.*$)/gim, '<h3 style="margin: 16px 0 8px; font-size: 1.1rem; color: #1e293b;">$1</h3>');
+  html = html.replace(/^## (.*$)/gim, '<h2 style="margin: 20px 0 10px; font-size: 1.25rem; color: #0f172a; border-left: 4px solid #3b82f6; padding-left: 10px;">$1</h2>');
+  // 加粗
+  html = html.replace(/\*\*(.*?)\*\*/g, '<b style="color: #0f172a;">$1</b>');
+  // 列表
+  html = html.replace(/^\- (.*$)/gim, '<li style="margin-left: 20px; list-style-type: disc;">$1</li>');
+  // 换行
+  html = html.replace(/\n/g, '<br/>');
+  return html;
+};
+
+// 交互式文本块 (支持点击朗读，且紧凑排版)
 const InteractiveTextBlock = ({ text, playFn, baseId }) => {
   if (!text) return null;
-
   const lines = text.split('\n').filter(l => l.trim().length > 0);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
       {lines.map((line, idx) => {
         const uniqueId = `${baseId}_line_${idx}`;
         const trimmed = line.trim();
         
-        // 判断类型
+        // 正误判断
         const isWrong = /^[❌X×]/.test(trimmed);
         const isCorrect = /^[✅V√]/.test(trimmed);
         
-        // 样式决定
-        let color = '#334155'; // 默认深灰
+        let color = '#334155'; 
         if (isWrong) color = '#ef4444'; // 红字
-        if (isCorrect) color = '#0f172a'; // 黑字 (强调)
+        if (isCorrect) color = '#0f172a'; // 黑字
 
         return (
           <div 
@@ -273,20 +288,13 @@ const InteractiveTextBlock = ({ text, playFn, baseId }) => {
             onClick={() => playFn(line, uniqueId)}
             style={{ 
               cursor: 'pointer', 
-              display: 'flex', 
-              alignItems: 'flex-start',
-              padding: '4px 8px',
-              borderRadius: '8px',
+              padding: '2px 4px',
+              borderRadius: '4px',
               transition: 'background 0.2s',
             }}
             className="hover-bg"
           >
-             <div style={{ flex: 1 }}>
-               {renderTextWithPinyin(trimmed, color)}
-             </div>
-             <div style={{ marginLeft: 8, marginTop: 6, opacity: 0.4 }}>
-                <FaVolumeUp size={14} color={color} />
-             </div>
+             {renderTextWithPinyin(trimmed, color, isCorrect)}
           </div>
         );
       })}
@@ -295,96 +303,81 @@ const InteractiveTextBlock = ({ text, playFn, baseId }) => {
 };
 
 // =================================================================================
-// ===== 4. 顶部固定播放器 (TopFixedPlayer) =====
+// ===== 4. 音乐播放器风格悬浮组件 (MusicPlayerHeader) =====
 // =================================================================================
-const TopFixedPlayer = ({ 
+const MusicPlayerHeader = ({ 
   isPlaying, isPaused, duration, currentTime, 
   onToggle, onSeek, onRateChange, playbackRate, label 
 }) => {
-  const formatTime = (t) => {
-    const min = Math.floor(t / 60);
-    const sec = Math.floor(t % 60);
-    return `${min}:${sec < 10 ? '0' + sec : sec}`;
-  };
-
-  // 循环切换语速
+  
   const cycleRate = () => {
     if (playbackRate >= 1.0) onRateChange(0.6);
     else if (playbackRate <= 0.6) onRateChange(0.8);
     else onRateChange(1.0);
   };
 
+  const formatTime = (t) => {
+    const min = Math.floor(t / 60);
+    const sec = Math.floor(t % 60);
+    return `${min}:${sec < 10 ? '0' + sec : sec}`;
+  };
+
   return (
-    <div style={styles.topPlayerContainer}>
-      <div style={styles.topPlayerContent}>
+    <div style={styles.musicPlayerContainer}>
+      <div style={styles.musicPlayerInner}>
         
-        {/* 左侧：播放控制 + 文本信息 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1, overflow: 'hidden' }}>
-          <button onClick={onToggle} style={styles.playBtnLarge}>
-            {isPlaying && !isPaused ? <FaPause size={16} /> : <FaPlay size={16} style={{ marginLeft: 2 }} />}
-          </button>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-             <div style={styles.playerLabel}>{label || '准备播放'}</div>
-             <div style={styles.timeLabel}>{formatTime(currentTime)} / {formatTime(duration)}</div>
+        {/* 左侧头像 */}
+        <div style={styles.avatarBox}>
+          <FaUserCircle size={36} color="#cbd5e1" />
+        </div>
+
+        {/* 中间控制区 */}
+        <div style={styles.controlsCenter}>
+          {/* 进度条 (在上方) */}
+          <div style={styles.progressBarWrapper}>
+             <div 
+               style={{ 
+                 ...styles.progressBarFill, 
+                 width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` 
+               }} 
+             />
+             <input 
+                type="range" 
+                min="0" 
+                max={duration || 100} 
+                value={currentTime} 
+                onChange={(e) => onSeek(Number(e.target.value))}
+                style={styles.hiddenRangeInput}
+              />
+          </div>
+
+          {/* 播放按钮与信息 (在下方) */}
+          <div style={styles.playInfoRow}>
+             <button onClick={onToggle} style={styles.playBtnSmall}>
+               {isPlaying && !isPaused ? <FaPause size={12} /> : <FaPlay size={12} style={{marginLeft: 2}} />}
+             </button>
+             <div style={styles.trackInfo}>
+               <span style={styles.trackTitle}>{label}</span>
+               <span style={styles.trackTime}>{formatTime(currentTime)} / {formatTime(duration)}</span>
+             </div>
           </div>
         </div>
 
-        {/* 右侧：语速 */}
+        {/* 右侧语速 */}
         <button onClick={cycleRate} style={styles.speedBtn}>
-          <FaTachometerAlt size={12} />
-          <span>{playbackRate.toFixed(1)}x</span>
+          <FaTachometerAlt size={14} color="#64748b" />
+          <span style={{fontSize: 10, fontWeight: 700, color: '#64748b'}}>{playbackRate}x</span>
         </button>
-      </div>
 
-      {/* 底部进度条 (吸附在容器底部) */}
-      <div style={styles.progressBarWrapper}>
-         <div 
-           style={{ 
-             ...styles.progressBarFill, 
-             width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` 
-           }} 
-         />
-         <input 
-            type="range" 
-            min="0" 
-            max={duration || 100} 
-            value={currentTime} 
-            onChange={(e) => onSeek(Number(e.target.value))}
-            style={styles.hiddenRangeInput}
-          />
       </div>
     </div>
   );
 };
 
 // =================================================================================
-// ===== 5. 完成页面 =====
+// ===== 5. 主组件 GrammarPointPlayer =====
 // =================================================================================
-const CompletionScreen = ({ onRestart }) => (
-  <div style={styles.completionContainer}>
-    <motion.div 
-      initial={{ scale: 0.9, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      style={styles.completionCard}
-    >
-      <div style={styles.checkIconWrapper}>
-        <FaCheckCircle size={50} color="white" />
-      </div>
-      <h2 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#1e293b', marginBottom: 12 }}>学习完成</h2>
-      <p style={{ color: '#64748b', marginBottom: 30, fontSize: '0.95rem' }}>太棒了！你已经掌握了本节内容。</p>
-      
-      <button onClick={onRestart} style={styles.restartBtn}>
-        <FaRedo style={{ marginRight: 8 }} /> 重新学习
-      </button>
-    </motion.div>
-  </div>
-);
-
-// =================================================================================
-// ===== 6. 主组件 GrammarPointPlayer =====
-// =================================================================================
-const GrammarPointPlayer = ({ grammarPoints }) => {
+const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
   const normalizedPoints = useMemo(() => {
     if (!Array.isArray(grammarPoints)) return [];
     return grammarPoints.map((item, idx) => ({
@@ -392,7 +385,7 @@ const GrammarPointPlayer = ({ grammarPoints }) => {
       title: item['语法标题'] || item.grammarPoint || '',
       pattern: item['句型结构'] || item.pattern || '',
       explanation: item['语法详解'] || item.visibleExplanation || '',
-      attention: item['注意事项'] || item['易错点'] || item.attention || '', // 这里的内容会特殊渲染
+      attention: item['注意事项'] || item['易错点'] || item.attention || '', 
       explanationScript: item['讲解脚本'] || item.narrationScript || (item['语法详解'] || '').replace(/<[^>]+>/g, ''),
       dialogues: (item['例句列表'] || item.examples || []).map((ex, i) => ({
         id: ex.id || i,
@@ -405,7 +398,6 @@ const GrammarPointPlayer = ({ grammarPoints }) => {
   }, [grammarPoints]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isCompleted, setIsCompleted] = useState(false);
   const contentRef = useRef(null);
   
   const { 
@@ -416,19 +408,15 @@ const GrammarPointPlayer = ({ grammarPoints }) => {
   useEffect(() => {
     stop(); 
     if (contentRef.current) contentRef.current.scrollTop = 0;
-  }, [currentIndex, isCompleted, stop]);
+  }, [currentIndex, stop]);
 
   const handleNext = () => {
     if (currentIndex < normalizedPoints.length - 1) {
       setCurrentIndex(p => p + 1);
     } else {
-      setIsCompleted(true);
+      // 触发外部回调，进入下一环节（如练习题），不显示完成页
+      if (onComplete) onComplete();
     }
-  };
-
-  const handleRestart = () => {
-    setIsCompleted(false);
-    setCurrentIndex(0);
   };
 
   const transitions = useTransition(currentIndex, {
@@ -439,13 +427,12 @@ const GrammarPointPlayer = ({ grammarPoints }) => {
   });
 
   if (!normalizedPoints.length) return <div style={styles.center}>暂无数据</div>;
-  if (isCompleted) return <CompletionScreen onRestart={handleRestart} />;
 
   return (
     <div style={styles.container}>
-      {/* 顶部固定播放器 - 一直显示 */}
-      <TopFixedPlayer 
-        isPlaying={isPlaying || isPaused} // 只要有状态就显示，或者根据需求一直显示
+      {/* 悬浮音乐播放器 */}
+      <MusicPlayerHeader 
+        isPlaying={isPlaying || isPaused}
         isPaused={isPaused}
         currentTime={currentTime}
         duration={duration}
@@ -455,7 +442,7 @@ const GrammarPointPlayer = ({ grammarPoints }) => {
         onRateChange={setRate}
         label={
              loadingId ? '加载中...' :
-             playingId ? (playingId.includes('narration') ? '语法讲解' : '例句朗读') : '点击文字开始朗读'
+             playingId ? (playingId.includes('narration') ? '讲解中...' : '朗读中') : '准备播放'
         }
       />
 
@@ -472,42 +459,38 @@ const GrammarPointPlayer = ({ grammarPoints }) => {
                 
                 <h2 style={styles.title}>{gp.title}</h2>
 
-                {/* 1. 核心句型 (支持点击) */}
+                {/* 1. 核心句型 */}
                 {gp.pattern && (
                   <div style={styles.card}>
-                    <div style={styles.cardLabel}>核心句型 (点击朗读)</div>
+                    <div style={styles.cardLabel}>核心句型</div>
                     <div 
                       onClick={() => play(gp.pattern, `pattern_${gp.id}`)}
                       style={{ cursor: 'pointer', ...styles.patternText }}
+                      className="hover-bg"
                     >
                       {renderTextWithPinyin(gp.pattern)}
-                      <span style={{ marginLeft: 8, verticalAlign: 'middle', display: 'inline-block' }}>
-                         {loadingId === `pattern_${gp.id}` ? <FaSpinner className="spin" size={16} color="#3b82f6"/> : <FaVolumeUp size={16} color="#3b82f6"/>}
-                      </span>
                     </div>
                   </div>
                 )}
 
-                {/* 2. 语法详解 (文字内容) */}
+                {/* 2. 语法详解 (使用富文本解析) */}
                 <div style={styles.section}>
                   <div style={styles.sectionHeader}>
                     <span style={styles.sectionTitle}>📝 语法详解</span>
-                    {/* 单独的讲解播放按钮 */}
+                    {/* 这个按钮用来触发长音频讲解 */}
                     <button 
                        onClick={() => play(gp.explanationScript, narrationId)}
                        style={styles.playBtnCircle}
                        disabled={loadingId === narrationId}
                     >
-                      {loadingId === narrationId ? <FaSpinner className="spin"/> : (playingId === narrationId && !isPaused ? <FaPause/> : <FaPlay/>)}
+                      {loadingId === narrationId ? <div className="spin" style={styles.miniSpin}/> : (playingId === narrationId && !isPaused ? <FaPause size={12}/> : <FaPlay size={12} style={{marginLeft:2}}/>)}
                     </button>
                   </div>
-                  {/* 使用简单渲染，如果需要点击朗读详解每行，可以用 InteractiveTextBlock */}
-                  <div style={styles.richText}>
-                    <InteractiveTextBlock text={gp.explanation.replace(/<br\/>/g, '\n')} playFn={play} baseId={`exp_${gp.id}`} />
-                  </div>
+                  
+                  <div style={styles.richTextBlock} dangerouslySetInnerHTML={{__html: processRichText(gp.explanation)}} />
                 </div>
 
-                {/* 3. 易错点/对比 (红字/黑字逻辑) */}
+                {/* 3. 易错点 (红字/黑字交互) */}
                 {gp.attention && (
                   <div style={styles.section}>
                     <div style={styles.sectionHeader}>
@@ -549,19 +532,12 @@ const GrammarPointPlayer = ({ grammarPoints }) => {
                              ...styles.bubble,
                              background: isLeft ? '#eff6ff' : '#fff1f2',
                              border: isLeft ? '1px solid #dbeafe' : '1px solid #fce7f3',
-                             borderRadius: isLeft ? '18px 18px 18px 4px' : '18px 18px 4px 18px'
-                          }}>
+                             borderRadius: isLeft ? '16px 16px 16px 4px' : '16px 16px 4px 16px'
+                          }} className="hover-bg">
                              <div style={styles.bubbleText}>
                                {renderTextWithPinyin(ex.sentence)}
                              </div>
                              <div style={styles.bubbleTrans}>{ex.translation}</div>
-                             
-                             {/* 播放状态指示 */}
-                             {(playingId === exId || loadingId === exId) && (
-                               <div style={{ position: 'absolute', top: 6, right: 8 }}>
-                                  {loadingId === exId ? <FaSpinner className="spin" size={10} color="#94a3b8"/> : <FaVolumeUp size={12} color="#3b82f6"/>}
-                               </div>
-                             )}
                           </div>
                         </div>
                       );
@@ -569,14 +545,14 @@ const GrammarPointPlayer = ({ grammarPoints }) => {
                   </div>
                 </div>
                 
-                {/* 底部按钮 - 跟随内容滚动，居中显示 */}
+                {/* 底部按钮 */}
                 <div style={styles.nextButtonContainer}>
                    <button style={styles.nextBtn} onClick={handleNext}>
-                     {i === normalizedPoints.length -1 ? '完成本节' : '下一个'} <FaChevronRight size={14} />
+                     {i === normalizedPoints.length -1 ? '进入练习' : '下一个'} <FaChevronRight size={14} />
                    </button>
                 </div>
                 
-                <div style={{ height: '40px' }} /> {/* 底部留白 */}
+                <div style={{ height: '60px' }} />
               </div>
             </div>
           </animated.div>
@@ -588,103 +564,96 @@ const GrammarPointPlayer = ({ grammarPoints }) => {
 
 GrammarPointPlayer.propTypes = {
   grammarPoints: PropTypes.array.isRequired,
+  onComplete: PropTypes.func,
 };
 
 // =================================================================================
-// ===== 7. 样式定义 =====
+// ===== 6. 样式定义 =====
 // =================================================================================
 const styles = {
-  container: { position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#f8fafc', fontFamily: '-apple-system, system-ui, sans-serif' },
+  container: { position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#f8fafc', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' },
   center: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#94a3b8' },
   page: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'white' },
   scrollContainer: { flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 16px' },
-  contentWrapper: { maxWidth: '800px', margin: '0 auto', paddingTop: '100px' }, // 给顶部播放器留出空间
+  contentWrapper: { maxWidth: '800px', margin: '0 auto', paddingTop: '100px' }, 
   
-  // 顶部播放器
-  topPlayerContainer: {
+  // === Music Player Style ===
+  musicPlayerContainer: {
     position: 'absolute', top: 0, left: 0, right: 0,
-    height: '80px',
-    background: 'rgba(255, 255, 255, 0.85)',
-    backdropFilter: 'blur(12px)',
-    borderBottom: '1px solid rgba(0,0,0,0.05)',
+    height: '84px',
+    background: 'rgba(255, 255, 255, 0.92)',
+    backdropFilter: 'blur(16px)',
+    borderBottom: '1px solid rgba(0,0,0,0.06)',
     zIndex: 1000,
-    display: 'flex', flexDirection: 'column',
-    boxShadow: '0 4px 20px rgba(0,0,0,0.03)'
-  },
-  topPlayerContent: {
-    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    padding: '0 20px', gap: '12px'
-  },
-  playBtnLarge: {
-    width: 44, height: 44, borderRadius: '50%',
-    background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
-    color: 'white', border: 'none',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    cursor: 'pointer', boxShadow: '0 4px 10px rgba(37, 99, 235, 0.3)'
+    boxShadow: '0 4px 24px rgba(0,0,0,0.04)'
   },
-  playerLabel: { fontSize: '0.8rem', fontWeight: 'bold', color: '#1e293b', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-  timeLabel: { fontSize: '0.75rem', color: '#64748b', fontFamily: 'monospace' },
+  musicPlayerInner: {
+    width: '100%', maxWidth: '800px', padding: '0 20px',
+    display: 'flex', alignItems: 'center', gap: '16px'
+  },
+  avatarBox: {
+    width: 48, height: 48, borderRadius: '12px', background: '#f1f5f9',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+  },
+  controlsCenter: { flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' },
+  progressBarWrapper: { position: 'relative', height: '4px', width: '100%', background: '#e2e8f0', borderRadius: '2px', overflow: 'hidden' },
+  progressBarFill: { height: '100%', background: '#3b82f6', borderRadius: '2px' },
+  hiddenRangeInput: { position: 'absolute', top: -5, left: 0, width: '100%', height: '14px', opacity: 0, cursor: 'pointer', margin: 0 },
+  
+  playInfoRow: { display: 'flex', alignItems: 'center', gap: '10px' },
+  playBtnSmall: {
+    width: 28, height: 28, borderRadius: '50%', background: '#3b82f6', color: 'white',
+    border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+    boxShadow: '0 2px 6px rgba(59, 130, 246, 0.4)'
+  },
+  trackInfo: { display: 'flex', flexDirection: 'column' },
+  trackTitle: { fontSize: '0.8rem', fontWeight: 'bold', color: '#1e293b' },
+  trackTime: { fontSize: '0.7rem', color: '#94a3b8', fontFamily: 'monospace' },
+  
   speedBtn: {
-    background: '#f1f5f9', border: 'none', borderRadius: '20px',
-    padding: '6px 12px', fontSize: '0.75rem', fontWeight: '600',
-    color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
-  },
-  progressBarWrapper: { position: 'relative', height: '3px', width: '100%', background: '#e2e8f0' },
-  progressBarFill: { height: '100%', background: '#3b82f6', transition: 'width 0.1s linear' },
-  hiddenRangeInput: {
-    position: 'absolute', top: -10, left: 0, width: '100%', height: '23px',
-    opacity: 0, cursor: 'pointer', margin: 0
+    background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px',
+    padding: '6px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', 
+    cursor: 'pointer', gap: '2px'
   },
 
-  title: { fontSize: '1.75rem', fontWeight: '800', textAlign: 'center', color: '#1e293b', marginBottom: '24px', marginTop: '10px' },
+  // === Content Styles ===
+  title: { fontSize: '1.8rem', fontWeight: '800', textAlign: 'center', color: '#1e293b', marginBottom: '24px', marginTop: '10px', letterSpacing: '-0.02em' },
   
-  card: { background: 'white', borderRadius: '16px', padding: '20px', marginBottom: '24px', boxShadow: '0 10px 30px -10px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' },
-  cardLabel: { fontSize: '0.8rem', color: '#94a3b8', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '10px', letterSpacing: '0.5px' },
-  patternText: { fontSize: '1.35rem', fontWeight: '600', color: '#0f172a' },
+  card: { background: 'white', borderRadius: '16px', padding: '24px', marginBottom: '32px', boxShadow: '0 10px 40px -10px rgba(0,0,0,0.08)', border: '1px solid #f1f5f9' },
+  cardLabel: { fontSize: '0.75rem', color: '#94a3b8', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '12px', letterSpacing: '1px' },
+  patternText: { fontSize: '1.4rem', fontWeight: '600', color: '#0f172a', lineHeight: 1.5 },
 
-  section: { marginBottom: '32px' },
-  sectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' },
-  sectionTitle: { fontSize: '1.1rem', fontWeight: '700', color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' },
-  playBtnCircle: { width: 32, height: 32, borderRadius: '50%', background: '#eff6ff', color: '#3b82f6', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
-  
-  richText: { fontSize: '1rem', color: '#475569', background: '#ffffff', borderRadius: '12px', border: '1px solid #f1f5f9', padding: '8px' },
-  attentionBox: { background: '#fff', borderRadius: '12px', border: '1px solid #f1f5f9', padding: '8px' },
+  section: { marginBottom: '40px' },
+  sectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' },
+  sectionTitle: { fontSize: '1.15rem', fontWeight: '700', color: '#334155' },
+  playBtnCircle: { width: 28, height: 28, borderRadius: '50%', background: '#eff6ff', color: '#3b82f6', border: '1px solid #dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
+  miniSpin: { width: 12, height: 12, border: '2px solid #3b82f6', borderTopColor: 'transparent', borderRadius: '50%' },
+
+  richTextBlock: { fontSize: '1.05rem', lineHeight: '1.8', color: '#475569' },
+  attentionBox: { background: '#fff', borderRadius: '12px', border: '1px solid #f1f5f9', padding: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' },
 
   ruby: { rubyPosition: 'over', margin: '0 1px' },
   rt: { fontSize: '0.6em', userSelect: 'none' },
 
-  dialogueContainer: { display: 'flex', flexDirection: 'column', gap: '20px' },
-  dialogueRow: { display: 'flex', alignItems: 'flex-end', gap: '10px' },
-  avatar: { width: 32, height: 32, borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '12px', flexShrink: 0, marginBottom: '4px' },
-  bubble: { padding: '12px 16px', maxWidth: '85%', position: 'relative', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' },
-  bubbleText: { fontSize: '1.05rem', color: '#1e293b', marginBottom: '4px' },
-  bubbleTrans: { fontSize: '0.85rem', color: '#94a3b8' },
+  dialogueContainer: { display: 'flex', flexDirection: 'column', gap: '24px' },
+  dialogueRow: { display: 'flex', alignItems: 'flex-end', gap: '12px' },
+  avatar: { width: 36, height: 36, borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '14px', flexShrink: 0, marginBottom: '6px' },
+  bubble: { padding: '14px 18px', maxWidth: '85%', position: 'relative', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' },
+  bubbleText: { fontSize: '1.1rem', color: '#1e293b', marginBottom: '4px' },
+  bubbleTrans: { fontSize: '0.9rem', color: '#94a3b8' },
 
-  // 底部按钮样式
-  nextButtonContainer: {
-    marginTop: '40px',
-    marginBottom: '20px',
-    display: 'flex',
-    justifyContent: 'center',
-    width: '100%'
-  },
+  nextButtonContainer: { marginTop: '40px', marginBottom: '20px', display: 'flex', justifyContent: 'center', width: '100%' },
   nextBtn: {
     background: '#1e293b', color: 'white',
-    border: 'none', padding: '14px 40px',
-    borderRadius: '40px', fontSize: '1rem', fontWeight: '600',
+    border: 'none', padding: '16px 48px',
+    borderRadius: '50px', fontSize: '1rem', fontWeight: '600',
     display: 'flex', alignItems: 'center', gap: '8px',
-    cursor: 'pointer', boxShadow: '0 10px 20px rgba(30, 41, 59, 0.2)',
+    cursor: 'pointer', boxShadow: '0 10px 25px rgba(30, 41, 59, 0.25)',
     transition: 'transform 0.1s'
   },
-
-  // 完成页
-  completionContainer: { width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' },
-  completionCard: { background: 'white', padding: '40px', borderRadius: '24px', boxShadow: '0 20px 40px -10px rgba(0,0,0,0.1)', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', width: '80%', maxWidth: '320px' },
-  checkIconWrapper: { width: 80, height: 80, borderRadius: '50%', background: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px', boxShadow: '0 10px 20px rgba(16, 185, 129, 0.3)' },
-  restartBtn: { marginTop: '10px', padding: '12px 24px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '12px', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', fontWeight: '600' }
 };
 
-// 注入 hover 样式
 if (typeof document !== 'undefined' && !document.getElementById('gp-player-style')) {
   const style = document.createElement('style');
   style.id = 'gp-player-style';
@@ -692,7 +661,11 @@ if (typeof document !== 'undefined' && !document.getElementById('gp-player-style
     .spin { animation: spin 1s linear infinite; }
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     ruby { ruby-align: center; }
-    .hover-bg:active { background-color: rgba(0,0,0,0.03) !important; transform: scale(0.99); }
+    .hover-bg:active { background-color: rgba(0,0,0,0.04) !important; transform: scale(0.995); }
+    /* Table styles for rich text */
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.95rem; }
+    th, td { border: 1px solid #e2e8f0; padding: 10px; text-align: left; }
+    th { background: #f8fafc; font-weight: 600; color: #475569; }
   `;
   document.head.appendChild(style);
 }
