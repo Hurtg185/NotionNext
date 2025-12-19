@@ -315,12 +315,12 @@ export default function InteractiveLesson({ lesson }) {
               <FaChevronLeft size={20} />
             </button>
 
-            {/* 下一个 */}
+            {/* 下一个 - 已修改为仅图标，无文字，圆形按钮 */}
             <button 
               onClick={goNext}
-              className="pointer-events-auto px-8 h-14 bg-slate-900 text-white rounded-full font-bold text-lg shadow-xl shadow-slate-200 active:scale-[0.98] transition-all flex items-center gap-3 hover:bg-slate-800"
+              className="pointer-events-auto w-14 h-14 bg-slate-900 text-white rounded-full flex items-center justify-center shadow-xl shadow-slate-200 active:scale-[0.98] transition-all hover:bg-slate-800"
             >
-              继续 <FaChevronRight size={16} />
+              <FaChevronRight size={20} />
             </button>
         </div>
       )}
