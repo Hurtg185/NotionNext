@@ -4,7 +4,8 @@ import { useRouter } from 'next/router';
 import {
   Mic2, Music4, Layers, BookText, Lightbulb,
   Sparkles, PlayCircle, Gem, MessageCircle,
-  Crown, Heart, ChevronRight, Star, BookOpen
+  Crown, Heart, ChevronRight, Star, BookOpen,
+  ChevronDown, ChevronUp, GraduationCap, HelpCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
@@ -41,6 +42,7 @@ const hskData = [
     imageUrl: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800&q=80',
     lessons: [
       { id: 1, title: '第 1 课 你好' }, { id: 2, title: '第 2 课 谢谢你' }, { id: 3, title: '第 3 课 你叫什么名字？' }, { id: 4, title: '第 4 课 她是我的汉语老师' }, { id: 5, title: '第 5 课 她女儿今年二十岁' },
+      { id: 6, title: '第 6 课 我会说汉语' }, { id: 7, title: '第 7 课 今天几号？' }, { id: 8, title: '第 8 课 我想喝茶' }
     ]
   },
   {
@@ -109,10 +111,18 @@ const MembershipModal = ({ isOpen, onClose, targetLevel }) => {
 // 课程卡片组件
 const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
   const router = useRouter();
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const handleLessonClick = (e, lesson) => {
     const isFree = checkIsFree(level.level, lesson.id);
-    if (!isFree) {
+    
+    // 权限检查逻辑 (参考源代码)
+    const cachedUser = typeof window !== 'undefined' ? localStorage.getItem('hsk_user') : null;
+    const user = cachedUser ? JSON.parse(cachedUser) : null;
+    const unlocked = user?.unlocked_levels ? user.unlocked_levels.split(',') : [];
+    const isUnlocked = unlocked.includes(`H${level.level}`) || unlocked.includes(`HSK${level.level}`);
+
+    if (!isFree && !isUnlocked) {
       e.preventDefault();
       onShowMembership(level.level);
       return;
@@ -137,7 +147,7 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
 
       {/* 课程列表 */}
       <div className="p-4 space-y-2">
-        {level.lessons.slice(0, 3).map(lesson => (
+        {(isExpanded ? level.lessons : level.lessons.slice(0, 3)).map(lesson => (
           <div key={lesson.id} onClick={(e) => handleLessonClick(e, lesson)} className="flex items-center p-3 rounded-xl bg-slate-50 active:bg-slate-100 cursor-pointer transition-colors">
             <div className={`p-1.5 rounded-full mr-3 ${checkIsFree(level.level, lesson.id) ? 'bg-cyan-100 text-cyan-600' : 'bg-amber-100 text-amber-600'}`}>
               {checkIsFree(level.level, lesson.id) ? <PlayCircle size={14} fill="currentColor" /> : <Gem size={14} />}
@@ -147,18 +157,17 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
         ))}
       </div>
 
-      {/* 底部功能区：单词放在全部课程下面 */}
+      {/* 底部功能区 */}
       <div className="px-4 pb-5 pt-1 flex flex-col gap-3">
-        {/* 1. 全部课程 (上) */}
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            router.push('/courses');
-          }}
-          className="w-full py-2.5 flex items-center justify-center text-xs font-bold text-slate-500 gap-1 bg-slate-50 border border-slate-100 rounded-xl hover:bg-slate-100 transition-colors active:scale-95"
-        >
-          全部课程 <ChevronRight size={12} />
-        </button>
+        {/* 1. 全部课程 (上) - 修复为展开逻辑，防止打开空白页 */}
+        {level.lessons.length > 3 && (
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="w-full py-2.5 flex items-center justify-center text-xs font-bold text-slate-500 gap-1 bg-slate-50 border border-slate-100 rounded-xl hover:bg-slate-100 transition-colors active:scale-95"
+          >
+            {isExpanded ? '收起列表' : `全部 ${level.lessons.length} 课时`} <ChevronRight size={12} className={isExpanded ? "-rotate-90 transition-transform" : "rotate-90 transition-transform"} />
+          </button>
+        )}
 
         {/* 2. 本级核心生词 (下) */}
         <button
@@ -179,9 +188,7 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
 };
 
 // 拼音面板组件
-const PinyinSection = () => {
-  const router = useRouter();
-
+const PinyinSection = ({ onOpenTips, onOpenCollection }) => {
   return (
     <div className="space-y-4">
       {/* 拼音 4 格 */}
@@ -202,7 +209,7 @@ const PinyinSection = () => {
       <div className="grid grid-cols-2 gap-3">
         {/* 发音技巧 */}
         <button 
-          onClick={() => router.push('/pinyin/tips')}
+          onClick={onOpenTips}
           className="flex items-center justify-between px-3 py-3 bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl border border-orange-100/50 active:scale-95 transition-transform group"
         >
           <div className="flex items-center gap-2">
@@ -216,9 +223,9 @@ const PinyinSection = () => {
           <ChevronRight size={14} className="text-orange-300" />
         </button>
 
-        {/* 单词收藏 */}
+        {/* 单词收藏 - 修复：点击调用 onOpenCollection 而不是直接跳转 */}
         <button 
-          onClick={() => router.push('/vocabulary/collection')}
+          onClick={onOpenCollection}
           className="flex items-center justify-between px-3 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100/50 active:scale-95 transition-transform group"
         >
           <div className="flex items-center gap-2">
@@ -250,18 +257,26 @@ export default function HskPageClient() {
 
   // 处理生词本点击逻辑
   const handleVocabularyClick = useCallback((level) => {
-    const levelNum = level?.level || 1;
+    // level 可以是对象(来自HskCard)或数字
+    const levelNum = typeof level === 'object' ? level.level : level;
     const words = hskWordsData[levelNum] || [];
-    
+
     setActiveHskWords(words);
     setActiveLevelTag(`hsk${levelNum}`);
-    
+
     router.push({
       pathname: router.pathname,
       query: { ...router.query, level: levelNum },
       hash: 'hsk-vocabulary'
     }, undefined, { shallow: true });
+
   }, [router]);
+
+  // 修复：默认打开 HSK 1 的生词本 (用于收藏按钮)
+  const openDefaultVocabulary = () => handleVocabularyClick(1);
+
+  // 跳转到拼音技巧
+  const goToPinyinTips = () => router.push('/pinyin/tips');
 
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans text-slate-900 pb-20 relative overflow-x-hidden">
@@ -280,9 +295,12 @@ export default function HskPageClient() {
           </div>
         </div>
 
-        {/* 拼音面板 (包含技巧和收藏) */}
+        {/* 拼音面板 (已修复：传入了跳转函数和收藏函数) */}
         <div className="bg-white rounded-[1.8rem] p-4 shadow-xl shadow-slate-200/60 border border-slate-50">
-          <PinyinSection />
+          <PinyinSection 
+            onOpenTips={goToPinyinTips}
+            onOpenCollection={openDefaultVocabulary}
+          />
         </div>
       </header>
 
