@@ -282,28 +282,19 @@ export default function WordStudyPlayer({ data, onNext, onPrev, isFirstBlock }) 
         </div>
       </div>
 
-      {/* 底部导航 */}
+      {/* 底部导航 - 已修改：移除上一个，改为浅色系“继续” */}
       <div 
         className="fixed bottom-0 left-0 right-0 z-20 bg-white/90 backdrop-blur-md border-t border-slate-50 px-6 pt-4"
         style={{ paddingBottom: 'max(24px, env(safe-area-inset-bottom))' }}
       >
         <div className="flex items-center gap-6 max-w-md mx-auto">
-            <button 
-              onClick={handlePrev}
-              disabled={index === 0 && isFirstBlock} 
-              className={`w-14 h-14 rounded-full flex items-center justify-center border-2 transition-all
-                ${index === 0 && isFirstBlock 
-                  ? 'border-slate-100 text-slate-200 cursor-not-allowed' 
-                  : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700 active:scale-95'}`}
-            >
-              <FaChevronLeft size={20} />
-            </button>
+            {/* 上一个按钮已移除 */}
 
             <button 
               onClick={handleNext}
-              className="flex-1 h-14 bg-slate-900 text-white rounded-full font-bold text-lg shadow-xl shadow-slate-200 active:scale-[0.98] transition-all flex items-center justify-center gap-3 hover:bg-slate-800"
+              className="flex-1 h-14 bg-white text-slate-700 border-2 border-slate-100 rounded-full font-bold text-lg hover:border-slate-300 hover:bg-slate-50 hover:shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-3"
             >
-              {index === total - 1 ? "完成" : "下一个"} <FaChevronRight size={16} />
+              {index === total - 1 ? "完成" : "继续"} <FaChevronRight size={14} className="text-slate-400" />
             </button>
         </div>
       </div>
