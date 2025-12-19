@@ -1,673 +1,480 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import PropTypes from 'prop-types';
-import { useTransition, animated } from '@react-spring/web';
-import { pinyin } from 'pinyin-pro';
-import { 
-  FaPause, FaPlay, FaChevronRight, FaTachometerAlt, FaUserCircle
-} from 'react-icons/fa';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/router';
+import { HiSpeakerWave } from "react-icons/hi2";
+import { FaChevronLeft, FaChevronRight, FaPlay } from "react-icons/fa";
 
-// =================================================================================
-// ===== 1. TTS 核心逻辑 (保持不变) =====
-// =================================================================================
+// --- 1. 核心全屏播放器组件 ---
+import WordStudyPlayer from './WordStudyPlayer';
+import GrammarPointPlayer from './GrammarPointPlayer';
 
-const ttsCache = new Map();
+// --- 2. 外部练习题组件 ---
+// 请确保这些文件在你的项目中存在，如果不存在，请使用下方的占位符或创建对应文件
+import XuanZeTi from './XuanZeTi';
+import LianXianTi from './LianXianTi';
+import GaiCuoTi from './GaiCuoTi';
+import TianKongTi from './TianKongTi'; 
+// 补充缺失的组件导入，防止报错
+import PaiXuTi from './PaiXuTi'; // 需确保文件存在
+import PanDuanTi from './PanDuanTi'; // 需确保文件存在
+// import DuiHua from './DuiHua'; // 假设对话组件叫这个
 
-const getTTSAudio = async (text, lang = 'zh') => {
-  const voice = lang === 'my' ? 'my-MM-NilarNeural' : 'zh-CN-XiaoyouNeural';
-  const cacheKey = `${text}|${voice}`;
+// --- 3. 旧版/备用组件 ---
+import WordCard from '../WordCard'; 
+// import PhraseCard from '../PhraseCard'; // 如果有短句卡片组件请取消注释
 
-  if (ttsCache.has(cacheKey)) {
-    const cachedAudio = ttsCache.get(cacheKey);
-    cachedAudio.currentTime = 0;
-    return cachedAudio;
-  }
+// ============================================================================
+// ===== 占位组件 (防止因缺少文件导致整个页面崩溃) =====
+// ============================================================================
+const DuiHua = ({ data, onComplete }) => (
+  <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+    <h3 className="text-xl font-bold mb-4">对话练习</h3>
+    <p className="text-gray-500 mb-8">（此处应加载 DialogueCinematic 组件）</p>
+    <button onClick={onComplete} className="bg-blue-600 text-white px-6 py-2 rounded-full">完成对话</button>
+  </div>
+);
 
-  try {
-    const url = `/api/tts?t=${encodeURIComponent(text)}&v=${voice}`;
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('TTS API Error');
-    const blob = await response.blob();
-    const audio = new Audio(URL.createObjectURL(blob));
-    ttsCache.set(cacheKey, audio);
-    return audio;
-  } catch (e) {
-    console.error(`Failed to get TTS for "${text}"`, e);
-    return null;
-  }
-};
-
-function useSimpleTTS() {
-  const [playerState, setPlayerState] = useState({
-    isPlaying: false,
-    isPaused: false,
-    loadingId: null,
-    playingId: null,
-    duration: 0,
-    currentTime: 0,
-    playbackRate: 1.0, 
-  });
-
-  const audioObjRef = useRef(null);
-  const requestRef = useRef(null);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      stop();
-    };
-  }, []);
-
-  const stop = useCallback(() => {
-    if (requestRef.current) cancelAnimationFrame(requestRef.current);
-    if (audioObjRef.current) {
-      audioObjRef.current.pause();
-      audioObjRef.current.currentTime = 0;
-      audioObjRef.current = null;
-    }
-    ttsCache.forEach(audio => {
-      if (!audio.paused) {
-        audio.pause();
-        audio.currentTime = 0;
-      }
-    });
-    setPlayerState(prev => ({
-      ...prev,
-      isPlaying: false,
-      isPaused: false,
-      playingId: null,
-      loadingId: null,
-      currentTime: 0,
-      duration: 0
-    }));
-  }, []);
-
-  const updateProgress = useCallback(() => {
-    if (audioObjRef.current && !audioObjRef.current.paused) {
-      setPlayerState(prev => ({
-        ...prev,
-        currentTime: audioObjRef.current.currentTime,
-        duration: audioObjRef.current.duration || 0
-      }));
-      requestRef.current = requestAnimationFrame(updateProgress);
-    }
-  }, []);
-
-  const toggle = useCallback(() => {
-    if (audioObjRef.current) {
-      if (audioObjRef.current.paused) {
-        audioObjRef.current.play().catch(console.error);
-        setPlayerState(prev => ({ ...prev, isPaused: false }));
-        requestRef.current = requestAnimationFrame(updateProgress);
-      } else {
-        audioObjRef.current.pause();
-        if (requestRef.current) cancelAnimationFrame(requestRef.current);
-        setPlayerState(prev => ({ ...prev, isPaused: true }));
-      }
-    }
-  }, [updateProgress]);
-
-  const seek = useCallback((time) => {
-    if (audioObjRef.current) {
-      audioObjRef.current.currentTime = time;
-      setPlayerState(prev => ({ ...prev, currentTime: time }));
-    }
-  }, []);
-
-  const setRate = useCallback((rate) => {
-    setPlayerState(prev => ({ ...prev, playbackRate: rate }));
-    if (audioObjRef.current) {
-      audioObjRef.current.playbackRate = rate;
-    }
-  }, []);
-
-  const play = useCallback(async (text, uniqueId) => {
-    if (playerState.playingId === uniqueId) {
-      toggle();
-      return;
-    }
-
-    stop();
-    setPlayerState(prev => ({ ...prev, loadingId: uniqueId }));
-
-    let cleanText = String(text).replace(/<[^>]+>/g, '').replace(/\{\{|\}\}/g, '').trim();
-    // 移除行首的特殊符号，避免朗读出来
-    cleanText = cleanText.replace(/^[❌✅XV×√]\s*/i, ''); 
-
-    if (!cleanText) {
-      setPlayerState(prev => ({ ...prev, loadingId: null }));
-      return;
-    }
-
-    const segments = [];
-    const hasBurmese = /[\u1000-\u109F]/.test(cleanText);
-
-    if (!hasBurmese) {
-      segments.push({ text: cleanText, lang: 'zh' });
-    } else {
-      const regex = /([\u1000-\u109F]+)|([^\u1000-\u109F]+)/g;
-      let match;
-      while ((match = regex.exec(cleanText)) !== null) {
-        if (match[0].trim()) {
-          segments.push({ text: match[0].trim(), lang: /[\u1000-\u109F]/.test(match[0]) ? 'my' : 'zh' });
-        }
-      }
-    }
-
-    try {
-      const audioPromises = segments.map(seg => getTTSAudio(seg.text, seg.lang));
-      const validAudios = (await Promise.all(audioPromises)).filter(a => a !== null);
-
-      if (validAudios.length === 0) {
-        setPlayerState(prev => ({ ...prev, loadingId: null }));
-        return;
-      }
-
-      const playQueue = (index) => {
-        if (!mountedRef.current) return;
-        if (index >= validAudios.length) {
-          stop();
-          return;
-        }
-
-        const audio = validAudios[index];
-        audioObjRef.current = audio;
-        audio.playbackRate = playerState.playbackRate;
-        
-        const onLoadedMeta = () => {
-           if(index === 0) setPlayerState(prev => ({ ...prev, duration: audio.duration, currentTime: 0 }));
-        };
-        const onEnded = () => playQueue(index + 1);
-        const onError = () => playQueue(index + 1);
-
-        audio.addEventListener('loadedmetadata', onLoadedMeta);
-        audio.addEventListener('ended', onEnded, { once: true });
-        audio.addEventListener('error', onError, { once: true });
-
-        audio.play()
-          .then(() => {
-            setPlayerState(prev => ({ 
-              ...prev, isPlaying: true, isPaused: false, playingId: uniqueId, loadingId: null 
-            }));
-            requestRef.current = requestAnimationFrame(updateProgress);
-          })
-          .catch(err => {
-            console.error("Play error", err);
-            playQueue(index + 1);
-          });
-      };
-
-      playQueue(0);
-    } catch (e) {
-      console.error(e);
-      setPlayerState(prev => ({ ...prev, loadingId: null }));
-    }
-  }, [playerState.playingId, playerState.playbackRate, stop, toggle, updateProgress]);
-
-  return { ...playerState, play, stop, toggle, seek, setRate };
-}
-
-// =================================================================================
-// ===== 3. 富文本与拼音解析 =====
-// =================================================================================
-
-// 拼音渲染器
-const renderTextWithPinyin = (text, colorStyle = 'inherit', isBold = false) => {
-  if (!text) return null;
-  // 移除标记符号进行显示
-  const displayable = text.replace(/^[❌✅XV×√]\s*/i, '').replace(/\{\{|\}\}/g, '');
-  const parts = displayable.match(/([\u4e00-\u9fff]+)|([^\u4e00-\u9fff]+)/g) || [];
-
-  return (
-    <span style={{ 
-      lineHeight: '2.2', 
-      wordBreak: 'break-word', 
-      color: colorStyle, 
-      fontWeight: isBold ? '700' : '400',
-      fontSize: '1.05rem' 
-    }}>
-      {parts.map((part, idx) => {
-        if (/[\u4e00-\u9fff]/.test(part)) {
-          const pyArray = pinyin(part, { type: 'array', toneType: 'symbol' });
-          const charArray = part.split('');
-          return charArray.map((char, cIdx) => (
-            <ruby key={`${idx}-${cIdx}`} style={styles.ruby}>
-              {char}
-              <rt style={{...styles.rt, color: colorStyle === '#ef4444' ? '#fca5a5' : '#94a3b8'}}>
-                {pyArray[cIdx] || ''}
-              </rt>
-            </ruby>
-          ));
-        } else {
-          return <span key={idx}>{part}</span>;
-        }
-      })}
-    </span>
-  );
-};
-
-// 简单的 Markdown 转 HTML 解析器 (处理标题、表格、粗体)
-const processRichText = (text) => {
-  if (!text) return '';
-  let html = text;
-  // 标题
-  html = html.replace(/^### (.*$)/gim, '<h3 style="margin: 16px 0 8px; font-size: 1.1rem; color: #1e293b;">$1</h3>');
-  html = html.replace(/^## (.*$)/gim, '<h2 style="margin: 20px 0 10px; font-size: 1.25rem; color: #0f172a; border-left: 4px solid #3b82f6; padding-left: 10px;">$1</h2>');
-  // 加粗
-  html = html.replace(/\*\*(.*?)\*\*/g, '<b style="color: #0f172a;">$1</b>');
-  // 列表
-  html = html.replace(/^\- (.*$)/gim, '<li style="margin-left: 20px; list-style-type: disc;">$1</li>');
-  // 换行
-  html = html.replace(/\n/g, '<br/>');
-  return html;
-};
-
-// 交互式文本块 (支持点击朗读，且紧凑排版)
-const InteractiveTextBlock = ({ text, playFn, baseId }) => {
-  if (!text) return null;
-  const lines = text.split('\n').filter(l => l.trim().length > 0);
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-      {lines.map((line, idx) => {
-        const uniqueId = `${baseId}_line_${idx}`;
-        const trimmed = line.trim();
-        
-        // 正误判断
-        const isWrong = /^[❌X×]/.test(trimmed);
-        const isCorrect = /^[✅V√]/.test(trimmed);
-        
-        let color = '#334155'; 
-        if (isWrong) color = '#ef4444'; // 红字
-        if (isCorrect) color = '#0f172a'; // 黑字
-
-        return (
-          <div 
-            key={idx}
-            onClick={() => playFn(line, uniqueId)}
-            style={{ 
-              cursor: 'pointer', 
-              padding: '2px 4px',
-              borderRadius: '4px',
-              transition: 'background 0.2s',
-            }}
-            className="hover-bg"
-          >
-             {renderTextWithPinyin(trimmed, color, isCorrect)}
-          </div>
-        );
-      })}
-    </div>
-  );
-};
-
-// =================================================================================
-// ===== 4. 音乐播放器风格悬浮组件 (MusicPlayerHeader) =====
-// =================================================================================
-const MusicPlayerHeader = ({ 
-  isPlaying, isPaused, duration, currentTime, 
-  onToggle, onSeek, onRateChange, playbackRate, label 
-}) => {
+// ============================================================================
+// ===== Audio Manager (TTS 工具) =====
+// ============================================================================
+const ttsVoices = { zh: 'zh-CN-XiaoyouNeural', my: 'my-MM-NilarNeural' };
+const audioManager = (() => {
+  if (typeof window === 'undefined') return null;
+  let audioEl = null, onEnded = null;
   
-  const cycleRate = () => {
-    if (playbackRate >= 1.0) onRateChange(0.6);
-    else if (playbackRate <= 0.6) onRateChange(0.8);
-    else onRateChange(1.0);
+  const stop = () => { 
+    try { 
+      if (audioEl) { audioEl.pause(); audioEl = null; } 
+    } catch (e) {} 
+    if (onEnded) { onEnded(); onEnded = null; } 
   };
 
-  const formatTime = (t) => {
-    const min = Math.floor(t / 60);
-    const sec = Math.floor(t % 60);
-    return `${min}:${sec < 10 ? '0' + sec : sec}`;
+  const playUrl = async (url, { onEnd = null } = {}) => { 
+    stop(); 
+    if (!url) return; 
+    try { 
+      const a = new Audio(url); 
+      a.volume = 1.0; 
+      a.preload = 'auto'; 
+      a.onended = () => { if (onEnd) onEnd(); if (audioEl === a) { audioEl = null; onEnded = null; } }; 
+      a.onerror = () => { if (onEnd) onEnd(); }; 
+      audioEl = a; 
+      onEnded = onEnd; 
+      await a.play().catch(e => console.warn("Audio play failed:", e)); 
+    } catch (e) { if (onEnd) onEnd(); } 
   };
+
+  const blobCache = new Map();
+  const fetchToBlobUrl = async (url) => { 
+    try { 
+      if (blobCache.has(url)) return blobCache.get(url); 
+      const r = await fetch(url); 
+      const b = await r.blob(); 
+      const u = URL.createObjectURL(b); 
+      blobCache.set(url, u); 
+      return u; 
+    } catch (e) { return url; } 
+  };
+
+  return { 
+    stop, 
+    playTTS: async (t, l='zh', r=0, cb=null) => { 
+      if (!t) { if (cb) cb(); return; } 
+      const v = ttsVoices[l]||ttsVoices.zh; 
+      // 注意：这里的 tts 接口是示例，请确保你的服务器支持
+      const u = await fetchToBlobUrl(`https://t.leftsite.cn/tts?t=${encodeURIComponent(t)}&v=${v}&r=${r}`); 
+      return playUrl(u, { onEnd: cb }); 
+    }, 
+    playDing: () => { try { new Audio('/sounds/click.mp3').play().catch(()=>{}); } catch(e){} } 
+  };
+})();
+
+// ============================================================================
+// ===== 子组件定义 =====
+// ============================================================================
+
+// 1. 列表容器适配器 (用于旧版渲染或短句)
+const CardListRenderer = ({ data, type, onComplete }) => {
+  const isPhrase = type === 'phrase_study' || type === 'sentences';
+  const list = data.words || data.sentences || data.vocabulary || []; 
 
   return (
-    <div style={styles.musicPlayerContainer}>
-      <div style={styles.musicPlayerInner}>
-        
-        {/* 左侧头像 */}
-        <div style={styles.avatarBox}>
-          <FaUserCircle size={36} color="#cbd5e1" />
-        </div>
-
-        {/* 中间控制区 */}
-        <div style={styles.controlsCenter}>
-          {/* 进度条 (在上方) */}
-          <div style={styles.progressBarWrapper}>
-             <div 
-               style={{ 
-                 ...styles.progressBarFill, 
-                 width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` 
-               }} 
-             />
-             <input 
-                type="range" 
-                min="0" 
-                max={duration || 100} 
-                value={currentTime} 
-                onChange={(e) => onSeek(Number(e.target.value))}
-                style={styles.hiddenRangeInput}
+    <div className="w-full h-full flex flex-col relative bg-slate-50">
+      <div className="flex-none pt-12 pb-4 px-4 text-center z-10 bg-slate-50">
+        <h2 className="text-2xl font-black text-slate-800">
+          {data.title || (isPhrase ? "常用短句" : "核心生词")}
+        </h2>
+        <p className="text-slate-400 text-xs mt-1">共 {list.length} 个 • 点击卡片跟读</p>
+      </div>
+      <div className="flex-1 w-full overflow-y-auto px-4 pb-32" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div className={`grid gap-4 ${isPhrase ? 'grid-cols-1' : 'grid-cols-2'}`}>
+          {list.map((item, i) => (
+            isPhrase ? (
+              <div key={i} className="p-4 bg-white rounded-xl shadow-sm border border-slate-100" onClick={() => audioManager.playTTS(item.sentence || item.chinese)}>
+                 <div className="text-lg font-bold text-slate-800">{item.sentence || item.chinese}</div>
+                 <div className="text-sm text-slate-500 mt-1">{item.pinyin}</div>
+                 <div className="text-sm text-slate-400 mt-1">{item.translation}</div>
+              </div>
+            ) : (
+              <WordCard 
+                key={item.id || i} 
+                word={item}
+                data={item}
+                onPlay={() => audioManager.playTTS(item.word || item.chinese)}
               />
-          </div>
-
-          {/* 播放按钮与信息 (在下方) */}
-          <div style={styles.playInfoRow}>
-             <button onClick={onToggle} style={styles.playBtnSmall}>
-               {isPlaying && !isPaused ? <FaPause size={12} /> : <FaPlay size={12} style={{marginLeft: 2}} />}
-             </button>
-             <div style={styles.trackInfo}>
-               <span style={styles.trackTitle}>{label}</span>
-               <span style={styles.trackTime}>{formatTime(currentTime)} / {formatTime(duration)}</span>
-             </div>
-          </div>
+            )
+          ))}
         </div>
-
-        {/* 右侧语速 */}
-        <button onClick={cycleRate} style={styles.speedBtn}>
-          <FaTachometerAlt size={14} color="#64748b" />
-          <span style={{fontSize: 10, fontWeight: 700, color: '#64748b'}}>{playbackRate}x</span>
+      </div>
+      <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-slate-50 via-slate-50 to-transparent z-20">
+        <button 
+          onClick={onComplete} 
+          className="w-full py-4 bg-blue-600 text-white font-bold text-lg rounded-2xl shadow-xl shadow-blue-200 active:scale-95 transition-all flex items-center justify-center gap-2"
+        >
+          我学会了 <FaChevronRight size={14} />
         </button>
-
       </div>
     </div>
   );
 };
 
-// =================================================================================
-// ===== 5. 主组件 GrammarPointPlayer =====
-// =================================================================================
-const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
-  const normalizedPoints = useMemo(() => {
-    if (!Array.isArray(grammarPoints)) return [];
-    return grammarPoints.map((item, idx) => ({
-      id: item.id || idx,
-      title: item['语法标题'] || item.grammarPoint || '',
-      pattern: item['句型结构'] || item.pattern || '',
-      explanation: item['语法详解'] || item.visibleExplanation || '',
-      attention: item['注意事项'] || item['易错点'] || item.attention || '', 
-      explanationScript: item['讲解脚本'] || item.narrationScript || (item['语法详解'] || '').replace(/<[^>]+>/g, ''),
-      dialogues: (item['例句列表'] || item.examples || []).map((ex, i) => ({
-        id: ex.id || i,
-        speaker: i % 2 === 0 ? 'A' : 'B', 
-        sentence: ex['句子'] || ex.sentence || '',
-        translation: ex['翻译'] || ex.translation || '',
-        script: ex['例句发音'] || ex.narrationScript || ex['句子'] || ''
-      }))
-    }));
-  }, [grammarPoints]);
-
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const contentRef = useRef(null);
-  
-  const { 
-    play, stop, toggle, seek, setRate,
-    isPlaying, isPaused, loadingId, playingId, currentTime, duration, playbackRate 
-  } = useSimpleTTS();
-
-  useEffect(() => {
-    stop(); 
-    if (contentRef.current) contentRef.current.scrollTop = 0;
-  }, [currentIndex, stop]);
-
-  const handleNext = () => {
-    if (currentIndex < normalizedPoints.length - 1) {
-      setCurrentIndex(p => p + 1);
-    } else {
-      // 触发外部回调，进入下一环节（如练习题），不显示完成页
-      if (onComplete) onComplete();
-    }
-  };
-
-  const transitions = useTransition(currentIndex, {
-    key: currentIndex,
-    from: { opacity: 0, transform: 'translate3d(100%,0,0)' },
-    enter: { opacity: 1, transform: 'translate3d(0%,0,0)' },
-    leave: { opacity: 0, transform: 'translate3d(-100%,0,0)', position: 'absolute' },
-  });
-
-  if (!normalizedPoints.length) return <div style={styles.center}>暂无数据</div>;
-
+// 2. 封面/首页组件 (新增：支持图片)
+const CoverBlock = ({ data, onNext }) => {
   return (
-    <div style={styles.container}>
-      {/* 悬浮音乐播放器 */}
-      <MusicPlayerHeader 
-        isPlaying={isPlaying || isPaused}
-        isPaused={isPaused}
-        currentTime={currentTime}
-        duration={duration}
-        playbackRate={playbackRate}
-        onToggle={toggle}
-        onSeek={seek}
-        onRateChange={setRate}
-        label={
-             loadingId ? '加载中...' :
-             playingId ? (playingId.includes('narration') ? '讲解中...' : '朗读中') : '准备播放'
-        }
-      />
+    <div className="w-full h-full flex flex-col items-center relative bg-white overflow-hidden">
+      {/* 背景装饰 */}
+      <div className="absolute top-[-20%] left-[-20%] w-[140%] h-[60%] bg-blue-50 rounded-[100%] z-0" />
+      
+      <div className="flex-1 flex flex-col items-center justify-center z-10 w-full px-6">
+        {data.imageUrl && (
+          <div className="w-64 h-64 mb-8 rounded-3xl overflow-hidden shadow-2xl shadow-blue-100">
+             <img src={data.imageUrl} alt="Cover" className="w-full h-full object-cover" />
+          </div>
+        )}
+        <h1 className="text-3xl font-black text-slate-800 text-center mb-4 leading-tight">
+          {data.title || "开始学习"}
+        </h1>
+        <p className="text-slate-500 text-center text-lg max-w-xs leading-relaxed">
+          {data.description || "准备好了吗？让我们开始今天的课程吧！"}
+        </p>
+      </div>
 
-      {transitions((style, i) => {
-        const gp = normalizedPoints[i];
-        if (!gp) return null;
-        
-        const narrationId = `narration_${gp.id}`;
-
-        return (
-          <animated.div style={{ ...styles.page, ...style }}>
-            <div style={styles.scrollContainer} ref={contentRef}>
-              <div style={styles.contentWrapper}>
-                
-                <h2 style={styles.title}>{gp.title}</h2>
-
-                {/* 1. 核心句型 */}
-                {gp.pattern && (
-                  <div style={styles.card}>
-                    <div style={styles.cardLabel}>核心句型</div>
-                    <div 
-                      onClick={() => play(gp.pattern, `pattern_${gp.id}`)}
-                      style={{ cursor: 'pointer', ...styles.patternText }}
-                      className="hover-bg"
-                    >
-                      {renderTextWithPinyin(gp.pattern)}
-                    </div>
-                  </div>
-                )}
-
-                {/* 2. 语法详解 (使用富文本解析) */}
-                <div style={styles.section}>
-                  <div style={styles.sectionHeader}>
-                    <span style={styles.sectionTitle}>📝 语法详解</span>
-                    {/* 这个按钮用来触发长音频讲解 */}
-                    <button 
-                       onClick={() => play(gp.explanationScript, narrationId)}
-                       style={styles.playBtnCircle}
-                       disabled={loadingId === narrationId}
-                    >
-                      {loadingId === narrationId ? <div className="spin" style={styles.miniSpin}/> : (playingId === narrationId && !isPaused ? <FaPause size={12}/> : <FaPlay size={12} style={{marginLeft:2}}/>)}
-                    </button>
-                  </div>
-                  
-                  <div style={styles.richTextBlock} dangerouslySetInnerHTML={{__html: processRichText(gp.explanation)}} />
-                </div>
-
-                {/* 3. 易错点 (红字/黑字交互) */}
-                {gp.attention && (
-                  <div style={styles.section}>
-                    <div style={styles.sectionHeader}>
-                      <span style={{...styles.sectionTitle, color: '#ef4444'}}>⚠️ 易错点 / 注意事项</span>
-                    </div>
-                    <div style={styles.attentionBox}>
-                      <InteractiveTextBlock 
-                        text={gp.attention} 
-                        playFn={play} 
-                        baseId={`att_${gp.id}`} 
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* 4. 场景对话 */}
-                <div style={styles.section}>
-                  <div style={styles.sectionHeader}>
-                    <span style={styles.sectionTitle}>💬 场景对话</span>
-                  </div>
-                  <div style={styles.dialogueContainer}>
-                    {gp.dialogues.map((ex, idx) => {
-                      const exId = `ex_${gp.id}_${idx}`;
-                      const isLeft = ex.speaker === 'A';
-                      return (
-                        <div key={idx} 
-                             onClick={() => play(ex.script, exId)}
-                             style={{ 
-                               ...styles.dialogueRow, 
-                               flexDirection: isLeft ? 'row' : 'row-reverse',
-                               cursor: 'pointer'
-                             }}
-                        >
-                          <div style={{...styles.avatar, background: isLeft ? '#3b82f6' : '#ec4899'}}>
-                            {ex.speaker}
-                          </div>
-                          
-                          <div style={{
-                             ...styles.bubble,
-                             background: isLeft ? '#eff6ff' : '#fff1f2',
-                             border: isLeft ? '1px solid #dbeafe' : '1px solid #fce7f3',
-                             borderRadius: isLeft ? '16px 16px 16px 4px' : '16px 16px 4px 16px'
-                          }} className="hover-bg">
-                             <div style={styles.bubbleText}>
-                               {renderTextWithPinyin(ex.sentence)}
-                             </div>
-                             <div style={styles.bubbleTrans}>{ex.translation}</div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                
-                {/* 底部按钮 */}
-                <div style={styles.nextButtonContainer}>
-                   <button style={styles.nextBtn} onClick={handleNext}>
-                     {i === normalizedPoints.length -1 ? '进入练习' : '下一个'} <FaChevronRight size={14} />
-                   </button>
-                </div>
-                
-                <div style={{ height: '60px' }} />
-              </div>
-            </div>
-          </animated.div>
-        );
-      })}
+      <div className="w-full p-8 z-10">
+        <button 
+          onClick={onNext}
+          className="w-full py-4 bg-blue-600 text-white text-xl font-bold rounded-2xl shadow-lg shadow-blue-200 active:scale-95 transition-all flex items-center justify-center gap-3"
+        >
+          <FaPlay size={18} /> 开始学习
+        </button>
+      </div>
     </div>
   );
 };
 
-GrammarPointPlayer.propTypes = {
-  grammarPoints: PropTypes.array.isRequired,
-  onComplete: PropTypes.func,
+// 3. 完成页面
+const CompletionBlock = ({ data, router }) => { 
+  useEffect(() => { 
+    audioManager?.playTTS("恭喜完成学习", 'zh'); 
+    // 自动返回逻辑可选
+    // setTimeout(() => router.back(), 3000); 
+  }, []); 
+  
+  return (
+    <div className="flex flex-col items-center justify-center h-full animate-bounce-in bg-slate-50">
+      <div className="text-8xl mb-6">🎉</div>
+      <h2 className="text-3xl font-black text-slate-800 mb-2">{data.title||"课程完成！"}</h2>
+      <p className="text-slate-500 mb-10">你真棒！已经掌握了所有内容。</p>
+      
+      <div className="flex gap-4">
+         <button onClick={() => router.back()} className="px-8 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold shadow-sm active:scale-95 transition-all">
+           返回列表
+         </button>
+         <button onClick={() => window.location.reload()} className="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-all">
+           再学一次
+         </button>
+      </div>
+    </div>
+  ); 
 };
 
-// =================================================================================
-// ===== 6. 样式定义 =====
-// =================================================================================
-const styles = {
-  container: { position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#f8fafc', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' },
-  center: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#94a3b8' },
-  page: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'white' },
-  scrollContainer: { flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 16px' },
-  contentWrapper: { maxWidth: '800px', margin: '0 auto', paddingTop: '100px' }, 
-  
-  // === Music Player Style ===
-  musicPlayerContainer: {
-    position: 'absolute', top: 0, left: 0, right: 0,
-    height: '84px',
-    background: 'rgba(255, 255, 255, 0.92)',
-    backdropFilter: 'blur(16px)',
-    borderBottom: '1px solid rgba(0,0,0,0.06)',
-    zIndex: 1000,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    boxShadow: '0 4px 24px rgba(0,0,0,0.04)'
-  },
-  musicPlayerInner: {
-    width: '100%', maxWidth: '800px', padding: '0 20px',
-    display: 'flex', alignItems: 'center', gap: '16px'
-  },
-  avatarBox: {
-    width: 48, height: 48, borderRadius: '12px', background: '#f1f5f9',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-  },
-  controlsCenter: { flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' },
-  progressBarWrapper: { position: 'relative', height: '4px', width: '100%', background: '#e2e8f0', borderRadius: '2px', overflow: 'hidden' },
-  progressBarFill: { height: '100%', background: '#3b82f6', borderRadius: '2px' },
-  hiddenRangeInput: { position: 'absolute', top: -5, left: 0, width: '100%', height: '14px', opacity: 0, cursor: 'pointer', margin: 0 },
-  
-  playInfoRow: { display: 'flex', alignItems: 'center', gap: '10px' },
-  playBtnSmall: {
-    width: 28, height: 28, borderRadius: '50%', background: '#3b82f6', color: 'white',
-    border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-    boxShadow: '0 2px 6px rgba(59, 130, 246, 0.4)'
-  },
-  trackInfo: { display: 'flex', flexDirection: 'column' },
-  trackTitle: { fontSize: '0.8rem', fontWeight: 'bold', color: '#1e293b' },
-  trackTime: { fontSize: '0.7rem', color: '#94a3b8', fontFamily: 'monospace' },
-  
-  speedBtn: {
-    background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px',
-    padding: '6px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', 
-    cursor: 'pointer', gap: '2px'
-  },
+// 4. 未知题型处理
+const UnknownBlockHandler = ({ type, onSkip }) => (
+  <div className="flex flex-col items-center justify-center h-full text-gray-400 p-8 text-center">
+    <p className="mb-4">暂不支持的题型: <span className="font-mono text-red-400 bg-red-50 px-2 py-1 rounded">{type}</span></p>
+    <button onClick={onSkip} className="mt-4 text-blue-500 underline">跳过此页</button>
+  </div>
+);
 
-  // === Content Styles ===
-  title: { fontSize: '1.8rem', fontWeight: '800', textAlign: 'center', color: '#1e293b', marginBottom: '24px', marginTop: '10px', letterSpacing: '-0.02em' },
-  
-  card: { background: 'white', borderRadius: '16px', padding: '24px', marginBottom: '32px', boxShadow: '0 10px 40px -10px rgba(0,0,0,0.08)', border: '1px solid #f1f5f9' },
-  cardLabel: { fontSize: '0.75rem', color: '#94a3b8', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '12px', letterSpacing: '1px' },
-  patternText: { fontSize: '1.4rem', fontWeight: '600', color: '#0f172a', lineHeight: 1.5 },
-
-  section: { marginBottom: '40px' },
-  sectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' },
-  sectionTitle: { fontSize: '1.15rem', fontWeight: '700', color: '#334155' },
-  playBtnCircle: { width: 28, height: 28, borderRadius: '50%', background: '#eff6ff', color: '#3b82f6', border: '1px solid #dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
-  miniSpin: { width: 12, height: 12, border: '2px solid #3b82f6', borderTopColor: 'transparent', borderRadius: '50%' },
-
-  richTextBlock: { fontSize: '1.05rem', lineHeight: '1.8', color: '#475569' },
-  attentionBox: { background: '#fff', borderRadius: '12px', border: '1px solid #f1f5f9', padding: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' },
-
-  ruby: { rubyPosition: 'over', margin: '0 1px' },
-  rt: { fontSize: '0.6em', userSelect: 'none' },
-
-  dialogueContainer: { display: 'flex', flexDirection: 'column', gap: '24px' },
-  dialogueRow: { display: 'flex', alignItems: 'flex-end', gap: '12px' },
-  avatar: { width: 36, height: 36, borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '14px', flexShrink: 0, marginBottom: '6px' },
-  bubble: { padding: '14px 18px', maxWidth: '85%', position: 'relative', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' },
-  bubbleText: { fontSize: '1.1rem', color: '#1e293b', marginBottom: '4px' },
-  bubbleTrans: { fontSize: '0.9rem', color: '#94a3b8' },
-
-  nextButtonContainer: { marginTop: '40px', marginBottom: '20px', display: 'flex', justifyContent: 'center', width: '100%' },
-  nextBtn: {
-    background: '#1e293b', color: 'white',
-    border: 'none', padding: '16px 48px',
-    borderRadius: '50px', fontSize: '1rem', fontWeight: '600',
-    display: 'flex', alignItems: 'center', gap: '8px',
-    cursor: 'pointer', boxShadow: '0 10px 25px rgba(30, 41, 59, 0.25)',
-    transition: 'transform 0.1s'
-  },
+// 辅助函数：数组打乱
+const shuffleArray = (array) => {
+  const newArray = [...array]; 
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]]; 
+  }
+  return newArray;
 };
 
-if (typeof document !== 'undefined' && !document.getElementById('gp-player-style')) {
-  const style = document.createElement('style');
-  style.id = 'gp-player-style';
-  style.innerHTML = `
-    .spin { animation: spin 1s linear infinite; }
-    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-    ruby { ruby-align: center; }
-    .hover-bg:active { background-color: rgba(0,0,0,0.04) !important; transform: scale(0.995); }
-    /* Table styles for rich text */
-    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.95rem; }
-    th, td { border: 1px solid #e2e8f0; padding: 10px; text-align: left; }
-    th { background: #f8fafc; font-weight: 600; color: #475569; }
-  `;
-  document.head.appendChild(style);
+
+// ============================================================================
+// ===== 主组件: InteractiveLesson =====
+// ============================================================================
+export default function InteractiveLesson({ lesson }) {
+  const router = useRouter();
+  const [hasMounted, setHasMounted] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isJumping, setIsJumping] = useState(false);
+  const [jumpValue, setJumpValue] = useState('');
+
+  const blocks = useMemo(() => lesson?.blocks || [], [lesson]);
+  const totalBlocks = blocks.length;
+  const currentBlock = blocks[currentIndex];
+
+  useEffect(() => { setHasMounted(true); }, []);
+  
+  // 1. 读取进度
+  useEffect(() => { 
+    if (lesson?.id && hasMounted) { 
+      const saved = localStorage.getItem(`lesson-progress-${lesson.id}`); 
+      if (saved) {
+        const savedIndex = parseInt(saved, 10);
+        if (savedIndex < totalBlocks) {
+          setCurrentIndex(savedIndex); 
+        } else {
+          // 如果上次已经学完，这次从头开始（或者保留在最后也行，这里选择重置）
+          setCurrentIndex(0);
+          localStorage.removeItem(`lesson-progress-${lesson.id}`);
+        }
+      }
+    } 
+  }, [lesson, hasMounted, totalBlocks]);
+
+  // 2. 保存进度
+  useEffect(() => { 
+    if (hasMounted && lesson?.id) {
+        const isFinished = currentIndex >= totalBlocks || 
+                           ['complete', 'end'].includes(blocks[currentIndex]?.type);
+
+        if (isFinished) {
+            localStorage.removeItem(`lesson-progress-${lesson.id}`);
+        } else {
+            localStorage.setItem(`lesson-progress-${lesson.id}`, currentIndex.toString());
+        }
+    }
+    audioManager?.stop(); 
+  }, [currentIndex, lesson?.id, hasMounted, totalBlocks, blocks]);
+
+  // 自动跳过 Teaching 类型（如果是纯逻辑块）
+  useEffect(() => {
+    if (currentBlock && currentBlock.type === 'teaching') {
+      const timer = setTimeout(() => {
+        if (currentIndex < totalBlocks) setCurrentIndex(prev => Math.min(prev + 1, totalBlocks));
+      }, 50); 
+      return () => clearTimeout(timer);
+    }
+  }, [currentIndex, currentBlock, totalBlocks]);
+
+  // 导航函数
+  const goNext = useCallback(() => { 
+    audioManager?.stop(); 
+    if (currentIndex < totalBlocks) {
+        setCurrentIndex(prev => Math.min(prev + 1, totalBlocks));
+    }
+  }, [currentIndex, totalBlocks]);
+
+  const goPrev = useCallback(() => { 
+    audioManager?.stop(); 
+    if (currentIndex > 0) {
+        setCurrentIndex(prev => Math.max(prev - 1, 0));
+    }
+  }, [currentIndex]);
+  
+  const delayedNextStep = useCallback(() => {
+    import('canvas-confetti').then(m => m.default({ particleCount: 80, spread: 60, origin: { y: 0.6 } })).catch(()=>{});
+    setTimeout(() => {
+        if (currentIndex < totalBlocks) setCurrentIndex(prev => prev + 1);
+    }, 1200); 
+  }, [currentIndex, totalBlocks]);
+
+  const handleJump = (e) => { 
+      e.preventDefault(); 
+      const p = parseInt(jumpValue); 
+      if (p >= 1 && p <= totalBlocks) setCurrentIndex(p - 1); 
+      setIsJumping(false); 
+      setJumpValue(''); 
+  };
+
+  // --- 核心渲染逻辑 ---
+  const renderBlock = () => {
+    if (!currentBlock) return <div className="text-slate-400 mt-20 text-center">Loading Content...</div>;
+    const type = (currentBlock.type || '').toLowerCase();
+    
+    // 通用属性传递
+    const commonProps = { 
+      key: `${lesson.id}-${currentIndex}`, 
+      data: currentBlock.content, 
+      onCorrect: delayedNextStep, 
+      onComplete: goNext, // 完成当前 Block 后去下一个
+      onNext: goNext, 
+      onPrev: goPrev,     // 传递 onPrev 给子组件
+      settings: { playTTS: audioManager?.playTTS },
+      isFirstBlock: currentIndex === 0
+    };
+    
+    const CommonWrapper = ({ children }) => <div className="w-full h-full flex flex-col items-center justify-center pt-4 bg-slate-50">{children}</div>;
+    const FullHeightWrapper = ({ children }) => <div className="w-full h-full flex flex-col bg-slate-50">{children}</div>;
+
+    try {
+      switch (type) {
+        case 'teaching': return null; 
+
+        // 首页/封面 (新增)
+        case 'cover':
+        case 'start_page':
+            return <CoverBlock data={commonProps.data} onNext={goNext} />;
+
+        // 全屏单词学习
+        case 'word_study': 
+          return (
+            <WordStudyPlayer 
+              data={commonProps.data} 
+              onNext={goNext} 
+              onPrev={goPrev}
+              isFirstBlock={commonProps.isFirstBlock}
+            />
+          );
+
+        // 短句学习列表
+        case 'phrase_study': 
+        case 'sentences':
+          return <FullHeightWrapper><CardListRenderer {...commonProps} type={type} /></FullHeightWrapper>;
+
+        // 语法学习 (全屏)
+        case 'grammar_study': 
+          if (!commonProps.data.grammarPoints?.length) return <UnknownBlockHandler type="grammar_study (empty)" onSkip={goNext} />;
+          return (
+             <div className="w-full h-full relative bg-slate-50">
+                <GrammarPointPlayer 
+                    grammarPoints={commonProps.data.grammarPoints} 
+                    onComplete={commonProps.onComplete}
+                    onPrev={goPrev} // 允许从语法第一页返回上一题
+                />
+             </div>
+          );
+
+        // 各种练习题
+        case 'choice': {
+            const { correctId } = commonProps.data;
+            const correctAnswer = Array.isArray(correctId) ? correctId : (correctId != null ? [correctId] : []);
+            return <CommonWrapper><XuanZeTi {...commonProps} data={{...commonProps.data, correctAnswer}} /></CommonWrapper>;
+        }
+        case 'lianxian': {
+            const columnA = commonProps.data.pairs?.map(p => ({ id: p.id, content: p.left })) || [];
+            const columnB = commonProps.data.pairs?.map(p => ({ id: `${p.id}_b`, content: p.right })) || [];
+            const shuffledColumnB = shuffleArray(columnB);
+            const pairsMap = commonProps.data.pairs?.reduce((acc, p) => { acc[p.id] = `${p.id}_b`; return acc }, {}) || {};
+            
+            return <CommonWrapper><LianXianTi {...commonProps} data={{...commonProps.data, columnA, columnB: shuffledColumnB, pairs: pairsMap}} /></CommonWrapper>;
+        }
+        case 'paixu': {
+            const correctOrder = [...(commonProps.data.items || [])].sort((a,b) => a.order - b.order).map(i => i.id);
+            return <CommonWrapper><PaiXuTi {...commonProps} data={{...commonProps.data, correctOrder}} /></CommonWrapper>;
+        }
+        
+        case 'panduan': return <CommonWrapper><PanDuanTi {...commonProps} /></CommonWrapper>;
+        case 'gaicuo': return <CommonWrapper><GaiCuoTi {...commonProps} /></CommonWrapper>;
+        case 'image_match_blanks': return <CommonWrapper><TianKongTi {...commonProps} /></CommonWrapper>;
+        case 'dialogue_cinematic': return <DuiHua {...commonProps} />;
+        
+        case 'complete': case 'end': return <CompletionBlock data={commonProps.data} router={router} />;
+        default: return <UnknownBlockHandler type={type} onSkip={goNext} />;
+      }
+    } catch (e) { 
+        console.error("Error rendering block:", type, e);
+        return <UnknownBlockHandler type={`${type} Error`} onSkip={goNext} />; 
+    }
+  };
+
+  if (!hasMounted) return null;
+
+  const type = currentBlock?.type?.toLowerCase();
+
+  // 哪些页面是"全屏沉浸式"的，不需要底部的通用导航栏
+  // cover: 封面自己有大按钮
+  // word_study, grammar_study: 自带全套导航
+  // complete: 结束页有自己逻辑
+  const hideBottomNav = ['cover', 'start_page', 'word_study', 'phrase_study', 'sentences', 'grammar_study', 'teaching', 'complete', 'end'].includes(type);
+  
+  // 哪些页面隐藏顶部的细条进度条 (全屏体验更好)
+  const hideTopProgressBar = ['cover', 'start_page', 'word_study', 'grammar_study', 'complete', 'end'].includes(type);
+
+  return (
+    <div className="fixed inset-0 w-screen h-screen bg-slate-50 flex flex-col overflow-hidden font-sans select-none" style={{ touchAction: 'none' }}>
+      <style>{`::-webkit-scrollbar { display: none; } * { -webkit-tap-highlight-color: transparent; }`}</style>
+      
+      {/* 顶部进度条 */}
+      <div className="absolute top-0 left-0 right-0 pt-[env(safe-area-inset-top)] px-4 py-3 z-30 pointer-events-none">
+        {!hideTopProgressBar && currentIndex < totalBlocks && (
+          <div className="h-1.5 bg-slate-200/50 rounded-full overflow-hidden mx-4 backdrop-blur-sm">
+            <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${((currentIndex + 1) / totalBlocks) * 100}%` }} />
+          </div>
+        )}
+      </div>
+
+      {/* 主内容区域 */}
+      <main className="relative w-full h-full flex flex-col z-10 overflow-hidden">
+        {currentIndex >= totalBlocks ? 
+          <CompletionBlock data={blocks[totalBlocks - 1]?.content || {}} router={router} /> : 
+          renderBlock()
+        }
+      </main>
+
+      {/* 底部通用导航 (仅在做练习题时显示) */}
+      {!hideBottomNav && currentIndex < totalBlocks && (
+        <div className="absolute bottom-0 left-0 right-0 pb-[env(safe-area-inset-bottom)] px-8 py-4 z-30 flex justify-between items-center pointer-events-none">
+            {/* 上一步 */}
+            <button 
+                onClick={goPrev} 
+                className={`pointer-events-auto w-12 h-12 rounded-full bg-white/90 shadow-sm border border-slate-100 text-slate-400 flex items-center justify-center backdrop-blur-md active:scale-95 transition-all ${currentIndex === 0 ? 'opacity-0' : 'opacity-100'}`}
+            >
+                <FaChevronLeft />
+            </button>
+            
+            {/* 页面跳转器 (点击数字) */}
+            <button onClick={() => setIsJumping(true)} className="pointer-events-auto px-4 py-2 rounded-xl active:bg-black/5 transition-colors">
+              <span className="text-xs font-bold text-slate-400 tracking-widest">{currentIndex + 1} / {totalBlocks}</span>
+            </button>
+            
+            {/* 下一步 (如果是练习题，通常由题目内部触发 onCorrect，但提供一个强制跳过按钮也是可以的，或者置灰) */}
+            <button 
+                onClick={goNext} 
+                className={`pointer-events-auto w-12 h-12 rounded-full bg-white/90 shadow-sm border border-slate-100 text-slate-400 flex items-center justify-center backdrop-blur-md active:scale-95 transition-all ${currentIndex >= totalBlocks ? 'opacity-0' : 'opacity-100'}`}
+            >
+                <FaChevronRight />
+            </button>
+        </div>
+      )}
+      
+      {/* 快速跳转弹窗 */}
+      {isJumping && (
+        <div className="absolute inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center" onClick={() => setIsJumping(false)}>
+            <div onClick={e => e.stopPropagation()} className="bg-white p-6 rounded-3xl shadow-2xl w-72 animate-scale-in">
+                <h3 className="text-center font-bold text-slate-700 mb-4">跳转到页面</h3>
+                <form onSubmit={handleJump}>
+                    <input 
+                        type="number" 
+                        autoFocus 
+                        value={jumpValue} 
+                        onChange={e => setJumpValue(e.target.value)} 
+                        placeholder={`1 - ${totalBlocks}`}
+                        className="w-full text-center text-3xl font-black text-blue-600 border-b-2 border-slate-100 outline-none py-2 mb-6 bg-transparent" 
+                    />
+                    <button className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold active:scale-95 transition-transform">
+                        GO
+                    </button>
+                </form>
+            </div>
+        </div>
+      )}
+    </div>
+  );
 }
-
-export default GrammarPointPlayer;
