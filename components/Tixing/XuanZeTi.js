@@ -6,7 +6,7 @@ import {
   FaVolumeUp, FaCheckCircle, FaTimesCircle, FaLightbulb, 
   FaArrowRight, FaRedo, FaPlay, FaSpinner, FaEye 
 } from 'react-icons/fa';
-import ReactPlayer from 'react-player/lazy';
+// import ReactPlayer from 'react-player/lazy';
 
 const theme = {
   primary: '#3b82f6',
