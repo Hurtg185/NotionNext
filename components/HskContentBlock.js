@@ -1,15 +1,15 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import {
     Mic2, Music4, Layers, BookText, Lightbulb, 
     Sparkles, PlayCircle, Gem, MessageCircle, 
-    Crown, Heart, ChevronRight, Star
+    Crown, Heart, ChevronRight, Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
 
-// 动态导入 WordCard 组件
+// 动态导入 WordCard 组件 (生词本核心组件)
 const WordCard = dynamic(
     () => import('@/components/WordCard'),
     { ssr: false }
@@ -26,7 +26,7 @@ const getLevelPrice = (level) => {
     return prices[level] || "价格待定";
 };
 
-// 拼音数据配置（简化为4个核心）
+// 拼音数据
 const pinyinMain = [
     { id: 'initials', title: '声母', sub: 'ဗျည်း', href: '/pinyin/initials', icon: Mic2, color: 'text-blue-500', bg: 'bg-blue-50' },
     { id: 'finals', title: '韵母', sub: 'သရ', href: '/pinyin/finals', icon: Music4, color: 'text-emerald-500', bg: 'bg-emerald-50' },
@@ -34,6 +34,7 @@ const pinyinMain = [
     { id: 'tones', title: '声调', sub: 'အသံ', href: '/pinyin/tones', icon: BookText, color: 'text-amber-500', bg: 'bg-amber-50' },
 ];
 
+// HSK 课程数据
 const hskData = [
     {
         level: 1, title: '入门水平', description: '掌握最常用词语和基本语法',
@@ -51,9 +52,10 @@ const hskData = [
     }
 ];
 
+// 核心生词数据加载逻辑
 let hskWordsData = {};
-try { hskWordsData[1] = require('@/data/hsk/hsk1.json'); } catch (e) { }
-try { hskWordsData[2] = require('@/data/hsk/hsk2.json'); } catch (e) { }
+try { hskWordsData[1] = require('@/data/hsk/hsk1.json'); } catch (e) { console.warn('HSK1 data missing'); }
+try { hskWordsData[2] = require('@/data/hsk/hsk2.json'); } catch (e) { console.warn('HSK2 data missing'); }
 
 const checkIsFree = (level, lessonId) => {
     if (level === 1) return lessonId <= 5; 
@@ -64,13 +66,12 @@ const checkIsFree = (level, lessonId) => {
 // 2. 核心子组件
 // ==========================================
 
-// 悬浮 Messenger 按钮组件
+// 悬浮 Messenger 按钮 (官方蓝紫渐变风格)
 const FloatingMessenger = () => {
     const constraintsRef = useRef(null);
 
     return (
         <>
-            {/* 拖动约束区域（全屏侧边） */}
             <div ref={constraintsRef} className="fixed inset-y-0 right-0 w-24 z-[90] pointer-events-none" />
             
             <motion.div
@@ -81,7 +82,7 @@ const FloatingMessenger = () => {
                 whileDrag={{ scale: 1.1 }}
                 initial={{ opacity: 0, x: 50 }}
                 animate={{ opacity: 1, x: 0 }}
-                className="fixed right-4 top-[60%] z-[100] cursor-pointer touch-none"
+                className="fixed right-4 top-[70%] z-[100] cursor-pointer touch-none"
             >
                 <a 
                     href={FB_CHAT_LINK} 
@@ -90,11 +91,18 @@ const FloatingMessenger = () => {
                     className="flex flex-col items-center justify-center"
                 >
                     <div className="relative group">
-                        <div className="absolute inset-0 bg-blue-500 rounded-full blur-lg opacity-40 group-hover:opacity-60 transition-opacity animate-pulse"></div>
-                        <div className="relative w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-xl border-2 border-white/20">
-                            <MessageCircle size={30} className="text-white fill-current" />
+                        {/* 动态光晕 */}
+                        <div className="absolute inset-0 bg-purple-500 rounded-full blur-xl opacity-40 group-hover:opacity-60 transition-opacity animate-pulse"></div>
+                        
+                        {/* 按钮主体 - 蓝紫粉渐变 */}
+                        <div className="relative w-14 h-14 bg-gradient-to-tr from-[#00C6FF] via-[#0078FF] to-[#A334FA] rounded-full flex items-center justify-center shadow-2xl border-2 border-white/20 overflow-hidden">
+                            <MessageCircle size={30} className="text-white fill-current relative z-10" />
+                            {/* 内部高光装饰 */}
+                            <div className="absolute top-0 right-0 w-8 h-8 bg-white/20 blur-md rounded-full -mr-2 -mt-2"></div>
                         </div>
-                        <span className="absolute -top-1 -right-1 flex h-4 w-4">
+
+                        {/* 红色通知点 */}
+                        <span className="absolute -top-1 -right-1 flex h-4 w-4 z-20">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 border-2 border-white"></span>
                         </span>
@@ -105,6 +113,7 @@ const FloatingMessenger = () => {
     );
 };
 
+// 会员弹窗
 const MembershipModal = ({ isOpen, onClose, targetLevel }) => {
     if (!isOpen) return null;
     const price = getLevelPrice(targetLevel);
@@ -117,21 +126,21 @@ const MembershipModal = ({ isOpen, onClose, targetLevel }) => {
                 className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
             />
             <motion.div 
-                initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
+                initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
                 className="relative w-full max-w-sm bg-white rounded-[2rem] shadow-2xl overflow-hidden p-6"
             >
                 <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full text-slate-400"><MessageCircle className="rotate-45" size={20}/></button>
-                <div className="text-center mt-4">
-                    <div className="bg-amber-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Crown className="text-amber-600" size={32} />
+                <div className="text-center mt-2">
+                    <div className="bg-amber-100 w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <Crown className="text-amber-600" size={28} />
                     </div>
-                    <h2 className="text-xl font-black text-slate-800">解锁完整课程</h2>
-                    <p className="text-slate-500 text-sm mt-2 mb-6">获取 HSK {targetLevel} 所有视频讲解与练习题</p>
-                    <div className="bg-slate-50 p-4 rounded-xl mb-6 border border-slate-100">
+                    <h2 className="text-xl font-black text-slate-800">解锁 HSK {targetLevel}</h2>
+                    <p className="text-slate-500 text-sm mt-1 mb-5">获取完整视频讲解与练习题</p>
+                    <div className="bg-slate-50 p-4 rounded-2xl mb-5 border border-slate-100">
                         <p className="text-3xl font-black text-amber-500">{price}</p>
                     </div>
                     <a href={FB_CHAT_LINK} target="_blank" rel="noopener noreferrer"
-                        className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-blue-200"
+                        className="w-full py-3.5 bg-blue-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-blue-200"
                     >
                         <MessageCircle size={20} fill="currentColor" />
                         联系老师开通
@@ -142,12 +151,12 @@ const MembershipModal = ({ isOpen, onClose, targetLevel }) => {
     );
 };
 
+// 课程卡片组件
 const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
     const router = useRouter();
 
     const handleLessonClick = (e, lesson) => {
         const isFree = checkIsFree(level.level, lesson.id);
-        // 简化的鉴权逻辑
         if (!isFree) {
             e.preventDefault();
             onShowMembership(level.level);
@@ -159,26 +168,25 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
     return (
         <motion.div 
             whileTap={{ scale: 0.99 }}
-            className="flex flex-col bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden"
+            className="flex flex-col bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden relative z-10"
         >
-            {/* 头部图片区域 */}
-            <div className="h-32 relative">
+            {/* 海报区域 */}
+            <div className="h-36 relative">
                 <img src={level.imageUrl} className="w-full h-full object-cover" alt="" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                 <div className="absolute bottom-4 left-5 text-white">
                     <p className="text-[10px] font-bold text-cyan-300 uppercase tracking-widest mb-0.5">{level.title}</p>
                     <h2 className="text-2xl font-black">HSK {level.level}</h2>
                 </div>
-                {/* 快速入口按钮 */}
+                {/* 收藏生词入口按钮 */}
                 <button 
                     onClick={(e) => { e.stopPropagation(); onVocabularyClick(level); }}
-                    className="absolute bottom-4 right-4 bg-white/20 backdrop-blur-md border border-white/30 text-white p-2 rounded-full active:bg-white/30"
+                    className="absolute bottom-4 right-4 bg-white/20 backdrop-blur-md border border-white/30 text-white p-2.5 rounded-full active:bg-white/40 transition-colors"
                 >
-                    <Heart size={18} fill="currentColor" />
+                    <Heart size={20} fill="currentColor" />
                 </button>
             </div>
 
-            {/* 课程列表预览 */}
             <div className="p-4 space-y-2">
                 {level.lessons.slice(0, 3).map(lesson => (
                     <div key={lesson.id} onClick={(e) => handleLessonClick(e, lesson)} className="flex items-center p-3 rounded-xl bg-slate-50 active:bg-slate-100 cursor-pointer">
@@ -190,60 +198,52 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
                 ))}
             </div>
             
-            {/* 底部Footer */}
-            <div className="px-4 pb-4 pt-1">
+            <div className="px-4 pb-3">
                 <div className="w-full py-2 flex items-center justify-center text-xs font-bold text-slate-400 gap-1 bg-slate-50/50 rounded-lg">
-                    查看全部课程 <ChevronRight size={12} />
+                    全部课程 <ChevronRight size={12} />
                 </div>
             </div>
         </motion.div>
     );
 };
 
+// 拼音面板组件
 const PinyinSection = ({ onOpenFavorites }) => {
     return (
-        <div className="space-y-4">
-            {/* 标题栏 */}
-            <div className="flex items-center justify-between px-2">
-                <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
-                    <div className="w-1.5 h-4 bg-blue-500 rounded-full"></div>
-                    基础工具
-                </h3>
-            </div>
-            
-            {/* 拼音 4 格 - 浅色系 */}
-            <div className="grid grid-cols-4 gap-3">
+        <div className="space-y-3">
+            {/* 拼音 4 格 - 紧凑型 */}
+            <div className="grid grid-cols-4 gap-2">
                 {pinyinMain.map((item) => (
                     <Link key={item.id} href={item.href} passHref>
-                        <a className={`flex flex-col items-center justify-center py-4 rounded-3xl ${item.bg} active:scale-95 transition-transform`}>
-                            <div className="mb-1.5 bg-white p-2 rounded-full shadow-sm">
-                                <item.icon size={18} className={item.color} />
+                        <a className={`flex flex-col items-center justify-center py-3 rounded-2xl ${item.bg} active:scale-95 transition-transform`}>
+                            <div className="mb-1 bg-white p-1.5 rounded-full shadow-sm">
+                                <item.icon size={16} className={item.color} />
                             </div>
-                            <span className="text-[11px] font-bold text-slate-600">{item.title}</span>
+                            <span className="text-[10px] font-bold text-slate-600">{item.title}</span>
                         </a>
                     </Link>
                 ))}
             </div>
 
-            {/* 新增：收藏生词 & 发音技巧 (并排) */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* 功能入口 (收藏生词 + 技巧) */}
+            <div className="grid grid-cols-2 gap-2">
                 <button 
                     onClick={onOpenFavorites}
-                    className="flex items-center gap-3 p-3 bg-gradient-to-r from-pink-50 to-rose-50 rounded-2xl border border-pink-100 active:scale-95 transition-transform"
+                    className="flex items-center gap-2 p-3 bg-gradient-to-r from-pink-50 to-rose-50 rounded-2xl border border-pink-100/50 active:scale-95 transition-transform"
                 >
-                    <div className="p-2 bg-white rounded-full text-rose-500 shadow-sm"><Heart size={16} fill="currentColor" /></div>
-                    <div className="text-left">
+                    <div className="p-1.5 bg-white rounded-full text-rose-500 shadow-sm"><Heart size={14} fill="currentColor" /></div>
+                    <div className="text-left leading-tight">
                         <span className="block text-xs font-black text-slate-700">收藏生词</span>
-                        <span className="block text-[10px] text-slate-400 font-myanmar">မှတ်စု</span>
+                        <span className="block text-[9px] text-slate-400 font-myanmar">မှတ်စု</span>
                     </div>
                 </button>
 
                 <Link href="/pinyin/tips" passHref>
-                    <a className="flex items-center gap-3 p-3 bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl border border-orange-100 active:scale-95 transition-transform">
-                        <div className="p-2 bg-white rounded-full text-orange-500 shadow-sm"><Lightbulb size={16} fill="currentColor" /></div>
-                        <div className="text-left">
+                    <a className="flex items-center gap-2 p-3 bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl border border-orange-100/50 active:scale-95 transition-transform">
+                        <div className="p-1.5 bg-white rounded-full text-orange-500 shadow-sm"><Lightbulb size={14} fill="currentColor" /></div>
+                        <div className="text-left leading-tight">
                             <span className="block text-xs font-black text-slate-700">发音技巧</span>
-                            <span className="block text-[10px] text-slate-400 font-myanmar">နည်းလမ်း</span>
+                            <span className="block text-[9px] text-slate-400 font-myanmar">နည်းလမ်း</span>
                         </div>
                     </a>
                 </Link>
@@ -264,53 +264,62 @@ export default function HskPageClient() {
 
     const isCardViewOpen = router.asPath.includes('#hsk-vocabulary');
 
+    // 处理生词本点击逻辑
     const handleVocabularyClick = useCallback((level) => {
         const levelNum = level?.level || 1;
         const words = hskWordsData[levelNum] || [];
         setActiveHskWords(words);
         setActiveLevelTag(`hsk${levelNum}`);
-        router.push({ pathname: router.pathname, query: { ...router.query, level: levelNum }, hash: 'hsk-vocabulary' }, undefined, { shallow: true });
+        // 确保路由跳转带上 hash 以触发弹窗
+        router.push({ 
+            pathname: router.pathname, 
+            query: { ...router.query, level: levelNum }, 
+            hash: 'hsk-vocabulary' 
+        }, undefined, { shallow: true });
     }, [router]);
 
     return (
-        <div className="min-h-screen bg-[#f8fafc] font-sans text-slate-900 pb-12 relative overflow-x-hidden">
-            {/* 顶部背景装饰 */}
-            <div className="absolute top-0 left-0 right-0 h-64 bg-gradient-to-b from-blue-100/40 via-blue-50/20 to-transparent pointer-events-none" />
+        <div className="min-h-screen bg-[#f8fafc] font-sans text-slate-900 pb-20 relative overflow-x-hidden">
+            {/* 1. 顶部极淡背景装饰 */}
+            <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-blue-50/50 to-transparent pointer-events-none" />
 
-            {/* Header 区域：减小了底部Padding */}
-            <header className="relative pt-6 px-5 pb-8 z-10">
-                <div className="flex justify-between items-start mb-6">
-                    <div>
-                        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white rounded-full border border-blue-100 shadow-sm mb-2">
-                            <Sparkles size={12} className="text-blue-500" />
-                            <span className="text-[10px] font-bold text-blue-800 uppercase">Premium Class</span>
-                        </div>
-                        <h1 className="text-xl font-black tracking-tight text-slate-900 leading-snug">
-                            从拼音开始<br />系统学汉语
-                        </h1>
+            {/* 2. 底部水墨山水背景 (替换黑色) */}
+            <div 
+                className="fixed bottom-0 left-0 right-0 h-80 z-0 pointer-events-none opacity-10"
+                style={{
+                    backgroundImage: `url('https://img.freepik.com/free-vector/chinese-style-ink-landscape-background_52683-39296.jpg')`, // 示例背景链接
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'bottom center',
+                    maskImage: 'linear-gradient(to top, black, transparent)'
+                }}
+            />
+
+            {/* Header 区域：去除 Slogan，仅保留 Logo 和 拼音面板 */}
+            <header className="relative pt-4 px-4 pb-1 z-10">
+                <div className="flex justify-between items-center mb-3">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/80 backdrop-blur rounded-full border border-blue-100 shadow-sm">
+                        <Sparkles size={12} className="text-blue-500" />
+                        <span className="text-[10px] font-bold text-blue-800 uppercase">Premium Class</span>
                     </div>
-                    {/* 右上角 Logo 或装饰 */}
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-cyan-500 rounded-xl flex items-center justify-center text-white font-black italic shadow-lg shadow-blue-200">
+                    <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-cyan-500 rounded-lg flex items-center justify-center text-white font-black italic shadow-md">
                         CN
                     </div>
                 </div>
 
-                {/* 拼音面板 - 浅色、紧凑 */}
-                <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] p-5 shadow-xl shadow-slate-200/50 border border-white">
+                {/* 拼音面板 (背景全白，阴影柔和) */}
+                <div className="bg-white rounded-[1.8rem] p-4 shadow-xl shadow-slate-200/60 border border-slate-50">
                     <PinyinSection onOpenFavorites={() => handleVocabularyClick({ level: 1 })} />
                 </div>
             </header>
 
-            {/* 系统课程列表 - 减小了上方Margin */}
-            <div className="max-w-2xl mx-auto px-5 relative z-10 -mt-2 space-y-5">
-                <div className="flex items-center justify-between px-1">
-                    <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                        <BookText size={18} className="text-slate-800" />
-                        系统课程
-                    </h2>
+            {/* 系统课程列表 - 紧贴上方 (mt-2 极小间距) */}
+            <div className="max-w-2xl mx-auto px-4 relative z-10 mt-2 space-y-4">
+                <div className="flex items-center gap-2 px-1 opacity-70">
+                    <BookText size={14} className="text-slate-500" />
+                    <h2 className="text-xs font-black text-slate-600 uppercase tracking-wider">System Courses</h2>
                 </div>
                 
-                <div className="grid grid-cols-1 gap-5">
+                <div className="grid grid-cols-1 gap-4 pb-10">
                     {hskData.map(level => (
                         <HskCard 
                             key={level.level} 
@@ -320,12 +329,9 @@ export default function HskPageClient() {
                         />
                     ))}
                 </div>
-                
-                {/* 底部留白给悬浮按钮 */}
-                <div className="h-12"></div>
             </div>
 
-            {/* 悬浮 Messenger 按钮 (可拖动) */}
+            {/* 悬浮 Messenger 按钮 (渐变色) */}
             <FloatingMessenger />
 
             {/* 会员升级弹窗 */}
@@ -339,7 +345,7 @@ export default function HskPageClient() {
                 )}
             </AnimatePresence>
 
-            {/* 生词卡片播放器 */}
+            {/* 生词卡片播放器 (保留所有功能) */}
             <WordCard 
                 isOpen={isCardViewOpen}
                 words={activeHskWords || []}
