@@ -22,7 +22,7 @@ import { siteConfig } from '@/lib/config'
 import CONFIG from './config'
 
 // Icons
-import { FaTiktok, FaFacebook, FaTelegramPlane } from 'react-icons/fa'
+import { FaTiktok, FaFacebook, FaTelegramPlane, FaFacebookMessenger } from 'react-icons/fa' // 新增 FaFacebookMessenger
 import {
     GraduationCap,
     Phone,
@@ -144,19 +144,20 @@ const FloatingMessenger = () => {
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="flex flex-col items-center justify-center"
-                    onClick={(e) => e.stopPropagation()} // 防止拖动结束时误触发点击（如果是在父级处理点击）
+                    onClick={(e) => e.stopPropagation()} // 防止拖动结束时误触发点击
                 >
                     <div className="relative group">
-                        {/* 动态光晕 */}
-                        <div className="absolute inset-0 bg-purple-500 rounded-full blur-xl opacity-40 group-hover:opacity-60 transition-opacity animate-pulse"></div>
+                        {/* 动态光晕 - 蓝紫色 */}
+                        <div className="absolute inset-0 bg-blue-500 rounded-full blur-xl opacity-40 group-hover:opacity-60 transition-opacity animate-pulse"></div>
                         
-                        {/* 按钮主体 - 蓝紫粉渐变 */}
-                        <div className="relative w-14 h-14 bg-gradient-to-tr from-[#00C6FF] via-[#0078FF] to-[#A334FA] rounded-full flex items-center justify-center shadow-2xl border-2 border-white/20 overflow-hidden">
-                            <MessageCircle size={30} className="text-white fill-current relative z-10" />
-                            {/* 内部高光装饰 */}
-                            <div className="absolute top-0 right-0 w-8 h-8 bg-white/20 blur-md rounded-full -mr-2 -mt-2"></div>
-                            {/* 闪电装饰 */}
-                            <Zap size={12} className="text-white absolute bottom-3 right-3 opacity-80 fill-white" />
+                        {/* 按钮主体 - 官方 Messenger 渐变色 (Blue -> Purple -> Pink) */}
+                        <div className="relative w-14 h-14 bg-gradient-to-b from-[#00C6FF] via-[#0078FF] to-[#A334FA] rounded-full flex items-center justify-center shadow-2xl border border-white/20 overflow-hidden">
+                            
+                            {/* 顶部高光 */}
+                            <div className="absolute top-0 w-full h-1/2 bg-gradient-to-b from-white/20 to-transparent pointer-events-none"></div>
+
+                            {/* Messenger 官方图标 */}
+                            <FaFacebookMessenger size={34} className="text-white relative z-10" />
                         </div>
 
                         {/* 红色通知点 */}
@@ -450,7 +451,7 @@ const LayoutIndex = props => {
         <Style/><CustomScrollbarStyle />
         <HomeSidebar isOpen={isSidebarOpen} onClose={closeSidebar} sidebarX={sidebarX} />
         
-        {/* 悬浮 Messenger 按钮 */}
+        {/* 悬浮 Messenger 按钮 (FaFacebookMessenger图标 + 渐变) */}
         <FloatingMessenger />
 
         <div className='relative flex-grow w-full h-full'>
@@ -466,7 +467,7 @@ const LayoutIndex = props => {
                 <i className="fas fa-bars text-xl"></i>
             </button>
             
-            {/* Hero 区域：包含文字和价格表 - 使用 absolute 定位，不随滚动条走，但内容高度由 Spacer 控制 */}
+            {/* Hero 区域：包含文字和价格表 - 使用 absolute 定位 */}
             <div className='absolute top-0 left-0 right-0 z-10 pt-20 md:pt-24 px-4 flex flex-col items-center text-center text-white pointer-events-none'>
                 <div className='max-w-5xl w-full flex flex-col items-center'>
                     <h1 className='text-3xl md:text-6xl font-black tracking-tight mb-2 md:mb-4 drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]'>中缅文培训中心</h1>
@@ -489,17 +490,16 @@ const LayoutIndex = props => {
             {/* 内容滚动层 */}
             <div ref={scrollableContainerRef} className='absolute inset-0 z-20 overflow-y-auto overscroll-y-contain custom-scrollbar'>
                 {/* 
-                    Spacer 高度控制：
-                    之前是 h-[62vh] 导致了巨大空隙。
-                    现在调整为更紧凑的高度，确保在不同屏幕下海报和内容能更好衔接。
-                    移动端设置 480px 左右，桌面端 580px，根据内容实际占用调整。
+                    Spacer 高度调整：
+                    大幅减小高度，消除海报和下方内容的空隙。
+                    从之前的 480px/580px 减小到 350px/430px。
+                    请根据实际海报高度微调此数值。
                 */}
-                <div className='h-[480px] md:h-[580px] w-full flex-shrink-0 transition-all duration-300' />
+                <div className='h-[350px] md:h-[430px] w-full flex-shrink-0 transition-all duration-300' />
                 
                 {/* 
                     白色内容区域：
-                    使用 -mt 负边距稍微向上提一点，或者保持自然流。
-                    这里 min-h 设置满屏，保证滚动体验。
+                    min-h-screen 保证覆盖
                 */}
                 <div className='relative bg-white dark:bg-gray-900 rounded-t-[30px] shadow-[0_-15px_35px_rgba(0,0,0,0.3)] pb-10 min-h-screen transition-all'>
                     <div className='w-12 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto my-4'></div>
