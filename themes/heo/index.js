@@ -33,7 +33,9 @@ import {
     Heart,
     Star,
     CheckCircle,
-    BookOpen
+    BookOpen,
+    MessageCircle,
+    Maximize2
 } from 'lucide-react'
 import { HashTag } from '@/components/HeroIcons'
 
@@ -81,6 +83,15 @@ const CustomScrollbarStyle = () => (
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(150, 150, 150, 0.3); border-radius: 10px; }
         .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(100, 100, 100, 0.4); }
+        
+        /* 隐藏价格图的滚动条，保持美观 */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
         
         #theme-heo footer, 
         #theme-heo .footer-wrapper, 
@@ -251,45 +262,71 @@ const HomeSidebar = ({ isOpen, onClose, sidebarX }) => {
 };
 
 // =================================================================================
-// ======================  主页操作按钮 (ActionButtons)  ========================
+// ======================  价格表组件 (可拖动)  ========================
 // =================================================================================
 
-const ActionButtons = ({ onOpenFavorites }) => {
-  // 您可以在此处替换 img 标签中的 src 链接
-  const actions = [
-    { 
-        // 替换此链接为您的一键私信图标
-        imgSrc: 'https://cdn-icons-png.flaticon.com/512/5968/5968771.png', 
-        text: '一键私信', 
-        type: 'contact', 
-        color: 'from-blue-600 to-sky-500',
-        onClick: () => window.open('https://m.me/61575187883357', '_blank')
-    },
-    { 
-        // 替换此链接为您的收藏生词图标
-        imgSrc: 'https://cdn-icons-png.flaticon.com/512/833/833472.png', 
-        text: '收藏生词', 
-        type: 'words', 
-        color: 'from-orange-500 to-amber-500',
-        onClick: () => onOpenFavorites('words')
-    },
-  ];
+const DraggablePriceChart = () => {
+    const scrollRef = useRef(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const [startX, setStartX] = useState(0);
+    const [scrollLeft, setScrollLeft] = useState(0);
 
-  return (
-    <div className="flex justify-center gap-4 md:gap-6 px-4 pointer-events-auto">
-      {actions.map((action, index) => (
-        <button 
-            key={index} 
-            onClick={action.onClick} 
-            className={`flex items-center gap-3 pl-4 pr-6 py-3 rounded-full shadow-2xl text-white bg-gradient-to-br ${action.color} border border-white/20 backdrop-blur-sm transition-all duration-300 transform hover:-translate-y-1 hover:brightness-110 active:scale-95`}
-        >
-          {/* 图片图标 - 您可以替换上面的链接 */}
-          <img src={action.imgSrc} alt={action.text} className="w-6 h-6 object-contain drop-shadow-md" />
-          <span className="text-base font-bold whitespace-nowrap drop-shadow-sm">{action.text}</span>
-        </button>
-      ))}
-    </div>
-  );
+    // 鼠标按下
+    const handleMouseDown = (e) => {
+        setIsDragging(true);
+        setStartX(e.pageX - scrollRef.current.offsetLeft);
+        setScrollLeft(scrollRef.current.scrollLeft);
+    };
+
+    // 鼠标离开或松开
+    const handleMouseUpOrLeave = () => {
+        setIsDragging(false);
+    };
+
+    // 鼠标移动
+    const handleMouseMove = (e) => {
+        if (!isDragging) return;
+        e.preventDefault();
+        const x = e.pageX - scrollRef.current.offsetLeft;
+        const walk = (x - startX) * 2; // 滚动速度系数
+        scrollRef.current.scrollLeft = scrollLeft - walk;
+    };
+
+    return (
+        <div className="w-full max-w-2xl px-4 pointer-events-auto">
+             {/* 容器：玻璃拟态背景 */}
+            <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-2 shadow-2xl">
+                 <div className="flex items-center justify-between px-2 mb-2">
+                     <span className="text-xs font-bold text-white/90 flex items-center gap-1">
+                        <Star size={12} className="text-yellow-400" /> 课程价格表 (左右滑动)
+                     </span>
+                     <Maximize2 size={12} className="text-white/60" />
+                 </div>
+                 
+                {/* 滚动区域 */}
+                <div 
+                    ref={scrollRef}
+                    className="overflow-x-auto hide-scrollbar cursor-grab active:cursor-grabbing select-none"
+                    onMouseDown={handleMouseDown}
+                    onMouseLeave={handleMouseUpOrLeave}
+                    onMouseUp={handleMouseUpOrLeave}
+                    onMouseMove={handleMouseMove}
+                >
+                    {/* 
+                        在此处替换 src 为您的真实价格表图片链接 
+                        建议使用长图，高度控制在 160px-200px 左右效果最佳
+                    */}
+                    <div className="min-w-max">
+                        <img 
+                            src="https://images.unsplash.com/photo-1554224155-6726b3ff858f?q=80&w=800&auto=format&fit=crop" 
+                            alt="Course Price List" 
+                            className="h-36 md:h-44 w-auto rounded-lg object-cover pointer-events-none" 
+                        />
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 };
 
 // IndexedDB Helper
@@ -342,16 +379,6 @@ const LayoutIndex = props => {
     setBackgroundUrl(backgrounds[Math.floor(Math.random() * backgrounds.length)]);
   }, []);
 
-  const handleOpenFavorites = useCallback(async (type) => {
-    if (type === 'words') {
-        const words = await getAllFavorites(WORD_STORE_NAME);
-        if (words?.length > 0) {
-            setWordCardData(words);
-            router.push('#favorite-words', undefined, { shallow: true });
-        } else { alert('您还没有收藏任何生词。'); }
-    }
-  }, [router]); 
-
   const handleCloseFavorites = useCallback(() => {
     router.push(router.pathname, undefined, { shallow: true });
   }, [router]);
@@ -377,11 +404,11 @@ const LayoutIndex = props => {
                 <i className="fas fa-bars text-xl"></i>
             </button>
             
-            {/* Hero 区域：包含文字和操作按钮，背景透明，点击穿透处理 */}
-            <div className='absolute top-0 left-0 right-0 h-[60vh] z-10 pt-24 px-6 flex flex-col items-center text-center text-white pointer-events-none'>
-                <div className='max-w-4xl w-full'>
+            {/* Hero 区域：包含文字和价格表 */}
+            <div className='absolute top-0 left-0 right-0 h-[65vh] z-10 pt-24 px-6 flex flex-col items-center text-center text-white pointer-events-none'>
+                <div className='max-w-4xl w-full flex flex-col items-center'>
                     <h1 className='text-5xl md:text-6xl font-black tracking-tight mb-4 drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]'>中缅文培训中心</h1>
-                    <div className='mb-8'>
+                    <div className='mb-6'>
                         <p className='text-lg md:text-xl font-bold leading-relaxed mb-2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] opacity-95'>
                             专业中缅双语教学，连接文化与机遇的桥梁。
                         </p>
@@ -390,19 +417,24 @@ const LayoutIndex = props => {
                         </p>
                     </div>
                     
-                    {/* 操作按钮：放在 Hero 背景上，必须开启 pointer-events-auto */}
-                    <div className='mt-4 flex justify-center pointer-events-auto'>
-                        <ActionButtons onOpenFavorites={handleOpenFavorites} />
+                    {/* 
+                        修复核心：
+                        1. 这里使用了 z-30，确保它在透明滚动层之上。
+                        2. 移除了 ActionButtons，替换为 DraggablePriceChart。
+                        3. 开启了 pointer-events-auto，允许拖动操作。
+                    */}
+                    <div className="z-30 w-full flex justify-center mt-2 pointer-events-auto">
+                        <DraggablePriceChart />
                     </div>
                 </div>
             </div>
 
             {/* 内容滚动层 */}
             <div ref={scrollableContainerRef} className='absolute inset-0 z-20 overflow-y-auto overscroll-y-contain custom-scrollbar'>
-                {/* 增加背景与内容之间的空隙 (Spacer) */}
-                <div className='h-[55vh] flex-shrink-0' />
+                {/* 增加背景与内容之间的空隙 (Spacer) - 增加高度以容纳价格图 */}
+                <div className='h-[62vh] flex-shrink-0' />
                 
-                <div className='relative bg-white dark:bg-gray-900 rounded-t-[40px] shadow-[0_-15px_35px_rgba(0,0,0,0.3)] pb-10 min-h-[calc(45vh+1px)] transition-all'>
+                <div className='relative bg-white dark:bg-gray-900 rounded-t-[40px] shadow-[0_-15px_35px_rgba(0,0,0,0.3)] pb-10 min-h-[calc(40vh+1px)] transition-all'>
                     <div className='w-16 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto my-6'></div>
 
                     <main className="max-w-5xl mx-auto px-4 py-2">
