@@ -1,261 +1,395 @@
-// components/Tixing/PaiXuTi.js (最终修复版 - 修正字段名并按要求修改)
+// components/Tixing/PaiXuTi.js (优化美化版)
 
 import React, { useState, useMemo, useEffect, useCallback, forwardRef } from 'react';
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, rectSortingStrategy } from '@dnd-kit/sortable';
-import { restrictToParentElement, restrictToHorizontalAxis } from '@dnd-kit/modifiers';
+import { restrictToParentElement } from '@dnd-kit/modifiers';
 import { CSS } from '@dnd-kit/utilities';
-import { Howl } from 'howler';
-import { FaVolumeUp, FaCheck, FaTimes, FaRedo, FaSpinner, FaCommentAlt, FaLightbulb } from 'react-icons/fa';
-// import confetti from 'canvas-confetti'; // Parent handles confetti now
+import { FaVolumeUp, FaCheck, FaTimes, FaRedo, FaSpinner, FaLightbulb, FaRobot } from 'react-icons/fa';
 import { pinyin } from 'pinyin-pro';
 
 // --- 样式定义 ---
-const keyColors = [ { bg: '#fee2e2', border: '#fca5a5', text: '#991b1b' }, { bg: '#ffedd5', border: '#fdba74', text: '#9a3412' }, { bg: '#fef9c3', border: '#fde047', text: '#854d0e' }, { bg: '#dcfce7', border: '#86efac', text: '#166534' }, { bg: '#e0f2fe', border: '#7dd3fc', text: '#0c4a6e' }, { bg: '#e0e7ff', border: '#a5b4fc', text: '#3730a3' }, { bg: '##f1f5f9', border: '#cbd5e1', text: '#334155' }, ];
+const keyColors = [
+  { bg: '#eff6ff', border: '#bfdbfe', text: '#1e40af' },
+  { bg: '#fdf2f8', border: '#fbcfe8', text: '#9d174d' },
+  { bg: '#f0fdf4', border: '#bbf7d0', text: '#166534' },
+  { bg: '#fffbeb', border: '#fef3c7', text: '#92400e' },
+  { bg: '#f5f3ff', border: '#ddd6fe', text: '#5b21b6' },
+  { bg: '#fafaf9', border: '#e7e5e4', text: '#44403c' }
+];
 
 const styles = {
-  container: { backgroundColor: '#f0f4f8', borderRadius: '24px', padding: '24px', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1), 0 8px 16px rgba(0,0,0,0.1)', fontFamily: 'sans-serif', maxWidth: '520px', margin: '2rem auto', display: 'flex', flexDirection: 'column', gap: '16px' },
-  titleContainer: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' },
-  title: { fontSize: '1.4rem', fontWeight: '600', color: '#475569', margin: 0 },
-  titlePlayButton: { cursor: 'pointer', color: '#64748b', fontSize: '1.5rem', display: 'flex', alignItems: 'center' },
-  answerArea: { display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px', padding: '12px', minHeight: '60px', backgroundColor: '#cbd5e1', borderRadius: '12px', border: '2px solid #94a3b8', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.15)', transition: 'border-color 0.3s ease' },
-  answerAreaError: { borderColor: '#ef4444' },
-  wordPool: { display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px', padding: '12px', minHeight: '60px', backgroundColor: '#cbd5e1', borderRadius: '12px', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.15)' },
-  // [核心修改] 卡片大小自适应
-  card: { touchAction: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: 'max-content', flexShrink: 0, padding: '6px 12px', borderRadius: '10px', border: '1px solid #94a3b8', borderBottomWidth: '4px', cursor: 'pointer', position: 'relative', transition: 'transform 0.1s ease, box-shadow 0.1s ease' },
-  cardActive: { transform: 'translateY(2px)', borderBottomWidth: '2px' },
-  pinyin: { fontSize: '0.8rem', color: 'inherit', opacity: 0.7, height: '1.2em', lineHeight: '1.2em' },
-  content: { fontSize: '1.3rem', fontWeight: '500', color: 'inherit', lineHeight: '1.5em' },
-  dragOverlay: { transform: 'scale(1.1) rotate(-5deg)', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.2), 0 4px 6px -2px rgba(0,0,0,0.1)', cursor: 'grabbing' },
-  draggingSource: { opacity: 0.5, transform: 'scale(0.95)' },
-  buttonContainer: { display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' },
-  submitButton: { width: '100%', padding: '14px', borderRadius: '10px', border: 'none', backgroundColor: '#3b82f6', color: 'white', fontSize: '1.2rem', fontWeight: 'bold', cursor: 'pointer', transition: 'background-color 0.2s ease', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' },
-  feedback: { padding: '14px', borderRadius: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '1.1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' },
-  feedbackCorrect: { backgroundColor: '#dcfce7', color: '#166534' },
-  feedbackIncorrect: { backgroundColor: '#fee2e2', color: '#991b1b' },
-  explanationBox: { backgroundColor: '#fffbeb', color: '#b45309', padding: '16px', borderRadius: '10px', border: '1px solid #fcd34d', marginTop: '12px', textAlign: 'left', fontSize: '0.95rem', lineHeight: '1.6' },
+  container: {
+    backgroundColor: '#ffffff',
+    borderRadius: '28px',
+    padding: '24px',
+    boxShadow: '0 10px 25px rgba(0,0,0,0.05), 0 2px 5px rgba(0,0,0,0.02)',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    maxWidth: '520px',
+    margin: '1rem auto',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '20px',
+    border: '1px solid #f1f5f9'
+  },
+  titleContainer: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', paddingBottom: '10px' },
+  title: { fontSize: '1.25rem', fontWeight: '700', color: '#1e293b', margin: 0, textAlign: 'center' },
+  titlePlayButton: { cursor: 'pointer', color: '#3b82f6', fontSize: '1.4rem', background: '#eff6ff', padding: '8px', borderRadius: '50%', display: 'flex', alignItems: 'center', transition: 'all 0.2s' },
+  
+  dropZone: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '20px 14px',
+    minHeight: '100px',
+    backgroundColor: '#f8fafc',
+    borderRadius: '20px',
+    border: '2px dashed #e2e8f0',
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+  },
+  dropZoneActive: { borderColor: '#3b82f6', backgroundColor: '#f0f7ff' },
+  dropZoneError: { borderColor: '#ef4444', backgroundColor: '#fef2f2' },
+  
+  wordPool: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: '8px',
+    padding: '16px',
+    backgroundColor: '#f1f5f9',
+    borderRadius: '20px'
+  },
+
+  // 卡片基础样式
+  card: {
+    touchAction: 'none',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: '48px',
+    padding: '8px 16px',
+    borderRadius: '14px',
+    border: '1px solid transparent',
+    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+    cursor: 'pointer',
+    position: 'relative',
+    transition: 'all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)',
+    userSelect: 'none'
+  },
+  answerCard: { transform: 'scale(1.0)' },
+  poolCard: { transform: 'scale(0.88)', opacity: 0.9, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' },
+  
+  pinyin: { fontSize: '0.75rem', fontWeight: '500', marginBottom: '2px', opacity: 0.7 },
+  content: { fontSize: '1.2rem', fontWeight: '600' },
+  
+  dragOverlay: { transform: 'scale(1.1) rotate(2deg)', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', cursor: 'grabbing', opacity: 0.9 },
+  
+  buttonArea: { display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px' },
+  mainButton: {
+    width: '100%',
+    padding: '16px',
+    borderRadius: '16px',
+    border: 'none',
+    backgroundColor: '#1e293b',
+    color: 'white',
+    fontSize: '1.1rem',
+    fontWeight: '700',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    transition: 'all 0.2s'
+  },
+  
+  feedback: {
+    padding: '14px',
+    borderRadius: '16px',
+    textAlign: 'center',
+    fontWeight: '700',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    animation: 'slideUp 0.3s ease-out'
+  },
+  feedbackCorrect: { backgroundColor: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0' },
+  feedbackIncorrect: { backgroundColor: '#fee2e2', color: '#991b1b', border: '1px solid #fecaca' },
+  
+  explanationBox: { backgroundColor: '#fffbeb', color: '#92400e', padding: '16px', borderRadius: '16px', border: '1px solid #fef3c7', fontSize: '0.95rem', lineHeight: '1.6', marginTop: '8px' },
   spinner: { animation: 'spin 1s linear infinite' },
 };
 
-// --- 音频与TTS ---
-let sounds = {};
-let ttsCache = new Map();
-if (typeof window !== 'undefined') { sounds.click = new Howl({ src: ['/sounds/click.mp3'], volume: 0.7 }); sounds.correct = new Howl({ src: ['/sounds/correct.mp3'], volume: 0.7 }); sounds.incorrect = new Howl({ src: ['/sounds/incorrect.mp3'], volume: 0.7 }); }
-const playSound = (name) => { if (sounds[name]) sounds[name].play(); };
+// --- TTS 与音效控制 ---
+const ttsCache = new Map();
+const ttsVoices = { zh: 'zh-CN-XiaoyouNeural', my: 'my-MM-NilarNeural' };
 
-const ttsVoices = { zh: 'zh-CN-XiaoyouNeural', my: 'my-MM-Nilar' };
-
-const preloadTTS = async (text, lang = 'zh') => {
-  const cacheKey = `${lang}:${text}`;
-  if (ttsCache.has(cacheKey) || !text) return;
-  try {
-    const voice = ttsVoices[lang];
-    if (!voice) throw new Error(`Unsupported language: ${lang}`);
-    const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${voice}`;
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('API Error');
-    const blob = await response.blob();
-    const audio = new Audio(URL.createObjectURL(blob));
-    ttsCache.set(cacheKey, audio);
-  } catch (error) { console.error(`预加载 "${text}" (${lang}) 失败:`, error); }
+const triggerHaptic = () => {
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    navigator.vibrate(50);
+  }
 };
 
-const playCachedTTS = (text, lang = 'zh') => {
+const playTTS = async (text, lang = 'zh') => {
   if (!text) return;
   const cacheKey = `${lang}:${text}`;
-  if (ttsCache.has(cacheKey)) { ttsCache.get(cacheKey).play(); } 
-  else { preloadTTS(text, lang).then(() => { if (ttsCache.has(cacheKey)) { ttsCache.get(cacheKey).play(); } }); }
+  
+  if (ttsCache.has(cacheKey)) {
+    const audio = ttsCache.get(cacheKey);
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+    return;
+  }
+
+  try {
+    const voice = ttsVoices[lang] || ttsVoices.zh;
+    const url = `/api/tts?t=${encodeURIComponent(text)}&v=${voice}`; // 修改为代理接口
+    const audio = new Audio(url);
+    audio.oncanplaythrough = () => ttsCache.set(cacheKey, audio);
+    audio.play().catch(() => {});
+  } catch (error) {
+    console.error("TTS Error:", error);
+  }
 };
 
-const buildCorrectionPrompt = (title, userOrderText, correctOrderText) => { return `你是一位专业的中文语法老师。一名学生做错了句子排序题，请用亲切、简单的方式为他解释。\n\n规则：\n1. 先鼓励学生。\n2. 指出学生的答案和正确答案。\n3. 详细解释语法点（如主谓宾）。\n4. 最后再次鼓励。\n\n题目信息：\n- 题目: "${title}"\n- 学生的错误答案: "${userOrderText}"\n- 正确答案: "${correctOrderText}"\n\n请开始你的解释：`; };
-
-// --- 卡片组件 ---
-const Card = forwardRef(({ content, color, lang, ...props }, ref) => {
-  const [isActive, setIsActive] = useState(false);
-  
+// --- 子组件: 卡片 ---
+const Card = forwardRef(({ content, color, lang, isSmall, isDragging, ...props }, ref) => {
   const isPunctuation = useMemo(() => {
-    if (typeof content !== 'string') return false;
-    return /^[。，、？！；：“”‘’（）《》〈〉【】 .,!?;:"'()\[\]{}]+$/.test(content.trim());
+    return /^[。，、？！；：“”‘’（）《》〈〉【】 .,!?;:"'()\[\]{}]+$/.test(content?.trim());
   }, [content]);
-  
-  const pinyinContent = useMemo(() => {
-    if (lang !== 'zh' || !content || isPunctuation) return '';
-    return pinyin(content, { toneType: 'mark' }).toLowerCase();
-  }, [content, isPunctuation, lang]);
 
-  const cardStyle = { ...styles.card, backgroundColor: color.bg, borderColor: color.border, color: color.text, ...(isActive ? styles.cardActive : {}) };
-  const handlePointerDown = () => setIsActive(true);
-  const handlePointerUp = () => setIsActive(false);
-  const handleClick = () => {
-    if (props.onClick) {
-      props.onClick();
-      if (!isPunctuation) playCachedTTS(content, lang);
-    }
+  const pinyinText = useMemo(() => {
+    if (lang !== 'zh' || isPunctuation) return '';
+    return pinyin(content, { toneType: 'mark' });
+  }, [content, lang, isPunctuation]);
+
+  const cardStyle = {
+    ...styles.card,
+    backgroundColor: color.bg,
+    borderColor: color.border,
+    color: color.text,
+    ...(isSmall ? styles.poolCard : styles.answerCard),
+    ...(isDragging ? { opacity: 0.4 } : {})
   };
-  return ( <div ref={ref} {...props} style={cardStyle} onClick={handleClick} onPointerDown={handlePointerDown} onPointerUp={handlePointerUp} onPointerLeave={handlePointerUp}> <div style={styles.pinyin}>{pinyinContent}</div> <div style={styles.content}>{content}</div> </div> );
+
+  return (
+    <div 
+      ref={ref} 
+      style={cardStyle} 
+      onClick={() => {
+        triggerHaptic();
+        if (props.onClick) props.onClick();
+        if (!isPunctuation) playTTS(content, lang);
+      }}
+      {...props}
+    >
+      {!isPunctuation && <div style={styles.pinyin}>{pinyinText}</div>}
+      <div style={styles.content}>{content}</div>
+    </div>
+  );
 });
 Card.displayName = 'Card';
 
 const SortableCard = ({ id, content, color, lang, onClick }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-  const style = { transition, transform: CSS.Transform.toString(transform), ...(isDragging ? styles.draggingSource : {}) };
-  return ( <div ref={setNodeRef} style={style}> <Card id={id} content={content} color={color} lang={lang} onClick={onClick} {...attributes} {...listeners} /> </div> );
+  const style = { transition, transform: CSS.Transform.toString(transform) };
+  
+  return (
+    <div ref={setNodeRef} style={style}>
+      <Card 
+        id={id} 
+        content={content} 
+        color={color} 
+        lang={lang} 
+        isSmall={false}
+        isDragging={isDragging}
+        onClick={onClick} 
+        {...attributes} 
+        {...listeners} 
+      />
+    </div>
+  );
 };
 
-// --- 主组件 ---
-const PaiXuTi = ({ title, items: initialItems, correctOrder, aiExplanation, onCorrectionRequest, lang = 'zh', onCorrect }) => { // 增加 onCorrect prop
-  const [isMounted, setIsMounted] = useState(false);
+// --- 主组件: PaiXuTi ---
+const PaiXuTi = ({ title, items: initialItems, correctOrder, aiExplanation, onCorrectionRequest, lang = 'zh', onCorrect }) => {
   const [answerItems, setAnswerItems] = useState([]);
   const [poolItems, setPoolItems] = useState([]);
   const [activeId, setActiveId] = useState(null);
   const [feedback, setFeedback] = useState({ shown: false, correct: false, showExplanation: false });
-  const [isRequestingCorrection, setIsRequestingCorrection] = useState(false);
-  const itemsWithColors = useMemo(() => { if (!initialItems) return []; return initialItems.map((item, index) => ({ ...item, color: keyColors[index % keyColors.length] })); }, [initialItems]);
-  
-  // 负责重置当前排序题的状态（重新洗牌，清空答案区）
-  const resetCurrentQuestion = useCallback(() => {
-    const shuffledItems = [...itemsWithColors].sort(() => Math.random() - 0.5); // 重新打乱顺序
-    setPoolItems(shuffledItems);
+  const [isRequestingAI, setIsRequestingAI] = useState(false);
+
+  const itemsWithColors = useMemo(() => {
+    return initialItems?.map((item, index) => ({
+      ...item,
+      color: keyColors[index % keyColors.length]
+    })) || [];
+  }, [initialItems]);
+
+  const resetGame = useCallback(() => {
+    const shuffled = [...itemsWithColors].sort(() => Math.random() - 0.5);
+    setPoolItems(shuffled);
     setAnswerItems([]);
     setFeedback({ shown: false, correct: false, showExplanation: false });
-    setIsRequestingCorrection(false); // 重置AI解释请求状态
+    setIsRequestingAI(false);
   }, [itemsWithColors]);
 
-  // 初始加载和 items 变化时重置题目
   useEffect(() => {
-    if (itemsWithColors.length > 0) {
-      resetCurrentQuestion();
-      if(title) preloadTTS(title, lang);
-      itemsWithColors.forEach(item => {
-        if (item.text && !/^[。，、？！；：“”‘’（）《》〈〉【】 .,!?;:"'()\[\]{}]+$/.test(item.text.trim())) {
-          preloadTTS(item.text, lang);
-        }
+    resetGame();
+  }, [resetGame]);
+
+  // DnD Sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragStart = (e) => setActiveId(e.active.id);
+
+  const handleDragEnd = (e) => {
+    const { active, over } = e;
+    if (over && active.id !== over.id) {
+      setAnswerItems((items) => {
+        const oldIndex = items.findIndex(i => i.id === active.id);
+        const newIndex = items.findIndex(i => i.id === over.id);
+        return arrayMove(items, oldIndex, newIndex);
       });
     }
-  }, [itemsWithColors, title, lang, resetCurrentQuestion]);
+    setActiveId(null);
+  };
 
-  useEffect(() => { setIsMounted(true); }, []);
-  
-  const sensors = useSensors( useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }) );
-  const handleDragStart = useCallback((event) => { setActiveId(event.active.id); }, []);
-  const handleDragEnd = useCallback((event) => { const { active, over } = event; if (over && active.id !== over.id) { setAnswerItems((items) => { const oldIndex = items.findIndex(({ id }) => id === active.id); const newIndex = items.findIndex(({ id }) => id === over.id); return arrayMove(items, oldIndex, newIndex); }); } setActiveId(null); }, []);
-  const toggleItemPlacement = useCallback((itemToMove) => { playSound('click'); if (answerItems.some(item => item.id === itemToMove.id)) { setAnswerItems(prev => prev.filter(item => item.id !== itemToMove.id)); setPoolItems(prev => [...prev, itemToMove]); } else { setPoolItems(prev => prev.filter(item => item.id !== itemToMove.id)); setAnswerItems(prev => [...prev, itemToMove]); } }, [answerItems]);
-  
-  const handleSubmit = useCallback(() => { 
-    const isCorrect = answerItems.map(item => item.id).join(',') === correctOrder.join(','); 
-    setFeedback({ shown: true, correct: isCorrect, showExplanation: !isCorrect }); 
-    playSound(isCorrect ? 'correct' : 'incorrect'); 
-    
-    // 如果答案正确，通知父组件（InteractiveLesson）当前块已完成
-    if (isCorrect) {
-      if (onCorrect) {
-        onCorrect(); // 调用父组件的 onCorrect (即 delayedNextStep)
-      }
-      // 这里不再进行 confetti 或 4.5 秒延迟，父组件会处理
-    }
-  }, [answerItems, correctOrder, onCorrect]); // 增加 onCorrect 到依赖数组
-
-  // 移除 PaiXuTi 内部的 4.5 秒自动下一题的 useEffect
-  // 因为 InteractiveLesson 的 onCorrect (delayedNextStep) 已经处理了延迟和跳转
-  // useEffect(() => {
-  //   let timer;
-  //   if (feedback.shown && feedback.correct) {
-  //     timer = setTimeout(() => {
-  //       handleNextQuestion();
-  //     }, 4500); // 4.5秒
-  //   }
-  //   // 组件卸载或 feedback 变化时清除定时器
-  //   return () => clearTimeout(timer);
-  // }, [feedback.shown, feedback.correct, handleNextQuestion]);
-
-  // 用户点击“下一题”或“重新尝试”的处理器
-  const handleUserAction = useCallback(() => {
-    if (feedback.correct) {
-      // 如果答对了，直接通知父组件进入下一块
-      if (onCorrect) {
-        onCorrect();
-      }
+  const togglePlacement = (item) => {
+    const isInAnswer = answerItems.some(i => i.id === item.id);
+    if (isInAnswer) {
+      setAnswerItems(prev => prev.filter(i => i.id !== item.id));
+      setPoolItems(prev => [...prev, item]);
     } else {
-      // 如果答错了，重置当前题目，让用户重新尝试
-      resetCurrentQuestion();
+      setPoolItems(prev => prev.filter(i => i.id !== item.id));
+      setAnswerItems(prev => [...prev, item]);
     }
-  }, [feedback.correct, onCorrect, resetCurrentQuestion]);
+  };
 
-  const handleAskForCorrection = useCallback(() => { 
-    if (!onCorrectionRequest) return; 
-    setIsRequestingCorrection(true); 
-    const userOrderText = answerItems.map(item => item.text).join(''); 
-    const correctItems = correctOrder.map(id => itemsWithColors.find(item => item.id === id));
-    const correctOrderText = correctItems.map(item => item.text).join(''); 
-    const prompt = buildCorrectionPrompt(title, userOrderText, correctOrderText); 
-    onCorrectionRequest(prompt); 
-  }, [answerItems, correctOrder, itemsWithColors, onCorrectionRequest, title]);
-  
-  const activeItem = useMemo(() => itemsWithColors.find(item => item.id === activeId), [activeId, itemsWithColors]);
-  
-  if (!isMounted || !initialItems) return null;
-  const spinAnimationStyle = `@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`;
+  const checkAnswer = () => {
+    const currentOrder = answerItems.map(i => i.id).join(',');
+    const correctStr = correctOrder.join(',');
+    const isCorrect = currentOrder === correctStr;
+
+    setFeedback({ shown: true, correct: isCorrect, showExplanation: !isCorrect });
+    
+    if (isCorrect && onCorrect) {
+      setTimeout(() => onCorrect(), 1500);
+    }
+  };
+
+  const requestAI = () => {
+    if (!onCorrectionRequest) return;
+    setIsRequestingAI(true);
+    const userAns = answerItems.map(i => i.text).join(' ');
+    const correctItems = correctOrder.map(id => itemsWithColors.find(i => i.id === id));
+    const correctAns = correctItems.map(i => i.text).join(' ');
+    
+    const prompt = `你是一位亲切的老师。学生在排序题 "${title}" 中，给出的答案是 "${userAns}"，但正确答案应该是 "${correctAns}"。请简短地解释语法原因并鼓励他。`;
+    onCorrectionRequest(prompt);
+  };
+
+  const activeItem = useMemo(() => itemsWithColors.find(i => i.id === activeId), [activeId, itemsWithColors]);
 
   return (
-    <>
-      <style>{spinAnimationStyle}</style>
-      <div style={styles.container}>
-        <div style={styles.titleContainer}>
-            <h3 style={styles.title}>{title}</h3>
-            <div style={styles.titlePlayButton} onClick={() => playCachedTTS(title, lang)}>
-                <FaVolumeUp />
-            </div>
+    <div style={styles.container}>
+      <style>{`
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes slideUp { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .hover-bg:hover { background: #dbeafe !important; }
+      `}</style>
+
+      {/* 标题 */}
+      <div style={styles.titleContainer}>
+        <div style={styles.titlePlayButton} onClick={() => playTTS(title, lang)}>
+          <FaVolumeUp />
         </div>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-            <div style={{ ...styles.answerArea, ...(feedback.shown && !feedback.correct ? styles.answerAreaError : {})}}>
-                <SortableContext items={answerItems} strategy={rectSortingStrategy}>
-                    {answerItems.map(item => 
-                        <SortableCard key={item.id} id={item.id} content={item.text} color={item.color} lang={lang} onClick={() => toggleItemPlacement(item)} />
-                    )}
-                </SortableContext>
-            </div>
-            <DragOverlay modifiers={[restrictToParentElement, restrictToHorizontalAxis]}>
-              {activeId && activeItem ? 
-                <Card id={activeItem.id} content={activeItem.text} color={activeItem.color} lang={lang} style={styles.dragOverlay} /> 
-              : null}
-            </DragOverlay>
-        </DndContext>
-        <div style={styles.wordPool}>
-            {poolItems.map(item => 
-                <Card key={item.id} id={item.id} content={item.text} color={item.color} lang={lang} onClick={() => toggleItemPlacement(item)} />
-            )}
-        </div>
-        <div style={styles.buttonContainer}>
-            {!feedback.shown ? (
-                <button style={styles.submitButton} onClick={handleSubmit}>检查答案</button>
-            ) : (
-                <>
-                    <div style={{ ...styles.feedback, ...(feedback.correct ? styles.feedbackCorrect : styles.incorrect) }}> {/* 修正了feedback.incorrect拼写错误 */}
-                        {/* [核心修改] 错误提示文案修改 */}
-                        {feedback.correct ? <><FaCheck /> 完全正确！</> : <><FaTimes /> 答案不对哦！</>}
-                    </div>
-                    {feedback.showExplanation && aiExplanation && (
-                        <div style={styles.explanationBox}>{aiExplanation}</div>
-                    )}
-                    {feedback.correct && aiExplanation && !feedback.showExplanation && (
-                        <button style={{...styles.submitButton, backgroundColor: '#10b981'}} onClick={() => setFeedback(f => ({...f, showExplanation: true}))}>
-                            <FaLightbulb /> 查看语法点
-                        </button>
-                    )}
-                    {!feedback.correct && !aiExplanation && onCorrectionRequest && (
-                         <button style={{...styles.submitButton, backgroundColor: '#f59e0b'}} onClick={handleAskForCorrection} disabled={isRequestingCorrection}>
-                            {isRequestingCorrection ? <FaSpinner style={styles.spinner} /> : <><FaCommentAlt /> 请 AI 解释</>}
-                        </button>
-                    )}
-                    {/* [核心修改] 按钮文案和功能绑定修改 */}
-                    <button style={{...styles.submitButton, backgroundColor: '#64748b'}} onClick={handleUserAction}>
-                        {feedback.correct ? <><FaRedo /> 下一题</> : <><FaRedo /> 重新尝试</>}
-                    </button>
-                </>
-            )}
-        </div>
+        <h3 style={styles.title}>{title}</h3>
       </div>
-    </>
+
+      {/* 答案区 */}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <div style={{ 
+          ...styles.dropZone, 
+          ...(activeId ? styles.dropZoneActive : {}),
+          ...(feedback.shown && !feedback.correct ? styles.dropZoneError : {}) 
+        }}>
+          {answerItems.length === 0 && !activeId && <span style={{color: '#94a3b8', fontSize: '0.9rem'}}>点击下方卡片或拖拽至此</span>}
+          <SortableContext items={answerItems} strategy={rectSortingStrategy}>
+            {answerItems.map(item => (
+              <SortableCard 
+                key={item.id} 
+                id={item.id} 
+                content={item.text} 
+                color={item.color} 
+                lang={lang} 
+                onClick={() => togglePlacement(item)} 
+              />
+            ))}
+          </SortableContext>
+        </div>
+        
+        <DragOverlay modifiers={[restrictToParentElement]}>
+          {activeId && activeItem ? (
+            <Card 
+              content={activeItem.text} 
+              color={activeItem.color} 
+              lang={lang} 
+              style={styles.dragOverlay} 
+            />
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+
+      {/* 待选池 */}
+      <div style={styles.wordPool}>
+        {poolItems.map(item => (
+          <Card 
+            key={item.id} 
+            content={item.text} 
+            color={item.color} 
+            lang={lang} 
+            isSmall={true}
+            onClick={() => togglePlacement(item)} 
+          />
+        ))}
+      </div>
+
+      {/* 底部控制 */}
+      <div style={styles.buttonArea}>
+        {!feedback.shown ? (
+          <button style={styles.mainButton} onClick={checkAnswer} disabled={answerItems.length === 0}>
+            检查答案
+          </button>
+        ) : (
+          <>
+            <div style={{ ...styles.feedback, ...(feedback.correct ? styles.feedbackCorrect : styles.feedbackIncorrect) }}>
+              {feedback.correct ? <><FaCheck /> 完全正确！</> : <><FaTimes /> 顺序不太对哦</>}
+            </div>
+
+            {feedback.showExplanation && aiExplanation && (
+              <div style={styles.explanationBox}>{aiExplanation}</div>
+            )}
+
+            {!feedback.correct && !aiExplanation && onCorrectionRequest && (
+              <button style={{...styles.mainButton, backgroundColor: '#f59e0b'}} onClick={requestAI} disabled={isRequestingAI}>
+                {isRequestingAI ? <FaSpinner style={styles.spinner} /> : <><FaRobot /> 问问 AI 为什么</>}
+              </button>
+            )}
+
+            <button style={{...styles.mainButton, backgroundColor: '#64748b'}} onClick={feedback.correct ? onCorrect : resetGame}>
+              {feedback.correct ? <><FaRedo /> 下一关</> : <><FaRedo /> 重新排列</>}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
   );
 };
 
