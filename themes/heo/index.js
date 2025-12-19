@@ -13,7 +13,6 @@ import Script from 'next/script'
 
 // UI & Animation
 import { Transition, Dialog } from '@headlessui/react'
-import { useSwipeable } from 'react-swipeable'
 import { loadWowJS } from '@/lib/plugins/wow'
 
 // Global State & Config
@@ -25,37 +24,28 @@ import CONFIG from './config'
 import { FaTiktok, FaFacebook, FaTelegramPlane } from 'react-icons/fa'
 import {
     GraduationCap,
-    BookOpen,
     Phone,
-    MessageSquare,
-    Users,
     Settings,
     LifeBuoy,
     Moon,
     Sun,
     UserCircle,
-    Mic,
     Heart,
-    List,
-    BookText,
-    SpellCheck2,
-    Type
+    Star,
+    CheckCircle,
+    BookOpen
 } from 'lucide-react'
 import { HashTag } from '@/components/HeroIcons'
 
 // Base Components from NotionNext
 import Comment from '@/components/Comment'
-import { AdSlot } from '@/components/GoogleAdsense'
 import LazyImage from '@/components/LazyImage'
-import LoadingCover from '@/components/LoadingCover'
 import replaceSearchResult from '@/components/Mark'
 import NotionPage from '@/components/NotionPage'
 import SmartLink from '@/components/SmartLink'
-import WWAds from '@/components/WWAds'
 import AISummary from '@/components/AISummary'
 import ArticleExpirationNotice from '@/components/ArticleExpirationNotice'
 import ShareBar from '@/components/ShareBar'
-
 
 // Original HEO Theme Components
 import BlogPostArchive from './components/BlogPostArchive'
@@ -63,11 +53,7 @@ import BlogPostListPage from './components/BlogPostListPage'
 import BlogPostListScroll from './components/BlogPostListScroll'
 import CategoryBar from './components/CategoryBar'
 import FloatTocButton from './components/FloatTocButton'
-// import Footer from './components/Footer' // <-- 移除 Footer 引用
 import Header from './components/Header'
-import Hero from './components/Hero'
-import LatestPostsGroup from './components/LatestPostsGroup'
-import { NoticeBar } from './components/NoticeBar'
 import PostAdjacent from './components/PostAdjacent'
 import PostCopyright from './components/PostCopyright'
 import PostHeader from './components/PostHeader'
@@ -78,14 +64,10 @@ import SideRight from './components/SideRight'
 import { Style } from './style'
 
 // Custom Content Block Components
-import PinyinContentBlock from '@/components/PinyinContentBlock'
-import WordsContentBlock from '@/components/WordsContentBlock'
-// import KouyuPage from '@/components/kouyu'
 import HskContentBlock from '@/components/HskContentBlock'
 
 // Dynamically imported heavy components
 const GlosbeSearchCard = dynamic(() => import('@/components/GlosbeSearchCard'), { ssr: false })
-// const ShortSentenceCard = dynamic(() => import('@/components/ShortSentenceCard'), { ssr: false })
 const WordCard = dynamic(() => import('@/components/WordCard'), { ssr: false })
 
 const isBrowser = typeof window !== 'undefined';
@@ -101,7 +83,6 @@ const CustomScrollbarStyle = () => (
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(150, 150, 150, 0.3); border-radius: 10px; }
         .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(100, 100, 100, 0.4); }
         
-        /* 强制隐藏自带主题的订阅盒、底部信息和统计栏，防止空白占位 */
         #theme-heo footer, 
         #theme-heo .footer-wrapper, 
         #theme-heo #footer,
@@ -134,9 +115,8 @@ const validateActivationCode = (code) => {
 // ======================  核心组件: 智能侧边栏 (HomeSidebar)  =====================
 // =================================================================================
 
-const HomeSidebar = ({ isOpen, onClose, sidebarX, isDragging }) => {
+const HomeSidebar = ({ isOpen, onClose, sidebarX }) => {
   const { isDarkMode, toggleDarkMode } = useGlobal();
-  const sidebarWidth = 288;
   const [user, setUser] = useState(null);
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
@@ -206,11 +186,6 @@ const HomeSidebar = ({ isOpen, onClose, sidebarX, isDragging }) => {
 
   const handleLogout = () => { localStorage.removeItem('hsk_user'); setUser(null); };
 
-  const sidebarLinks = [
-    { icon: <Settings size={20} />, text: '通用设置', href: '/settings' },
-    { icon: <LifeBuoy size={20} />, text: '帮助中心', href: '/help' },
-  ];
-
   return (
     <>
       <Script src="https://accounts.google.com/gsi/client" strategy="lazyOnload" onLoad={() => setIsGoogleLoaded(true)} />
@@ -244,29 +219,29 @@ const HomeSidebar = ({ isOpen, onClose, sidebarX, isDragging }) => {
                         </div>
                         <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-600 shadow-sm">
                             <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">课程激活</label>
-                            <input type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="HSK1-JHM-XXXX" className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 text-sm mb-2 focus:ring-2 focus:ring-blue-500 outline-none uppercase transition-all" />
-                            <button onClick={handleActivate} disabled={loading || !code} className="w-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white py-1.5 rounded-lg text-sm font-medium transition-all disabled:bg-gray-400">{loading ? '验证中...' : '立即激活'}</button>
+                            <input type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="HSK1-JHM-XXXX" className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 text-sm mb-2 outline-none uppercase transition-all" />
+                            <button onClick={handleActivate} disabled={loading || !code} className="w-full bg-blue-600 text-white py-1.5 rounded-lg text-sm font-medium transition-all">{loading ? '验证中...' : '立即激活'}</button>
                             {msg && <p className={`text-xs mt-2 font-medium text-center ${msg.includes('✅') ? 'text-green-600' : 'text-red-500'}`}>{msg}</p>}
                         </div>
                     </div>
                 )}
             </div>
             <nav className="flex-grow p-4 space-y-2">
-                {sidebarLinks.map((link, index) => (
-                    <SmartLink key={index} href={link.href} className="flex items-center gap-4 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                        {link.icon} <span className="font-medium">{link.text}</span>
-                    </SmartLink>
-                ))}
+                <SmartLink href='/help' className="flex items-center gap-4 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800">
+                    <LifeBuoy size={20} /> <span className="font-medium">帮助中心</span>
+                </SmartLink>
+                <SmartLink href='/settings' className="flex items-center gap-4 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800">
+                    <Settings size={20} /> <span className="font-medium">设置</span>
+                </SmartLink>
             </nav>
             <div className="p-4 border-t dark:border-gray-700 space-y-2">
-                <button onClick={toggleDarkMode} className="w-full flex items-center gap-4 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                <button onClick={toggleDarkMode} className="w-full flex items-center gap-4 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800">
                     {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-                    <span className="font-medium">{isDarkMode ? '切换日间模式' : '切换夜间模式'}</span>
+                    <span className="font-medium">{isDarkMode ? '日间模式' : '夜间模式'}</span>
                 </button>
                 {user && (
-                    <button onClick={handleLogout} className="w-full flex items-center gap-4 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                        <i className="fas fa-sign-out-alt w-5 text-center text-lg"></i>
-                        <span className="font-medium">退出登录</span>
+                    <button onClick={handleLogout} className="w-full flex items-center gap-4 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50">
+                        <i className="fas fa-sign-out-alt w-5"></i> <span className="font-medium">退出登录</span>
                     </button>
                 )}
             </div>
@@ -287,11 +262,11 @@ const ActionButtons = ({ onOpenFavorites, onOpenContact }) => {
   ];
   return (
     <div className="flex justify-center gap-8 px-4">
-      {actions.map((action, index) => {
-        const content = ( <> <div className="mb-2">{action.icon}</div> <span className="text-sm font-bold">{action.text}</span> </> );
-        const className = `flex flex-col items-center justify-center p-4 min-w-[120px] rounded-2xl shadow-lg hover:shadow-xl text-white bg-gradient-to-br ${action.color} transition-all duration-300 transform hover:-translate-y-1`;
-        return ( <button key={index} onClick={() => action.type === 'contact' ? onOpenContact() : onOpenFavorites(action.type)} className={className}> {content} </button> );
-      })}
+      {actions.map((action, index) => (
+        <button key={index} onClick={() => action.type === 'contact' ? onOpenContact() : onOpenFavorites(action.type)} className={`flex flex-col items-center justify-center p-4 min-w-[120px] rounded-2xl shadow-lg hover:shadow-xl text-white bg-gradient-to-br ${action.color} transition-all duration-300 transform hover:-translate-y-1`}>
+          <div className="mb-2">{action.icon}</div> <span className="text-sm font-bold">{action.text}</span>
+        </button>
+      ))}
     </div>
   );
 };
@@ -333,7 +308,7 @@ const ContactPanel = ({ isOpen, onClose }) => {
 const DB_NAME = 'ChineseLearningDB';
 const WORD_STORE_NAME = 'favoriteWords';
 function openDB() {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     if (!isBrowser) return resolve(null);
     const request = indexedDB.open(DB_NAME, 1);
     request.onsuccess = () => resolve(request.result);
@@ -355,45 +330,32 @@ async function getAllFavorites(storeName) {
     } catch (e) { return []; }
 }
 
-
 // =================================================================================
 // ======================  新主页布局 (LayoutIndex) ========================
 // =================================================================================
+
 const LayoutIndex = props => {
   const router = useRouter();
-  const allTabs = [{ name: 'HSK 课程', key: 'hsk', icon: <GraduationCap size={24} /> }];
-  const [activeTabKey, setActiveTabKey] = useState('hsk'); 
-
-  useEffect(() => {
-    if (router.isReady) {
-      const tabFromQuery = router.query.tab;
-      const validTab = allTabs.find(t => t.key === tabFromQuery);
-      setActiveTabKey(validTab ? validTab.key : 'hsk');
-    }
-  }, [router.isReady, router.query.tab]);
-  
-  const handleTabChange = (key) => {
-    router.push(`/?tab=${key}`, undefined, { shallow: true });
-    setActiveTabKey(key);
-  };
-
   const [backgroundUrl, setBackgroundUrl] = useState('');
   const scrollableContainerRef = useRef(null);
-  const stickySentinelRef = useRef(null);
-  const lastScrollY = useRef(0);
-  const [isStickyActive, setIsStickyActive] = useState(false);
-  const [isNavVisible, setIsNavVisible] = useState(true);
-  const mainContentRef = useRef(null);
   
   const sidebarWidth = 288;
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [sidebarX, setSidebarX] = useState(-sidebarWidth);
-  const [isDragging, setIsDragging] = useState(false);
 
   const [wordCardData, setWordCardData] = useState(null);
   const isWordFavoritesCardOpen = isBrowser ? window.location.hash === '#favorite-words' : false;
   const [isContactPanelOpen, setIsContactPanelOpen] = useState(false);
-  
+
+  useEffect(() => {
+    // 采用更具文化与教育气息的背景图
+    const backgrounds = [
+        'https://images.unsplash.com/photo-1543165796-5426273eaec3?q=80&w=2070&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1519491050282-cf00c82424b4?q=80&w=2072&auto=format&fit=crop'
+    ];
+    setBackgroundUrl(backgrounds[Math.floor(Math.random() * backgrounds.length)]);
+  }, []);
+
   const handleOpenFavorites = useCallback(async (type) => {
     if (type === 'words') {
         const words = await getAllFavorites(WORD_STORE_NAME);
@@ -408,106 +370,86 @@ const LayoutIndex = props => {
     router.push(router.pathname, undefined, { shallow: true });
   }, [router]);
 
-  useEffect(() => {
-    const backgrounds = [
-        'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=2071&auto=format&fit=crop',
-        'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=2070&auto=format&fit=crop'
-    ];
-    setBackgroundUrl(backgrounds[Math.floor(Math.random() * backgrounds.length)]);
-
-    const container = scrollableContainerRef.current;
-    if (!container) return;
-    const handleScroll = () => {
-      const currentY = container.scrollTop;
-      if (isStickyActive) {
-          const diff = currentY - lastScrollY.current;
-          if (Math.abs(diff) > 5) setIsNavVisible(diff <= 0);
-      }
-      lastScrollY.current = currentY;
-    };
-    container.addEventListener('scroll', handleScroll, { passive: true });
-    
-    const observer = new IntersectionObserver(([entry]) => {
-            const shouldBeSticky = !entry.isIntersecting && entry.boundingClientRect.top < 0;
-            setIsStickyActive(shouldBeSticky);
-    }, { threshold: 0 });
-    if (stickySentinelRef.current) observer.observe(stickySentinelRef.current);
-    return () => { container.removeEventListener('scroll', handleScroll); };
-  }, [isStickyActive]);
-
   const openSidebar = () => { setIsSidebarOpen(true); setSidebarX(0); };
   const closeSidebar = () => { setIsSidebarOpen(false); setSidebarX(-sidebarWidth); };
-  
-  const renderTabButtons = () => allTabs.map(tab => (
-    <button key={tab.key} onClick={() => handleTabChange(tab.key)} className={`flex flex-col items-center justify-center w-full pt-4 pb-2 transition-all duration-300 ${activeTabKey === tab.key ? 'text-blue-600 scale-105' : 'text-gray-500'}`}>
-        {tab.icon} <span className='text-sm font-bold mt-1'>{tab.name}</span>
-        <div className={`w-12 h-1 mt-1 rounded-full bg-blue-600 transition-all ${activeTabKey === tab.key ? 'opacity-100' : 'opacity-0'}`}></div>
-    </button>
-  ));
 
   return (
     <div id='theme-heo' className={`${siteConfig('FONT_STYLE')} h-screen w-screen bg-black flex flex-col overflow-hidden`}>
         <Style/><CustomScrollbarStyle />
-        <HomeSidebar isOpen={isSidebarOpen} onClose={closeSidebar} sidebarX={sidebarX} isDragging={isDragging} />
+        <HomeSidebar isOpen={isSidebarOpen} onClose={closeSidebar} sidebarX={sidebarX} />
 
         <div className='relative flex-grow w-full h-full'>
+            {/* 背景图层 */}
             <div className='absolute inset-0 z-0 bg-cover bg-center transition-opacity duration-1000' style={{ backgroundImage: `url(${backgroundUrl})` }} />
-            <div className='absolute inset-0 bg-black/40 backdrop-blur-[2px]'></div>
+            <div className='absolute inset-0 bg-black/40 backdrop-blur-[1px]'></div>
 
+            {/* 汉堡按钮 */}
             <button onClick={openSidebar} className="absolute top-6 left-6 z-30 p-3 text-white bg-white/20 backdrop-blur-md rounded-full hover:bg-white/30 transition-all shadow-lg">
                 <i className="fas fa-bars text-xl"></i>
             </button>
             
-            <div className='absolute top-0 left-0 right-0 h-[45vh] z-10 p-6 flex flex-col justify-center items-center text-center text-white pointer-events-none'>
-                <div className='pointer-events-auto max-w-4xl'>
-                    <h1 className='text-5xl md:text-6xl font-black tracking-tight mb-4 drop-shadow-2xl'>中缅文培训中心</h1>
-                    <div className='bg-black/20 backdrop-blur-md p-4 rounded-2xl border border-white/10'>
-                        <p className='text-lg md:text-xl font-medium leading-relaxed mb-2 opacity-95'>
-                            专业中缅双语教学，连接文化与机遇的桥梁。从零起点到精通，助力学子跨越语言障碍，开启职场与人生的精彩新篇章。
+            {/* Hero 文字部分 - 移除了黑色半透明背景框，增加了顶部间距 */}
+            <div className='absolute top-0 left-0 right-0 h-[45vh] z-10 pt-28 px-6 flex flex-col items-center text-center text-white pointer-events-none'>
+                <div className='max-w-4xl'>
+                    <h1 className='text-5xl md:text-6xl font-black tracking-tight mb-4 drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]'>中缅文培训中心</h1>
+                    <div className='mb-8'>
+                        <p className='text-lg md:text-xl font-bold leading-relaxed mb-2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] opacity-95'>
+                            专业中缅双语教学，连接文化与机遇的桥梁。
                         </p>
-                        <p className='text-sm md:text-md font-semibold text-blue-300 tracking-widest'>
-                            မြန်မာ-တရုတ် နှစ်ဘာသာစကား သင်ကြားရေး ကျွမ်းကျင်သူ။ လူငယ်များအတွက် အနာဂတ် အခွင့်အလမ်းကောင်းများဆီသို့။
+                        <p className='text-sm md:text-md font-bold text-blue-300 tracking-widest drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]'>
+                            မြန်မာ-တရုတ် နှစ်ဘာသာစကား သင်ကြားရေး ကျွမ်းကျင်သူ။
                         </p>
                     </div>
                     
-                    <div className='mt-8 grid grid-cols-4 gap-4 h-32 w-full max-w-2xl mx-auto'>
-                        <div className='col-span-1 rounded-2xl overflow-hidden relative border border-white/20 shadow-xl group'>
-                            <img src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=400" className="w-full h-full object-cover transition-transform group-hover:scale-110" />
-                            <div className='absolute inset-0 bg-blue-600/30 backdrop-blur-[2px] flex items-center justify-center font-bold text-[10px]'>互动学习</div>
-                        </div>
-                        <div className='col-span-2 rounded-2xl overflow-hidden relative border border-white/20 shadow-xl group'>
-                            <img src="https://images.unsplash.com/photo-1434030216411-0b793f4b4173?q=80&w=600" className="w-full h-full object-cover transition-transform group-hover:scale-110" />
-                            <div className='absolute inset-0 bg-black/30 backdrop-blur-md flex flex-col items-center justify-center'>
-                                <span className='text-xs font-bold'>HSK 标准课程</span>
-                                <span className='text-[8px] opacity-70'>Standard Course</span>
+                    {/* 小图标介绍栏 */}
+                    <div className='mt-4 flex justify-center gap-4 w-full max-w-2xl mx-auto'>
+                        <div className='flex flex-col items-center gap-2 group'>
+                            <div className='w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-lg group-hover:bg-white/20 transition-all'>
+                                <Star className='text-yellow-400' size={24} />
                             </div>
+                            <span className='text-[10px] font-bold text-white drop-shadow-md'>互动学习</span>
                         </div>
-                        <div className='col-span-1 rounded-2xl overflow-hidden relative border border-white/20 shadow-xl group'>
-                            <img src="https://images.unsplash.com/photo-1524178232363-1fb2b075b655?q=80&w=400" className="w-full h-full object-cover transition-transform group-hover:scale-110" />
-                            <div className='absolute inset-0 bg-indigo-600/30 backdrop-blur-[2px] flex items-center justify-center font-bold text-[10px]'>证书保障</div>
+                        <div className='flex flex-col items-center gap-2 group'>
+                            <div className='w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-lg group-hover:bg-white/20 transition-all'>
+                                <BookOpen className='text-blue-400' size={24} />
+                            </div>
+                            <span className='text-[10px] font-bold text-white drop-shadow-md'>标准课程</span>
+                        </div>
+                        <div className='flex flex-col items-center gap-2 group'>
+                            <div className='w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-lg group-hover:bg-white/20 transition-all'>
+                                <CheckCircle className='text-green-400' size={24} />
+                            </div>
+                            <span className='text-[10px] font-bold text-white drop-shadow-md'>证书保障</span>
                         </div>
                     </div>
                 </div>
             </div>
 
+            {/* 内容滚动层 */}
             <div ref={scrollableContainerRef} className='absolute inset-0 z-20 overflow-y-auto overscroll-y-contain custom-scrollbar'>
-                <div className='h-[45vh] flex-shrink-0' />
-                <div className='relative bg-white dark:bg-gray-900 rounded-t-[40px] shadow-2xl pb-10 min-h-[calc(55vh+1px)] transition-all'>
-                    <div className='bg-gradient-to-b from-blue-50 to-white dark:from-gray-800 dark:to-gray-900 rounded-t-[40px] pt-8'>
+                {/* 增加背景与内容之间的空隙 (Spacer) */}
+                <div className='h-[48vh] flex-shrink-0' />
+                
+                <div className='relative bg-white dark:bg-gray-900 rounded-t-[40px] shadow-[0_-15px_35px_rgba(0,0,0,0.3)] pb-10 min-h-[calc(52vh+1px)] transition-all'>
+                    <div className='bg-gradient-to-b from-blue-50/50 to-white dark:from-gray-800/50 dark:to-gray-900 rounded-t-[40px] pt-10'>
+                       {/* 搜索框 */}
                        <div className='px-6 mb-8 max-w-3xl mx-auto'><GlosbeSearchCard /></div>
-                       <div className='pb-8'><ActionButtons onOpenFavorites={handleOpenFavorites} onOpenContact={() => setIsContactPanelOpen(true)} /></div>
-                       <div ref={stickySentinelRef}></div>
-                       <div className={`${isStickyActive ? 'opacity-0 h-0 overflow-hidden' : ''} border-b border-blue-100 dark:border-gray-800 transition-all`}>
-                            <div className='max-w-md mx-auto'>{renderTabButtons()}</div>
-                       </div>
+                       
+                       {/* 操作按钮 */}
+                       <div className='pb-10'><ActionButtons onOpenFavorites={handleOpenFavorites} onOpenContact={() => setIsContactPanelOpen(true)} /></div>
+
+                       <div className='w-16 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto mb-8'></div>
                     </div>
-                    <div className={`fixed w-full top-0 z-30 transition-transform duration-300 ${isStickyActive ? 'translate-y-0' : '-translate-y-full'} ${isNavVisible ? 'translate-y-0' : '-translate-y-full'}`}>
-                        <div className='bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-b border-blue-100 dark:border-gray-800 shadow-lg'>
-                            <div className='max-w-md mx-auto'>{renderTabButtons()}</div>
+
+                    <main className="max-w-5xl mx-auto px-4 py-4">
+                        {/* 移除了 Tab 切换逻辑，直接展示 HSK 课程内容 */}
+                        <div className='mb-6 px-4'>
+                            <h2 className='text-2xl font-black text-gray-800 dark:text-gray-100 flex items-center gap-3'>
+                                <GraduationCap className='text-blue-600' /> HSK 标准课程
+                            </h2>
+                            <p className='text-xs text-gray-500 mt-1 font-medium'>从零基础到精通，系统化学习汉语知识。</p>
                         </div>
-                    </div>
-                    <main ref={mainContentRef} className="max-w-5xl mx-auto px-4 py-8">
-                        {activeTabKey === 'hsk' && <HskContentBlock />}
+                        <HskContentBlock />
                     </main>
                 </div>
             </div>
@@ -528,7 +470,6 @@ const LayoutBase = props => {
   const router = useRouter()
   if (router.route === '/') return <LayoutIndex {...props} />
 
-  // 彻底移除 Header、Footer 以及自带的通知栏
   const headerSlot = (
     <header>
       {fullWidth ? null : <PostHeader {...props} isDarkMode={isDarkMode} />}
@@ -541,7 +482,7 @@ const LayoutBase = props => {
   return (
     <div id='theme-heo' className={`${siteConfig('FONT_STYLE')} bg-[#f7f9fe] dark:bg-[#18171d] min-h-screen flex flex-col`}>
       <Style /> 
-      <CustomScrollbarStyle /> {/* 加入强制隐藏 CSS 逻辑 */}
+      <CustomScrollbarStyle />
       {headerSlot}
       <main className={`flex-grow w-full ${maxWidth} mx-auto relative md:px-5`}>
         <div className='w-full mx-auto lg:flex justify-center relative z-10'>
@@ -550,7 +491,6 @@ const LayoutBase = props => {
           <div className='hidden xl:block'>{slotRight}</div>
         </div>
       </main>
-      {/* <Footer /> 彻底移除 Footer */}
     </div>
   )
 }
@@ -593,7 +533,7 @@ const LayoutArchive = props => (
 
 const LayoutSlug = props => {
   const { post, lock, validPassword } = props
-  const { locale, fullWidth } = useGlobal()
+  const { fullWidth } = useGlobal()
   const commentEnable = siteConfig('COMMENT_TWIKOO_ENV_ID') || siteConfig('COMMENT_WALINE_SERVER_URL')
   return (
     <>
@@ -613,7 +553,7 @@ const LayoutSlug = props => {
   )
 }
 
-const Layout404 = (props) => (
+const Layout404 = () => (
     <div className='error-content flex flex-col md:flex-row w-full mt-12 h-96 justify-center items-center bg-white dark:bg-[#1B1C20] border dark:border-gray-800 rounded-3xl'>
       <LazyImage className='h-full p-4' src={'https://bu.dusays.com/2023/03/03/6401a7906aa4a.gif'} />
       <div className='flex-1 flex flex-col items-center space-y-4'>
