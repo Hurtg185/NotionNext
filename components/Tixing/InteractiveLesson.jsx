@@ -15,7 +15,7 @@ import GaiCuoTi from './GaiCuoTi';
 import TianKongTi from './TianKongTi'; 
 // 补充缺失的组件导入，防止报错
 import PaiXuTi from './PaiXuTi'; // 需确保文件存在
-import PanDuanTi from './PanDuanTi'; // 需确保文件存在
+// import PanDuanTi from './PanDuanTi'; // 需确保文件存在
 // import DuiHua from './DuiHua'; // 假设对话组件叫这个
 
 // --- 3. 旧版/备用组件 ---
