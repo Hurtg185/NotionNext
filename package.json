@@ -50,8 +50,10 @@
   "dependencies": {
     "@clerk/localizations": "^3.17.1",
     "@clerk/nextjs": "^5.7.5",
+    "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@headlessui/react": "^1.7.19",
     "@next/bundle-analyzer": "^12.3.7",
     "@react-spring/web": "^10.0.3",
