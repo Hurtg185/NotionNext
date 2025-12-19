@@ -183,17 +183,20 @@ const cssStyles = `
 .option-card.correct{border-color:#10b981;background:#ecfdf5}
 .option-card.wrong{border-color:#ef4444;background:#fef2f2}
 
+/* 提交按钮位置调整：bottom 30px -> 80px */
 .submit-bar{
-  position:fixed;bottom:30px;width:100%;
+  position:fixed;bottom:80px;width:100%;
   display:flex;justify-content:center;
 }
 .submit-btn{
   border:2px solid #6366f1;
   color:#6366f1;
+  background: white;
   padding:12px 60px;border-radius:100px;
   font-size:1.1rem;font-weight:800;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
-.submit-btn:disabled{border-color:#cbd5e1;color:#cbd5e1}
+.submit-btn:disabled{border-color:#cbd5e1;color:#cbd5e1;box-shadow:none;}
 
 .result-sheet{
   position:fixed;bottom:0;left:0;right:0;
@@ -201,6 +204,7 @@ const cssStyles = `
   border-radius:30px 30px 0 0;
   transform:translateY(100%);
   transition:.4s;z-index:100;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
 }
 .result-sheet.show{transform:translateY(0)}
 .is-correct{background:#ecfdf5;border-top:5px solid #10b981}
@@ -209,6 +213,7 @@ const cssStyles = `
   width:100%;padding:16px;border-radius:16px;
   border:none;color:#fff;font-weight:800;
   font-size:1.1rem;
+  display:flex;align-items:center;justify-content:center;gap:8px;
 }
 .is-correct .next-btn{background:#10b981}
 .is-wrong .next-btn{background:#ef4444}
@@ -275,8 +280,10 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext }) => {
 
     if (correct) {
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.8 } });
+      onCorrect?.(); // 答对回调（仅统计，不跳题）
     } else {
       navigator.vibrate?.(200);
+      onIncorrect?.(); // 答错回调（仅统计，不跳题）
     }
   };
 
@@ -285,8 +292,8 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext }) => {
     nextLockRef.current = true;
 
     audioController.stop();
-    isRight ? onCorrect?.() : onIncorrect?.();
-    onNext?.();
+    // 无论对错，只要点击了"下一题"按钮，就执行 onNext 跳转
+    onNext?.(); 
   };
 
   const renderRichText = (text) => {
@@ -323,19 +330,20 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext }) => {
               {renderRichText(questionText)}
             </div>
             <div
-              className={`mt-2 self-end p-2 rounded-full ${
+              className={`mt-2 self-end p-2 rounded-full cursor-pointer transition-colors ${
                 isPlaying
                   ? 'bg-indigo-500 text-white'
                   : 'bg-indigo-50 text-indigo-500'
               }`}
-              onClick={() =>
+              onClick={(e) => {
+                e.stopPropagation();
                 audioController.playMixed(
                   questionText,
                   {},
                   () => setIsPlaying(true),
                   () => setIsPlaying(false)
-                )
-              }
+                );
+              }}
             >
               {isPlaying ? <FaSpinner className="animate-spin" /> : <FaVolumeUp />}
             </div>
