@@ -262,7 +262,7 @@ const HomeSidebar = ({ isOpen, onClose, sidebarX }) => {
 };
 
 // =================================================================================
-// ======================  价格表组件 (可拖动)  ========================
+// ======================  价格表组件 (可拖动 - 多卡片版)  ========================
 // =================================================================================
 
 const DraggablePriceChart = () => {
@@ -270,6 +270,28 @@ const DraggablePriceChart = () => {
     const [isDragging, setIsDragging] = useState(false);
     const [startX, setStartX] = useState(0);
     const [scrollLeft, setScrollLeft] = useState(0);
+
+    // 课程数据定义
+    const courses = [
+        {
+            id: 1,
+            title: 'HSK 1',
+            price: '10,000 Ks',
+            image: 'https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/IMG_20251219_162925.png'
+        },
+        {
+            id: 2,
+            title: 'HSK 2',
+            price: '30,000 Ks',
+            image: 'https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/IMG_20251219_162958.png'
+        },
+        {
+            id: 3,
+            title: '口语课程',
+            price: '60,000 Ks',
+            image: 'https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/IMG_20251219_162958.png'
+        }
+    ];
 
     // 鼠标按下
     const handleMouseDown = (e) => {
@@ -295,34 +317,39 @@ const DraggablePriceChart = () => {
     return (
         <div className="w-full max-w-2xl px-4 pointer-events-auto">
              {/* 容器：玻璃拟态背景 */}
-            <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-2 shadow-2xl">
-                 <div className="flex items-center justify-between px-2 mb-2">
+            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-3 shadow-2xl">
+                 <div className="flex items-center justify-between px-2 mb-3">
                      <span className="text-xs font-bold text-white/90 flex items-center gap-1">
-                        <Star size={12} className="text-yellow-400" /> 课程价格表 (左右滑动)
+                        <Star size={12} className="text-yellow-400" /> 热门课程 (左右滑动)
                      </span>
-                     <Maximize2 size={12} className="text-white/60" />
                  </div>
                  
                 {/* 滚动区域 */}
                 <div 
                     ref={scrollRef}
-                    className="overflow-x-auto hide-scrollbar cursor-grab active:cursor-grabbing select-none"
+                    className="overflow-x-auto hide-scrollbar cursor-grab active:cursor-grabbing select-none flex gap-4"
                     onMouseDown={handleMouseDown}
                     onMouseLeave={handleMouseUpOrLeave}
                     onMouseUp={handleMouseUpOrLeave}
                     onMouseMove={handleMouseMove}
                 >
-                    {/* 
-                        在此处替换 src 为您的真实价格表图片链接 
-                        建议使用长图，高度控制在 160px-200px 左右效果最佳
-                    */}
-                    <div className="min-w-max">
-                        <img 
-                            src="https://images.unsplash.com/photo-1554224155-6726b3ff858f?q=80&w=800&auto=format&fit=crop" 
-                            alt="Course Price List" 
-                            className="h-36 md:h-44 w-auto rounded-lg object-cover pointer-events-none" 
-                        />
-                    </div>
+                    {courses.map((course) => (
+                        <div key={course.id} className="relative flex-shrink-0 w-28 md:w-36 group">
+                            <div className="aspect-[2/3] overflow-hidden rounded-xl bg-gray-800 shadow-lg relative border border-white/10">
+                                {/* 图片 */}
+                                <img 
+                                    src={course.image} 
+                                    alt={course.title} 
+                                    className="w-full h-full object-cover pointer-events-none transition-transform duration-500 group-hover:scale-105" 
+                                />
+                                {/* 价格标签遮罩 */}
+                                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent pt-8 pb-2 px-2 text-center pointer-events-none">
+                                    <p className="text-white text-[10px] md:text-xs font-bold opacity-90">{course.title}</p>
+                                    <p className="text-yellow-400 text-xs md:text-sm font-black">{course.price}</p>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>
@@ -396,16 +423,16 @@ const LayoutIndex = props => {
             <div className='absolute inset-0 z-0 bg-cover bg-center transition-opacity duration-1000' style={{ backgroundImage: `url(${backgroundUrl})` }} />
             <div className='absolute inset-0 bg-black/40 backdrop-blur-[1px]'></div>
 
-            {/* 汉堡按钮 - 固定在左上角，z-index 高，确保可点击 */}
+            {/* 汉堡按钮 - 固定在左上角，无背景，z-index 高 */}
             <button 
                 onClick={openSidebar} 
-                className="absolute top-6 left-6 z-50 p-3 text-white bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all shadow-lg border border-white/10"
+                className="fixed top-6 left-6 z-50 p-2 text-white hover:opacity-80 transition-all drop-shadow-md"
             >
                 <i className="fas fa-bars text-xl"></i>
             </button>
             
             {/* Hero 区域：包含文字和价格表 */}
-            <div className='absolute top-0 left-0 right-0 h-[65vh] z-10 pt-24 px-6 flex flex-col items-center text-center text-white pointer-events-none'>
+            <div className='absolute top-0 left-0 right-0 h-[65vh] z-10 pt-20 px-6 flex flex-col items-center text-center text-white pointer-events-none'>
                 <div className='max-w-4xl w-full flex flex-col items-center'>
                     <h1 className='text-5xl md:text-6xl font-black tracking-tight mb-4 drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]'>中缅文培训中心</h1>
                     <div className='mb-6'>
@@ -420,7 +447,7 @@ const LayoutIndex = props => {
                     {/* 
                         修复核心：
                         1. 这里使用了 z-30，确保它在透明滚动层之上。
-                        2. 移除了 ActionButtons，替换为 DraggablePriceChart。
+                        2. 替换为 DraggablePriceChart (3张竖图版)。
                         3. 开启了 pointer-events-auto，允许拖动操作。
                     */}
                     <div className="z-30 w-full flex justify-center mt-2 pointer-events-auto">
