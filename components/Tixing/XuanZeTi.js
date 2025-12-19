@@ -95,8 +95,9 @@ const audioController = {
     const cached = await idb.get(cacheKey);
     if (cached) return cached;
 
-    // 此 URL 格式固定，配合 Cloudflare 缓存规则
-    const apiUrl = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${voice}&r=0`;
+    // --- 修改点：使用 Cloudflare 代理接口 ---
+    const apiUrl = `/api/tts?t=${encodeURIComponent(text)}&v=${voice}`;
+    
     const controller = new AbortController();
     this._pendingFetches.push(controller);
     try {
@@ -392,8 +393,12 @@ const XuanZeTi = (props) => {
 
   const rawQuestion = data.question || {};
   const rawOptions = data.options || [];
-  // --- 关键：将正确答案全部转为字符串数组，确保对比一致性 ---
-  const correctIds = (data.correctAnswer || []).map(String);
+  
+  // --- 关键修改：将正确答案全部转为字符串数组，并过滤空值，确保对比一致性 ---
+  const correctIds = (Array.isArray(data.correctAnswer) ? data.correctAnswer : [data.correctAnswer])
+    .filter(id => id != null)
+    .map(String);
+    
   const explanationText = data.explanation || "";
 
   const questionText = typeof rawQuestion === 'string' ? rawQuestion : (rawQuestion.text || '');
@@ -459,10 +464,12 @@ const XuanZeTi = (props) => {
   const handleSubmit = () => {
     if (selectedIds.length === 0 || isSubmitted) return;
     
-    // --- 核心逻辑：判定正确性 ---
-    // 选中数量一致，且每一个选中的都在正确答案里
-    const correct = selectedIds.length === correctIds.length && 
-                    selectedIds.every(id => correctIds.includes(id));
+    // --- 核心逻辑修复：严格数组对比 ---
+    // 1. 长度必须一致
+    // 2. selectedIds 中的每个元素都必须存在于 correctIds 中
+    const isCorrectLength = selectedIds.length === correctIds.length;
+    const isAllIncluded = selectedIds.every(id => correctIds.includes(id));
+    const correct = isCorrectLength && isAllIncluded;
     
     setIsRight(correct);
     setIsSubmitted(true);
