@@ -5,7 +5,7 @@ import {
   Mic2, Music4, Layers, BookText, Lightbulb,
   Sparkles, PlayCircle, Gem, MessageCircle,
   Crown, Heart, ChevronRight, Star, BookOpen,
-  ChevronDown, ChevronUp, GraduationCap, HelpCircle
+  ChevronDown, ChevronUp, GraduationCap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
@@ -42,7 +42,7 @@ const hskData = [
     imageUrl: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800&q=80',
     lessons: [
       { id: 1, title: '第 1 课 你好' }, { id: 2, title: '第 2 课 谢谢你' }, { id: 3, title: '第 3 课 你叫什么名字？' }, { id: 4, title: '第 4 课 她是我的汉语老师' }, { id: 5, title: '第 5 课 她女儿今年二十岁' },
-      { id: 6, title: '第 6 课 我会说汉语' }, { id: 7, title: '第 7 课 今天几号？' }, { id: 8, title: '第 8 课 我想喝茶' }
+      { id: 6, title: '第 6 课 我会说汉语' }, { id: 7, title: '第 7 课 今天几号？' }, { id: 8, title: '第 8 课 我想喝茶' },
     ]
   },
   {
@@ -115,14 +115,7 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
 
   const handleLessonClick = (e, lesson) => {
     const isFree = checkIsFree(level.level, lesson.id);
-    
-    // 权限检查逻辑 (参考源代码)
-    const cachedUser = typeof window !== 'undefined' ? localStorage.getItem('hsk_user') : null;
-    const user = cachedUser ? JSON.parse(cachedUser) : null;
-    const unlocked = user?.unlocked_levels ? user.unlocked_levels.split(',') : [];
-    const isUnlocked = unlocked.includes(`H${level.level}`) || unlocked.includes(`HSK${level.level}`);
-
-    if (!isFree && !isUnlocked) {
+    if (!isFree) {
       e.preventDefault();
       onShowMembership(level.level);
       return;
@@ -159,13 +152,14 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
 
       {/* 底部功能区 */}
       <div className="px-4 pb-5 pt-1 flex flex-col gap-3">
-        {/* 1. 全部课程 (上) - 修复为展开逻辑，防止打开空白页 */}
+        {/* 1. 全部课程 (上) - 修复：点击不再跳转空白页，而是展开/收起 */}
         {level.lessons.length > 3 && (
           <button
             onClick={() => setIsExpanded(!isExpanded)}
             className="w-full py-2.5 flex items-center justify-center text-xs font-bold text-slate-500 gap-1 bg-slate-50 border border-slate-100 rounded-xl hover:bg-slate-100 transition-colors active:scale-95"
           >
-            {isExpanded ? '收起列表' : `全部 ${level.lessons.length} 课时`} <ChevronRight size={12} className={isExpanded ? "-rotate-90 transition-transform" : "rotate-90 transition-transform"} />
+            {isExpanded ? '收起课时' : `查看全部 ${level.lessons.length} 课时`} 
+            {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </button>
         )}
 
@@ -188,7 +182,9 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
 };
 
 // 拼音面板组件
-const PinyinSection = ({ onOpenTips, onOpenCollection }) => {
+const PinyinSection = ({ onOpenCollection }) => {
+  const router = useRouter();
+
   return (
     <div className="space-y-4">
       {/* 拼音 4 格 */}
@@ -209,7 +205,7 @@ const PinyinSection = ({ onOpenTips, onOpenCollection }) => {
       <div className="grid grid-cols-2 gap-3">
         {/* 发音技巧 */}
         <button 
-          onClick={onOpenTips}
+          onClick={() => router.push('/pinyin/tips')}
           className="flex items-center justify-between px-3 py-3 bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl border border-orange-100/50 active:scale-95 transition-transform group"
         >
           <div className="flex items-center gap-2">
@@ -223,7 +219,7 @@ const PinyinSection = ({ onOpenTips, onOpenCollection }) => {
           <ChevronRight size={14} className="text-orange-300" />
         </button>
 
-        {/* 单词收藏 - 修复：点击调用 onOpenCollection 而不是直接跳转 */}
+        {/* 单词收藏 - 修复：点击不再跳转空白页，而是触发弹窗显示已收藏单词 */}
         <button 
           onClick={onOpenCollection}
           className="flex items-center justify-between px-3 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100/50 active:scale-95 transition-transform group"
@@ -257,26 +253,49 @@ export default function HskPageClient() {
 
   // 处理生词本点击逻辑
   const handleVocabularyClick = useCallback((level) => {
-    // level 可以是对象(来自HskCard)或数字
-    const levelNum = typeof level === 'object' ? level.level : level;
+    const levelNum = level?.level || 1;
     const words = hskWordsData[levelNum] || [];
-
+    
     setActiveHskWords(words);
     setActiveLevelTag(`hsk${levelNum}`);
-
+    
     router.push({
       pathname: router.pathname,
       query: { ...router.query, level: levelNum },
       hash: 'hsk-vocabulary'
     }, undefined, { shallow: true });
-
   }, [router]);
 
-  // 修复：默认打开 HSK 1 的生词本 (用于收藏按钮)
-  const openDefaultVocabulary = () => handleVocabularyClick(1);
+  // 【核心功能】处理收藏夹逻辑：点击收藏按钮时，过滤出所有点过红心的单词
+  const handleCollectionClick = useCallback(() => {
+    // 1. 从本地存储获取收藏的单词 ID 列表
+    // 这个 Key 必须和你的 WordCard 组件内保存收藏的 Key 一致
+    const favoritesKey = 'framer-pinyin-favorites'; 
+    const savedIds = JSON.parse(localStorage.getItem(favoritesKey) || '[]');
+    
+    // 2. 汇总所有可能的单词
+    const allWords = [
+      ...(hskWordsData[1] || []),
+      ...(hskWordsData[2] || [])
+    ];
+    
+    // 3. 过滤出已收藏的单词对象
+    const favoriteWords = allWords.filter(word => savedIds.includes(word.id));
 
-  // 跳转到拼音技巧
-  const goToPinyinTips = () => router.push('/pinyin/tips');
+    if (favoriteWords.length === 0) {
+      alert("你还没有收藏任何单词哦！在学习单词时点击红心即可收藏。");
+      return;
+    }
+
+    // 4. 打开弹窗播放收藏的单词
+    setActiveHskWords(favoriteWords);
+    setActiveLevelTag('my-favorites-collection');
+    
+    router.push({
+      pathname: router.pathname,
+      hash: 'hsk-vocabulary'
+    }, undefined, { shallow: true });
+  }, [router]);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans text-slate-900 pb-20 relative overflow-x-hidden">
@@ -295,12 +314,9 @@ export default function HskPageClient() {
           </div>
         </div>
 
-        {/* 拼音面板 (已修复：传入了跳转函数和收藏函数) */}
+        {/* 拼音面板 */}
         <div className="bg-white rounded-[1.8rem] p-4 shadow-xl shadow-slate-200/60 border border-slate-50">
-          <PinyinSection 
-            onOpenTips={goToPinyinTips}
-            onOpenCollection={openDefaultVocabulary}
-          />
+          <PinyinSection onOpenCollection={handleCollectionClick} />
         </div>
       </header>
 
