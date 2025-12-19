@@ -106,13 +106,9 @@ const initSounds = () => {
 };
 
 // =================================================================================
-// --- 🔥 核心音频引擎：集成代理、缓存与语速控制 ---
+// --- 🔥 核心：集成 CF Workers 代理的音频播放引擎 ---
 // =================================================================================
 
-/**
- * 播放 TTS 语音
- * 集成 Cloudflare Workers 代理 (/api/tts)，实现边缘缓存
- */
 const playTTS = async (text, voice, rate, onEndCallback, e) => {
     if (e && e.stopPropagation) e.stopPropagation();
     stopAllAudio();
@@ -122,8 +118,8 @@ const playTTS = async (text, voice, rate, onEndCallback, e) => {
         return;
     }
 
-    // 构建 Cloudflare 代理 URL，实现 90 天强缓存
-    // 参数说明：t=文本, v=声音名, r=语速增量
+    // 🔥 集成 Cloudflare Workers 代理逻辑，实现 90 天强缓存
+    // 接口格式：/api/tts?t=文本&v=发音人&r=语速
     const url = `/api/tts?t=${encodeURIComponent(text)}&v=${voice}&r=${rate || 0}`;
 
     _howlInstance = new Howl({
@@ -134,11 +130,7 @@ const playTTS = async (text, voice, rate, onEndCallback, e) => {
             if (onEndCallback) onEndCallback();
         },
         onloaderror: (id, err) => {
-            console.error("TTS Proxy Load Error:", err);
-            if (onEndCallback) onEndCallback();
-        },
-        onplayerror: (id, err) => {
-            console.error("TTS Proxy Play Error:", err);
+            console.error("TTS Proxy Error", err);
             if (onEndCallback) onEndCallback();
         }
     });
@@ -146,11 +138,8 @@ const playTTS = async (text, voice, rate, onEndCallback, e) => {
     _howlInstance.play();
 };
 
-/**
- * 播放 R2 存储中的原始音频文件
- */
 const playR2Audio = (word, onEndCallback, settings, defaultLevel) => {
-    // 如果设置中关闭了音频文件，或者没有 ID/Level，则降级到 TTS
+    // 检查设置：是否强制走 TTS
     if (!settings.useAudioFile || !word || !word.id) {
         playTTS(word.chinese, settings.voiceChinese, settings.speechRateChinese, onEndCallback);
         return;
@@ -173,8 +162,8 @@ const playR2Audio = (word, onEndCallback, settings, defaultLevel) => {
         onend: () => {
             if (onEndCallback) onEndCallback();
         },
-        onloaderror: (id, err) => {
-            // R2 文件加载失败时自动降级到代理 TTS
+        onloaderror: () => {
+            // R2 加载失败则自动降级到本地缓存代理 TTS
             playTTS(word.chinese, settings.voiceChinese, settings.speechRateChinese, onEndCallback);
         }
     });
@@ -196,7 +185,7 @@ const useCardSettings = () => {
     const [settings, setSettings] = useState(() => {
         try {
             if (typeof window === 'undefined') return {};
-            const savedSettings = localStorage.getItem('learningWordCardSettings_v4');
+            const savedSettings = localStorage.getItem('learningWordCardSettings_v5');
             const defaultSettings = {
                 order: 'sequential', 
                 autoPlayChinese: true, 
@@ -206,7 +195,7 @@ const useCardSettings = () => {
                 autoBrowseDelay: 6000, 
                 useAudioFile: true, 
                 voiceChinese: 'zh-CN-XiaoyouNeural', 
-                voiceBurmese: 'my-MM-ThihaNeural', // 默认男声
+                voiceBurmese: 'my-MM-ThihaNeural', // 🔥 默认男声
                 speechRateChinese: -20, 
                 speechRateBurmese: -10, 
                 backgroundImage: ''
@@ -218,7 +207,7 @@ const useCardSettings = () => {
     });
     useEffect(() => { 
         if (typeof window !== 'undefined') {
-            localStorage.setItem('learningWordCardSettings_v4', JSON.stringify(settings)); 
+            localStorage.setItem('learningWordCardSettings_v5', JSON.stringify(settings)); 
         }
     }, [settings]);
     return [settings, setSettings];
@@ -276,9 +265,9 @@ const SpellingModal = ({ wordObj, settings, level, onClose }) => {
     return (
         <div style={styles.comparisonOverlay} onClick={onClose}>
             <div style={{...styles.comparisonPanel, maxWidth: '400px'}} onClick={e => e.stopPropagation()}>
-                <div style={styles.recordHeader}><h3>ပေါင်း၍ဖတ်ခြင်း (拼读)</h3><button style={styles.closeButtonSimple} onClick={onClose}><FaTimes /></button></div>
+                <div style={styles.recordHeader}><h3>ပေါင်း၍ဖတ်ခြင်း (拼读演示)</h3><button style={styles.closeButtonSimple} onClick={onClose}><FaTimes /></button></div>
                 <div style={styles.recordContent}>
-                    <div style={{display: 'flex', flexWrap: 'wrap', gap: '20px', justifyContent: 'center'}}>
+                    <div style={{display: 'flex', flexWrap: 'wrap', gap: '25px', justifyContent: 'center'}}>
                         {word && word.split('').map((char, index) => {
                             const py = pinyinConverter(char, { toneType: 'symbol' });
                             const isActive = status === `${index}-full` || status === 'all-full';
@@ -287,7 +276,7 @@ const SpellingModal = ({ wordObj, settings, level, onClose }) => {
                                     <div style={{fontSize: '1.4rem', marginBottom: '8px', color: isActive ? '#ef4444' : '#9ca3af', fontWeight: isActive ? 'bold' : 'normal'}}>
                                         {py}
                                     </div>
-                                    <div style={{fontSize: '3.5rem', fontWeight: 'bold', color: isActive ? '#2563eb' : '#1f2937'}}>
+                                    <div style={{fontSize: '3.8rem', fontWeight: 'bold', color: isActive ? '#2563eb' : '#1f2937'}}>
                                         {char}
                                     </div>
                                 </div>
@@ -301,7 +290,7 @@ const SpellingModal = ({ wordObj, settings, level, onClose }) => {
 };
 
 // =================================================================================
-// --- 子组件：发音录制与对比 (PronunciationComparison) ---
+// --- 子组件：发音对比与录制 (PronunciationComparison) ---
 // =================================================================================
 const PronunciationComparison = ({ correctWord, settings, onClose }) => {
     const [status, setStatus] = useState('idle');
@@ -334,7 +323,7 @@ const PronunciationComparison = ({ correctWord, settings, onClose }) => {
     return (
         <div style={styles.comparisonOverlay} onClick={onClose}>
             <div style={styles.comparisonPanel} onClick={e => e.stopPropagation()}>
-                <div style={styles.recordHeader}><h3>發音練習</h3><button style={styles.closeButtonSimple} onClick={onClose}><FaTimes /></button></div>
+                <div style={styles.recordHeader}><h3>發音對比</h3><button style={styles.closeButtonSimple} onClick={onClose}><FaTimes /></button></div>
                 <div style={styles.recordContent}>
                     <div style={styles.textWordChinese}>{correctWord}</div>
                     <div style={styles.actionArea}>
@@ -342,7 +331,7 @@ const PronunciationComparison = ({ correctWord, settings, onClose }) => {
                         {status === 'recording' && <button style={{...styles.bigRecordBtn, background:'#ef4444'}} onClick={stopRecording}><FaStop size={32}/></button>}
                         {status === 'review' && (
                             <div style={styles.reviewContainer}>
-                                <div style={{display:'flex', gap:'20px'}}>
+                                <div style={{display:'flex', gap:'25px'}}>
                                     <button style={styles.circleBtnBlue} onClick={() => playTTS(correctWord, settings.voiceChinese, settings.speechRateChinese)}><FaVolumeUp size={24}/></button>
                                     <button style={styles.circleBtnGreen} onClick={() => new Audio(userAudioUrl).play()}><FaPlayCircle size={24}/></button>
                                     <button style={styles.circleBtnGray} onClick={() => setStatus('idle')}><FaRedo size={20}/></button>
@@ -368,41 +357,33 @@ const SettingsPanel = React.memo(({ settings, setSettings, onClose }) => {
                 <h2 style={{marginTop: 0, marginBottom: '25px', color: '#1f2937'}}>Settings</h2>
                 
                 <div style={styles.settingGroup}>
-                    <label style={styles.settingLabel}>Audio Source (音频源)</label>
+                    <label style={styles.settingLabel}>音频源选择 (Audio Source)</label>
                     <div style={styles.settingControl}>
                         <button onClick={() => update('useAudioFile', true)} style={{...styles.settingButton, background: settings.useAudioFile ? '#4299e1' : '#f3f4f6', color: settings.useAudioFile ? 'white' : '#4b5563'}}>R2 Original</button>
-                        <button onClick={() => update('useAudioFile', false)} style={{...styles.settingButton, background: !settings.useAudioFile ? '#4299e1' : '#f3f4f6', color: !settings.useAudioFile ? 'white' : '#4b5563'}}>Cloud TTS</button>
+                        <button onClick={() => update('useAudioFile', false)} style={{...styles.settingButton, background: !settings.useAudioFile ? '#4299e1' : '#f3f4f6', color: !settings.useAudioFile ? 'white' : '#4b5563'}}>Force Cloud TTS</button>
                     </div>
                 </div>
 
                 <div style={styles.settingGroup}>
-                    <label style={styles.settingLabel}>Burmese Voice (缅语发音)</label>
+                    <label style={styles.settingLabel}>缅语发音人 (Burmese Voice)</label>
                     <select style={styles.settingSelect} value={settings.voiceBurmese} onChange={e => update('voiceBurmese', e.target.value)}>
                         {TTS_VOICES.filter(v => v.value.startsWith('my')).map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
                     </select>
                 </div>
 
                 <div style={styles.settingGroup}>
-                    <label style={styles.settingLabel}>Chinese Speed (中文语速: {settings.speechRateChinese})</label>
+                    <label style={styles.settingLabel}>中文语速 (Chinese Speed: {settings.speechRateChinese})</label>
                     <input type="range" min="-100" max="100" step="5" value={settings.speechRateChinese} onChange={e => update('speechRateChinese', parseInt(e.target.value))} style={{width:'100%'}} />
                 </div>
 
                 <div style={styles.settingGroup}>
-                    <label style={styles.settingLabel}>Burmese Speed (缅语语速: {settings.speechRateBurmese})</label>
+                    <label style={styles.settingLabel}>缅语语速 (Burmese Speed: {settings.speechRateBurmese})</label>
                     <input type="range" min="-100" max="100" step="5" value={settings.speechRateBurmese} onChange={e => update('speechRateBurmese', parseInt(e.target.value))} style={{width:'100%'}} />
                 </div>
 
                 <div style={styles.settingGroup}>
-                    <label style={styles.settingLabel}>Background Image (背景图片 URL)</label>
+                    <label style={styles.settingLabel}>背景图 URL (Background Image)</label>
                     <input style={styles.settingSelect} type="text" value={settings.backgroundImage} onChange={e => update('backgroundImage', e.target.value)} placeholder="https://..." />
-                </div>
-                
-                <div style={styles.settingGroup}>
-                    <label style={styles.settingLabel}>Learning Order</label>
-                    <div style={styles.settingControl}>
-                        <button onClick={() => update('order', 'sequential')} style={{...styles.settingButton, background: settings.order === 'sequential' ? '#4299e1' : '#f3f4f6', color: settings.order === 'sequential' ? 'white' : '#4b5563'}}><FaSortAmountDown/> Seq</button>
-                        <button onClick={() => update('order', 'random')} style={{...styles.settingButton, background: settings.order === 'random' ? '#4299e1' : '#f3f4f6', color: settings.order === 'random' ? 'white' : '#4b5563'}}><FaRandom/> Rand</button>
-                    </div>
                 </div>
             </div>
         </div>
@@ -410,7 +391,7 @@ const SettingsPanel = React.memo(({ settings, setSettings, onClose }) => {
 });
 
 // =================================================================================
-// --- 子组件：跳转页面 (JumpModal) ---
+// --- 子组件：卡片跳转 (JumpModal) ---
 // =================================================================================
 const JumpModal = ({ max, current, onJump, onClose }) => {
     const [val, setVal] = useState(current + 1);
@@ -419,7 +400,7 @@ const JumpModal = ({ max, current, onJump, onClose }) => {
     return (
         <div style={styles.jumpModalOverlay} onClick={onClose}>
             <div style={styles.jumpModalContent} onClick={e => e.stopPropagation()}>
-                <h3 style={{marginBottom:'20px'}}>Jump to Card</h3>
+                <h3 style={{marginBottom:'20px'}}>Jump to Page</h3>
                 <input ref={inputRef} type="number" style={styles.jumpModalInput} value={val} onChange={e => setVal(e.target.value)} />
                 <button style={styles.jumpModalButton} onClick={() => onJump(parseInt(val)-1)}>Go</button>
             </div>
@@ -448,7 +429,7 @@ const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level 
     const lastDirection = useRef(0);
     const currentCard = activeCards[currentIndex];
 
-    // 初始化数据处理
+    // 初始化处理
     useEffect(() => {
         if (words.length > 0) {
             let mapped = words.map(w => ({
@@ -472,31 +453,28 @@ const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level 
         }
     }, [words, settings.order]);
 
-    // 状态切换处理
     useEffect(() => {
         if (currentCard) isFavorite(currentCard.id).then(setIsFavoriteCard);
         setIsRevealed(false);
     }, [currentIndex, currentCard]);
 
-    // 🔥 核心逻辑：自动播放序列 (例句强制语速 -30)
+    // 🔥 播放序列逻辑：例句固定 -30 语速方便跟读
     useEffect(() => {
         if (!isOpen || !currentCard) return;
         stopAllAudio();
         
         const playSequence = async () => {
-            // 1. 中文发音
+            // 1. 中文发音 (R2 或代理 TTS)
             if (settings.autoPlayChinese) {
                 await new Promise(r => playR2Audio(currentCard, r, settings, level));
             }
-            // 2. 只有在揭晓状态下才播放缅语和例句
-            if (isRevealed) {
-                if (settings.autoPlayBurmese && currentCard.burmese) {
-                    await new Promise(r => playTTS(currentCard.burmese, settings.voiceBurmese, settings.speechRateBurmese, r));
-                }
-                if (settings.autoPlayExample && currentCard.example) {
-                    // 🔥 例句发音语速硬编码为 -30，确保学习效果
-                    await new Promise(r => playTTS(currentCard.example, settings.voiceChinese, -30, r));
-                }
+            // 2. 缅语发音 (代理 TTS)
+            if (isRevealed && settings.autoPlayBurmese && currentCard.burmese) {
+                await new Promise(r => playTTS(currentCard.burmese, settings.voiceBurmese, settings.speechRateBurmese, r));
+            }
+            // 3. 例句发音 (代理 TTS - 强制 -30 慢速)
+            if (isRevealed && settings.autoPlayExample && currentCard.example) {
+                await new Promise(r => playTTS(currentCard.example, settings.voiceChinese, -30, r));
             }
         };
 
@@ -504,11 +482,11 @@ const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level 
         return () => clearTimeout(timer);
     }, [currentIndex, isRevealed, isOpen, currentCard, settings, level]);
 
-    // 🔥 核心算法：遗忘曲线控制 (认识/不认识/模糊)
+    // 🔥 核心复习算法 (遗忘曲线)
     const handleKnow = () => {
         stopAllAudio();
         const newCards = [...activeCards];
-        newCards.splice(currentIndex, 1); // 认识：从列表中彻底移除
+        newCards.splice(currentIndex, 1); // 认识：彻底剔除
         if (newCards.length === 0) {
             setActiveCards([]);
         } else {
@@ -522,7 +500,7 @@ const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level 
         const card = activeCards[currentIndex];
         const newCards = [...activeCards];
         newCards.splice(currentIndex, 1);
-        // 不认识：将其插入到 10 个单词后的位置重新出现
+        // 不认识：插入到 10 个词之后
         const targetPos = Math.min(currentIndex + 10, newCards.length);
         newCards.splice(targetPos, 0, card);
         setActiveCards(newCards);
@@ -534,7 +512,7 @@ const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level 
         const card = activeCards[currentIndex];
         const newCards = [...activeCards];
         newCards.splice(currentIndex, 1);
-        // 模糊：将其插入到 20 个单词后的位置重新出现
+        // 模糊：插入到 20 个词之后
         const targetPos = Math.min(currentIndex + 20, newCards.length);
         newCards.splice(targetPos, 0, card);
         setActiveCards(newCards);
@@ -546,22 +524,20 @@ const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level 
         setCurrentIndex(prev => (prev + dir + activeCards.length) % activeCards.length);
     };
 
-    // 手势逻辑
     const bind = useDrag(({ last, movement: [mx, my], velocity: { magnitude: vel } }) => {
         if (last) {
-            if (mx > 120) onClose(); // 右滑退出
-            else if (my < -60 || (vel > 0.4 && my < 0)) navigate(1); // 上滑下一个
-            else if (my > 60 || (vel > 0.4 && my > 0)) navigate(-1); // 下滑上一个
+            if (mx > 120) onClose();
+            else if (my < -60 || (vel > 0.4 && my < 0)) navigate(1);
+            else if (my > 60 || (vel > 0.4 && my > 0)) navigate(-1);
         }
     }, { filterTaps: true });
 
-    // 动画配置
     const transitions = useTransition(currentIndex, {
         key: currentCard?.id || currentIndex,
-        from: { opacity: 0, transform: `translateY(${lastDirection.current >= 0 ? 50 : -50}px)` },
+        from: { opacity: 0, transform: `translateY(${lastDirection.current >= 0 ? 60 : -60}px)` },
         enter: { opacity: 1, transform: 'translateY(0px)' },
-        leave: { opacity: 0, transform: `translateY(${lastDirection.current >= 0 ? -50 : 50}px)`, position: 'absolute' },
-        config: { mass: 1, tension: 210, friction: 20 },
+        leave: { opacity: 0, transform: `translateY(${lastDirection.current >= 0 ? -60 : 60}px)`, position: 'absolute' },
+        config: { mass: 1, tension: 240, friction: 22 },
         onStart: () => playSoundEffect('switch')
     });
 
@@ -571,17 +547,17 @@ const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level 
 
     return createPortal(
         <animated.div style={{ ...styles.fullScreen, ...bgImage }}>
-            {/* 全屏手势区 */}
+            {/* 核心手势点击区 */}
             <div style={styles.gestureArea} {...bind()} onClick={() => setIsRevealed(!isRevealed)} />
 
-            {/* 功能浮层 */}
+            {/* 功能浮层组件 */}
             {isSettingsOpen && <SettingsPanel settings={settings} setSettings={setSettings} onClose={() => setIsSettingsOpen(false)} />}
             {isRecordingOpen && currentCard && <PronunciationComparison correctWord={currentCard.chinese} settings={settings} onClose={() => setIsRecordingOpen(false)} />}
             {isSpellingOpen && currentCard && <SpellingModal wordObj={currentCard} settings={settings} level={level} onClose={() => setIsSpellingOpen(false)} />}
             {writerChar && <HanziModal word={writerChar} onClose={() => setWriterChar(null)} />}
             {isJumping && <JumpModal max={activeCards.length} current={currentIndex} onJump={(i) => { setCurrentIndex(i); setIsJumping(false); }} onClose={() => setIsJumping(false)} />}
 
-            {/* 卡片展示 */}
+            {/* 主卡片渲染 */}
             {activeCards.length > 0 && currentCard ? (
                 transitions((style, i) => {
                     const card = activeCards[i];
@@ -613,13 +589,13 @@ const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level 
                 })
             ) : (
                 <div style={styles.completionContainer}>
-                    <h2 style={{fontSize: '2rem', marginBottom: '15px'}}>🎉 ဂုဏ်ယူပါတယ်!</h2>
-                    <p style={{color:'#64748b', marginBottom: '30px'}}>သင် ဒီသင်ခန်းစာကို လေ့လာပြီးသွားပါပြီ။</p>
-                    <button style={{...styles.knowButtonBase, background:'#10b981', width:'200px'}} onClick={onClose}>Close</button>
+                    <h2 style={{fontSize: '2.4rem', marginBottom: '20px'}}>🎉 ဂုဏ်ယူပါတယ်!</h2>
+                    <p style={{color:'#64748b', marginBottom: '40px', fontSize: '1.2rem'}}>သင် ဒီသင်ခန်းစာကို လေ့လာပြီးသွားပါပြီ။</p>
+                    <button style={{...styles.knowButtonBase, background:'#10b981', width:'240px'}} onClick={onClose}>ပိတ်မည် (Close)</button>
                 </div>
             )}
 
-            {/* 右侧悬浮控制栏 */}
+            {/* 右侧悬浮功能组 */}
             <div style={styles.rightControls} data-no-gesture="true">
                 <button style={styles.rightIconButton} onClick={() => window.location.href='https://886.best'}><FaHome /></button>
                 <button style={styles.rightIconButton} onClick={() => setIsSettingsOpen(true)}><FaCog /></button>
@@ -634,7 +610,7 @@ const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level 
                 </button>
             </div>
 
-            {/* 🔥 底部模糊控制栏 (SRS 遗忘曲线算法集成) */}
+            {/* 🔥 底部实体控制栏 (SRS 算法操作) */}
             <div style={styles.bottomControlsContainer}>
                 <div style={styles.bottomCenterCounter} onClick={() => setIsJumping(true)}>
                     {currentIndex + 1} / {activeCards.length}
@@ -646,7 +622,7 @@ const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level 
                     </button>
                     {/* 模糊：20个单词后重现 */}
                     <button style={{...styles.knowButtonBase, background: '#64748b', fontSize:'0.9rem'}} onClick={handleBlurry}>
-                        <FaEyeSlash style={{marginRight:'8px'}}/> ဝေဝါး (模糊)
+                        <FaEyeSlash style={{marginRight:'10px'}}/> ဝေဝါး (模糊)
                     </button>
                     {/* 认识：踢出列表 */}
                     <button style={{...styles.knowButtonBase, background: '#10b981'}} onClick={handleKnow}>
@@ -666,54 +642,52 @@ const styles = {
     fullScreen: { position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f0f4f8', overflow: 'hidden', touchAction: 'none' },
     gestureArea: { position: 'absolute', inset: 0, zIndex: 1 },
     animatedCardShell: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' },
-    cardContainer: { textAlign: 'center', width: '90%', maxWidth: '550px', zIndex: 2, pointerEvents: 'auto' },
-    pinyin: { fontSize: '1.6rem', color: '#d97706', marginBottom: '15px', fontWeight: 'bold', fontFamily: 'monospace' },
-    textWordChinese: { fontSize: '5rem', fontWeight: 'bold', color: '#1e293b', cursor: 'pointer', lineHeight: 1.1, textShadow: '0 2px 4px rgba(0,0,0,0.05)' },
-    revealedContent: { marginTop: '35px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', animation: 'fadeIn 0.4s ease' },
-    textWordBurmese: { fontSize: '2.2rem', color: '#475569', fontFamily: 'Padauk', cursor: 'pointer', lineHeight: 1.4 },
-    explanationText: { color: '#059669', fontSize: '1.2rem', fontWeight: '500', maxWidth: '85%' },
-    exampleBox: { padding: '18px', borderBottom: '1px dashed #cbd5e1', cursor: 'pointer', width: '100%', textAlign: 'center', transition: 'background 0.2s' },
+    cardContainer: { textAlign: 'center', width: '92%', maxWidth: '600px', zIndex: 2, pointerEvents: 'auto' },
+    pinyin: { fontSize: '1.7rem', color: '#d97706', marginBottom: '15px', fontWeight: 'bold', fontFamily: 'monospace' },
+    textWordChinese: { fontSize: '5.5rem', fontWeight: 'bold', color: '#1e293b', cursor: 'pointer', lineHeight: 1.1, textShadow: '0 2px 4px rgba(0,0,0,0.05)' },
+    revealedContent: { marginTop: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '25px', animation: 'fadeIn 0.5s ease' },
+    textWordBurmese: { fontSize: '2.4rem', color: '#475569', fontFamily: 'Padauk', cursor: 'pointer', lineHeight: 1.4 },
+    explanationText: { color: '#059669', fontSize: '1.3rem', fontWeight: '500', maxWidth: '90%' },
+    exampleBox: { padding: '20px', borderBottom: '1px dashed #cbd5e1', cursor: 'pointer', width: '100%', textAlign: 'center' },
     rightControls: { position: 'fixed', right: '15px', top: '45%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', gap: '15px', zIndex: 100 },
-    rightIconButton: { width: '48px', height: '48px', borderRadius: '50%', background: 'white', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', cursor: 'pointer', color: '#475569' },
+    rightIconButton: { width: '52px', height: '52px', borderRadius: '50%', background: 'white', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', cursor: 'pointer', color: '#475569' },
     
-    // 🔥 底部模糊控制栏样式
+    // 🔥 底部控制栏样式：去除毛玻璃，改为实体白色背景
     bottomControlsContainer: { 
         position: 'fixed', bottom: 0, left: 0, right: 0, 
-        padding: '25px 20px 45px 20px', 
+        padding: '30px 25px 50px 25px', 
         zIndex: 10, 
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px',
-        background: 'rgba(255, 255, 255, 0.7)', 
-        backdropFilter: 'blur(15px)', // 高级模糊效果
-        WebkitBackdropFilter: 'blur(15px)',
-        borderTop: '1px solid rgba(255,255,255,0.4)',
-        boxShadow: '0 -4px 20px rgba(0,0,0,0.05)'
+        background: '#ffffff', // 实体背景
+        borderTop: '1px solid #e5e7eb',
+        boxShadow: '0 -4px 30px rgba(0,0,0,0.05)'
     },
-    bottomCenterCounter: { fontSize: '0.95rem', color: '#64748b', fontWeight: 'bold', background: 'rgba(0,0,0,0.06)', padding: '6px 18px', borderRadius: '25px', cursor: 'pointer', border: '1px solid rgba(0,0,0,0.05)' },
-    knowButtonsWrapper: { display: 'flex', width: '100%', maxWidth: '550px', gap: '12px' },
-    knowButtonBase: { flex: 1, padding: '18px', borderRadius: '20px', border: 'none', color: 'white', fontWeight: 'bold', fontSize: '1.15rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', transition: 'transform 0.1s' },
+    bottomCenterCounter: { fontSize: '1rem', color: '#64748b', fontWeight: 'bold', background: '#f3f4f6', padding: '8px 22px', borderRadius: '25px', cursor: 'pointer', border: '1px solid #e5e7eb' },
+    knowButtonsWrapper: { display: 'flex', width: '100%', maxWidth: '550px', gap: '15px' },
+    knowButtonBase: { flex: 1, padding: '20px', borderRadius: '22px', border: 'none', color: 'white', fontWeight: 'bold', fontSize: '1.2rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' },
     
     completionContainer: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center' },
-    comparisonOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: '20px' },
-    comparisonPanel: { background: 'white', width: '100%', maxWidth: '420px', borderRadius: '28px', padding: '30px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' },
-    recordHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' },
-    closeButtonSimple: { background: 'none', border: 'none', fontSize: '1.4rem', color: '#94a3b8', cursor: 'pointer' },
+    comparisonOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: '20px' },
+    comparisonPanel: { background: 'white', width: '100%', maxWidth: '440px', borderRadius: '32px', padding: '35px', boxShadow: '0 30px 60px -12px rgba(0,0,0,0.3)' },
+    recordHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' },
+    closeButtonSimple: { background: 'none', border: 'none', fontSize: '1.6rem', color: '#94a3b8', cursor: 'pointer' },
     recordContent: { textAlign: 'center' },
-    bigRecordBtn: { width: '85px', height: '85px', borderRadius: '50%', background: '#3b82f6', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 20px rgba(59, 130, 246, 0.4)' },
-    circleBtnBlue: { width: '55px', height: '55px', borderRadius: '50%', background: '#3b82f6', color: 'white', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-    circleBtnGreen: { width: '55px', height: '55px', borderRadius: '50%', background: '#10b981', color: 'white', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-    circleBtnGray: { width: '55px', height: '55px', borderRadius: '50%', background: '#94a3b8', color: 'white', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-    settingsModal: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(5px)', padding: '20px' },
-    settingsContent: { background: 'white', width: '100%', maxWidth: '480px', borderRadius: '28px', padding: '35px', position: 'relative', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' },
-    closeButton: { position: 'absolute', top: '25px', right: '25px', background: 'none', border: 'none', fontSize: '1.6rem', color: '#cbd5e1', cursor: 'pointer' },
-    settingGroup: { marginBottom: '30px' },
-    settingLabel: { display: 'block', fontWeight: '700', marginBottom: '12px', fontSize: '1rem', color: '#334155' },
-    settingControl: { display: 'flex', gap: '12px' },
-    settingButton: { flex: 1, padding: '14px', borderRadius: '15px', border: 'none', cursor: 'pointer', fontWeight: '700', transition: 'all 0.2s' },
-    settingSelect: { width: '100%', padding: '14px', borderRadius: '15px', border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', fontWeight: '500' },
-    jumpModalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 10002, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' },
-    jumpModalContent: { background: 'white', padding: '40px', borderRadius: '30px', textAlign: 'center', boxShadow: '0 25px 50px rgba(0,0,0,0.3)' },
-    jumpModalInput: { width: '100px', padding: '15px', fontSize: '1.8rem', textAlign: 'center', border: '2px solid #e2e8f0', borderRadius: '15px', marginBottom: '25px', fontWeight: 'bold' },
-    jumpModalButton: { width: '100%', padding: '16px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '15px', fontWeight: 'bold', fontSize: '1.1rem' }
+    bigRecordBtn: { width: '90px', height: '90px', borderRadius: '50%', background: '#3b82f6', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 25px rgba(59, 130, 246, 0.4)' },
+    circleBtnBlue: { width: '60px', height: '60px', borderRadius: '50%', background: '#3b82f6', color: 'white', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    circleBtnGreen: { width: '60px', height: '60px', borderRadius: '50%', background: '#10b981', color: 'white', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    circleBtnGray: { width: '60px', height: '60px', borderRadius: '50%', background: '#94a3b8', color: 'white', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    settingsModal: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' },
+    settingsContent: { background: 'white', width: '100%', maxWidth: '500px', borderRadius: '32px', padding: '40px', position: 'relative', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 25px 50px rgba(0,0,0,0.25)' },
+    closeButton: { position: 'absolute', top: '25px', right: '25px', background: 'none', border: 'none', fontSize: '1.8rem', color: '#cbd5e1', cursor: 'pointer' },
+    settingGroup: { marginBottom: '35px' },
+    settingLabel: { display: 'block', fontWeight: '800', marginBottom: '15px', fontSize: '1.1rem', color: '#334155' },
+    settingControl: { display: 'flex', gap: '15px' },
+    settingButton: { flex: 1, padding: '16px', borderRadius: '18px', border: 'none', cursor: 'pointer', fontWeight: '800', transition: 'all 0.2s' },
+    settingSelect: { width: '100%', padding: '16px', borderRadius: '18px', border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', fontWeight: '600' },
+    jumpModalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10002, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    jumpModalContent: { background: 'white', padding: '45px', borderRadius: '35px', textAlign: 'center', boxShadow: '0 30px 60px rgba(0,0,0,0.4)' },
+    jumpModalInput: { width: '120px', padding: '18px', fontSize: '2rem', textAlign: 'center', border: '3px solid #e2e8f0', borderRadius: '18px', marginBottom: '30px', fontWeight: 'bold' },
+    jumpModalButton: { width: '100%', padding: '18px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '18px', fontWeight: 'bold', fontSize: '1.2rem' }
 };
 
 export default WordCard;
