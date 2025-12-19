@@ -258,14 +258,14 @@ const HomeSidebar = ({ isOpen, onClose, sidebarX }) => {
 const ActionButtons = ({ onOpenFavorites }) => {
   const actions = [
     { 
-        icon: <MessageCircle size={26} />, 
+        icon: <MessageCircle size={22} />, 
         text: '一键私信', 
         type: 'contact', 
         color: 'from-blue-600 to-sky-500',
         onClick: () => window.open('https://m.me/61575187883357', '_blank')
     },
     { 
-        icon: <Heart size={26} />, 
+        icon: <Heart size={22} />, 
         text: '收藏生词', 
         type: 'words', 
         color: 'from-orange-500 to-amber-500',
@@ -274,15 +274,15 @@ const ActionButtons = ({ onOpenFavorites }) => {
   ];
 
   return (
-    <div className="flex justify-center gap-8 px-4">
+    <div className="flex justify-center gap-4 md:gap-8 px-4 pointer-events-auto">
       {actions.map((action, index) => (
         <button 
             key={index} 
             onClick={action.onClick} 
-            className={`flex flex-col items-center justify-center p-4 min-w-[140px] rounded-2xl shadow-lg hover:shadow-xl text-white bg-gradient-to-br ${action.color} transition-all duration-300 transform hover:-translate-y-1`}
+            className={`flex items-center gap-2 px-6 py-3 rounded-full shadow-2xl text-white bg-gradient-to-br ${action.color} transition-all duration-300 transform hover:-translate-y-1 hover:brightness-110 active:scale-95`}
         >
-          <div className="mb-2">{action.icon}</div> 
-          <span className="text-sm font-bold">{action.text}</span>
+          {action.icon}
+          <span className="text-sm font-bold whitespace-nowrap">{action.text}</span>
         </button>
       ))}
     </div>
@@ -366,13 +366,13 @@ const LayoutIndex = props => {
             <div className='absolute inset-0 z-0 bg-cover bg-center transition-opacity duration-1000' style={{ backgroundImage: `url(${backgroundUrl})` }} />
             <div className='absolute inset-0 bg-black/40 backdrop-blur-[1px]'></div>
 
-            {/* 汉堡按钮 */}
-            <button onClick={openSidebar} className="absolute top-6 left-6 z-30 p-3 text-white bg-white/20 backdrop-blur-md rounded-full hover:bg-white/30 transition-all shadow-lg">
+            {/* 汉堡按钮 - 提高层级并微调位置 */}
+            <button onClick={openSidebar} className="absolute top-5 left-5 z-30 p-3 text-white bg-white/20 backdrop-blur-md rounded-full hover:bg-white/30 transition-all shadow-lg">
                 <i className="fas fa-bars text-xl"></i>
             </button>
             
-            {/* Hero 文字部分 */}
-            <div className='absolute top-0 left-0 right-0 h-[40vh] z-10 pt-32 px-6 flex flex-col items-center text-center text-white pointer-events-none'>
+            {/* Hero 区域：包含文字和按钮，确保在背景图上可见 */}
+            <div className='absolute top-0 left-0 right-0 h-[50vh] z-10 pt-20 px-6 flex flex-col items-center text-center text-white pointer-events-none'>
                 <div className='max-w-4xl'>
                     <h1 className='text-5xl md:text-6xl font-black tracking-tight mb-4 drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]'>中缅文培训中心</h1>
                     <div className='mb-8'>
@@ -383,24 +383,20 @@ const LayoutIndex = props => {
                             မြန်မာ-တရုတ် နှစ်ဘာသာစကား သင်ကြားရေး ကျွမ်းကျင်သူ။
                         </p>
                     </div>
+                    {/* 操作按钮：直接放在 Hero 文字下方，背景图上 */}
+                    <div className='mt-2'>
+                        <ActionButtons onOpenFavorites={handleOpenFavorites} />
+                    </div>
                 </div>
             </div>
 
             {/* 内容滚动层 */}
             <div ref={scrollableContainerRef} className='absolute inset-0 z-20 overflow-y-auto overscroll-y-contain custom-scrollbar'>
-                {/* 增加背景与内容之间的空隙 (Spacer) */}
-                <div className='h-[42vh] flex-shrink-0' />
+                {/* 增加背景与内容之间的空隙 (Spacer)，确保背景按钮不被立即挡住 */}
+                <div className='h-[48vh] flex-shrink-0' />
                 
-                <div className='relative bg-white dark:bg-gray-900 rounded-t-[40px] shadow-[0_-15px_35px_rgba(0,0,0,0.3)] pb-10 min-h-[calc(58vh+1px)] transition-all'>
-                    <div className='bg-gradient-to-b from-blue-50/50 to-white dark:from-gray-800/50 dark:to-gray-900 rounded-t-[40px] pt-10'>
-                       
-                       {/* 操作按钮：联系和收藏单词 */}
-                       <div className='pb-10'>
-                            <ActionButtons onOpenFavorites={handleOpenFavorites} />
-                       </div>
-
-                       <div className='w-16 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto mb-8'></div>
-                    </div>
+                <div className='relative bg-white dark:bg-gray-900 rounded-t-[40px] shadow-[0_-15px_35px_rgba(0,0,0,0.3)] pb-10 min-h-[calc(52vh+1px)] transition-all'>
+                    <div className='w-16 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto my-6'></div>
 
                     <main className="max-w-5xl mx-auto px-4 py-4">
                         <div className='mb-6 px-4'>
