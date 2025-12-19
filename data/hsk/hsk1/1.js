@@ -151,7 +151,7 @@ export default {
           { id: "3", text: "中国 (Zhōngguó)" },
           { id: "4", text: "你好 (Nǐ hǎo)" }
         ],
-        correctAnswer: ["3"]
+        correctAnswer: "3"
       }
     },
     {
@@ -164,7 +164,7 @@ export default {
           { id: "3", text: "我是不老师。" },
           { id: "4", text: "老师不我是。" }
         ],
-        correctAnswer: ["2"],
+        correctAnswer: "2",
         explanation: "在动词'是'前面加'不'表示否定。"
       }
     },
@@ -181,7 +181,7 @@ export default {
           { id: "3", text: "缅甸 (Miǎndiàn)" },
           { id: "4", text: "英国 (Yīngguó)" }
         ],
-        correctAnswer: ["3"]
+        correctAnswer: "3","1"
       }
     },
 
