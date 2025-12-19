@@ -80,7 +80,7 @@ import { Style } from './style'
 // Custom Content Block Components
 import PinyinContentBlock from '@/components/PinyinContentBlock'
 import WordsContentBlock from '@/components/WordsContentBlock'
-import KouyuPage from '@/components/kouyu'
+// import KouyuPage from '@/components/kouyu'
 import HskContentBlock from '@/components/HskContentBlock'
 
 // Dynamically imported heavy components
