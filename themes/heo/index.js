@@ -13,6 +13,7 @@ import Script from 'next/script'
 
 // UI & Animation
 import { Transition, Dialog } from '@headlessui/react'
+import { motion, AnimatePresence } from 'framer-motion' // 引入 framer-motion 实现拖拽
 import { loadWowJS } from '@/lib/plugins/wow'
 
 // Global State & Config
@@ -37,7 +38,8 @@ import {
     MessageCircle,
     Maximize2,
     Sparkles,
-    Gem
+    Gem,
+    Zap
 } from 'lucide-react'
 import { HashTag } from '@/components/HeroIcons'
 
@@ -74,6 +76,7 @@ import HskContentBlock from '@/components/HskContentBlock'
 const WordCard = dynamic(() => import('@/components/WordCard'), { ssr: false })
 
 const isBrowser = typeof window !== 'undefined';
+const FB_CHAT_LINK = "https://m.me/61575187883357";
 
 // =================================================================================
 // ======================  辅助组件 & 工具函数  ========================
@@ -112,6 +115,60 @@ const validateActivationCode = (code) => {
     const VALID_LEVELS = ['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'H7-9'];
     if (!VALID_LEVELS.includes(parts[0])) return { isValid: false, error: `不支持的等级: ${parts[0]}` };
     return { isValid: true, level: parts[0] };
+};
+
+// =================================================================================
+// ======================  悬浮 Messenger 按钮 (可拖动)  ========================
+// =================================================================================
+
+const FloatingMessenger = () => {
+    const constraintsRef = useRef(null);
+
+    return (
+        <>
+            {/* 拖动约束区域（全屏侧边，防止拖出屏幕太远） */}
+            <div ref={constraintsRef} className="fixed inset-0 pointer-events-none z-[90]" />
+            
+            <motion.div
+                drag
+                dragConstraints={constraintsRef}
+                dragMomentum={false}
+                dragElastic={0.1}
+                whileDrag={{ scale: 1.1, cursor: 'grabbing' }}
+                initial={{ opacity: 0, x: 50 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="fixed right-6 bottom-24 z-[100] cursor-grab touch-none"
+            >
+                <a 
+                    href={FB_CHAT_LINK} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex flex-col items-center justify-center"
+                    onClick={(e) => e.stopPropagation()} // 防止拖动结束时误触发点击（如果是在父级处理点击）
+                >
+                    <div className="relative group">
+                        {/* 动态光晕 */}
+                        <div className="absolute inset-0 bg-purple-500 rounded-full blur-xl opacity-40 group-hover:opacity-60 transition-opacity animate-pulse"></div>
+                        
+                        {/* 按钮主体 - 蓝紫粉渐变 */}
+                        <div className="relative w-14 h-14 bg-gradient-to-tr from-[#00C6FF] via-[#0078FF] to-[#A334FA] rounded-full flex items-center justify-center shadow-2xl border-2 border-white/20 overflow-hidden">
+                            <MessageCircle size={30} className="text-white fill-current relative z-10" />
+                            {/* 内部高光装饰 */}
+                            <div className="absolute top-0 right-0 w-8 h-8 bg-white/20 blur-md rounded-full -mr-2 -mt-2"></div>
+                            {/* 闪电装饰 */}
+                            <Zap size={12} className="text-white absolute bottom-3 right-3 opacity-80 fill-white" />
+                        </div>
+
+                        {/* 红色通知点 */}
+                        <span className="absolute -top-1 -right-1 flex h-4 w-4 z-20">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 border-2 border-white"></span>
+                        </span>
+                    </div>
+                </a>
+            </motion.div>
+        </>
+    );
 };
 
 // =================================================================================
@@ -392,38 +449,38 @@ const LayoutIndex = props => {
     <div id='theme-heo' className={`${siteConfig('FONT_STYLE')} h-screen w-screen bg-black flex flex-col overflow-hidden`}>
         <Style/><CustomScrollbarStyle />
         <HomeSidebar isOpen={isSidebarOpen} onClose={closeSidebar} sidebarX={sidebarX} />
+        
+        {/* 悬浮 Messenger 按钮 */}
+        <FloatingMessenger />
 
         <div className='relative flex-grow w-full h-full'>
             {/* 背景图层 */}
             <div className='absolute inset-0 z-0 bg-cover bg-center transition-opacity duration-1000' style={{ backgroundImage: `url(${backgroundUrl})` }} />
             <div className='absolute inset-0 bg-black/40 backdrop-blur-[1px]'></div>
 
-            {/* 汉堡按钮 - 固定左上角，纯图标，无背景，带投影 */}
+            {/* 汉堡按钮 - 固定左上角 */}
             <button 
                 onClick={openSidebar} 
-                className="fixed top-6 left-6 z-50 p-2 text-white hover:opacity-80 transition-opacity drop-shadow-[0_2px_5px_rgba(0,0,0,0.5)]"
+                className="fixed top-6 left-6 z-50 p-2 text-white hover:opacity-80 transition-opacity drop-shadow-[0_2px_5px_rgba(0,0,0,0.5)] bg-black/20 rounded-full backdrop-blur-sm"
             >
                 <i className="fas fa-bars text-xl"></i>
             </button>
             
-            {/* Hero 区域：包含文字和价格表 */}
-            <div className='absolute top-0 left-0 right-0 h-[68vh] z-10 pt-16 md:pt-20 px-4 flex flex-col items-center text-center text-white pointer-events-none'>
+            {/* Hero 区域：包含文字和价格表 - 使用 absolute 定位，不随滚动条走，但内容高度由 Spacer 控制 */}
+            <div className='absolute top-0 left-0 right-0 z-10 pt-20 md:pt-24 px-4 flex flex-col items-center text-center text-white pointer-events-none'>
                 <div className='max-w-5xl w-full flex flex-col items-center'>
-                    <h1 className='text-4xl md:text-6xl font-black tracking-tight mb-3 md:mb-4 drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]'>中缅文培训中心</h1>
+                    <h1 className='text-3xl md:text-6xl font-black tracking-tight mb-2 md:mb-4 drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]'>中缅文培训中心</h1>
                     <div className='mb-4 md:mb-6'>
-                        <p className='text-base md:text-xl font-bold leading-relaxed mb-1 md:mb-2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] opacity-95'>
+                        <p className='text-sm md:text-xl font-bold leading-relaxed mb-1 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] opacity-95'>
                             专业中缅双语教学，连接文化与机遇的桥梁。
                         </p>
-                        <p className='text-xs md:text-md font-bold text-blue-300 tracking-widest drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]'>
+                        <p className='text-[10px] md:text-md font-bold text-blue-300 tracking-widest drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]'>
                             မြန်မာ-တရုတ် နှစ်ဘာသာစကား သင်ကြားရေး ကျွမ်းကျင်သူ။
                         </p>
                     </div>
                     
-                    {/* 
-                        PriceChartDisplay 容器
-                        z-30 保证层级高于滚动层，pointer-events-auto 保证可交互
-                    */}
-                    <div className="z-30 w-full flex justify-center mt-1 md:mt-2 pointer-events-auto">
+                    {/* PriceChartDisplay 容器 - 保持可点击 */}
+                    <div className="z-30 w-full flex justify-center mt-1 pointer-events-auto">
                         <PriceChartDisplay />
                     </div>
                 </div>
@@ -431,18 +488,28 @@ const LayoutIndex = props => {
 
             {/* 内容滚动层 */}
             <div ref={scrollableContainerRef} className='absolute inset-0 z-20 overflow-y-auto overscroll-y-contain custom-scrollbar'>
-                {/* 增加Spacer高度以容纳更大的图片卡片 */}
-                <div className='h-[62vh] md:h-[65vh] flex-shrink-0' />
+                {/* 
+                    Spacer 高度控制：
+                    之前是 h-[62vh] 导致了巨大空隙。
+                    现在调整为更紧凑的高度，确保在不同屏幕下海报和内容能更好衔接。
+                    移动端设置 480px 左右，桌面端 580px，根据内容实际占用调整。
+                */}
+                <div className='h-[480px] md:h-[580px] w-full flex-shrink-0 transition-all duration-300' />
                 
-                <div className='relative bg-white dark:bg-gray-900 rounded-t-[40px] shadow-[0_-15px_35px_rgba(0,0,0,0.3)] pb-10 min-h-[calc(40vh+1px)] transition-all'>
-                    <div className='w-16 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto my-6'></div>
+                {/* 
+                    白色内容区域：
+                    使用 -mt 负边距稍微向上提一点，或者保持自然流。
+                    这里 min-h 设置满屏，保证滚动体验。
+                */}
+                <div className='relative bg-white dark:bg-gray-900 rounded-t-[30px] shadow-[0_-15px_35px_rgba(0,0,0,0.3)] pb-10 min-h-screen transition-all'>
+                    <div className='w-12 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto my-4'></div>
 
-                    <main className="max-w-5xl mx-auto px-4 py-2">
-                        <div className='mb-6 px-4'>
-                            <h2 className='text-2xl font-black text-gray-800 dark:text-gray-100 flex items-center gap-3'>
-                                <GraduationCap className='text-blue-600' /> HSK 标准课程
+                    <main className="max-w-5xl mx-auto px-4 py-1">
+                        <div className='mb-4 px-2'>
+                            <h2 className='text-xl font-black text-gray-800 dark:text-gray-100 flex items-center gap-2'>
+                                <GraduationCap size={24} className='text-blue-600' /> HSK 标准课程
                             </h2>
-                            <p className='text-xs text-gray-500 mt-1 font-medium'>从零基础到精通，系统化学习汉语知识。</p>
+                            <p className='text-xs text-gray-500 mt-1 font-medium ml-1'>从零基础到精通，系统化学习汉语知识。</p>
                         </div>
                         <HskContentBlock />
                     </main>
