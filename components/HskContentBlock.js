@@ -26,7 +26,12 @@ const FB_CHAT_LINK = "https://m.me/61575187883357";
 const FAVORITES_STORAGE_KEY = 'framer-pinyin-favorites';
 
 const getLevelPrice = (level) => {
-  const prices = { 1: "10,000 Ks", 2: "15,000 Ks", 3: "20,000 Ks" };
+  const prices = { 
+    1: "10,000 Ks", 
+    2: "15,000 Ks", 
+    3: "20,000 Ks",
+    'SP': "30,000 Ks" // 口语特训价格
+  };
   return prices[level] || "价格待定";
 };
 
@@ -75,6 +80,7 @@ const checkIsFree = (level, lessonId) => {
 const MembershipModal = ({ isOpen, onClose, targetLevel }) => {
   if (!isOpen) return null;
   const price = getLevelPrice(targetLevel);
+  const isSpoken = targetLevel === 'SP';
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -88,14 +94,18 @@ const MembershipModal = ({ isOpen, onClose, targetLevel }) => {
         className="relative w-full max-w-sm bg-white rounded-[2rem] shadow-2xl overflow-hidden p-6"
       >
         <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full text-slate-400 hover:bg-slate-200 transition-colors">
-          <MessageCircle className="rotate-45" size={20} />
+           <ChevronRight className="rotate-45" size={20} />
         </button>
         <div className="text-center mt-2">
           <div className="bg-amber-100 w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3">
             <Crown className="text-amber-600" size={28} />
           </div>
-          <h2 className="text-xl font-black text-slate-800">解锁 HSK {targetLevel}</h2>
-          <p className="text-slate-500 text-sm mt-1 mb-5">获取完整视频讲解与练习题</p>
+          <h2 className="text-xl font-black text-slate-800">
+            解锁 {isSpoken ? "口语特训课程" : `HSK ${targetLevel}`}
+          </h2>
+          <p className="text-slate-500 text-sm mt-1 mb-5">
+            {isSpoken ? "解锁地道场景、谐音助记与评测" : "获取完整视频讲解与练习题"}
+          </p>
           <div className="bg-slate-50 p-4 rounded-2xl mb-5 border border-slate-100">
             <p className="text-3xl font-black text-amber-500">{price}</p>
           </div>
@@ -131,7 +141,6 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
       whileTap={{ scale: 0.995 }}
       className="flex flex-col bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden relative z-10"
     >
-      {/* 海报区域 */}
       <div className="h-36 relative">
         <img src={level.imageUrl} className="w-full h-full object-cover" alt="" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
@@ -141,7 +150,6 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
         </div>
       </div>
 
-      {/* 课程列表 */}
       <div className="p-4 space-y-2">
         {(isExpanded ? level.lessons : level.lessons.slice(0, 3)).map(lesson => (
           <div key={lesson.id} onClick={(e) => handleLessonClick(e, lesson)} className="flex items-center p-3 rounded-xl bg-slate-50 active:bg-slate-100 cursor-pointer transition-colors">
@@ -153,7 +161,6 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
         ))}
       </div>
 
-      {/* 底部功能区 */}
       <div className="px-4 pb-5 pt-1 flex flex-col gap-3">
         {level.lessons.length > 3 && (
           <button
@@ -248,33 +255,33 @@ export default function HskPageClient() {
 
   const isCardViewOpen = router.asPath.includes('#hsk-vocabulary');
 
+  // 处理口语点击拦截逻辑
+  const handleSpokenClick = useCallback((e) => {
+    e.preventDefault();
+    const cachedUser = JSON.parse(localStorage.getItem('hsk_user') || '{}');
+    const unlockedLevels = cachedUser.unlocked_levels || '';
+    
+    // 如果没有 SP 权限，显示会员弹窗
+    if (!unlockedLevels.includes('SP')) {
+      setMembership({ open: true, level: 'SP' });
+    } else {
+      router.push('/spoken');
+    }
+  }, [router]);
+
   // 处理生词本点击逻辑
   const handleVocabularyClick = useCallback((level) => {
     const levelNum = level?.level || 1;
     const words = hskWordsData[levelNum] || [];
-    
     setActiveHskWords(words);
     setActiveLevelTag(`hsk${levelNum}`);
-    
-    router.push({
-      pathname: router.pathname,
-      query: { ...router.query, level: levelNum },
-      hash: 'hsk-vocabulary'
-    }, undefined, { shallow: true });
+    router.push({ pathname: router.pathname, query: { ...router.query, level: levelNum }, hash: 'hsk-vocabulary' }, undefined, { shallow: true });
   }, [router]);
 
-  // 【核心功能】修复收藏夹逻辑：
+  // 修复收藏夹逻辑
   const handleCollectionClick = useCallback(() => {
-    // 1. 从本地存储获取收藏的单词 ID 列表
     const savedIds = JSON.parse(localStorage.getItem(FAVORITES_STORAGE_KEY) || '[]');
-    
-    // 2. 汇总所有可能的单词并强行转 ID 为字符串进行比对
-    const allWords = [
-      ...(hskWordsData[1] || []),
-      ...(hskWordsData[2] || [])
-    ];
-    
-    // 3. 过滤出已收藏的单词对象
+    const allWords = [ ...(hskWordsData[1] || []), ...(hskWordsData[2] || []) ];
     const favoriteWords = allWords.filter(word => 
       savedIds.some(savedId => String(savedId) === String(word.id))
     );
@@ -284,24 +291,16 @@ export default function HskPageClient() {
       return;
     }
 
-    // 4. 打开弹窗播放收藏的单词
     setActiveHskWords(favoriteWords);
     setActiveLevelTag('my-favorites-collection');
-    
-    router.push({
-      pathname: router.pathname,
-      hash: 'hsk-vocabulary'
-    }, undefined, { shallow: true });
+    router.push({ pathname: router.pathname, hash: 'hsk-vocabulary' }, undefined, { shallow: true });
   }, [router]);
 
   return (
-    // 强制 max-w-md 保持所有设备上的小屏美感
     <div className="min-h-screen bg-[#f8fafc] font-sans text-slate-900 pb-20 relative overflow-x-hidden max-w-md mx-auto shadow-2xl shadow-slate-200">
       
-      {/* 顶部背景装饰 */}
       <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-blue-50/50 to-transparent pointer-events-none" />
 
-      {/* Header 区域 */}
       <header className="relative pt-4 px-4 pb-1 z-10">
         <div className="flex justify-between items-center mb-3">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/80 backdrop-blur rounded-full border border-blue-100 shadow-sm">
@@ -309,11 +308,7 @@ export default function HskPageClient() {
             <span className="text-[10px] font-bold text-blue-800 uppercase">Premium Class</span>
           </div>
           
-          {/* 联系老师按钮 */}
-          <a 
-            href={FB_CHAT_LINK} 
-            target="_blank" 
-            rel="noopener noreferrer"
+          <a href={FB_CHAT_LINK} target="_blank" rel="noopener noreferrer"
             className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-full shadow-lg shadow-blue-200 active:scale-95 transition-all"
           >
             <MessageSquareText size={14} fill="currentColor" />
@@ -321,37 +316,36 @@ export default function HskPageClient() {
           </a>
         </div>
 
-        {/* 拼音面板 */}
         <div className="bg-white rounded-[1.8rem] p-4 shadow-xl shadow-slate-200/60 border border-slate-50">
           <PinyinSection onOpenCollection={handleCollectionClick} />
         </div>
       </header>
 
-      {/* 口语练习横图入口 - 新增 */}
+      {/* 口语练习横图入口 */}
       <div className="px-4 mt-4">
-        <Link href="/spoken" passHref>
-          <a className="block relative h-28 w-full rounded-3xl overflow-hidden shadow-lg shadow-emerald-100 group active:scale-[0.98] transition-all">
-            <img 
-              src="https://images.unsplash.com/photo-1543269865-cbf427effbad?w=800&q=80" 
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-              alt="Oral Chinese" 
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-emerald-600/90 via-emerald-600/40 to-transparent flex flex-col justify-center px-6">
-              <div className="flex items-center gap-2 text-emerald-100 mb-1">
-                <Headphones size={16} />
-                <span className="text-[10px] font-bold uppercase tracking-widest">Oral Practice</span>
-              </div>
-              <h3 className="text-xl font-black text-white">日常口语练习</h3>
-              <p className="text-emerald-50/80 text-xs font-medium">Daily Conversations & Phrases</p>
+        <div 
+          onClick={handleSpokenClick}
+          className="block relative h-28 w-full rounded-3xl overflow-hidden shadow-lg shadow-emerald-100 group active:scale-[0.98] transition-all cursor-pointer"
+        >
+          <img 
+            src="https://images.unsplash.com/photo-1543269865-cbf427effbad?w=800&q=80" 
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+            alt="Oral Chinese" 
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-emerald-600/90 via-emerald-600/40 to-transparent flex flex-col justify-center px-6">
+            <div className="flex items-center gap-2 text-emerald-100 mb-1">
+              <Headphones size={16} />
+              <span className="text-[10px] font-bold uppercase tracking-widest">Oral Practice</span>
             </div>
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/20 backdrop-blur rounded-full flex items-center justify-center text-white">
-              <ChevronRight size={20} />
-            </div>
-          </a>
-        </Link>
+            <h3 className="text-xl font-black text-white">日常口语练习</h3>
+            <p className="text-emerald-50/80 text-xs font-medium">Daily Conversations & Phrases</p>
+          </div>
+          <div className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/20 backdrop-blur rounded-full flex items-center justify-center text-white">
+            <ChevronRight size={20} />
+          </div>
+        </div>
       </div>
 
-      {/* 系统课程列表 */}
       <div className="max-w-2xl mx-auto px-4 relative z-10 mt-6 space-y-4">
         <div className="flex items-center gap-2 px-1 opacity-70">
           <BookText size={14} className="text-slate-500" />
@@ -370,7 +364,6 @@ export default function HskPageClient() {
         </div>
       </div>
 
-      {/* 会员升级弹窗 */}
       <AnimatePresence>
         {membership.open && (
           <MembershipModal
@@ -381,7 +374,6 @@ export default function HskPageClient() {
         )}
       </AnimatePresence>
 
-      {/* 生词卡片播放器 */}
       <WordCard
         isOpen={isCardViewOpen}
         words={activeHskWords || []}
