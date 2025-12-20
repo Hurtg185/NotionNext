@@ -2,7 +2,7 @@
  *   HEO 主题说明
  *  > 主题设计者 [张洪](https://zhheo.com/)
  *  > 主题开发者 [tangly1024](https://github.com/tangly1024)
- *  > 此文件已强制设为手机端显示模式，隐藏价格，移除私信功能。
+ *  > 此文件已强制设为手机端显示模式，隐藏价格，移除私信功能，并优化了海报间距。
  */
 
 // React & Next.js
@@ -295,7 +295,6 @@ const PriceChartDisplay = () => {
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-90" />
                                 <div className="absolute bottom-0 left-0 right-0 p-1.5 text-center">
                                     <h3 className="text-white text-[10px] font-bold leading-tight drop-shadow-md">{course.title}</h3>
-                                    {/* 价格已移除 */}
                                 </div>
                             </div>
                         </div>
@@ -372,7 +371,8 @@ const LayoutIndex = props => {
 
                 {/* 滚动内容区 */}
                 <div ref={scrollableContainerRef} className='absolute inset-0 z-20 overflow-y-auto overscroll-y-contain custom-scrollbar'>
-                    <div className='h-[360px] w-full flex-shrink-0' />
+                    {/* 修改占位符高度以减小间隙 */}
+                    <div className='h-[310px] md:h-[340px] w-full flex-shrink-0 transition-all' />
                     
                     <div className='relative bg-white dark:bg-gray-900 rounded-t-[32px] shadow-[0_-10px_30px_rgba(0,0,0,0.5)] pb-10 min-h-screen'>
                         <div className='w-10 h-1 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto my-4'></div>
@@ -454,8 +454,7 @@ const LayoutSearch = props => {
     <div id='post-outer-wrapper'>
       {!currentSearch ? <SearchNav {...props} /> : <div id='posts-wrapper'>{siteConfig('POST_LIST_STYLE') === 'page' ? <BlogPostListPage {...props} /> : <BlogPostListScroll {...props} />}</div>}
     </div>
-  )
-}
+)
 
 const LayoutArchive = props => (
   <div className='p-4 rounded-2xl border dark:border-gray-600 w-full bg-white dark:bg-[#1e1e1e]'>
