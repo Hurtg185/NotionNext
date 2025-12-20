@@ -5,7 +5,8 @@ import {
   Mic2, Music4, Layers, BookText, Lightbulb,
   Sparkles, PlayCircle, Gem, MessageCircle,
   Crown, Heart, ChevronRight, Star, BookOpen,
-  ChevronDown, ChevronUp, GraduationCap
+  ChevronDown, ChevronUp, GraduationCap,
+  MessageSquareText, Headphones
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
@@ -21,6 +22,8 @@ const WordCard = dynamic(
 // ==========================================
 
 const FB_CHAT_LINK = "https://m.me/61575187883357";
+// 统一收藏夹的 Key，确保与 WordCard 组件内部一致
+const FAVORITES_STORAGE_KEY = 'framer-pinyin-favorites';
 
 const getLevelPrice = (level) => {
   const prices = { 1: "10,000 Ks", 2: "15,000 Ks", 3: "20,000 Ks" };
@@ -152,7 +155,6 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
 
       {/* 底部功能区 */}
       <div className="px-4 pb-5 pt-1 flex flex-col gap-3">
-        {/* 1. 全部课程 (上) - 修复：点击不再跳转空白页，而是展开/收起 */}
         {level.lessons.length > 3 && (
           <button
             onClick={() => setIsExpanded(!isExpanded)}
@@ -163,7 +165,6 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
           </button>
         )}
 
-        {/* 2. 本级核心生词 (下) */}
         <button
           onClick={(e) => {
             e.preventDefault();
@@ -187,7 +188,6 @@ const PinyinSection = ({ onOpenCollection }) => {
 
   return (
     <div className="space-y-4">
-      {/* 拼音 4 格 */}
       <div className="grid grid-cols-4 gap-2">
         {pinyinMain.map((item) => (
           <Link key={item.id} href={item.href} passHref>
@@ -201,9 +201,7 @@ const PinyinSection = ({ onOpenCollection }) => {
         ))}
       </div>
 
-      {/* 底部功能区：发音技巧 + 单词收藏 */}
       <div className="grid grid-cols-2 gap-3">
-        {/* 发音技巧 */}
         <button 
           onClick={() => router.push('/pinyin/tips')}
           className="flex items-center justify-between px-3 py-3 bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl border border-orange-100/50 active:scale-95 transition-transform group"
@@ -219,7 +217,6 @@ const PinyinSection = ({ onOpenCollection }) => {
           <ChevronRight size={14} className="text-orange-300" />
         </button>
 
-        {/* 单词收藏 - 修复：点击不再跳转空白页，而是触发弹窗显示已收藏单词 */}
         <button 
           onClick={onOpenCollection}
           className="flex items-center justify-between px-3 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100/50 active:scale-95 transition-transform group"
@@ -266,24 +263,24 @@ export default function HskPageClient() {
     }, undefined, { shallow: true });
   }, [router]);
 
-  // 【核心功能】处理收藏夹逻辑：点击收藏按钮时，过滤出所有点过红心的单词
+  // 【核心功能】修复收藏夹逻辑：
   const handleCollectionClick = useCallback(() => {
     // 1. 从本地存储获取收藏的单词 ID 列表
-    // 这个 Key 必须和你的 WordCard 组件内保存收藏的 Key 一致
-    const favoritesKey = 'framer-pinyin-favorites'; 
-    const savedIds = JSON.parse(localStorage.getItem(favoritesKey) || '[]');
+    const savedIds = JSON.parse(localStorage.getItem(FAVORITES_STORAGE_KEY) || '[]');
     
-    // 2. 汇总所有可能的单词
+    // 2. 汇总所有可能的单词并强行转 ID 为字符串进行比对
     const allWords = [
       ...(hskWordsData[1] || []),
       ...(hskWordsData[2] || [])
     ];
     
     // 3. 过滤出已收藏的单词对象
-    const favoriteWords = allWords.filter(word => savedIds.includes(word.id));
+    const favoriteWords = allWords.filter(word => 
+      savedIds.some(savedId => String(savedId) === String(word.id))
+    );
 
     if (favoriteWords.length === 0) {
-      alert("你还没有收藏任何单词哦！在学习单词时点击红心即可收藏。");
+      alert("你还没有收藏任何单词哦！\n在学习单词时点击红心即可在此查看。");
       return;
     }
 
@@ -298,7 +295,9 @@ export default function HskPageClient() {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] font-sans text-slate-900 pb-20 relative overflow-x-hidden">
+    // 强制 max-w-md 保持所有设备上的小屏美感
+    <div className="min-h-screen bg-[#f8fafc] font-sans text-slate-900 pb-20 relative overflow-x-hidden max-w-md mx-auto shadow-2xl shadow-slate-200">
+      
       {/* 顶部背景装饰 */}
       <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-blue-50/50 to-transparent pointer-events-none" />
 
@@ -309,9 +308,17 @@ export default function HskPageClient() {
             <Sparkles size={12} className="text-blue-500" />
             <span className="text-[10px] font-bold text-blue-800 uppercase">Premium Class</span>
           </div>
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-cyan-500 rounded-lg flex items-center justify-center text-white font-black italic shadow-md">
-            CN
-          </div>
+          
+          {/* 联系老师按钮 */}
+          <a 
+            href={FB_CHAT_LINK} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-full shadow-lg shadow-blue-200 active:scale-95 transition-all"
+          >
+            <MessageSquareText size={14} fill="currentColor" />
+            <span className="text-xs font-bold">Contact</span>
+          </a>
         </div>
 
         {/* 拼音面板 */}
@@ -320,14 +327,38 @@ export default function HskPageClient() {
         </div>
       </header>
 
+      {/* 口语练习横图入口 - 新增 */}
+      <div className="px-4 mt-4">
+        <Link href="/spoken" passHref>
+          <a className="block relative h-28 w-full rounded-3xl overflow-hidden shadow-lg shadow-emerald-100 group active:scale-[0.98] transition-all">
+            <img 
+              src="https://images.unsplash.com/photo-1543269865-cbf427effbad?w=800&q=80" 
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+              alt="Oral Chinese" 
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-emerald-600/90 via-emerald-600/40 to-transparent flex flex-col justify-center px-6">
+              <div className="flex items-center gap-2 text-emerald-100 mb-1">
+                <Headphones size={16} />
+                <span className="text-[10px] font-bold uppercase tracking-widest">Oral Practice</span>
+              </div>
+              <h3 className="text-xl font-black text-white">日常口语练习</h3>
+              <p className="text-emerald-50/80 text-xs font-medium">Daily Conversations & Phrases</p>
+            </div>
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/20 backdrop-blur rounded-full flex items-center justify-center text-white">
+              <ChevronRight size={20} />
+            </div>
+          </a>
+        </Link>
+      </div>
+
       {/* 系统课程列表 */}
-      <div className="max-w-2xl mx-auto px-4 relative z-10 mt-2 space-y-4">
+      <div className="max-w-2xl mx-auto px-4 relative z-10 mt-6 space-y-4">
         <div className="flex items-center gap-2 px-1 opacity-70">
           <BookText size={14} className="text-slate-500" />
           <h2 className="text-xs font-black text-slate-600 uppercase tracking-wider">System Courses</h2>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 pb-10">
+        <div className="grid grid-cols-1 gap-5 pb-10">
           {hskData.map(level => (
             <HskCard
               key={level.level}
