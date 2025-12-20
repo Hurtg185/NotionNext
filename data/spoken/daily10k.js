@@ -1,24 +1,14 @@
-const dailyData = [
-  // 小主题：基础问候 (1-10)
-  { id: 1, chapter: "基础问候", chinese: "你好！", pinyin: "Nǐ hǎo!", burmese: "မင်္ဂလာပါ!", xieyin: "မင်ဂလာပါ" },
-  { id: 2, chapter: "基础问候", chinese: "你叫什么名字？", pinyin: "Nǐ jiào shénme míngzì?", burmese: "နာမည်ဘယ်လိုခေါ်လဲ?", xieyin: "နားမမည် ဘယ်လိုခေါ်လဲ" },
-  { id: 3, chapter: "基础问候", chinese: "认识你很高兴。", pinyin: "Rènshí nǐ hěn gāoxìng.", burmese: "တွေ့ရတာ ဝမ်းသာပါတယ်။", xieyin: "တွေ့ရတာ ဝမ်းသာပါတယ်" },
-  { id: 4, chapter: "基础问候", chinese: "麻烦帮个忙。", pinyin: "Máfan bāng gè máng.", burmese: "အကူအညီလေး တစ်ခုလောက်ပေးပါ။", xieyin: "မားဖန့် ပန်းကော့မန်း" },
-  { id: 5, chapter: "基础问候", chinese: "没关系。", pinyin: "Méiguānxì.", burmese: "ကိစ္စမရှိပါဘူး။", xieyin: "မေကွန်းရှိ" },
+export default [
+  // --- 大主题：日常问候 ---
+  { id: 1, category: "日常问候", sub: "初次见面", chinese: "你好！", pinyin: "Nǐ hǎo!", burmese: "မင်္ဂလာပါ!", xieyin: "မင်ဂလာပါ" },
+  { id: 2, category: "日常问候", sub: "初次见面", chinese: "很高兴认识你。", pinyin: "Hěn gāoxìng rènshí nǐ.", burmese: "တွေ့ရတာ ဝမ်းသာပါတယ်။", xieyin: "ဟန် ကောင်းရှင်း ရန့်ရှစ် နီ" },
   
-  // 小主题：购物交际 (11-25)
-  { id: 11, chapter: "购物交际", chinese: "这个多少钱？", pinyin: "Zhège duōshǎo qián?", burmese: "ဒါ ဘယ်လောက်လဲ?", xieyin: "တကျော့ တိုးရှောင်ချี่ยน" },
-  { id: 12, chapter: "购物交际", chinese: "太贵了，便宜点。", pinyin: "Tài guì le, piányí diǎn.", burmese: "ဈေးကြီးတယ်၊ လျှော့ပေးပါ။", xieyin: "ထိုက်ကွေ့လော့ ဖျန်ယီတี่ยน" },
-  { id: 13, chapter: "购物交际", chinese: "有黑色的吗？", pinyin: "Yǒu hēisè de ma?", burmese: "အနက်ရောင် ရှိလား?", xieyin: "ရို ဟေးစော့တိုမား" },
+  { id: 10, category: "日常问候", sub: "久别重逢", chinese: "好久不见！", pinyin: "Hǎojiǔ bújiàn!", burmese: "မတွေ့တာကြာပြီ!", xieyin: "ဟောင်ကျို ပူကျန့်" },
+  { id: 11, category: "日常问候", sub: "久别重逢", chinese: "最近怎么样？", pinyin: "Zuìjìn zěnmeyàng?", burmese: "နေကောင်းလား?", xieyin: "ကျွေ့ကျင့် ဇမ်မယန့်" },
+
+  // --- 大主题：介绍与交流 ---
+  { id: 20, category: "介绍与交流", sub: "自我介绍", chinese: "我叫王明。", pinyin: "Wǒ jiào Wáng Míng.", burmese: "ကျွန်တော့်နာမည် ဝမ်မင်ပါ။", xieyin: "ဝေါ့ ကျောက် ဝမ်မင်" },
   
-  // 小主题：工作实战 (26-50)
-  { id: 26, chapter: "工作实战", chinese: "这个工序怎么做？", pinyin: "Zhège gōngxù zěnme zuò?", burmese: "ဒီအဆင့်ကို ဘယ်လိုလုပ်ရမလဲ?", xieyin: "တကျော့ ကုန်းရွိ" },
-  { id: 27, chapter: "工作实战", chinese: "老板，我想请假。", pinyin: "Lǎobǎn, wǒ xiǎng qǐngjià.", burmese: "အလုပ်ရှင်၊ ခွင့်ယူချင်ပါတယ်။", xieyin: "လောင်ပန့် ဝေါ့ရှန့်ချင်ကျား" },
+  // 用于测试模糊拦截的数据 (第3条以后)
+  { id: 99, category: "测试主题", sub: "测试", chinese: "这是模糊测试句", pinyin: "test", burmese: "test", xieyin: "test" }
 ];
-
-// 补充满 50 条用于测试滑动拦截
-for(let i=30; i<=50; i++) {
-    dailyData.push({ id: i, chapter: "更多内容", chinese: `测试短句第 ${i} 句`, pinyin: "test", burmese: "test", xieyin: "test" });
-}
-
-export default dailyData;
