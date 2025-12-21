@@ -7,43 +7,61 @@ export async function onRequestGet(context) {
 
     if (!t) return new Response('Missing text', { status: 400 });
 
-    // 1. 逻辑：处理默认语速和发音人
+    // 1. 处理默认值
     const voice = v || 'zh-CN-XiaoyouNeural';
-    // 中文默认 -20，其他默认 0
     let rate = r;
-    if (rate === null || rate === undefined || rate === 'undefined') {
+    // 如果是中文发音人且没传语速，默认设为 -20
+    if (!rate || rate === 'undefined') {
         rate = voice.startsWith('zh') ? '-20' : '0';
     }
 
-    // 2. 构造目标接口 URL
-    const targetUrl = `https://libretts.is-an.org/api/tts?text=${encodeURIComponent(t)}&voice=${voice}&rate=${rate}`;
-
+    // 2. 构造原始接口请求
+    // 注意：这里我们必须用 POST，因为那个 libretts 接口只认 JSON POST
+    const targetUrl = `https://libretts.is-an.org/api/tts`;
+    
     try {
         const response = await fetch(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                text: t,
+                voice: voice,
+                rate: parseInt(rate),
+                pitch: 0
+            }),
+            // 告诉 Cloudflare 即使后台是 POST，也要缓存这个 GET 请求的结果
             cf: {
                 cacheEverything: true,
-                cacheTtl: 7776000, // 90天
+                cacheTtl: 7776000,
             }
         });
 
         if (!response.ok) {
-            return new Response('TTS Origin Error', { status: response.status });
+            return new Response(`Origin Error: ${response.status}`, { status: 500 });
         }
 
-        // 3. 关键修复：使用流式传输，并强制指定 Content-Type
-        const { readable, writable } = new TransformStream();
-        response.body.pipeTo(writable);
+        // 3. 获取音频二进制数据
+        const audioBuffer = await response.arrayBuffer();
 
-        return new Response(readable, {
+        // 4. 检查数据是否为空
+        if (audioBuffer.byteLength === 0) {
+            return new Response('Empty Audio Data', { status: 500 });
+        }
+
+        // 5. 返回给浏览器，并注入强缓存标头
+        return new Response(audioBuffer, {
             headers: {
                 'Content-Type': 'audio/mpeg',
                 'Cache-Control': 'public, s-maxage=7776000, max-age=2592000',
                 'Access-Control-Allow-Origin': '*',
-                'X-Debug-URL': targetUrl, // 调试用：看最终请求的地址
-                'X-Debug-Rate': rate      // 调试用：看最终语速
+                'X-Debug-Status': 'Success',
+                'X-Debug-Size': audioBuffer.byteLength.toString()
             }
         });
+
     } catch (e) {
-        return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+        return new Response(`Worker Error: ${e.message}`, { status: 500 });
     }
 }
