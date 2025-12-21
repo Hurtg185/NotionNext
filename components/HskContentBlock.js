@@ -255,18 +255,12 @@ export default function HskPageClient() {
 
   const isCardViewOpen = router.asPath.includes('#hsk-vocabulary');
 
-  // 处理口语点击拦截逻辑
+  // 处理口语点击拦截逻辑 (已修改)
   const handleSpokenClick = useCallback((e) => {
     e.preventDefault();
-    const cachedUser = JSON.parse(localStorage.getItem('hsk_user') || '{}');
-    const unlockedLevels = cachedUser.unlocked_levels || '';
-    
-    // 如果没有 SP 权限，显示会员弹窗
-    if (!unlockedLevels.includes('SP')) {
-      setMembership({ open: true, level: 'SP' });
-    } else {
-      router.push('/spoken');
-    }
+    // 移除此处的权限检查，直接跳转
+    // 权限检查和VIP弹窗逻辑将由 /spoken 页面内部处理
+    router.push('/spoken');
   }, [router]);
 
   // 处理生词本点击逻辑
