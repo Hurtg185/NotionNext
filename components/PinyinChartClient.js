@@ -427,16 +427,16 @@ export default function PinyinChartClient({ initialData }) {
 
         return (
             <div {...swipeHandlers} className="flex flex-col flex-grow w-full">
-                {/* Tabs */}
+                {/* Tabs - 修改为 4 列 Grid */}
                 <div className="relative mb-6">
-                    <div className="flex space-x-3 overflow-x-auto pb-4 pt-2 px-1 scroll-hidden items-center snap-x">
+                    <div className="grid grid-cols-4 gap-3 pb-4 pt-2 px-1">
                         {initialData.categories.map((cat, index) => {
                             const isSelected = activeTab === index;
                             return (
                                 <button 
                                     key={cat.name} 
                                     onClick={() => { setDirection(index > activeTab ? 1 : -1); setActiveTab(index); setIsAutoPlaying(false); }} 
-                                    className={`relative px-6 py-3 rounded-full text-sm font-bold transition-all duration-300 whitespace-nowrap snap-center z-10 flex-shrink-0
+                                    className={`relative w-full py-3 rounded-2xl text-sm font-bold transition-all duration-300 flex items-center justify-center z-10
                                     ${isSelected 
                                         ? 'text-white bg-slate-900 shadow-lg shadow-slate-900/30 scale-105' 
                                         : 'text-slate-500 bg-white hover:bg-slate-50 border border-slate-100 hover:border-slate-300'}`}
