@@ -11,7 +11,7 @@ import { pinyin } from 'pinyin-pro';
 import dailyData from '@/data/spoken/daily10k.js'; 
 
 // ============================================================================
-// 1. 全局音频引擎 (独占播放 + 数值语速)
+// 1. 核心音频引擎 (独占、数值语速)
 // ============================================================================
 const AudioEngine = {
   current: null,
@@ -72,7 +72,7 @@ const SpeechEngine = {
   start(onResult, onError) {
     if (typeof window === 'undefined') return;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { alert("浏览器不支持语音识别"); if(onError) onError(); return; }
+    if (!SR) { alert("浏览器不支持识别"); if(onError) onError(); return; }
     this.recognition = new SR();
     this.recognition.lang = 'zh-CN';
     this.recognition.onresult = (e) => onResult(e.results[0][0].transcript);
@@ -168,7 +168,7 @@ const SpellingModal = ({ item, settings, onClose }) => {
 // 5. 主组件
 // ============================================================================
 export default function SpokenModule() {
-  const [view, setView] = useState('catalog'); // 默认目录 catalog | list
+  const [view, setView] = useState('catalog'); // 默认目录
   const [phrases] = useState(dailyData); 
   const [selectedSub, setSelectedSub] = useState(null);
   const [selectedCat, setSelectedCat] = useState(null);
@@ -199,13 +199,22 @@ export default function SpokenModule() {
         setSelectedCat(progress.cat);
         setSelectedSub(progress.sub);
         setView('list');
+        window.history.replaceState({ page: 'list' }, '', `?sub=${progress.sub}`); // 更新URL
         setTimeout(() => window.scrollTo(0, progress.scrollY || 0), 100);
+    } else {
+        window.history.replaceState({ page: 'catalog' }, '', window.location.pathname);
     }
   }, []);
 
   // 手势返回
   useEffect(() => {
-    const handlePopState = () => { if (view === 'list') setView('catalog'); };
+    const handlePopState = (event) => {
+        // 当URL hash或query变化时，我们用这个来处理返回
+        if (view === 'list') {
+            setView('catalog');
+            setSelectedSub(null);
+        }
+    };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [view]);
@@ -217,21 +226,23 @@ export default function SpokenModule() {
   useEffect(() => {
     const handleScroll = () => {
       const y = window.scrollY;
-      if (y < lastScrollY.current || y < 40) setShowHeader(true);
-      else if (y > lastScrollY.current && y > 80) setShowHeader(false);
+      if (y < lastScrollY.current || y < 50) setShowHeader(true);
+      else if (y > lastScrollY.current && y > 100) setShowHeader(false);
       lastScrollY.current = y;
-      if (view === 'list') localStorage.setItem('spoken_progress', JSON.stringify({ view: 'list', cat: selectedCat, sub: selectedSub, scrollY: y }));
+      if (view === 'list') {
+        localStorage.setItem('spoken_progress', JSON.stringify({ view: 'list', cat: selectedCat, sub: selectedSub, scrollY: y }));
+      }
     };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, [view, selectedCat, selectedSub]);
 
-  // --- 业务逻辑 ---
+  // --- 逻辑 ---
   const handleEnterList = (catName, subName) => {
     setSelectedCat(catName);
     setSelectedSub(subName);
     setView('list');
-    window.history.pushState({ page: 'list' }, '');
+    window.history.pushState({ page: 'list' }, '', `?sub=${subName}`);
     window.scrollTo(0, 0);
   };
 
@@ -250,7 +261,7 @@ export default function SpokenModule() {
     seq();
   };
 
-  const toggleRecord = (item) => {
+  const handleSpeech = (item) => {
     if (recordingId === item.id) { SpeechEngine.stop(); setRecordingId(null); } 
     else {
       AudioEngine.stop(); setRecordingId(item.id); setSpeechResult(null);
@@ -274,7 +285,7 @@ export default function SpokenModule() {
 
   const renderDiff = (target, input) => {
     return target.split('').map((char, i) => {
-        return <span key={i} className={input.includes(char) ? "text-slate-700 font-bold" : "text-red-500 font-black underline"}>{char}</span>;
+        return <span key={i} className={input.includes(char) ? "text-slate-700 font-bold" : "text-red-500 font-black"}>{char}</span>;
     });
   };
 
@@ -311,8 +322,8 @@ export default function SpokenModule() {
                <div className="h-12 px-4 flex items-center justify-between border-b border-slate-50">
                  <button onClick={() => window.history.back()} className="p-2 -ml-2 text-slate-600 active:scale-90"><ChevronLeft size={22}/></button>
                  <div className="flex flex-col items-center">
-                    <span className="text-[10px] text-slate-400 font-bold">{category}</span>
-                    <span className="text-sm font-black text-slate-800">{subCategory}</span>
+                    <span className="text-[10px] text-slate-400 font-bold">{selectedCat}</span>
+                    <span className="text-sm font-black text-slate-800">{selectedSub}</span>
                  </div>
                  <button onClick={() => setShowSettings(!showSettings)} className={`p-2 rounded-full transition-all ${showSettings ? 'bg-blue-100 text-blue-600' : 'text-slate-600'}`}><Settings2 size={20}/></button>
                </div>
@@ -330,7 +341,7 @@ export default function SpokenModule() {
                         <div 
                           className={`relative bg-white pt-8 pb-4 px-5 rounded-[1.8rem] shadow-sm border border-slate-100 flex flex-col items-center text-center transition-all active:scale-[0.99] max-w-[360px] mx-auto
                           ${playingId === item.id ? 'ring-2 ring-blue-500 bg-blue-50/10' : ''}
-                          ${isLocked ? 'blur-sm opacity-50 pointer-events-none' : ''}`}
+                          ${isLocked ? 'blur-[5px] opacity-60 pointer-events-none' : ''}`}
                           onClick={() => isLocked ? setShowVip(true) : handleCardPlay(item)}
                         >
                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-100 text-amber-700 px-4 py-1 rounded-full text-[10px] font-black border-2 border-white shadow-sm z-10 whitespace-nowrap">{item.xieyin}</div>
@@ -340,25 +351,18 @@ export default function SpokenModule() {
 
                            <div className="w-full flex justify-center items-center gap-8 px-4 pt-4 border-t border-slate-50">
                               <button onClick={(e) => { e.stopPropagation(); setSpellingItem(item); }} className="w-10 h-10 rounded-full bg-slate-50 text-slate-400 flex items-center justify-center active:scale-90"><Sparkles size={18}/></button>
-                              <button onClick={(e) => { e.stopPropagation(); handleCardPlay(item); }} className={`w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-lg ${playingId === item.id ? 'bg-blue-600 text-white' : 'bg-slate-800 text-white'}`}>{playingId === item.id ? <Loader2 className="animate-spin" size={24}/> : <Volume2 size={24}/>}</button>
-                              <button onClick={(e) => { e.stopPropagation(); toggleRecord(item); }} className={`w-10 h-10 rounded-full flex items-center justify-center active:scale-90 ${recordingId === item.id ? 'bg-red-100 text-red-500 animate-pulse' : 'bg-slate-50 text-slate-400'}`}>{recordingId === item.id ? <StopCircle size={18}/> : <Mic size={18}/>}</button>
+                              <button onClick={(e) => { e.stopPropagation(); toggleRecord(item); }} className={`w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-md ${recordingId === item.id ? 'bg-red-500 text-white animate-pulse' : 'bg-blue-600 text-white'}`}>{recordingId === item.id ? <StopCircle size={22}/> : <Mic size={22}/>}</button>
+                              <button onClick={(e) => { e.stopPropagation(); const newFavs = favorites.includes(item.id) ? favorites.filter(i => i !== item.id) : [...favorites, item.id]; setFavorites(newFavs); localStorage.setItem('spoken_favs', JSON.stringify(newFavs)); }} className={`w-10 h-10 rounded-full flex items-center justify-center active:scale-90 ${favorites.includes(item.id) ? 'bg-pink-50 text-pink-500' : 'bg-slate-50 text-slate-300'}`}><Heart size={18} fill={favorites.includes(item.id) ? "currentColor" : "none"}/></button>
                            </div>
                         </div>
 
                         {speechResult?.id === item.id && (
-                          <div className="mt-2 bg-white p-3 rounded-lg text-xs w-full border border-slate-100 shadow-sm animate-in fade-in max-w-[360px] mx-auto">
-                             <div className="flex justify-center gap-1 flex-wrap font-mono">
-                                {renderDiff(item.chinese, speechResult.text)}
-                             </div>
+                          <div className="mt-2 bg-white p-3 rounded-lg text-xs w-full border border-slate-100 shadow-sm animate-in fade-in max-w-[360px] mx-auto text-center">
+                             {renderDiff(item.chinese, speechResult.text)}
                           </div>
                         )}
 
-                        {isLocked && (
-                           <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
-                              <Lock className="text-slate-500 mb-2" size={32}/>
-                              <span className="text-[10px] bg-slate-800 text-white px-3 py-1 rounded-full font-bold shadow-lg">激活后解锁</span>
-                           </div>
-                        )}
+                        {isLocked && <div className="absolute inset-0 flex flex-col items-center justify-center z-20"><Lock className="text-slate-500 mb-2" size={32}/><span className="text-[10px] bg-slate-800 text-white px-3 py-1 rounded-full font-bold shadow-lg">激活后解锁</span></div>}
                      </div>
                    )
                 })}
@@ -367,31 +371,14 @@ export default function SpokenModule() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {showVip && (
-          <div className="fixed inset-0 z-[3000] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-md">
-             <motion.div initial={{scale:0.9}} animate={{scale:1}} className="relative bg-white rounded-[2rem] p-8 w-full max-w-xs text-center shadow-2xl">
-                 <button onClick={() => setShowVip(false)} className="absolute top-4 right-4 p-2 text-slate-400"><X size={20}/></button>
-                 <div className="w-16 h-16 mx-auto bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-4"><Crown size={32} /></div>
-                 <h3 className="text-xl font-black text-slate-900 mb-2">解锁完整版</h3>
-                 <p className="text-xs text-slate-500 mb-6">激活后可解锁全部 10,000+ 场景会话。</p>
-                 <a href="https://m.me/61575187883357" target="_blank" className="block w-full py-3.5 bg-blue-600 text-white rounded-xl font-black shadow-lg active:scale-95 transition-transform">联系老师激活</a>
-             </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
       {spellingItem && <SpellingModal item={spellingItem} settings={settings} onClose={() => setSpellingItem(null)} />}
-
-      <style jsx global>{`
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .font-burmese { font-family: 'Padauk', sans-serif; }
-      `}</style>
     </div>
   );
 }
 
+// ============================================================================
 // 辅助组件：目录分组 (可折叠)
+// ============================================================================
 const CatalogGroup = ({ cat, idx, onSelect }) => {
   const [isOpen, setIsOpen] = useState(false);
   return (
@@ -420,7 +407,9 @@ const CatalogGroup = ({ cat, idx, onSelect }) => {
   );
 };
 
+// ============================================================================
 // 辅助组件：设置面板
+// ============================================================================
 const SettingsPanel = ({ settings, setSettings, onClose }) => {
   return (
     <motion.div initial={{opacity:0, y:-10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-10}} className="fixed top-16 left-4 right-4 z-[60] bg-white rounded-[2rem] shadow-2xl border border-slate-200 overflow-hidden max-w-sm mx-auto">
