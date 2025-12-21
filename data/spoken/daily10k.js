@@ -1,4 +1,4 @@
-[
+export defaultexport default [
   {
     "id": 1,
     "category": "问候与寒暄",
