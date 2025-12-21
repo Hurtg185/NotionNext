@@ -2,20 +2,19 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   ChevronLeft, Lock, Crown, Loader2, 
   Settings2, Mic, StopCircle, Home, ArrowUp, 
-  ChevronRight, Sparkles, X, ChevronDown, Volume2, Heart, Play, Square, Circle
+  ChevronRight, Sparkles, X, Volume2, Heart, Play, Square, RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { pinyin } from 'pinyin-pro';
 
-// 引入数据 (确保路径正确)
+// 引入数据
 import dailyData from '@/data/spoken/daily10k.js'; 
 
 // ============================================================================
-// 1. 核心音频引擎 (独占、数值语速、去百分号)
+// 1. 音频引擎 (独占、数值语速)
 // ============================================================================
 const AudioEngine = {
   current: null,
-  
   stop() {
     if (this.current) {
       this.current.pause();
@@ -23,31 +22,19 @@ const AudioEngine = {
       this.current = null;
     }
   },
-
+  // 播放 TTS
   play(text, voice, rate, onEnd) {
     if (typeof window === 'undefined' || !text) return;
-    this.stop(); // 强制停止其他声音
-    
-    // 修正：直接传数值，不要 %
-    const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${voice}&r=${rate}`;
-    
+    this.stop();
+    const r = parseInt(rate) || 0; 
+    const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${voice}&r=${r}`;
     const audio = new Audio(url);
     this.current = audio;
-    
     audio.onended = () => { this.current = null; if(onEnd) onEnd(); };
-    audio.onerror = (e) => { 
-        console.error("Audio Error:", e); 
-        this.current = null; 
-        if(onEnd) onEnd(); 
-    };
-    
-    audio.play().catch(e => {
-        // console.warn("Play failed:", e);
-        this.current = null;
-        if(onEnd) onEnd();
-    });
+    audio.onerror = () => { this.current = null; if(onEnd) onEnd(); };
+    audio.play().catch(() => { this.current = null; if(onEnd) onEnd(); });
   },
-
+  // 播放 URL (R2)
   playUrl(url, onEnd) {
     if (typeof window === 'undefined') return;
     this.stop();
@@ -65,7 +52,6 @@ const AudioEngine = {
 const RecorderEngine = {
   mediaRecorder: null,
   chunks: [],
-  
   async start() {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices) return null;
     try {
@@ -76,11 +62,10 @@ const RecorderEngine = {
       this.mediaRecorder.start();
       return true;
     } catch (e) {
-      alert("无法访问麦克风，请检查权限");
+      alert("无法访问麦克风，请在浏览器设置中允许权限");
       return false;
     }
   },
-
   stop() {
     return new Promise((resolve) => {
       if (!this.mediaRecorder) return resolve(null);
@@ -97,38 +82,63 @@ const RecorderEngine = {
 };
 
 // ============================================================================
-// 3. 拼读窗口组件 (拼读 + 录音对比)
+// 3. 语音识别 (Web Speech API)
+// ============================================================================
+const SpeechEngine = {
+  recognition: null,
+  start(onResult, onError) {
+    if (typeof window === 'undefined') return;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      alert("您的浏览器不支持语音识别，请使用 Chrome/Safari");
+      if(onError) onError();
+      return;
+    }
+    this.recognition = new SR();
+    this.recognition.lang = 'zh-CN';
+    this.recognition.continuous = false;
+    this.recognition.interimResults = false;
+    this.recognition.onresult = (e) => onResult(e.results[0][0].transcript);
+    this.recognition.onerror = (e) => { console.error(e); if(onError) onError(); };
+    this.recognition.onend = () => { if(onError) onError(); };
+    try {
+      this.recognition.start();
+    } catch(e) { if(onError) onError(); }
+  },
+  stop() { if(this.recognition) this.recognition.stop(); }
+};
+
+// ============================================================================
+// 4. 子组件：拼读 & 录音弹窗 (自动演示)
 // ============================================================================
 const SpellingModal = ({ item, settings, onClose }) => {
   const [activeCharIndex, setActiveCharIndex] = useState(-1);
-  const [recordState, setRecordState] = useState('idle'); // idle, recording, review
+  const [recordState, setRecordState] = useState('idle'); 
   const [userAudio, setUserAudio] = useState(null);
   
-  // 自动开始拼读
+  // 打开自动拼读
   useEffect(() => {
-    handleSpellPlay();
-    return () => AudioEngine.stop();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleSpellPlay = async () => {
-    const chars = item.chinese.split('');
-    
-    // 1. 逐字播放 R2 拼音
-    for (let i = 0; i < chars.length; i++) {
-      setActiveCharIndex(i);
-      const py = pinyin(chars[i], { toneType: 'symbol' });
-      // R2 拼音音频地址
-      const r2Url = `https://audio.886.best/chinese-vocab-audio/%E6%8B%BC%E8%AF%BB%E9%9F%B3%E9%A2%91/${encodeURIComponent(py)}.mp3`;
-      await new Promise(resolve => AudioEngine.playUrl(r2Url, resolve));
-      await new Promise(r => setTimeout(r, 150));
-    }
-    
-    // 2. 整句 TTS 中文
-    setActiveCharIndex('all');
-    await new Promise(resolve => AudioEngine.play(item.chinese, settings.zhVoice, settings.zhRate, resolve));
-    setActiveCharIndex(-1);
-  };
+    let isMounted = true;
+    const sequence = async () => {
+      const chars = item.chinese.split('');
+      // 1. 逐字 R2
+      for (let i = 0; i < chars.length; i++) {
+        if(!isMounted) return;
+        setActiveCharIndex(i);
+        const py = pinyin(chars[i], { toneType: 'symbol' });
+        const r2Url = `https://audio.886.best/chinese-vocab-audio/%E6%8B%BC%E8%AF%BB%E9%9F%B3%E9%A2%91/${encodeURIComponent(py)}.mp3`;
+        await new Promise(r => AudioEngine.playUrl(r2Url, r));
+        await new Promise(r => setTimeout(r, 150));
+      }
+      // 2. 整句 TTS
+      if(!isMounted) return;
+      setActiveCharIndex('all');
+      await new Promise(r => AudioEngine.play(item.chinese, settings.zhVoice, settings.zhRate, r));
+      if(isMounted) setActiveCharIndex(-1);
+    };
+    sequence();
+    return () => { isMounted = false; AudioEngine.stop(); };
+  }, [item, settings]);
 
   const toggleRecord = async () => {
     if (recordState === 'recording') {
@@ -136,6 +146,7 @@ const SpellingModal = ({ item, settings, onClose }) => {
       setUserAudio(url);
       setRecordState('review');
     } else {
+      AudioEngine.stop(); // 录音前停止播放
       const success = await RecorderEngine.start();
       if (success) setRecordState('recording');
     }
@@ -149,25 +160,23 @@ const SpellingModal = ({ item, settings, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6" onClick={onClose}>
       <motion.div 
-        initial={{ scale: 0.9, opacity: 0 }} 
-        animate={{ scale: 1, opacity: 1 }} 
-        className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl relative"
+        initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} 
+        className="bg-white w-full max-w-xs rounded-[2rem] p-6 shadow-2xl relative"
         onClick={e => e.stopPropagation()}
       >
         <button onClick={onClose} className="absolute top-4 right-4 text-slate-300 p-2"><X size={24}/></button>
-        
-        <h3 className="text-center text-slate-400 text-xs font-bold uppercase tracking-widest mb-8">拼读练习</h3>
+        <h3 className="text-center text-slate-400 text-xs font-bold uppercase tracking-widest mb-8">拼读演示 & 录音</h3>
 
         {/* 拼音大字 */}
-        <div className="flex flex-wrap justify-center gap-4 mb-10">
+        <div className="flex flex-wrap justify-center gap-3 mb-8">
           {item.chinese.split('').map((char, i) => (
             <div key={i} className="flex flex-col items-center">
-              <span className={`text-lg font-mono mb-1 transition-colors ${activeCharIndex === i ? 'text-orange-500 font-bold' : 'text-slate-400'}`}>
+              <span className={`text-sm font-mono mb-1 transition-colors ${activeCharIndex === i ? 'text-orange-500 font-bold' : 'text-slate-400'}`}>
                 {pinyin(char, {toneType:'symbol'})}
               </span>
-              <span className={`text-5xl font-black transition-all ${activeCharIndex === i || activeCharIndex === 'all' ? 'text-slate-800 scale-110' : 'text-slate-200'}`}>
+              <span className={`text-3xl font-black transition-all ${activeCharIndex === i || activeCharIndex === 'all' ? 'text-slate-800 scale-125' : 'text-slate-300'}`}>
                 {char}
               </span>
             </div>
@@ -175,29 +184,29 @@ const SpellingModal = ({ item, settings, onClose }) => {
         </div>
 
         {/* 底部操作区 */}
-        <div className="flex justify-around items-center px-4">
-            {/* 重播原音 */}
-            <div className="flex flex-col items-center gap-2 cursor-pointer" onClick={handleSpellPlay}>
-               <div className="w-12 h-12 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center shadow-sm active:scale-95">
-                  <Volume2 size={20}/>
+        <div className="flex justify-around items-center px-2">
+            {/* 重播 */}
+            <div className="flex flex-col items-center gap-2 cursor-pointer" onClick={() => { setActiveCharIndex(-1); setTimeout(() => setActiveCharIndex(0), 10); }}>
+               <div className="w-10 h-10 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center shadow-sm active:scale-95">
+                  <RefreshCw size={18}/>
                </div>
                <span className="text-[10px] text-slate-400">重播</span>
             </div>
 
             {/* 录音按钮 (大) */}
             <div className="flex flex-col items-center gap-2 cursor-pointer" onClick={toggleRecord}>
-               <div className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-95 ${recordState === 'recording' ? 'bg-red-500 ring-4 ring-red-200' : 'bg-blue-600'}`}>
-                  {recordState === 'recording' ? <Square size={24} className="text-white animate-pulse" fill="currentColor"/> : <Mic size={28} className="text-white"/>}
+               <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-95 ${recordState === 'recording' ? 'bg-red-500 ring-4 ring-red-200' : 'bg-blue-600'}`}>
+                  {recordState === 'recording' ? <Square size={20} className="text-white animate-pulse" fill="currentColor"/> : <Mic size={24} className="text-white"/>}
                </div>
-               <span className="text-[10px] text-slate-400">{recordState === 'recording' ? '停止' : '录音'}</span>
+               <span className="text-[10px] text-slate-500">{recordState === 'recording' ? '停止' : '录音'}</span>
             </div>
 
             {/* 回放 */}
             <div className={`flex flex-col items-center gap-2 transition-all ${userAudio ? 'opacity-100 cursor-pointer' : 'opacity-30 pointer-events-none'}`} onClick={playUserAudio}>
-               <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center shadow-sm active:scale-95">
-                  <Play size={20} fill="currentColor"/>
+               <div className="w-10 h-10 bg-green-100 text-green-600 rounded-full flex items-center justify-center shadow-sm active:scale-95">
+                  <Play size={18} fill="currentColor"/>
                </div>
-               <span className="text-[10px] text-slate-400">我的</span>
+               <span className="text-[10px] text-slate-500">我的</span>
             </div>
         </div>
       </motion.div>
@@ -206,13 +215,12 @@ const SpellingModal = ({ item, settings, onClose }) => {
 };
 
 // ============================================================================
-// 4. 主组件 SpokenModule
+// 5. 主组件 SpokenModule
 // ============================================================================
 export default function SpokenModule() {
-  const [view, setView] = useState('catalog'); // 默认直接显示目录 catalog | list
-  const [phrases] = useState(dailyData); // 数据源
-  const [category, setCategory] = useState(null);
-  const [subCategory, setSubCategory] = useState(null);
+  const [view, setView] = useState('catalog'); // 默认直接显示目录
+  const [phrases] = useState(dailyData); 
+  const [selectedSub, setSelectedSub] = useState(null); // 选中的小主题
   
   // 设置
   const [settings, setSettings] = useState({ 
@@ -223,83 +231,90 @@ export default function SpokenModule() {
   
   // 状态
   const [playingId, setPlayingId] = useState(null);
-  const [spellingItem, setSpellingItem] = useState(null); 
+  const [spellingItem, setSpellingItem] = useState(null);
+  const [recordingId, setRecordingId] = useState(null); 
+  const [speechResult, setSpeechResult] = useState(null); // {id, text, score}
   const [favorites, setFavorites] = useState([]);
   
   // 交互
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [showVip, setShowVip] = useState(false);
   const [showHeader, setShowHeader] = useState(true);
+  const [showBackTop, setShowBackTop] = useState(false);
+  
   const lastScrollY = useRef(0);
 
   // 初始化
   useEffect(() => {
-    // 权限检查
     const user = JSON.parse(localStorage.getItem('hsk_user') || '{}');
     setIsUnlocked((user.unlocked_levels || '').includes('SP'));
-    
-    // 设置读取
     const savedSet = localStorage.getItem('spoken_settings');
     if (savedSet) setSettings(JSON.parse(savedSet));
-    
     const savedFavs = JSON.parse(localStorage.getItem('spoken_favs') || '[]');
     setFavorites(savedFavs);
 
     // 进度恢复
     const progress = JSON.parse(localStorage.getItem('spoken_progress'));
     if (progress && progress.view === 'list' && progress.sub) {
-        setCategory(progress.cat);
-        setSubCategory(progress.sub);
+        setSelectedSub(progress.sub);
         setView('list');
+        // 手势返回支持：恢复到列表页时，也push一个历史记录
+        window.history.replaceState({ page: 'list' }, '');
         setTimeout(() => window.scrollTo(0, progress.scrollY || 0), 100);
+    } else {
+        window.history.replaceState({ page: 'catalog' }, '');
     }
   }, []);
 
-  // 保存设置
-  useEffect(() => localStorage.setItem('spoken_settings', JSON.stringify(settings)), [settings]);
+  // 监听浏览器返回 (手势返回)
+  useEffect(() => {
+    const handlePopState = (event) => {
+      // 如果当前是 list，且按了返回，则回到 catalog
+      if (view === 'list') {
+        setView('catalog');
+        setSelectedSub(null);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [view]);
 
-  // 滚动监听 (顶部面板隐显)
+  // 保存设置 & 进度
+  useEffect(() => localStorage.setItem('spoken_settings', JSON.stringify(settings)), [settings]);
+  useEffect(() => {
+    if (view === 'list') {
+        localStorage.setItem('spoken_progress', JSON.stringify({ view: 'list', sub: selectedSub, scrollY: window.scrollY }));
+    }
+  }, [view, selectedSub]);
+
+  // 滚动监听
   useEffect(() => {
     const handleScroll = () => {
       const y = window.scrollY;
+      setShowBackTop(y > 300);
       if (y < lastScrollY.current || y < 50) setShowHeader(true);
-      else if (y > lastScrollY.current && y > 100) setShowHeader(false);
+      else if (y > lastScrollY.current && y > 80) setShowHeader(false);
       lastScrollY.current = y;
-      
-      // 实时保存进度
-      if (view === 'list') {
-        localStorage.setItem('spoken_progress', JSON.stringify({ 
-          view: 'list', cat: category, sub: subCategory, scrollY: y 
-        }));
-      }
     };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [view, category, subCategory]);
+  }, []);
 
-  // --- 逻辑 ---
+  // --- 业务逻辑 ---
 
-  const handleEnterList = (cat, sub) => {
-    setCategory(cat);
-    setSubCategory(sub);
+  const handleEnterList = (sub) => {
+    setSelectedSub(sub);
     setView('list');
     window.scrollTo(0, 0);
+    // 关键：Push 一个历史记录，这样按返回键/手势返回时，不会直接退出页面
+    window.history.pushState({ page: 'list' }, '');
   };
 
-  // 连读逻辑：点击卡片触发 (中文 -> 缅文)
   const handleCardPlay = (item) => {
     if (playingId === item.id) { AudioEngine.stop(); setPlayingId(null); return; }
     setPlayingId(item.id);
-    
     const seq = async () => {
-      // 1. 中文
-      if (settings.zhEnabled) {
-        await new Promise(r => AudioEngine.play(item.chinese, settings.zhVoice, settings.zhRate, r));
-      }
-      
-      if (AudioEngine.current?.paused && !settings.zhEnabled) {} // check interrupt
-      
-      // 2. 缅文
+      if (settings.zhEnabled) await new Promise(r => AudioEngine.play(item.chinese, settings.zhVoice, settings.zhRate, r));
       if (settings.myEnabled) {
         if (settings.zhEnabled) await new Promise(r => setTimeout(r, 400));
         await new Promise(r => AudioEngine.play(item.burmese, settings.myVoice, settings.myRate, r));
@@ -307,6 +322,24 @@ export default function SpokenModule() {
       setPlayingId(null);
     };
     seq();
+  };
+
+  const handleSpeech = (item) => {
+    if (recordingId === item.id) { 
+        SpeechEngine.stop(); 
+        setRecordingId(null); 
+    } else {
+        AudioEngine.stop(); // 停止其他播放
+        setRecordingId(item.id);
+        setSpeechResult(null);
+        SpeechEngine.start((text) => {
+            setSpeechResult({ id: item.id, text });
+            setRecordingId(null);
+        }, () => {
+            setRecordingId(null);
+            // alert("未检测到语音");
+        });
+    }
   };
 
   const toggleFav = (id) => {
@@ -325,45 +358,65 @@ export default function SpokenModule() {
     return Array.from(map.entries()).map(([cat, subs]) => ({ name: cat, subs: Array.from(subs) }));
   }, [phrases]);
 
-  // 当前列表数据
-  const listData = useMemo(() => {
-    return phrases.filter(p => p.category === category && p.sub === subCategory);
-  }, [phrases, category, subCategory]);
+  const listData = useMemo(() => phrases.filter(p => p.sub === selectedSub), [phrases, selectedSub]);
 
-  // 语音识别 (简易版: 点击中间麦克风)
-  const handleQuickRecord = () => {
-      alert("请点击左下角拼读按钮进入专业评测模式");
+  // 渲染纠错结果
+  const renderSpeechDiff = (target, input) => {
+    return target.split('').map((char, i) => {
+        const isMatch = input.includes(char);
+        return <span key={i} className={isMatch ? "text-slate-700 font-bold" : "text-red-500 font-black"}>{char}</span>;
+    });
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F9FB] font-sans text-slate-900 max-w-md mx-auto relative shadow-2xl overflow-hidden">
+    <div className="min-h-screen bg-[#F5F7FA] font-sans text-slate-900 max-w-md mx-auto relative shadow-2xl overflow-hidden">
       
-      {/* ================= VIEW 1: 目录页 (直接显示) ================= */}
+      {/* 886.best (仅在目录页显示) */}
+      {view === 'catalog' && (
+        <a href="https://886.best" className="fixed top-4 right-4 z-[2000] bg-black/20 backdrop-blur-md px-3 py-1 rounded-full text-white text-[10px] font-bold border border-white/10 active:scale-95 transition-transform">
+          Home
+        </a>
+      )}
+
+      {/* ================= VIEW 1: 目录页 (Catalog) ================= */}
       {view === 'catalog' && (
         <div className="min-h-screen bg-white">
-           {/* 顶部大图背景 */}
-           <div className="relative h-56 overflow-hidden">
+           {/* 顶部大图背景 + 融合遮罩 */}
+           <div className="relative h-64">
               <img src="https://images.unsplash.com/photo-1543269865-cbf427effbad?w=800&q=80" className="w-full h-full object-cover brightness-[0.7]" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-              <div className="absolute bottom-6 left-6 text-white">
-                 <h1 className="text-3xl font-black mb-1 tracking-tight">日常高频口语</h1>
-                 <p className="text-white/80 text-xs font-bold uppercase tracking-widest bg-white/20 px-2 py-1 rounded inline-block backdrop-blur-md">10,000 句通关</p>
+              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-white" />
+              <div className="absolute bottom-10 left-6 text-slate-800">
+                 <h1 className="text-3xl font-black mb-1 text-white drop-shadow-md">日常高频口语</h1>
+                 <p className="text-white/90 text-xs font-bold uppercase tracking-widest bg-black/20 px-2 py-1 rounded inline-block backdrop-blur-sm">10,000 Sentences</p>
               </div>
-              <a href="https://886.best" className="absolute top-4 right-4 bg-black/40 backdrop-blur-md text-white px-3 py-1 rounded-full text-[10px] font-bold border border-white/20">
-                 Home
-              </a>
            </div>
 
-           {/* 目录列表 */}
-           <div className="p-5 pb-20 space-y-6">
+           {/* 目录列表 (向上覆盖) */}
+           <div className="px-5 pb-20 -mt-6 relative z-10 space-y-6">
               {catalog.map((cat, idx) => (
-                 <CatalogGroup key={idx} cat={cat} idx={idx} onSelect={handleEnterList} />
+                 <div key={idx} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div className="bg-slate-50/50 p-4 border-b border-slate-100 flex items-center gap-3">
+                       <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-black text-sm shadow-md shadow-blue-200">{idx + 1}</div>
+                       <h3 className="font-bold text-slate-800">{cat.name}</h3>
+                    </div>
+                    <div className="p-2 grid grid-cols-2 gap-2">
+                       {cat.subs.map((s, i) => (
+                          <button 
+                            key={i} 
+                            onClick={() => handleEnterList(s)}
+                            className="text-left bg-white p-3 rounded-xl border border-slate-100 text-xs font-bold text-slate-600 active:scale-95 transition-transform hover:border-blue-200 hover:text-blue-600 shadow-sm"
+                          >
+                             {s}
+                          </button>
+                       ))}
+                    </div>
+                 </div>
               ))}
            </div>
         </div>
       )}
 
-      {/* ================= VIEW 2: 列表页 ================= */}
+      {/* ================= VIEW 2: 列表页 (List) ================= */}
       <AnimatePresence>
         {view === 'list' && (
           <motion.div 
@@ -376,11 +429,8 @@ export default function SpokenModule() {
                className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur shadow-sm max-w-md mx-auto"
              >
                <div className="h-12 px-4 flex items-center justify-between border-b border-slate-50">
-                 <button onClick={() => setView('catalog')} className="p-2 -ml-2 text-slate-600 active:scale-90"><ChevronLeft size={22}/></button>
-                 <div className="flex flex-col items-center">
-                    <span className="text-[10px] text-slate-400 font-bold">{category}</span>
-                    <span className="text-sm font-black text-slate-800">{subCategory}</span>
-                 </div>
+                 <button onClick={() => window.history.back()} className="p-2 -ml-2 text-slate-600 active:scale-90"><ChevronLeft size={22}/></button>
+                 <span className="font-black text-slate-800 text-sm truncate">{selectedSub}</span>
                  <button onClick={() => setShowSettings(!showSettings)} className={`p-2 rounded-full transition-all ${showSettings ? 'bg-blue-100 text-blue-600' : 'text-slate-600'}`}><Settings2 size={20}/></button>
                </div>
              </motion.div>
@@ -391,7 +441,7 @@ export default function SpokenModule() {
              </AnimatePresence>
 
              {/* 列表内容 */}
-             <div className="pt-20 pb-32 px-4 space-y-6">
+             <div className="pt-16 pb-32 px-4 space-y-5">
                 {listData.map((item, index) => {
                    const isLocked = !isUnlocked && index >= 3; // 前3条免费
                    
@@ -399,12 +449,12 @@ export default function SpokenModule() {
                      <div key={item.id} className="relative">
                         {/* 卡片容器 */}
                         <div 
-                          className={`relative bg-white pt-8 pb-4 px-5 rounded-[1.8rem] shadow-sm border border-slate-100 flex flex-col items-center text-center transition-all active:scale-[0.99] cursor-pointer
+                          className={`relative bg-white pt-8 pb-4 px-5 rounded-[1.8rem] shadow-sm border border-slate-100 flex flex-col items-center text-center transition-all active:scale-[0.99] cursor-pointer max-w-[340px] mx-auto
                           ${playingId === item.id ? 'ring-2 ring-blue-500 bg-blue-50/10' : ''}
                           ${isLocked ? 'blur-[4px] opacity-60 pointer-events-none' : ''}`}
                           onClick={() => isLocked ? setShowVip(true) : handleCardPlay(item)}
                         >
-                           {/* 1. 谐音胶囊 (骑缝布局: 绝对定位 top-3) */}
+                           {/* 1. 谐音胶囊 (骑缝) */}
                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-50 text-amber-700 px-4 py-1 rounded-full text-[10px] font-black border border-amber-200 shadow-sm z-10 whitespace-nowrap">
                               {item.xieyin}
                            </div>
@@ -416,37 +466,46 @@ export default function SpokenModule() {
                            <h3 className="text-2xl font-black text-slate-800 mb-2 leading-snug">{item.chinese}</h3>
                            
                            {/* 4. 缅文 */}
-                           <p className="text-base text-blue-600 font-medium mb-4 font-burmese">{item.burmese}</p>
+                           <p className="text-sm text-blue-600 font-medium mb-4 font-burmese">{item.burmese}</p>
 
-                           {/* 5. 底部工具栏 */}
-                           <div className="w-full flex justify-between items-center px-6 pt-4 border-t border-slate-50">
-                              {/* 左下：拼读/播放 */}
+                           {/* 5. 底部工具栏 (靠拢) */}
+                           <div className="flex justify-center items-center gap-6 pt-3 border-t border-slate-50 w-full">
+                              {/* 拼读 (左) */}
                               <button 
                                 onClick={(e) => { e.stopPropagation(); setSpellingItem(item); }} 
-                                className="w-9 h-9 rounded-full bg-slate-50 text-blue-500 flex items-center justify-center active:scale-90"
+                                className="p-2 text-slate-400 hover:text-blue-500 active:scale-90 transition-colors"
                               >
-                                 <Volume2 size={18}/>
+                                 <Sparkles size={18}/>
                               </button>
 
-                              {/* 中间：语音识别 (Web Speech) */}
+                              {/* 语音识别 (中) */}
                               <button 
-                                 onClick={(e) => { e.stopPropagation(); handleQuickRecord(); }}
-                                 className="w-9 h-9 rounded-full bg-slate-50 text-slate-400 flex items-center justify-center"
+                                 onClick={(e) => { e.stopPropagation(); handleSpeech(item); }}
+                                 className={`p-3 rounded-full shadow-md active:scale-90 transition-all ${recordingId === item.id ? 'bg-red-500 text-white animate-pulse' : 'bg-blue-50 text-blue-600'}`}
                               >
-                                 <Mic size={18}/>
+                                 <Mic size={20}/>
                               </button>
 
-                              {/* 右下：收藏 */}
+                              {/* 收藏 (右) */}
                               <button 
                                 onClick={(e) => { e.stopPropagation(); toggleFav(item.id); }} 
-                                className={`w-9 h-9 rounded-full flex items-center justify-center active:scale-90 ${favorites.includes(item.id) ? 'bg-pink-50 text-pink-500' : 'bg-slate-50 text-slate-300'}`}
+                                className={`p-2 active:scale-90 transition-colors ${favorites.includes(item.id) ? 'text-pink-500' : 'text-slate-400'}`}
                               >
                                  <Heart size={18} fill={favorites.includes(item.id) ? "currentColor" : "none"}/>
                               </button>
                            </div>
+                           
+                           {/* 识别结果显示 */}
+                           {speechResult?.id === item.id && (
+                              <div className="mt-3 bg-slate-50 p-2 rounded-lg text-xs w-full border border-slate-100 animate-in fade-in">
+                                 <div className="flex justify-center gap-1 flex-wrap">
+                                    {renderSpeechDiff(item.chinese, speechResult.text)}
+                                 </div>
+                              </div>
+                           )}
                         </div>
 
-                        {/* 播放中状态 */}
+                        {/* 播放动画 */}
                         {playingId === item.id && (
                            <div className="absolute top-4 right-4 animate-pulse">
                               <Loader2 size={16} className="text-blue-400 animate-spin"/>
@@ -456,8 +515,8 @@ export default function SpokenModule() {
                         {/* 锁定遮罩 */}
                         {isLocked && (
                            <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
-                              <Lock className="text-slate-500 mb-2" size={36}/>
-                              <span className="text-[10px] bg-slate-800 text-white px-3 py-1 rounded-full font-bold">激活后解锁</span>
+                              <Lock className="text-slate-500 mb-2" size={32}/>
+                              <span className="text-[10px] bg-slate-800 text-white px-3 py-1 rounded-full font-bold shadow-lg">VIP 解锁全部</span>
                            </div>
                         )}
                      </div>
@@ -472,11 +531,17 @@ export default function SpokenModule() {
                    </div>
                 )}
              </div>
+
+             <AnimatePresence>
+                {showBackTop && (
+                  <motion.button initial={{scale:0}} animate={{scale:1}} exit={{scale:0}} onClick={() => window.scrollTo({top:0, behavior:'smooth'})} className="fixed bottom-10 right-6 w-10 h-10 bg-white shadow-xl border border-slate-100 rounded-full flex items-center justify-center text-slate-500 z-[1100] active:scale-90"><ArrowUp size={20}/></motion.button>
+                )}
+             </AnimatePresence>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* 拼读 & 录音弹窗 */}
+      {/* 拼读弹窗 */}
       {spellingItem && <SpellingModal item={spellingItem} settings={settings} onClose={() => setSpellingItem(null)} />}
 
       {/* VIP 弹窗 */}
@@ -502,55 +567,10 @@ export default function SpokenModule() {
   );
 }
 
-// ============================================================================
-// 辅助组件：目录分组 (可折叠)
-// ============================================================================
-const CatalogGroup = ({ cat, idx, onSelect }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  
-  return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-       <div 
-         onClick={() => setIsOpen(!isOpen)}
-         className="p-4 flex items-center justify-between cursor-pointer active:bg-slate-50"
-       >
-          <div className="flex items-center gap-3">
-             <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-black text-sm">{idx + 1}</div>
-             <h3 className="font-bold text-slate-800">{cat.name}</h3>
-          </div>
-          <ChevronDown size={18} className={`text-slate-300 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-       </div>
-       
-       <AnimatePresence>
-         {isOpen && (
-           <motion.div 
-             initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }}
-             className="overflow-hidden bg-slate-50"
-           >
-              <div className="p-2 grid grid-cols-2 gap-2">
-                 {cat.subs.map((sub, i) => (
-                    <button 
-                      key={i} 
-                      onClick={() => onSelect(cat.name, sub)}
-                      className="text-left bg-white p-3 rounded-xl border border-slate-100 text-xs font-bold text-slate-600 active:scale-95 transition-transform"
-                    >
-                       {sub}
-                    </button>
-                 ))}
-              </div>
-           </motion.div>
-         )}
-       </AnimatePresence>
-    </div>
-  );
-};
-
-// ============================================================================
 // 辅助组件：设置面板 (高对比度)
-// ============================================================================
 const SettingsPanel = ({ settings, setSettings, onClose }) => {
   return (
-    <motion.div initial={{opacity:0, y:-10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-10}} className="fixed top-16 left-4 right-4 z-[60] bg-white rounded-[2rem] shadow-2xl border border-slate-200 overflow-hidden max-w-sm mx-auto">
+    <motion.div initial={{opacity:0, y:-10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-10}} className="fixed top-16 left-4 right-4 z-[2000] bg-white rounded-[2rem] shadow-2xl border border-slate-200 overflow-hidden max-w-sm mx-auto">
        <div className="p-5 space-y-4">
           <div className="flex justify-between items-center border-b border-slate-50 pb-2">
              <span className="text-xs font-black text-slate-400 uppercase">Audio Settings</span>
