@@ -287,11 +287,27 @@ export default function HskPageClient() {
 
   const isCardViewOpen = router.asPath.includes('#hsk-vocabulary');
 
-  // 跳转到口语页面 (口语收藏也跳转至此，由口语页面处理展示)
-  const handleSpokenClick = useCallback((e) => {
+  // ====================================================
+  // 修改处：将口语跳转拆分为两个函数
+  // ====================================================
+
+  // 1. 普通跳转：进入口语首页 (点击 Banner)
+  const handleSpokenGeneralClick = useCallback((e) => {
     if(e) e.preventDefault();
     router.push('/spoken');
   }, [router]);
+
+  // 2. 收藏跳转：进入口语收藏 (点击按钮)
+  // 通过 query 参数 filter=favorites 告诉目标页面显示收藏
+  const handleSpokenCollectionClick = useCallback((e) => {
+    if(e) e.preventDefault();
+    router.push({
+      pathname: '/spoken',
+      query: { filter: 'favorites' }
+    });
+  }, [router]);
+
+  // ====================================================
 
   // 处理生词本点击逻辑
   const handleVocabularyClick = useCallback((level) => {
@@ -332,7 +348,7 @@ export default function HskPageClient() {
             <span className="text-[10px] font-bold text-blue-800 uppercase">Premium Class</span>
           </div>
           
-          {/* Messenger 风格按钮 (无蓝色背景，清晰识别) */}
+          {/* Messenger 风格按钮 */}
           <a href={FB_CHAT_LINK} target="_blank" rel="noopener noreferrer"
             className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white rounded-full shadow-sm border border-slate-100 active:scale-95 transition-all"
           >
@@ -344,15 +360,16 @@ export default function HskPageClient() {
         <div className="bg-white rounded-[1.8rem] p-4 shadow-xl shadow-slate-200/60 border border-slate-50">
           <PinyinSection 
             onOpenCollection={handleCollectionClick} 
-            onOpenSpokenCollection={handleSpokenClick}
+            // 传递新的收藏跳转函数
+            onOpenSpokenCollection={handleSpokenCollectionClick}
           />
         </div>
       </header>
 
-      {/* 口语练习横图入口 (缅语化) */}
+      {/* 口语练习横图入口 (缅语化) - 使用普通跳转 */}
       <div className="px-4 mt-4">
         <div 
-          onClick={handleSpokenClick}
+          onClick={handleSpokenGeneralClick}
           className="block relative h-28 w-full rounded-3xl overflow-hidden shadow-lg shadow-emerald-100 group active:scale-[0.98] transition-all cursor-pointer"
         >
           <img 
