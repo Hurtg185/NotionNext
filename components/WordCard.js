@@ -379,6 +379,8 @@ const JumpModal = ({ max, current, onJump, onClose }) => {
 // =================================================================================
 const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level }) => {
   const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => { setIsMounted(true); }, []);
+
   const [settings, setSettings] = useCardSettings();
   const [activeCards, setActiveCards] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -391,9 +393,6 @@ const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level 
   const [isJumping, setIsJumping] = useState(false);
   const autoBrowseTimerRef = useRef(null);
   const lastDirection = useRef(0);
-
-  // 1. 解决挂载问题
-  useEffect(() => { setIsMounted(true); }, []);
 
   const getPinyin = useCallback((wordObj) => {
       if (wordObj.pinyin) return wordObj.pinyin;
@@ -412,7 +411,7 @@ const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level 
     return mapped;
   }, [words, settings.order]);
 
-  // 2. 进度恢复
+  // 进度恢复
   useEffect(() => {
     setActiveCards(processedCards.length > 0 ? processedCards : []);
     if (isMounted && progressKey && processedCards.length > 0) {
@@ -422,7 +421,7 @@ const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level 
     }
   }, [processedCards, progressKey, isMounted]);
 
-  // 3. 进度保存
+  // 进度保存
   useEffect(() => {
       if (isMounted && progressKey && activeCards.length > 0) {
           localStorage.setItem(`word_progress_${progressKey}`, currentIndex);
@@ -444,7 +443,7 @@ const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level 
     setCurrentIndex(prev => (prev + direction + activeCards.length) % activeCards.length);
   }, [activeCards.length]);
 
-  // 4. 自动播放逻辑
+  // 自动播放逻辑
   useEffect(() => {
     if (!isOpen || !currentCard || !isMounted) return;
     clearTimeout(autoBrowseTimerRef.current);
@@ -489,8 +488,11 @@ const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level 
 
   if (!isMounted) return null;
 
-  const cardContent = pageTransitions((style, item) => item && (
-      <animated.div style={{ ...styles.fullScreen, ...style }}>
+  const cardContent = pageTransitions((style, item) => {
+    const bgUrl = settings.backgroundImage;
+    const backgroundStyle = bgUrl ? { background: `url(${bgUrl}) center/cover no-repeat` } : {};
+    return item && (
+      <animated.div style={{ ...styles.fullScreen, ...backgroundStyle, ...style }}>
         <div style={styles.gestureArea} {...bind()} onClick={() => setIsRevealed(!isRevealed)} />
         {writerChar && <HanziModal word={writerChar} onClose={() => setWriterChar(null)} />}
         {isSettingsOpen && <SettingsPanel settings={settings} setSettings={setSettings} onClose={() => setIsSettingsOpen(false)} />}
@@ -512,10 +514,17 @@ const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level 
                             <div style={styles.revealedContent}>
                                 <div style={styles.textWordBurmese} onClick={(e) => playTTS(cardData.burmese, settings.voiceBurmese, settings.speechRateBurmese, null, e)}>{cardData.burmese}</div>
                                 {cardData.explanation && <div style={styles.explanationBox} onClick={(e) => playTTS(cardData.explanation, settings.voiceBurmese, settings.speechRateBurmese, null, e)}>{cardData.explanation}</div>}
+                                {cardData.mnemonic && <div style={styles.mnemonicBox}>{cardData.mnemonic}</div>}
                                 {cardData.example && (
                                     <div style={styles.exampleBox} onClick={(e) => playTTS(cardData.example, settings.voiceChinese, settings.speechRateChinese, null, e)}>
                                         <div style={styles.examplePinyin}>{pinyinConverter(cardData.example, { toneType: 'symbol' })}</div>
                                         <div style={styles.exampleText}>{cardData.example}</div>
+                                    </div>
+                                )}
+                                {cardData.example2 && (
+                                    <div style={styles.exampleBox} onClick={(e) => playTTS(cardData.example2, settings.voiceChinese, settings.speechRateChinese, null, e)}>
+                                        <div style={styles.examplePinyin}>{pinyinConverter(cardData.example2, { toneType: 'symbol' })}</div>
+                                        <div style={styles.exampleText}>{cardData.example2}</div>
                                     </div>
                                 )}
                             </div>
@@ -531,8 +540,8 @@ const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level 
         <div style={styles.rightControls} data-no-gesture="true">
             <button style={styles.rightIconButton} onClick={(e) => { e.stopPropagation(); window.location.href = 'https://886.best'; }}><FaHome size={18} /></button>
             <button style={styles.rightIconButton} onClick={() => setIsSettingsOpen(true)}><FaCog size={18} /></button>
-            <button style={styles.rightIconButton} onClick={handleOpenSpelling}><span style={{ fontWeight: 'bold', color: '#d97706' }}>拼</span></button>
-            <button style={styles.rightIconButton} onClick={handleOpenRecorder}><FaMicrophone size={18} /></button>
+            <button style={styles.rightIconButton} onClick={() => setIsSpellingOpen(true)}><span style={{ fontWeight: 'bold', color: '#d97706' }}>拼</span></button>
+            <button style={styles.rightIconButton} onClick={() => setIsRecordingOpen(true)}><FaMicrophone size={18} /></button>
             {currentCard?.chinese?.length <= 5 && <button style={styles.rightIconButton} onClick={() => setWriterChar(currentCard.chinese)}><FaPenFancy size={18} /></button>}
             <button style={styles.rightIconButton} onClick={handleToggleFavorite}>{isFavoriteCard ? <FaHeart color="#f87171" /> : <FaRegHeart />}</button>
         </div>
@@ -545,7 +554,7 @@ const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level 
             </div>
         </div>
       </animated.div>
-  ));
+  )});
 
   return createPortal(cardContent, document.body);
 };
@@ -560,6 +569,7 @@ const styles = {
     revealedContent: { marginTop: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' },
     textWordBurmese: { fontSize: '1.3rem', color: '#4b5563' },
     explanationBox: { color: '#16a34a', fontSize: '1.1rem', cursor: 'pointer' },
+    mnemonicBox: { color: '#6b7280', fontSize: '1.0rem', background: 'transparent' },
     exampleBox: { padding: '10px', borderBottom: '1px dashed #e5e7eb', cursor: 'pointer' },
     examplePinyin: { fontSize: '0.95rem', color: '#d97706' },
     exampleText: { fontSize: '1.2rem' },
