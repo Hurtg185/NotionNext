@@ -9,30 +9,27 @@ import { pinyin } from 'pinyin-pro';
 import { spokenBooks } from '@/data/spoken/meta';
 
 // ============================================================================
-// 1. 音频引擎 (修复语速无效问题)
+// 1. 全局音频控制器 (确保全局唯一，切歌必停)
 // ============================================================================
-const AudioEngine = {
+const GlobalPlayer = {
   current: null,
-  play(text, voice, rate, onEnd) {
-    if (typeof window === 'undefined') return;
-    this.stop();
-    
-    // 语速修复：确保是 -30% 这种格式，并限制在 API 接受范围内
-    const r = rate < 0 ? `${rate}%` : `+${rate}%`;
-    const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${voice}&r=${r}`;
-    
-    const audio = new window.Audio(url);
-    this.current = audio;
-    audio.onended = () => { this.current = null; if(onEnd) onEnd(); };
-    audio.onerror = () => { this.current = null; if(onEnd) onEnd(); };
-    audio.play().catch(() => { this.current = null; if(onEnd) onEnd(); });
-  },
   stop() {
     if (this.current) {
       this.current.pause();
-      this.current.currentTime = 0;
+      this.current.src = "";
+      this.current.load();
       this.current = null;
     }
+  },
+  play(url) {
+    return new Promise((resolve, reject) => {
+      this.stop();
+      const audio = new Audio(url);
+      this.current = audio;
+      audio.onended = () => { this.current = null; resolve(); };
+      audio.onerror = () => { this.current = null; resolve(); };
+      audio.play().catch(e => { this.current = null; resolve(); });
+    });
   }
 };
 
@@ -62,16 +59,19 @@ export default function SpokenModule() {
   const [view, setView] = useState('home'); // home | catalog | list
   const [book, setBook] = useState(null);
   const [phrases, setPhrases] = useState([]);
-  const [selectedSub, setSelectedSub] = useState(null); // 当前选中的小节
+  const [selectedSub, setSelectedSub] = useState(null); 
   
+  // 设置状态
   const [settings, setSettings] = useState({ 
     zhVoice: 'zh-CN-YunxiaNeural', zhRate: -30, zhEnabled: true,
     myVoice: 'my-MM-ThihaNeural', myRate: 0, myEnabled: true
   });
   const [showSettings, setShowSettings] = useState(false);
+  
+  // 状态锁
   const [playingId, setPlayingId] = useState(null);
   const [recordingId, setRecordingId] = useState(null);
-  const [speechResult, setSpeechResult] = useState(null);
+  const [speechDiff, setSpeechDiff] = useState(null); // { id, resultText }
   const [spellingId, setSpellingId] = useState(null);
 
   const [isUnlocked, setIsUnlocked] = useState(false);
@@ -79,7 +79,6 @@ export default function SpokenModule() {
   const [showHeader, setShowHeader] = useState(true);
   const lastScrollY = useRef(0);
 
-  // 初始化
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('hsk_user') || '{}');
     setIsUnlocked((user.unlocked_levels || '').includes('SP'));
@@ -87,7 +86,6 @@ export default function SpokenModule() {
     if (saved) setSettings(JSON.parse(saved));
   }, []);
 
-  // 滚动逻辑 (窄 Header)
   useEffect(() => {
     const handleScroll = () => {
       const y = window.scrollY;
@@ -99,38 +97,68 @@ export default function SpokenModule() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // 业务方法
-  const handleOpenBook = async (b) => {
+  // --- 核心播放功能 ---
+
+  // 播放 CF TTS
+  const playTtsTask = async (text, voice, rate) => {
+    const r = rate < 0 ? `${rate}%` : `+${rate}%`;
+    const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${voice}&r=${r}`;
+    await GlobalPlayer.play(url);
+  };
+
+  // 拼读演示逻辑：单字R2 -> 完整TTS
+  const handleSpelling = async (item) => {
+    if (playingId === `spell-${item.id}`) { GlobalPlayer.stop(); setPlayingId(null); return; }
+    setPlayingId(`spell-${item.id}`);
+    
     try {
-      const mod = await import(`@/data/spoken/${b.file}.js`);
-      setPhrases(mod.default);
-      setBook(b);
-      setView('catalog'); // 进入书籍目录页
-      window.scrollTo(0, 0);
-    } catch(e) { alert("课程内容加载失败"); }
+      const chars = item.chinese.split('');
+      for (const char of chars) {
+        const py = pinyin(char, { toneType: 'symbol' });
+        const r2Url = `https://audio.886.best/chinese-vocab-audio/%E6%8B%BC%E8%AF%BB%E9%9F%B3%E9%A2%91/${encodeURIComponent(py)}.mp3`;
+        await GlobalPlayer.play(r2Url);
+        await new Promise(r => setTimeout(r, 100)); // 停顿
+      }
+      // 拼完读完整句子
+      await playTtsTask(item.chinese, settings.zhVoice, settings.zhRate);
+    } finally {
+      setPlayingId(null);
+    }
   };
 
-  const handleOpenSub = (subName) => {
-    setSelectedSub(subName);
-    setView('list'); // 进入具体的对话列表
-    window.scrollTo(0, 0);
-  };
-
-  const handlePlay = (item) => {
-    if (playingId === item.id) { AudioEngine.stop(); setPlayingId(null); return; }
+  const handlePlayTTS = (item) => {
+    if (playingId === item.id) { GlobalPlayer.stop(); setPlayingId(null); return; }
     setPlayingId(item.id);
     const seq = async () => {
-      if (settings.zhEnabled) await new Promise(r => AudioEngine.play(item.chinese, settings.zhVoice, settings.zhRate, r));
+      if (settings.zhEnabled) await playTtsTask(item.chinese, settings.zhVoice, settings.zhRate);
       if (settings.myEnabled) {
-        if (settings.zhEnabled) await new Promise(r => setTimeout(r, 400));
-        await new Promise(r => AudioEngine.play(item.burmese, settings.myVoice, settings.myRate, r));
+        await new Promise(r => setTimeout(r, 400));
+        await playTtsTask(item.burmese, settings.myVoice, settings.myRate);
       }
       setPlayingId(null);
     };
     seq();
   };
 
-  // 书籍大纲提取
+  const toggleRecord = (item) => {
+    if (recordingId === item.id) { SpeechEngine.stop(); setRecordingId(null); } 
+    else {
+      setRecordingId(item.id); setSpeechDiff(null);
+      SpeechEngine.start((text) => {
+        setSpeechDiff({ id: item.id, text });
+        setRecordingId(null);
+      }, () => setRecordingId(null));
+    }
+  };
+
+  // 目录逻辑
+  const handleOpenBook = async (b) => {
+    try {
+      const mod = await import(`@/data/spoken/${b.file}.js`);
+      setPhrases(mod.default); setBook(b); setView('catalog');
+    } catch(e) { alert("加载失败"); }
+  };
+
   const bookOutline = useMemo(() => {
     const map = new Map();
     phrases.forEach(p => {
@@ -140,37 +168,46 @@ export default function SpokenModule() {
     return Array.from(map.entries()).map(([name, subs]) => ({ name, subs: Array.from(subs) }));
   }, [phrases]);
 
-  // 当前小节对话数据
-  const displayPhrases = useMemo(() => {
-    return phrases.filter(p => p.sub === selectedSub);
-  }, [phrases, selectedSub]);
+  const displayPhrases = useMemo(() => phrases.filter(p => p.sub === selectedSub), [phrases, selectedSub]);
+
+  // 比对渲染
+  const renderSpeechDiff = (target, input) => {
+    return target.split('').map((char, i) => {
+      const isMatch = input.includes(char);
+      return <span key={i} className={isMatch ? "text-slate-500" : "text-red-500 font-bold"}>{char}</span>;
+    });
+  };
 
   return (
     <div className="min-h-screen bg-[#F8F9FB] font-sans text-slate-900 max-w-md mx-auto relative shadow-2xl">
       
-      {/* ================= VIEW 1: 书架首页 (背景图面板) ================= */}
+      <a href="https://886.best" className="fixed top-4 left-1/2 -translate-x-1/2 z-[2000] bg-black/60 backdrop-blur-md px-4 py-1.5 rounded-full text-white text-[10px] font-black border border-white/10 active:scale-95 transition-transform uppercase tracking-widest">
+        <Home size={10} className="inline mr-1 mb-0.5"/> 886.best
+      </a>
+
+      {/* ================= VIEW 1: 首页 ================= */}
       {view === 'home' && (
         <div className="min-h-screen">
-           <div className="relative h-64 overflow-hidden">
-              <img src="https://images.unsplash.com/photo-1543269865-cbf427effbad?w=800&q=80" className="w-full h-full object-cover brightness-[0.7]" />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#F8F9FB] to-transparent" />
-              <div className="absolute bottom-12 left-8">
-                 <h1 className="text-4xl font-black text-slate-900 mb-1">口语特训</h1>
-                 <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Digital Learning Library</p>
+           <div className="relative h-64 overflow-hidden z-0">
+              <img src="https://images.unsplash.com/photo-1543269865-cbf427effbad?w=800&q=80" className="w-full h-full object-cover brightness-[0.8]" />
+              <div className="absolute inset-0 bg-gradient-to-b from-black/50 to-transparent" />
+              <div className="absolute bottom-14 left-8 text-white">
+                 <h1 className="text-4xl font-black mb-1">口语特训</h1>
+                 <p className="text-white/70 text-xs font-bold uppercase tracking-widest">Digital Learning Shelf</p>
               </div>
            </div>
 
-           <div className="px-6 -mt-6 relative z-10 space-y-6 pb-24">
+           <div className="px-6 -mt-10 relative z-10 space-y-6 pb-24 rounded-t-[2.5rem] bg-[#F8F9FB] pt-10 min-h-[500px]">
               {spokenBooks.map(b => (
-                <motion.div key={b.id} whileTap={{ scale: 0.98 }} className="bg-white rounded-3xl p-5 shadow-xl shadow-slate-200/50 border border-white cursor-pointer flex gap-5 items-center" onClick={() => handleOpenBook(b)}>
+                <motion.div key={b.id} whileTap={{ scale: 0.98 }} className="bg-white rounded-3xl p-5 shadow-xl border border-white cursor-pointer flex gap-5 items-center" onClick={() => handleOpenBook(b)}>
                     <div className="w-20 h-28 rounded-2xl overflow-hidden shadow-lg shrink-0">
                         <img src={b.image} className="w-full h-full object-cover" />
                     </div>
                     <div className="flex-1">
-                        <h3 className="text-xl font-black text-slate-800 mb-2 leading-tight">{b.title}</h3>
-                        <p className="text-xs text-slate-400 line-clamp-2 mb-3">{b.desc}</p>
+                        <h3 className="text-xl font-black text-slate-800 leading-tight mb-2">{b.title}</h3>
+                        <p className="text-xs text-slate-400 line-clamp-2 mb-3 leading-relaxed">{b.desc}</p>
                         <div className="flex items-center text-blue-600 text-[10px] font-black uppercase tracking-tighter">
-                            <span>Open Book</span> <ChevronRight size={14} className="ml-1"/>
+                            <span>Open catalog</span> <ChevronRight size={14} className="ml-1"/>
                         </div>
                     </div>
                 </motion.div>
@@ -179,26 +216,25 @@ export default function SpokenModule() {
         </div>
       )}
 
-      {/* ================= VIEW 2: 书籍目录页 (Catalog) ================= */}
+      {/* ================= VIEW 2: 目录页 ================= */}
       {view === 'catalog' && (
         <div className="min-h-screen bg-white">
            <div className="p-4 flex items-center gap-3 border-b sticky top-0 bg-white/90 backdrop-blur z-20">
              <button onClick={() => setView('home')} className="p-2"><ChevronLeft/></button>
-             <h2 className="font-black text-slate-800">课程大纲</h2>
+             <h2 className="font-black text-slate-800">课程目录</h2>
            </div>
-           
            <div className="p-6 pb-20">
               {bookOutline.map((chapter, idx) => (
                 <div key={idx} className="mb-8">
                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-black text-xs">{idx + 1}</div>
+                      <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center font-black text-xs">{idx + 1}</div>
                       <h3 className="text-lg font-black text-slate-800">{chapter.name}</h3>
                    </div>
-                   <div className="grid grid-cols-1 gap-2 pl-11">
+                   <div className="grid grid-cols-1 gap-2 pl-10">
                       {chapter.subs.map((s, i) => (
-                         <button key={i} onClick={() => handleOpenSub(s)} className="group flex items-center justify-between py-3 border-b border-slate-50 active:bg-slate-50 pr-2">
-                            <span className="text-sm font-bold text-slate-600 group-hover:text-blue-600 transition-colors">{s}</span>
-                            <ChevronRight size={16} className="text-slate-200" />
+                         <button key={i} onClick={() => { setSelectedSub(s); setView('list'); window.scrollTo(0,0); }} className="flex items-center justify-between py-3 border-b border-slate-50 active:bg-slate-50 text-left">
+                            <span className="text-sm font-bold text-slate-600">{s}</span>
+                            <ChevronRight size={14} className="text-slate-200" />
                          </button>
                       ))}
                    </div>
@@ -208,126 +244,109 @@ export default function SpokenModule() {
         </div>
       )}
 
-      {/* ================= VIEW 3: 学习列表页 (全屏沉浸) ================= */}
+      {/* ================= VIEW 3: 学习页 ================= */}
       <AnimatePresence>
         {view === 'list' && (
           <motion.div initial={{x:'100%'}} animate={{x:0}} exit={{x:'100%'}} transition={{type:'spring', damping:28}} className="fixed inset-0 z-[1000] bg-[#F5F7FA] overflow-y-auto no-scrollbar">
              
-             {/* 极窄 Header (滚动消失) */}
-             <motion.div initial={{y:0}} animate={{y: showHeader ? 0 : -100}} className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur shadow-sm max-w-md mx-auto">
-               <div className="h-11 px-4 flex items-center justify-between border-b border-slate-50">
+             <motion.div initial={{y:0}} animate={{y: showHeader ? 0 : -100}} className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur shadow-sm max-w-md mx-auto">
+               <div className="h-11 px-4 flex items-center justify-between">
                  <button onClick={() => setView('catalog')} className="p-1.5 text-slate-600"><ChevronLeft size={22}/></button>
                  <span className="font-black text-slate-800 text-[11px] truncate uppercase tracking-widest">{selectedSub}</span>
-                 <button onClick={() => setShowSettings(!showSettings)} className={`p-1.5 rounded-full ${showSettings ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-100 text-slate-600'}`}><Settings2 size={16}/></button>
+                 <button onClick={() => setShowSettings(!showSettings)} className={`p-1.5 rounded-full transition-all ${showSettings ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}><Settings2 size={16}/></button>
                </div>
              </motion.div>
 
-             {/* 设置面板 (高辨识度设计) */}
+             {/* 重新设计的设置面板 */}
              <AnimatePresence>
                {showSettings && (
-                 <motion.div initial={{opacity:0, y:-10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-10}} className="fixed top-20 left-4 right-4 z-[60] bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 overflow-hidden max-w-sm mx-auto">
-                   <div className="p-6 space-y-6">
-                      <div className="bg-slate-50 rounded-3xl p-4 border border-slate-100">
-                         <div className="flex justify-between items-center mb-4">
-                            <span className="text-[10px] font-black text-slate-800">CHINESE / 中文设置</span>
-                            <Switch checked={settings.zhEnabled} onChange={v => setSettings(s => ({...s, zhEnabled: v}))} />
+                 <motion.div initial={{opacity:0, y:-10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-10}} className="fixed top-16 left-4 right-4 z-[60] bg-white rounded-[2rem] shadow-2xl border border-slate-100 overflow-hidden max-w-sm mx-auto">
+                   <div className="p-5 space-y-6">
+                      <div className="bg-slate-50 rounded-2xl p-4">
+                         <div className="flex justify-between items-center mb-3">
+                            <span className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Chinese Setting</span>
+                            <button onClick={() => setSettings(s => ({...s, zhEnabled: !s.zhEnabled}))} className={`w-10 h-5 rounded-full relative transition-colors ${settings.zhEnabled ? 'bg-blue-600' : 'bg-slate-300'}`}><div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${settings.zhEnabled ? 'right-1' : 'left-1'}`} /></button>
                          </div>
-                         <div className="grid grid-cols-3 gap-2 mb-4">
+                         <div className="flex gap-2 mb-3">
                             {[{l:'Kid',v:'zh-CN-YunxiaNeural'},{l:'Lady',v:'zh-CN-XiaoyanNeural'},{l:'Man',v:'zh-CN-YunxiNeural'}].map(opt => (
-                               <button key={opt.v} onClick={() => setSettings(s => ({...s, zhVoice: opt.v}))} className={`py-2 text-[10px] font-black rounded-xl border transition-all ${settings.zhVoice === opt.v ? 'bg-blue-600 text-white border-blue-600 shadow-md scale-105' : 'bg-white text-slate-400 border-slate-100'}`}>{opt.l}</button>
+                               <button key={opt.v} onClick={() => setSettings(s => ({...s, zhVoice: opt.v}))} className={`flex-1 py-1.5 text-[9px] font-black rounded-lg border transition-all ${settings.zhVoice === opt.v ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-400 border-slate-100'}`}>{opt.l}</button>
                             ))}
                          </div>
-                         <div className="flex items-center gap-3"><span className="text-[10px] text-slate-400 font-bold w-12">Speed {settings.zhRate}%</span><input type="range" min="-50" max="50" step="10" value={settings.zhRate} onChange={e => setSettings(s => ({...s, zhRate: Number(e.target.value)}))} className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none accent-blue-600"/></div>
+                         <div className="flex items-center gap-3"><span className="text-[9px] text-slate-400 font-black w-10">{settings.zhRate}%</span><input type="range" min="-50" max="50" step="10" value={settings.zhRate} onChange={e => setSettings(s => ({...s, zhRate: Number(e.target.value)}))} className="flex-1 h-1 bg-slate-200 rounded-lg appearance-none accent-blue-600"/></div>
                       </div>
-
-                      <div className="bg-slate-50 rounded-3xl p-4 border border-slate-100">
-                         <div className="flex justify-between items-center mb-4">
-                            <span className="text-[10px] font-black text-slate-800">MYANMAR / 缅文设置</span>
-                            <Switch checked={settings.myEnabled} onChange={v => setSettings(s => ({...s, myEnabled: v}))} />
+                      <div className="bg-slate-50 rounded-2xl p-4">
+                         <div className="flex justify-between items-center mb-3">
+                            <span className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Myanmar Setting</span>
+                            <button onClick={() => setSettings(s => ({...s, myEnabled: !s.myEnabled}))} className={`w-10 h-5 rounded-full relative transition-colors ${settings.myEnabled ? 'bg-green-600' : 'bg-slate-300'}`}><div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${settings.myEnabled ? 'right-1' : 'left-1'}`} /></button>
                          </div>
-                         <div className="grid grid-cols-2 gap-2 mb-4">
+                         <div className="grid grid-cols-2 gap-2 mb-3">
                             {[{l:'Thiha',v:'my-MM-ThihaNeural'},{l:'Nilar',v:'my-MM-NilarNeural'}].map(opt => (
-                               <button key={opt.v} onClick={() => setSettings(s => ({...s, myVoice: opt.v}))} className={`py-2 text-[10px] font-black rounded-xl border transition-all ${settings.myVoice === opt.v ? 'bg-green-600 text-white border-green-600 shadow-md scale-105' : 'bg-white text-slate-400 border-slate-100'}`}>{opt.l}</button>
+                               <button key={opt.v} onClick={() => setSettings(s => ({...s, myVoice: opt.v}))} className={`flex-1 py-1.5 text-[9px] font-black rounded-lg border transition-all ${settings.myVoice === opt.v ? 'bg-green-600 text-white border-green-600' : 'bg-white text-slate-400 border-slate-100'}`}>{opt.l}</button>
                             ))}
                          </div>
-                         <div className="flex items-center gap-3"><span className="text-[10px] text-slate-400 font-bold w-12">Speed {settings.myRate}%</span><input type="range" min="-50" max="50" step="10" value={settings.myRate} onChange={e => setSettings(s => ({...s, myRate: Number(e.target.value)}))} className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none accent-green-600"/></div>
+                         <div className="flex items-center gap-3"><span className="text-[9px] text-slate-400 font-black w-10">{settings.myRate}%</span><input type="range" min="-50" max="50" step="10" value={settings.myRate} onChange={e => setSettings(s => ({...s, myRate: Number(e.target.value)}))} className="flex-1 h-1 bg-slate-200 rounded-lg appearance-none accent-green-600"/></div>
                       </div>
                    </div>
                  </motion.div>
                )}
              </AnimatePresence>
 
-             {/* 对话卡片流 */}
-             <div className="pt-16 pb-40 px-5 space-y-6">
+             <div className="pt-20 pb-40 px-5 space-y-8">
                {displayPhrases.map((item, index) => {
                  const isLocked = !isUnlocked && index >= 3;
-
                  return (
-                   <motion.div key={item.id} whileTap={{scale:0.98}} onClick={() => isLocked ? setShowVip(true) : handlePlay(item)} className={`relative bg-white p-7 rounded-[2.5rem] shadow-sm border border-slate-100 text-center transition-all cursor-pointer ${isLocked ? 'blur-[4.5px] opacity-60 pointer-events-none' : ''} ${playingId === item.id ? 'ring-2 ring-blue-500 bg-blue-50/10' : ''}`}>
+                   <motion.div key={item.id} className={`relative bg-white p-7 rounded-[2.5rem] shadow-sm border border-slate-100 text-center transition-all ${isLocked ? 'blur-[5px] pointer-events-none' : ''}`}>
                       
-                      {/* 1. 谐音 (最顶) */}
-                      <div className="inline-block bg-amber-50 text-amber-700 px-3 py-0.5 rounded-full text-[9px] font-black border border-amber-100 mb-3 shadow-sm uppercase tracking-tighter">
-                         {item.xieyin}
-                      </div>
-
-                      {/* 2. 拼音 (自动) */}
-                      <div className="text-[11px] text-slate-400 font-mono mb-2 tracking-tighter" style={{ fontFamily: '"Roboto", sans-serif' }}>
-                         {pinyin(item.chinese, {toneType:'symbol'})}
-                      </div>
-
-                      {/* 3. 中文 (大字) */}
-                      <h3 className="text-2xl font-black text-slate-800 mb-3 leading-tight tracking-tight">{item.chinese}</h3>
-
-                      {/* 4. 缅文 */}
-                      <p className="text-base text-blue-600 font-medium mb-5 font-burmese leading-relaxed">{item.burmese}</p>
+                      <div className="inline-block bg-amber-50 text-amber-700 px-3 py-0.5 rounded-full text-[9px] font-black border border-amber-100 mb-3 shadow-sm uppercase tracking-tighter">{item.xieyin}</div>
                       
-                      {/* 底部工具 */}
-                      <div className="flex justify-center gap-6 border-t border-slate-50 pt-5 mt-2">
-                           <button onClick={(e) => {e.stopPropagation(); setSpellingId(spellingId === item.id ? null : item.id)}} className={`active:scale-90 transition-colors ${spellingId === item.id ? 'text-orange-500 shadow-orange-100' : 'text-slate-300'}`}><Sparkles size={20}/></button>
-                           <button onClick={(e) => {e.stopPropagation(); toggleRecord(item)}} className={`active:scale-90 transition-colors ${recordingId === item.id ? 'text-red-500 animate-pulse' : 'text-slate-300'}`}>{recordingId === item.id ? <StopCircle size={20}/> : <Mic size={20}/></button>
-                           {playingId === item.id ? <Loader2 className="text-blue-600 animate-spin" size={20}/> : <Volume2 className="text-slate-200" size={20}/>}
-                      </div>
-
-                      {/* 拼读展开 */}
-                      {spellingId === item.id && (
-                        <div className="mt-5 pt-5 border-t border-slate-50 flex flex-wrap justify-center gap-3 animate-in slide-in-from-top-2">
+                      {spellingId === item.id ? (
+                        <div className="flex justify-center gap-3 mb-2 animate-in fade-in">
                            {item.chinese.split('').map((char, i) => (
-                              <div key={i} className="text-center"><div className="text-[9px] font-mono text-orange-500 mb-1">{pinyin(char, {toneType:'symbol'})}</div><div className="text-2xl font-black text-slate-700">{char}</div></div>
+                             <div key={i} className="text-center">
+                               <div className="text-[9px] text-orange-500 font-mono mb-1">{pinyin(char, {toneType:'symbol'})}</div>
+                               <div className="text-2xl font-black text-slate-700">{char}</div>
+                             </div>
                            ))}
                         </div>
+                      ) : (
+                        <div className="text-[11px] text-slate-400 font-mono mb-2 tracking-tighter">{pinyin(item.chinese, {toneType:'symbol'})}</div>
                       )}
 
-                      {/* 识别结果 */}
-                      {speechResult?.id === item.id && (
-                        <div className="mt-4 bg-slate-50 p-3 rounded-2xl text-[11px] flex justify-between items-center text-slate-500 border border-slate-100">
-                           <span className="truncate flex-1 text-left mr-2 italic">" {speechResult.text} "</span>
-                           <span className={`font-black px-2 py-0.5 rounded-lg ${speechResult.score >= 60 ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{speechResult.score}分</span>
+                      <h3 className="text-2xl font-black text-slate-800 mb-3 leading-tight cursor-pointer" onClick={() => handlePlayTTS(item)}>{item.chinese}</h3>
+                      <p className="text-base text-blue-600 font-medium mb-4 font-burmese leading-relaxed">{item.burmese}</p>
+                      
+                      <div className="flex justify-center gap-8 border-t border-slate-50 pt-5">
+                           <button onClick={(e) => {e.stopPropagation(); setSpellingId(spellingId === item.id ? null : item.id); handleSpelling(item);}} className={`active:scale-90 transition-colors ${playingId === `spell-${item.id}` ? 'text-orange-500 scale-110' : 'text-slate-300'}`}><Sparkles size={20}/></button>
+                           <button onClick={(e) => {e.stopPropagation(); toggleRecord(item)}} className={`active:scale-90 transition-colors ${recordingId === item.id ? 'text-red-500 animate-pulse' : 'text-slate-300'}`}>{recordingId === item.id ? <StopCircle size={20}/> : <Mic size={20}/></button>
+                           <button onClick={(e) => {e.stopPropagation(); handlePlayTTS(item)}} className={`active:scale-90 transition-colors ${playingId === item.id ? 'text-blue-500 scale-110' : 'text-slate-300'}`}>{playingId === item.id ? <Loader2 className="animate-spin" size={20}/> : <Volume2 size={20}/>}</button>
+                      </div>
+
+                      {speechDiff?.id === item.id && (
+                        <div className="mt-4 bg-slate-50 p-3 rounded-2xl text-sm flex justify-between items-center text-slate-500 border border-slate-100">
+                           <div className="flex flex-wrap gap-1">你说: {renderSpeechDiff(item.chinese, speechDiff.text)}</div>
+                           <button onClick={() => setSpeechDiff(null)} className="text-slate-300"><X size={14}/></button>
                         </div>
                       )}
 
-                      {/* 锁定层 */}
-                      {isLocked && <div className="absolute inset-0 flex flex-col items-center justify-center z-10"><Lock className="text-slate-400" size={40}/><span className="text-[10px] font-black text-slate-400 mt-2 bg-white/80 px-2 py-0.5 rounded shadow-sm">激活码已锁定</span></div>}
+                      {isLocked && <div className="absolute inset-0 flex flex-col items-center justify-center z-10"><Lock className="text-slate-400" size={40}/><span className="text-[10px] font-black text-slate-400 mt-2 bg-white/80 px-2 py-0.5 rounded">VIP 内容已锁定</span></div>}
                    </motion.div>
-                 )
+                 );
                })}
+               {!isUnlocked && <div className="py-12 text-center"><button onClick={() => setShowVip(true)} className="bg-slate-900 text-white px-10 py-4 rounded-[2rem] text-sm font-black shadow-2xl active:scale-95 transition-transform animate-bounce">激活完整课程</button></div>}
              </div>
-             
-             {/* 一键置顶按钮 */}
-             <motion.button onClick={() => window.scrollTo({top:0, behavior:'smooth'})} className="fixed bottom-10 right-6 w-12 h-12 bg-white/90 backdrop-blur shadow-2xl border border-slate-100 rounded-full flex items-center justify-center text-slate-600 z-[1100] active:scale-90"><ArrowUp size={24}/></motion.button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* 激活弹窗 */}
       <AnimatePresence>
         {showVip && (
           <div className="fixed inset-0 z-[3000] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-md">
              <motion.div initial={{scale:0.9}} animate={{scale:1}} className="relative bg-white rounded-[3rem] p-10 w-full max-w-xs text-center shadow-2xl">
                  <button onClick={() => setShowVip(false)} className="absolute top-6 right-6 p-2 text-slate-400"><X size={20} /></button>
                  <div className="w-20 h-20 mx-auto bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mb-6 shadow-inner"><Crown size={42} /></div>
-                 <h3 className="text-2xl font-black text-slate-900 mb-3 tracking-tight">解锁本章节</h3>
-                 <p className="text-xs text-slate-400 mb-8 leading-relaxed">当前仅展示试看内容。激活口语特训包可查看全部 10,000+ 对话，并开启智能语音评测功能。</p>
-                 <a href="https://m.me/61575187883357" target="_blank" className="block w-full py-4.5 bg-blue-600 text-white rounded-[1.8rem] font-black shadow-xl shadow-blue-200 active:scale-95 transition-transform tracking-wider">联系老师激活</a>
+                 <h3 className="text-2xl font-black text-slate-900 mb-3 tracking-tight">解锁全部对话</h3>
+                 <p className="text-xs text-slate-400 mb-8 leading-relaxed">激活后可查看全部行业场景对话，使用书籍目录模式及智能语音评测功能。</p>
+                 <a href="https://m.me/61575187883357" target="_blank" className="block w-full py-4.5 bg-blue-600 text-white rounded-[1.8rem] font-black shadow-xl shadow-blue-200 active:scale-95 transition-transform">联系老师开通</a>
              </motion.div>
           </div>
         )}
