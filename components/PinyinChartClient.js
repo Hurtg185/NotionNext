@@ -8,10 +8,9 @@ import {
     Volume2, Sparkles, Mic, Square, Ear, RefreshCcw, BarChart2, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useSwipeable } from 'react-swipeable';
 
 // ==========================================
-// 1. IndexedDB 离线缓存管理器 (原生实现，无依赖)
+// 1. IndexedDB 离线缓存管理器
 // ==========================================
 const DB_NAME = 'Pinyin_Hsk_Audio_DB';
 const STORE_NAME = 'audio_blobs';
@@ -20,7 +19,6 @@ const DB_VERSION = 1;
 const AudioCacheManager = {
     db: null,
 
-    // 初始化数据库
     async init() {
         if (typeof window === 'undefined') return;
         if (this.db) return this.db;
@@ -41,7 +39,6 @@ const AudioCacheManager = {
         });
     },
 
-    // 获取缓存的 Blob URL
     async getAudioUrl(url) {
         if (!url) return null;
         await this.init();
@@ -52,9 +49,7 @@ const AudioCacheManager = {
 
             request.onsuccess = () => {
                 if (request.result) {
-                    // 命中缓存：将 Blob 转为本地 URL
                     const blobUrl = URL.createObjectURL(request.result);
-                    // console.log('📦 Loaded from Cache:', url);
                     resolve(blobUrl);
                 } else {
                     resolve(null);
@@ -64,13 +59,12 @@ const AudioCacheManager = {
         });
     },
 
-    // 缓存音频
     async cacheAudio(url, blob) {
         await this.init();
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction([STORE_NAME], 'readwrite');
             const store = transaction.objectStore(STORE_NAME);
-            const request = store.put(blob, url); // Key: URL, Value: Blob
+            const request = store.put(blob, url);
             request.onsuccess = () => resolve();
             request.onerror = () => reject(request.error);
         });
@@ -81,7 +75,6 @@ const AudioCacheManager = {
 // 2. 视觉组件
 // ==========================================
 
-// Siri 风格动态声波
 const SiriWaveform = ({ isActive }) => {
     return (
         <div className="flex items-center justify-center gap-[3px] h-8">
@@ -104,7 +97,6 @@ const SiriWaveform = ({ isActive }) => {
     );
 };
 
-// 单个拼音按钮 (Memoized)
 const LetterButton = React.memo(({ item, isActive, isSelected, onClick }) => {
     const fontSizeClass = useMemo(() => {
         const len = item.letter.length;
@@ -130,7 +122,6 @@ const LetterButton = React.memo(({ item, isActive, isSelected, onClick }) => {
                 <div className="absolute top-0 right-0 w-12 h-12 bg-white/20 blur-xl rounded-full translate-x-1/2 -translate-y-1/2" />
             )}
 
-            {/* 修复声调偏移：移除 leading-none，使用 leading-normal 给声调留出空间，微调 pb-1 视觉居中 */}
             <span className={`pinyin-letter font-black tracking-tight leading-normal pb-1 z-10 transition-colors duration-200
                 ${fontSizeClass}
                 ${isActive ? 'text-white drop-shadow-md' : 'text-slate-800 group-hover:text-violet-600'}
@@ -165,9 +156,7 @@ LetterButton.displayName = 'LetterButton';
 
 export default function PinyinChartClient({ initialData }) {
     // 基础状态
-    const [activeTab, setActiveTab] = useState(0);
     const [currentIndex, setCurrentIndex] = useState({ cat: 0, row: 0, col: 0 });
-    const [direction, setDirection] = useState(0); 
     
     // 播放状态
     const [selectedItem, setSelectedItem] = useState(null); 
@@ -178,7 +167,7 @@ export default function PinyinChartClient({ initialData }) {
 
     // 录音状态
     const [isRecording, setIsRecording] = useState(false);
-    const [isMicLoading, setIsMicLoading] = useState(false); // 新增：麦克风初始化状态
+    const [isMicLoading, setIsMicLoading] = useState(false);
     const [userAudioUrl, setUserAudioUrl] = useState(null);
     const [isPlayingUserAudio, setIsPlayingUserAudio] = useState(false);
 
@@ -189,15 +178,11 @@ export default function PinyinChartClient({ initialData }) {
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
 
-    // 初始化 DB
     useEffect(() => {
         AudioCacheManager.init().catch(console.error);
     }, []);
 
-    // ===========================
-    // 核心逻辑：智能缓存播放
-    // ===========================
-
+    // 核心逻辑：播放
     const playAudio = useCallback(async (item, isAuto = false) => {
         if (!item?.audio) {
             if (isAuto) handleAudioEnd();
@@ -217,7 +202,6 @@ export default function PinyinChartClient({ initialData }) {
             let srcToPlay = await AudioCacheManager.getAudioUrl(item.audio);
 
             if (!srcToPlay) {
-                // console.log('⬇️ Fetching from network:', item.audio);
                 const response = await fetch(item.audio);
                 const blob = await response.blob();
                 await AudioCacheManager.cacheAudio(item.audio, blob);
@@ -250,12 +234,23 @@ export default function PinyinChartClient({ initialData }) {
             timeoutRef.current = setTimeout(() => {
                 let nextIndex;
                 if (initialData.categories) {
-                    const cat = initialData.categories[currentIndex.cat];
-                    if (currentIndex.col < cat.rows[currentIndex.row].length - 1) {
+                    const currentCat = initialData.categories[currentIndex.cat];
+                    const currentRow = currentCat.rows[currentIndex.row];
+
+                    // 1. 同一行向后移
+                    if (currentIndex.col < currentRow.length - 1) {
                         nextIndex = { ...currentIndex, col: currentIndex.col + 1 };
-                    } else if (currentIndex.row < cat.rows.length - 1) {
+                    } 
+                    // 2. 换行
+                    else if (currentIndex.row < currentCat.rows.length - 1) {
                         nextIndex = { ...currentIndex, row: currentIndex.row + 1, col: 0 };
-                    } else {
+                    } 
+                    // 3. 跨分类换行
+                    else if (currentIndex.cat < initialData.categories.length - 1) {
+                        nextIndex = { cat: currentIndex.cat + 1, row: 0, col: 0 };
+                    } 
+                    // 4. 到底了
+                    else {
                         setIsAutoPlaying(false);
                         return;
                     }
@@ -301,24 +296,18 @@ export default function PinyinChartClient({ initialData }) {
             }
             setIsPlayingLetter(null);
         } else {
-            setCurrentIndex({ cat: activeTab, row: 0, col: 0 });
+            setCurrentIndex({ cat: 0, row: 0, col: 0 });
             setIsAutoPlaying(true);
         }
-    }, [isAutoPlaying, activeTab]);
+    }, [isAutoPlaying]);
 
-    // ===========================
-    // 录音功能 (优化版)
-    // ===========================
-
+    // 录音功能
     const startRecording = async () => {
         if (typeof window === "undefined") return;
-        
-        // 立即给予 UI 反馈，避免用户觉得卡顿
         setIsMicLoading(true);
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            
             mediaRecorderRef.current = new MediaRecorder(stream);
             audioChunksRef.current = [];
 
@@ -330,27 +319,20 @@ export default function PinyinChartClient({ initialData }) {
                 const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
                 const url = URL.createObjectURL(audioBlob);
                 setUserAudioUrl(url);
-                
-                // 彻底释放流
                 stream.getTracks().forEach(track => track.stop());
             };
 
-            // timeslice 设置为 100ms，防止非常短的点击导致数据为空
             mediaRecorderRef.current.start(100);
-            
-            // 只有成功开始录音后才切换状态
             setIsRecording(true);
         } catch (error) {
             console.error("Microphone error:", error);
             alert("请允许麦克风权限以使用对比功能。");
         } finally {
-            // 无论成功失败，都停止加载动画
             setIsMicLoading(false);
         }
     };
 
     const stopRecording = () => {
-        // 增加安全检查，防止未初始化完成就点击停止
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
             mediaRecorderRef.current.stop();
             setIsRecording(false);
@@ -366,49 +348,9 @@ export default function PinyinChartClient({ initialData }) {
         }
     };
 
-    // ===========================
-    // UI 逻辑
-    // ===========================
-
-    const hasMultipleCategories = initialData.categories && initialData.categories.length > 1;
-    
-    const paginate = useCallback((newDirection) => {
-        if (!hasMultipleCategories) return;
-        if (newDirection > 0 && activeTab < initialData.categories.length - 1) {
-            setDirection(1); setActiveTab(prev => prev + 1); setIsAutoPlaying(false);
-        } else if (newDirection < 0 && activeTab > 0) {
-            setDirection(-1); setActiveTab(prev => prev - 1); setIsAutoPlaying(false);
-        }
-    }, [activeTab, hasMultipleCategories, initialData.categories]);
-
-    const swipeHandlers = useSwipeable({
-        onSwipedLeft: () => paginate(1),
-        onSwipedRight: () => paginate(-1),
-        preventDefaultTouchmoveEvent: true,
-        trackMouse: true,
-    });
-
-    const pageVariants = {
-        enter: (direction) => ({ x: direction > 0 ? 50 : -50, opacity: 0, scale: 0.95 }),
-        center: { zIndex: 1, x: 0, opacity: 1, scale: 1 },
-        exit: (direction) => ({ zIndex: 0, x: direction < 0 ? 50 : -50, opacity: 0, scale: 0.95 }),
-    };
-
-    // 响应式 Grid
-    const [gridCols, setGridCols] = useState(4);
-    useEffect(() => {
-        const handleResize = () => {
-            if (window.innerWidth < 400) setGridCols(3);
-            else if (window.innerWidth < 640) setGridCols(4);
-            else setGridCols(5);
-        };
-        handleResize();
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
-
     const renderContent = () => {
-        const gridClass = gridCols === 3 ? "grid-cols-3" : gridCols === 4 ? "grid-cols-4" : "grid-cols-5";
+        // 强制手机一排4个
+        const gridClass = "grid-cols-4";
 
         if (!initialData.categories) {
             return (
@@ -427,37 +369,17 @@ export default function PinyinChartClient({ initialData }) {
         }
 
         return (
-            <div {...swipeHandlers} className="flex flex-col flex-grow w-full">
-                {/* Tabs - 修改为 4 列 Grid，并减小间距和字体以适应手机 */}
-                <div className="relative mb-6">
-                    <div className="grid grid-cols-4 gap-2 sm:gap-3 pb-4 pt-2 px-0 sm:px-1">
-                        {initialData.categories.map((cat, index) => {
-                            const isSelected = activeTab === index;
-                            return (
-                                <button 
-                                    key={cat.name} 
-                                    onClick={() => { setDirection(index > activeTab ? 1 : -1); setActiveTab(index); setIsAutoPlaying(false); }} 
-                                    className={`relative w-full py-2 sm:py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all duration-300 flex items-center justify-center z-10
-                                    ${isSelected 
-                                        ? 'text-white bg-slate-900 shadow-lg shadow-slate-900/30 scale-105' 
-                                        : 'text-slate-500 bg-white hover:bg-slate-50 border border-slate-100 hover:border-slate-300'}`}
-                                >
-                                    {cat.name}
-                                </button>
-                            )
-                        })}
-                    </div>
-                </div>
-                
-                {/* 字母列表 */}
-                <div className="relative min-h-[300px]">
-                    <AnimatePresence initial={false} custom={direction} mode="popLayout">
-                        <motion.div
-                            key={activeTab} custom={direction} variants={pageVariants} initial="enter" animate="center" exit="exit"
-                            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                            className="space-y-6 pb-4"
-                        >
-                            {initialData.categories[activeTab].rows.map((row, rowIndex) => (
+            <div className="flex flex-col flex-grow w-full space-y-10">
+                {initialData.categories.map((cat, catIdx) => (
+                    <div key={cat.name} className="flex flex-col gap-4">
+                        {/* 分类标题：简洁显示 */}
+                        <div className="flex items-center gap-3 px-1">
+                            <div className="h-4 w-1 bg-violet-500 rounded-full"></div>
+                            <h2 className="text-sm font-bold text-slate-400 tracking-wider uppercase">{cat.name}</h2>
+                        </div>
+                        
+                        <div className="space-y-4">
+                            {cat.rows.map((row, rowIndex) => (
                                 <div key={rowIndex} className={`grid ${gridClass} gap-3 sm:gap-5`}>
                                     {row.map((item) => (
                                         <LetterButton 
@@ -470,9 +392,9 @@ export default function PinyinChartClient({ initialData }) {
                                     ))}
                                 </div>
                             ))}
-                        </motion.div>
-                    </AnimatePresence>
-                </div>
+                        </div>
+                    </div>
+                ))}
             </div>
         );
     };
@@ -506,9 +428,8 @@ export default function PinyinChartClient({ initialData }) {
                     <audio ref={audioRef} onEnded={handleAudioEnd} preload="none" />
                     <audio ref={userAudioRef} />
                     
-                    {/* Header (移除了返回箭头，文字和图标两端对齐) */}
-                    <header className="flex items-center justify-between mb-6 pt-2">
-                        <h1 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight drop-shadow-sm flex items-center gap-2">
+                    <header className="flex items-center justify-between mb-8 pt-2">
+                        <h1 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight drop-shadow-sm">
                             {initialData.title}
                         </h1>
                         <div className="w-12 h-12 flex items-center justify-center bg-white/80 backdrop-blur rounded-full border border-slate-200 shadow-sm">
@@ -656,7 +577,7 @@ export default function PinyinChartClient({ initialData }) {
                                     ) : (
                                         <>
                                             <RefreshCcw size={20} />
-                                            <span>开启自动循环</span>
+                                            <span>开启全表循环</span>
                                         </>
                                     )}
                                 </button>
