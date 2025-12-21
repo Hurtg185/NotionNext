@@ -37,7 +37,7 @@ function getPinyinComparison(targetText, userText) {
 }
 
 // ============================================================================
-// 1. 核心音频引擎
+// 1. 核心音频引擎 (已修改为走 CF 缓存代理)
 // ============================================================================
 const AudioEngine = {
   current: null,
@@ -60,8 +60,13 @@ const AudioEngine = {
     });
   },
   playTTS(text, voice, rate) {
+    // 🔥 核心修改：使用 GET 请求访问自己的 CF 代理接口
+    // rate 参数处理：有些接口接受 -50 到 50，有些接受 0.5 到 2，这里保持原样传递给后端处理
     const r = parseInt(rate) || 0; 
-    const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${voice}&r=${r}`;
+    
+    // 使用你自己的域名 API，而不是直接访问第三方
+    const url = `/api/tts?t=${encodeURIComponent(text)}&v=${voice}&r=${r}`;
+    
     return this.play(url);
   }
 };
@@ -142,16 +147,17 @@ const SettingsPanel = ({ settings, setSettings, onClose }) => {
                 </div>
              </div>
              {/* 发音人选择 */}
-             <div className="grid grid-cols-3 gap-2">
+             <div className="grid grid-cols-2 gap-2">
                 {[
-                  { label: '女声', val: 'zh-CN-XiaoyanNeural' },
-                  { label: '男声', val: 'zh-CN-YunxiNeural' },
-                  { label: '男童', val: 'zh-CN-YunxiaNeural' }
+                  { label: '小晓 (女)', val: 'zh-CN-XiaoxiaoMultilingualNeural' },
+                  { label: '云希 (男)', val: 'zh-CN-YunyiMultilingualNeural' },
+                  { label: '云夏 (男童)', val: 'zh-CN-YunxiaNeural' },
+                  { label: '小颜 (通用)', val: 'zh-CN-XiaoyanNeural' }
                 ].map(opt => (
                   <button 
                     key={opt.val}
                     onClick={() => setSettings(s => ({...s, zhVoice: opt.val}))}
-                    className={`py-1.5 text-[10px] font-bold rounded border transition-all ${settings.zhVoice === opt.val ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-slate-100 text-slate-400'}`}
+                    className={`py-1.5 text-[10px] font-bold rounded border transition-all truncate ${settings.zhVoice === opt.val ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-slate-100 text-slate-400'}`}
                   >
                     {opt.label}
                   </button>
@@ -177,6 +183,20 @@ const SettingsPanel = ({ settings, setSettings, onClose }) => {
                    <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform`} style={{left: settings.myEnabled ? '18px' : '2px'}}/>
                 </div>
              </div>
+             <div className="grid grid-cols-2 gap-2">
+                {[
+                  { label: 'Thiha (男)', val: 'my-MM-ThihaNeural' },
+                  { label: 'Nilar (女)', val: 'my-MM-NilarNeural' }
+                ].map(opt => (
+                  <button 
+                    key={opt.val}
+                    onClick={() => setSettings(s => ({...s, myVoice: opt.val}))}
+                    className={`py-1.5 text-[10px] font-bold rounded border transition-all truncate ${settings.myVoice === opt.val ? 'bg-green-50 border-green-200 text-green-600' : 'bg-white border-slate-100 text-slate-400'}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+             </div>
              <div className="flex items-center gap-2 pt-1">
                 <span className="text-[10px] text-slate-400">语速</span>
                 <input type="range" min="-50" max="50" step="10" value={settings.myRate} onChange={e => setSettings(s => ({...s, myRate: Number(e.target.value)}))} className="flex-1 h-1 bg-slate-100 rounded-lg appearance-none accent-green-500"/>
@@ -198,7 +218,7 @@ const SpellingModal = ({ item, settings, onClose }) => {
   const chars = item.chinese.split('');
   const isMounted = useRef(true);
 
-  // 挂载时自动逐字拼读 (原音)
+  // 挂载时自动逐字拼读 (原音 - 走 R2 静态资源，无需改动)
   useEffect(() => {
     isMounted.current = true;
     const autoSpell = async () => {
@@ -231,6 +251,7 @@ const SpellingModal = ({ item, settings, onClose }) => {
 
   const playWhole = () => {
      setActiveCharIndex('all');
+     // 这里的 playTTS 已经改成走 CF 代理了
      AudioEngine.playTTS(item.chinese, settings.zhVoice, settings.zhRate).then(() => setActiveCharIndex(-1));
   };
 
@@ -307,7 +328,15 @@ export default function SpokenModule() {
   const [isHeaderVisible, setIsHeaderVisible] = useState(true); 
 
   // 播放与交互
-  const [settings, setSettings] = useState({ zhVoice: 'zh-CN-YunxiaNeural', zhRate: -10, zhEnabled: true, myVoice: 'my-MM-ThihaNeural', myRate: 0, myEnabled: true });
+  // 更新默认发音人配置
+  const [settings, setSettings] = useState({ 
+      zhVoice: 'zh-CN-XiaoxiaoMultilingualNeural', 
+      zhRate: -20, 
+      zhEnabled: true, 
+      myVoice: 'my-MM-ThihaNeural', 
+      myRate: 0, 
+      myEnabled: true 
+  });
   const [playingId, setPlayingId] = useState(null);
   const [spellingItem, setSpellingItem] = useState(null);
   const [recordingId, setRecordingId] = useState(null); 
@@ -324,7 +353,7 @@ export default function SpokenModule() {
   // 1. 初始化
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('hsk_user') || '{}');
-    setIsUnlocked((user.unlocked_levels || '').includes('SP'));
+    setIsUnlocked((user.unlocked_levels || '').includes('SP')); // 假设口语特训的代号是 SP
 
     const savedSet = localStorage.getItem('spoken_settings');
     if (savedSet) setSettings(JSON.parse(savedSet));
@@ -375,7 +404,6 @@ export default function SpokenModule() {
   const enterList = (targetSub = null) => {
     // 推入历史记录，支持手势返回
     window.history.pushState({ page: 'list' }, '', '');
-    setShowVip(false); // 确保进入列表时不显示VIP弹窗
     setView('list');
     
     setTimeout(() => {
