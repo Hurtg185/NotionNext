@@ -130,7 +130,8 @@ const LetterButton = React.memo(({ item, isActive, isSelected, onClick }) => {
                 <div className="absolute top-0 right-0 w-12 h-12 bg-white/20 blur-xl rounded-full translate-x-1/2 -translate-y-1/2" />
             )}
 
-            <span className={`pinyin-letter font-black tracking-tight leading-none z-10 transition-colors duration-200
+            {/* 修复声调偏移：移除 leading-none，使用 leading-normal 给声调留出空间，微调 pb-1 视觉居中 */}
+            <span className={`pinyin-letter font-black tracking-tight leading-normal pb-1 z-10 transition-colors duration-200
                 ${fontSizeClass}
                 ${isActive ? 'text-white drop-shadow-md' : 'text-slate-800 group-hover:text-violet-600'}
             `}>
@@ -427,16 +428,16 @@ export default function PinyinChartClient({ initialData }) {
 
         return (
             <div {...swipeHandlers} className="flex flex-col flex-grow w-full">
-                {/* Tabs - 修改为 4 列 Grid */}
+                {/* Tabs - 修改为 4 列 Grid，并减小间距和字体以适应手机 */}
                 <div className="relative mb-6">
-                    <div className="grid grid-cols-4 gap-3 pb-4 pt-2 px-1">
+                    <div className="grid grid-cols-4 gap-2 sm:gap-3 pb-4 pt-2 px-0 sm:px-1">
                         {initialData.categories.map((cat, index) => {
                             const isSelected = activeTab === index;
                             return (
                                 <button 
                                     key={cat.name} 
                                     onClick={() => { setDirection(index > activeTab ? 1 : -1); setActiveTab(index); setIsAutoPlaying(false); }} 
-                                    className={`relative w-full py-3 rounded-2xl text-sm font-bold transition-all duration-300 flex items-center justify-center z-10
+                                    className={`relative w-full py-2 sm:py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all duration-300 flex items-center justify-center z-10
                                     ${isSelected 
                                         ? 'text-white bg-slate-900 shadow-lg shadow-slate-900/30 scale-105' 
                                         : 'text-slate-500 bg-white hover:bg-slate-50 border border-slate-100 hover:border-slate-300'}`}
