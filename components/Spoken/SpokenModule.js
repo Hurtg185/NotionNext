@@ -310,7 +310,8 @@ const SpellingModal = ({ item, settings, onClose }) => {
         <div className="flex flex-wrap justify-center gap-2 mb-10 px-2">
           {chars.map((char, i) => (
             <div key={i} onClick={() => handleCharClick(i)} className={`flex flex-col items-center p-2 rounded-xl transition-all cursor-pointer select-none ${activeCharIndex === i ? 'bg-blue-50 ring-2 ring-blue-500 scale-110 shadow-lg' : 'hover:bg-slate-50'}`}>
-              <span className={`text-xs font-mono mb-1 ${activeCharIndex === i ? 'text-blue-600 font-bold' : 'text-slate-400'}`}>{pinyin(char, {toneType:'symbol'})}</span>
+              {/* 修复：这里使用 font-pinyin 替代 font-mono */}
+              <span className={`text-xs font-pinyin mb-1 ${activeCharIndex === i ? 'text-blue-600 font-bold' : 'text-slate-400'}`}>{pinyin(char, {toneType:'symbol'})}</span>
               <span className={`text-3xl font-black transition-colors ${activeCharIndex === i ? 'text-blue-800' : 'text-slate-800'}`}>{char}</span>
             </div>
           ))}
@@ -704,7 +705,8 @@ export default function SpokenModule() {
                               </div>
 
                               <div className={isLocked ? 'opacity-30 blur-sm pointer-events-none' : ''}>
-                                  <div className="text-[13px] text-slate-400 font-mono mb-1.5">{pinyin(item.chinese, {toneType:'symbol'})}</div>
+                                  {/* 修复：这里使用 font-pinyin 替代 font-mono */}
+                                  <div className="text-[13px] text-slate-400 font-pinyin mb-1.5">{pinyin(item.chinese, {toneType:'symbol'})}</div>
                                   <h3 className="text-xl font-black text-slate-800 mb-2 leading-tight">{item.chinese}</h3>
                                   <p className="text-sm text-blue-600 font-medium mb-4 font-burmese">{item.burmese}</p>
 
@@ -729,7 +731,8 @@ export default function SpokenModule() {
                                   <div className="flex flex-wrap gap-2 justify-center">
                                       {speechResult.data.comparison.map((r, idx) => (
                                           <div key={idx} className="flex flex-col items-center">
-                                              <span className={`text-xs font-mono font-bold ${r.isMatch ? 'text-slate-800' : 'text-red-500'}`}>{r.userPy || '?'}</span>
+                                              {/* 修复：这里使用 font-pinyin 替代 font-mono */}
+                                              <span className={`text-xs font-pinyin font-bold ${r.isMatch ? 'text-slate-800' : 'text-red-500'}`}>{r.userPy || '?'}</span>
                                               <span className="text-[10px] text-slate-400">{r.targetChar}</span>
                                           </div>
                                       ))}
@@ -776,6 +779,10 @@ export default function SpokenModule() {
       <style jsx global>{`
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .font-burmese { font-family: 'Padauk', sans-serif; }
+        /* 强制使用对拼音支持良好的字体，解决等宽字体导致的声调偏移和多余点的问题 */
+        .font-pinyin { 
+           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+        }
       `}</style>
     </div>
   );
