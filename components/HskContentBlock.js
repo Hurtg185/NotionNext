@@ -6,7 +6,7 @@ import {
   Sparkles, PlayCircle, Gem, MessageCircle,
   Crown, Heart, ChevronRight, Star, BookOpen,
   ChevronDown, ChevronUp, GraduationCap,
-  MessageSquareText, Headphones
+  MessageSquareText, Headphones, Volume2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
@@ -18,11 +18,19 @@ const WordCard = dynamic(
 );
 
 // ==========================================
+// 0. 图标组件 (Messenger)
+// ==========================================
+const MessengerIcon = ({ size = 24 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 2C6.48 2 2 6.03 2 11C2 13.66 3.39 16.03 5.61 17.58V21.5C5.61 21.78 5.81 22 6.09 22.04C6.18 22.05 6.27 22.05 6.36 22.02L9.2 21.17C10.09 21.41 11.03 21.54 12 21.54C17.52 21.54 22 17.51 22 12.54C22 7.57 17.52 2 12 2ZM12.98 14.54L10.56 12.07L6.33 14.47C6.18 14.55 5.99 14.53 5.88 14.41C5.76 14.28 5.76 14.09 5.85 13.96L8.85 9.47C8.96 9.3 9.17 9.25 9.35 9.35L11.77 11.82L15.99 9.42C16.14 9.33 16.33 9.36 16.44 9.48C16.56 9.61 16.56 9.8 16.47 9.93L12.98 14.54Z" fill="#0084FF"/>
+  </svg>
+);
+
+// ==========================================
 // 1. 全局配置与数据
 // ==========================================
 
 const FB_CHAT_LINK = "https://m.me/61575187883357";
-// 统一收藏夹的 Key，确保与 WordCard 组件内部一致
 const FAVORITES_STORAGE_KEY = 'framer-pinyin-favorites';
 
 const getLevelPrice = (level) => {
@@ -30,23 +38,26 @@ const getLevelPrice = (level) => {
     1: "10,000 Ks", 
     2: "15,000 Ks", 
     3: "20,000 Ks",
-    'SP': "30,000 Ks" // 口语特训价格
+    'SP': "30,000 Ks" 
   };
-  return prices[level] || "价格待定";
+  return prices[level] || "Contact Us";
 };
 
-// 拼音数据
+// 拼音数据 (双语/缅语)
 const pinyinMain = [
   { id: 'initials', title: '声母', sub: 'ဗျည်း', href: '/pinyin/initials', icon: Mic2, color: 'text-blue-500', bg: 'bg-blue-50' },
   { id: 'finals', title: '韵母', sub: 'သရ', href: '/pinyin/finals', icon: Music4, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-  { id: 'whole', title: '整体认读', sub: 'အသံတွဲ', href: '/pinyin/whole', icon: Layers, color: 'text-purple-500', bg: 'bg-purple-50' },
+  { id: 'whole', title: '整体', sub: 'အသံတွဲ', href: '/pinyin/whole', icon: Layers, color: 'text-purple-500', bg: 'bg-purple-50' },
   { id: 'tones', title: '声调', sub: 'အသံ', href: '/pinyin/tones', icon: BookText, color: 'text-amber-500', bg: 'bg-amber-50' },
 ];
 
 // HSK 课程数据
 const hskData = [
   {
-    level: 1, title: '入门水平', description: '掌握最常用词语和基本语法',
+    level: 1, 
+    title: '入门 (Intro)', 
+    description: '掌握最常用词语和基本语法',
+    descBurmese: 'အသုံးအများဆုံး စကားလုံးများနှင့် သဒ္ဒါ',
     imageUrl: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800&q=80',
     lessons: [
       { id: 1, title: '第 1 课 你好' }, { id: 2, title: '第 2 课 谢谢你' }, { id: 3, title: '第 3 课 你叫什么名字？' }, { id: 4, title: '第 4 课 她是我的汉语老师' }, { id: 5, title: '第 5 课 她女儿今年二十岁' },
@@ -54,7 +65,10 @@ const hskData = [
     ]
   },
   {
-    level: 2, title: '基础水平', description: '就熟悉的日常话题进行交流',
+    level: 2, 
+    title: '基础 (Basic)', 
+    description: '就熟悉的日常话题进行交流',
+    descBurmese: 'နေ့စဉ်သုံး စကားပြောများ',
     imageUrl: 'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=800&q=80',
     lessons: [
       { id: 1, title: '第 1 课 九月去北京旅游最好' }, { id: 2, title: '第 2 课 我每天六点起床' }, { id: 3, title: '第 3 课 左边那个红色的是我的' },
@@ -101,19 +115,21 @@ const MembershipModal = ({ isOpen, onClose, targetLevel }) => {
             <Crown className="text-amber-600" size={28} />
           </div>
           <h2 className="text-xl font-black text-slate-800">
-            解锁 {isSpoken ? "口语特训课程" : `HSK ${targetLevel}`}
+            {isSpoken ? "口语特训课程" : `HSK ${targetLevel}`}
           </h2>
-          <p className="text-slate-500 text-sm mt-1 mb-5">
-            {isSpoken ? "解锁地道场景、谐音助记与评测" : "获取完整视频讲解与练习题"}
+          <p className="text-slate-500 font-medium text-sm mt-1 mb-5">
+            {isSpoken ? "地道场景、谐音助记与 AI 评测" : "完整视频讲解与练习题"}
+            <br/>
+            <span className="text-xs text-slate-400">(အတန်းစုံလင်စွာ သင်ယူနိုင်ပါသည်)</span>
           </p>
           <div className="bg-slate-50 p-4 rounded-2xl mb-5 border border-slate-100">
             <p className="text-3xl font-black text-amber-500">{price}</p>
           </div>
           <a href={FB_CHAT_LINK} target="_blank" rel="noopener noreferrer"
-            className="w-full py-3.5 bg-blue-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-blue-200"
+            className="w-full py-3.5 bg-[#0084FF] text-white rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg hover:bg-blue-600"
           >
             <MessageCircle size={20} fill="currentColor" />
-            联系老师开通
+            ဆက်သွယ်ရန် (Contact)
           </a>
         </div>
       </motion.div>
@@ -143,10 +159,11 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
     >
       <div className="h-36 relative">
         <img src={level.imageUrl} className="w-full h-full object-cover" alt="" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
         <div className="absolute bottom-4 left-5 text-white">
           <p className="text-[10px] font-bold text-cyan-300 uppercase tracking-widest mb-0.5">{level.title}</p>
           <h2 className="text-2xl font-black">HSK {level.level}</h2>
+          <p className="text-[10px] text-slate-200 mt-1">{level.descBurmese}</p>
         </div>
       </div>
 
@@ -167,7 +184,7 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
             onClick={() => setIsExpanded(!isExpanded)}
             className="w-full py-2.5 flex items-center justify-center text-xs font-bold text-slate-500 gap-1 bg-slate-50 border border-slate-100 rounded-xl hover:bg-slate-100 transition-colors active:scale-95"
           >
-            {isExpanded ? '收起课时' : `查看全部 ${level.lessons.length} 课时`} 
+            {isExpanded ? 'See Less' : `View All ${level.lessons.length} Lessons`} 
             {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </button>
         )}
@@ -181,20 +198,21 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
           className="relative z-20 w-full py-3 flex items-center justify-center gap-2 bg-gradient-to-r from-pink-50 to-rose-50 text-rose-500 rounded-xl font-black text-xs active:scale-95 transition-all border border-pink-100 hover:shadow-sm"
         >
           <BookOpen size={14} />
-          <span>本级核心生词</span>
-          <span className="text-[10px] opacity-70 font-normal ml-1">(View Words)</span>
+          <span>核心生词</span>
+          <span className="text-[10px] opacity-70 font-normal ml-1">(ဝေါဟာရများ)</span>
         </button>
       </div>
     </motion.div>
   );
 };
 
-// 拼音面板组件
-const PinyinSection = ({ onOpenCollection }) => {
+// 拼音面板组件 (布局调整)
+const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection }) => {
   const router = useRouter();
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
+      {/* 第一行：4个基础功能 */}
       <div className="grid grid-cols-4 gap-2">
         {pinyinMain.map((item) => (
           <Link key={item.id} href={item.href} passHref>
@@ -202,41 +220,55 @@ const PinyinSection = ({ onOpenCollection }) => {
               <div className="mb-1 bg-white p-1.5 rounded-full shadow-sm">
                 <item.icon size={16} className={item.color} />
               </div>
-              <span className="text-[10px] font-bold text-slate-600">{item.title}</span>
+              <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
+                {item.title}<br/><span className="text-[8px] opacity-70">{item.sub}</span>
+              </span>
             </a>
           </Link>
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <button 
-          onClick={() => router.push('/pinyin/tips')}
-          className="flex items-center justify-between px-3 py-3 bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl border border-orange-100/50 active:scale-95 transition-transform group"
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-white rounded-full text-orange-500 shadow-sm shrink-0">
-              <Lightbulb size={14} fill="currentColor" />
-            </div>
-            <div className="text-left leading-tight">
-              <span className="block text-xs font-black text-slate-700">发音技巧</span>
-            </div>
+      {/* 第二行：发音技巧 (通栏) */}
+      <button 
+        onClick={() => router.push('/pinyin/tips')}
+        className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl border border-orange-100/50 active:scale-95 transition-transform group"
+      >
+        <div className="flex items-center gap-3">
+          <div className="p-1.5 bg-white rounded-full text-orange-500 shadow-sm shrink-0">
+            <Lightbulb size={16} fill="currentColor" />
           </div>
-          <ChevronRight size={14} className="text-orange-300" />
-        </button>
+          <div className="text-left">
+            <span className="block text-xs font-black text-slate-700">发音技巧 (Tips)</span>
+            <span className="block text-[10px] text-slate-500 font-medium">အသံထွက်နည်းလမ်းများ</span>
+          </div>
+        </div>
+        <ChevronRight size={16} className="text-orange-300" />
+      </button>
 
+      {/* 第三行：双收藏按钮 */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* 单词收藏 */}
         <button 
           onClick={onOpenCollection}
-          className="flex items-center justify-between px-3 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100/50 active:scale-95 transition-transform group"
+          className="flex flex-col items-center justify-center py-3 bg-white border border-blue-100 rounded-2xl shadow-sm active:scale-95 transition-transform"
         >
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-white rounded-full text-blue-500 shadow-sm shrink-0">
-              <Star size={14} fill="currentColor" />
-            </div>
-            <div className="text-left leading-tight">
-              <span className="block text-xs font-black text-slate-700">单词收藏</span>
-            </div>
+          <div className="flex items-center gap-1.5 mb-1 text-blue-600">
+             <Star size={14} fill="currentColor"/>
+             <span className="text-xs font-black">单词收藏</span>
           </div>
-          <ChevronRight size={14} className="text-blue-300" />
+          <span className="text-[9px] text-slate-400">မှတ်ထားသော စာလုံး</span>
+        </button>
+
+        {/* 口语收藏 */}
+        <button 
+          onClick={onOpenSpokenCollection}
+          className="flex flex-col items-center justify-center py-3 bg-white border border-emerald-100 rounded-2xl shadow-sm active:scale-95 transition-transform"
+        >
+           <div className="flex items-center gap-1.5 mb-1 text-emerald-600">
+             <Volume2 size={14} fill="currentColor"/>
+             <span className="text-xs font-black">口语收藏</span>
+           </div>
+           <span className="text-[9px] text-slate-400">မှတ်ထားသော စကားပြော</span>
         </button>
       </div>
     </div>
@@ -255,11 +287,9 @@ export default function HskPageClient() {
 
   const isCardViewOpen = router.asPath.includes('#hsk-vocabulary');
 
-  // 处理口语点击拦截逻辑 (已修改)
+  // 跳转到口语页面 (口语收藏也跳转至此，由口语页面处理展示)
   const handleSpokenClick = useCallback((e) => {
-    e.preventDefault();
-    // 移除此处的权限检查，直接跳转
-    // 权限检查和VIP弹窗逻辑将由 /spoken 页面内部处理
+    if(e) e.preventDefault();
     router.push('/spoken');
   }, [router]);
 
@@ -272,7 +302,7 @@ export default function HskPageClient() {
     router.push({ pathname: router.pathname, query: { ...router.query, level: levelNum }, hash: 'hsk-vocabulary' }, undefined, { shallow: true });
   }, [router]);
 
-  // 修复收藏夹逻辑
+  // 处理生词收藏点击
   const handleCollectionClick = useCallback(() => {
     const savedIds = JSON.parse(localStorage.getItem(FAVORITES_STORAGE_KEY) || '[]');
     const allWords = [ ...(hskWordsData[1] || []), ...(hskWordsData[2] || []) ];
@@ -281,7 +311,7 @@ export default function HskPageClient() {
     );
 
     if (favoriteWords.length === 0) {
-      alert("你还没有收藏任何单词哦！\n在学习单词时点击红心即可在此查看。");
+      alert("No saved words yet!\nမှတ်ထားသော စာလုံး မရှိသေးပါ");
       return;
     }
 
@@ -302,20 +332,24 @@ export default function HskPageClient() {
             <span className="text-[10px] font-bold text-blue-800 uppercase">Premium Class</span>
           </div>
           
+          {/* Messenger 风格按钮 (无蓝色背景，清晰识别) */}
           <a href={FB_CHAT_LINK} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-full shadow-lg shadow-blue-200 active:scale-95 transition-all"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white rounded-full shadow-sm border border-slate-100 active:scale-95 transition-all"
           >
-            <MessageSquareText size={14} fill="currentColor" />
-            <span className="text-xs font-bold">Contact</span>
+            <MessengerIcon size={18} />
+            <span className="text-xs font-bold text-slate-700">Messenger</span>
           </a>
         </div>
 
         <div className="bg-white rounded-[1.8rem] p-4 shadow-xl shadow-slate-200/60 border border-slate-50">
-          <PinyinSection onOpenCollection={handleCollectionClick} />
+          <PinyinSection 
+            onOpenCollection={handleCollectionClick} 
+            onOpenSpokenCollection={handleSpokenClick}
+          />
         </div>
       </header>
 
-      {/* 口语练习横图入口 */}
+      {/* 口语练习横图入口 (缅语化) */}
       <div className="px-4 mt-4">
         <div 
           onClick={handleSpokenClick}
@@ -332,7 +366,7 @@ export default function HskPageClient() {
               <span className="text-[10px] font-bold uppercase tracking-widest">Oral Practice</span>
             </div>
             <h3 className="text-xl font-black text-white">日常口语练习</h3>
-            <p className="text-emerald-50/80 text-xs font-medium">Daily Conversations & Phrases</p>
+            <p className="text-emerald-50/90 text-xs font-medium font-burmese mt-0.5">နေ့စဉ်သုံး စကားပြော လေ့ကျင့်ခန်း</p>
           </div>
           <div className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/20 backdrop-blur rounded-full flex items-center justify-center text-white">
             <ChevronRight size={20} />
@@ -343,7 +377,7 @@ export default function HskPageClient() {
       <div className="max-w-2xl mx-auto px-4 relative z-10 mt-6 space-y-4">
         <div className="flex items-center gap-2 px-1 opacity-70">
           <BookText size={14} className="text-slate-500" />
-          <h2 className="text-xs font-black text-slate-600 uppercase tracking-wider">System Courses</h2>
+          <h2 className="text-xs font-black text-slate-600 uppercase tracking-wider">System Courses (သင်ရိုး)</h2>
         </div>
 
         <div className="grid grid-cols-1 gap-5 pb-10">
