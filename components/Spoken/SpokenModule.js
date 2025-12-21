@@ -202,11 +202,9 @@ const SpellingModal = ({ item, settings, onClose }) => {
   useEffect(() => {
     isMounted.current = true;
     const autoSpell = async () => {
-        // 等待弹窗动画
         await new Promise(r => setTimeout(r, 200)); 
         if (!isMounted.current) return;
 
-        // 逐字播放
         for (let i = 0; i < chars.length; i++) {
             if (!isMounted.current) break;
             setActiveCharIndex(i);
@@ -219,7 +217,6 @@ const SpellingModal = ({ item, settings, onClose }) => {
     };
     autoSpell();
     return () => { isMounted.current = false; AudioEngine.stop(); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleCharClick = (index) => {
@@ -254,7 +251,7 @@ const SpellingModal = ({ item, settings, onClose }) => {
         initial={{ y: '100%', opacity: 0 }} 
         animate={{ y: 0, opacity: 1 }} 
         exit={{ y: '100%', opacity: 0 }} 
-        transition={{ duration: 0.2, ease: "easeOut" }} // 快速动画
+        transition={{ duration: 0.2, ease: "easeOut" }} 
         className="bg-white w-full max-w-md rounded-t-[2rem] sm:rounded-[2rem] p-6 shadow-2xl relative" 
         onClick={e => e.stopPropagation()}
       >
@@ -305,8 +302,8 @@ export default function SpokenModule() {
   // UI 状态
   const [showCatalog, setShowCatalog] = useState(false); 
   const [showSettings, setShowSettings] = useState(false);
-  const [expandedCats, setExpandedCats] = useState({}); // 目录折叠状态
-  const [isHeaderVisible, setIsHeaderVisible] = useState(true); // 控制导航栏显隐
+  const [expandedCats, setExpandedCats] = useState({}); 
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true); 
 
   // 播放与交互
   const [settings, setSettings] = useState({ zhVoice: 'zh-CN-YunxiaNeural', zhRate: -10, zhEnabled: true, myVoice: 'my-MM-ThihaNeural', myRate: 0, myEnabled: true });
@@ -323,7 +320,7 @@ export default function SpokenModule() {
   const { scrollY } = useScroll();
   const itemRefs = useRef({});
 
-  // 初始化
+  // 1. 初始化
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('hsk_user') || '{}');
     setIsUnlocked((user.unlocked_levels || '').includes('SP'));
@@ -335,17 +332,57 @@ export default function SpokenModule() {
     setFavorites(savedFavs);
   }, []);
 
+  // 2. 监听 History API (手势返回的核心)
+  useEffect(() => {
+    const onPopState = (event) => {
+      // 浏览器后退（如手势返回）时触发
+      if (view === 'list') {
+        // 如果在列表页，则拦截返回，只切回封面
+        setView('home'); 
+      }
+      // 如果已经在home，则默认退出
+    };
+    
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [view]);
+
+  // 3. 滚动与进度保存
   useEffect(() => localStorage.setItem('spoken_settings', JSON.stringify(settings)), [settings]);
 
-  // 滚动监听 -> 控制头部导航显隐
   useMotionValueEvent(scrollY, "change", (latest) => {
     const previous = scrollY.getPrevious();
-    if (latest > previous && latest > 50) {
-      setIsHeaderVisible(false); // 向下滚隐藏
-    } else {
-      setIsHeaderVisible(true); // 向上滚显示
+    // 导航栏自动显隐
+    if (latest > previous && latest > 50) setIsHeaderVisible(false);
+    else setIsHeaderVisible(true);
+    
+    // 保存阅读进度 (仅在列表页)
+    if (view === 'list') {
+        localStorage.setItem('spoken_scroll_pos', latest.toString());
     }
   });
+
+  // 4. 进入列表页 (推入历史记录 + 恢复进度)
+  const enterList = () => {
+    // 推入一条历史记录，这样手势返回时会触发 popstate 而不是退出
+    window.history.pushState({ page: 'list' }, '', '');
+    setView('list');
+    
+    // 恢复上次阅读位置
+    setTimeout(() => {
+        const savedPos = localStorage.getItem('spoken_scroll_pos');
+        if (savedPos) {
+            window.scrollTo({ top: parseInt(savedPos), behavior: 'auto' });
+        } else {
+            window.scrollTo(0, 0);
+        }
+    }, 50); // 微小延迟确保DOM已渲染
+  };
+
+  // 5. 返回封面 (模拟浏览器后退，触发 popstate 逻辑)
+  const goHome = () => {
+    window.history.back();
+  };
 
   // --- 业务逻辑 ---
   const handleCatalogJump = (sub) => {
@@ -421,7 +458,7 @@ export default function SpokenModule() {
             
             <div className="px-8 pb-20">
                <button 
-                 onClick={() => setView('list')} 
+                 onClick={enterList} 
                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold text-lg shadow-xl shadow-slate-200 active:scale-95 transition-transform flex items-center justify-center gap-2"
                >
                  开始学习 <ChevronRight size={20}/>
@@ -455,7 +492,7 @@ export default function SpokenModule() {
                transition={{ ease: "easeInOut", duration: 0.3 }}
                className="fixed top-0 left-0 right-0 z-[100] bg-white/90 backdrop-blur-md border-b border-slate-100 h-14 max-w-md mx-auto px-4 flex justify-between items-center"
             >
-               <button onClick={() => setView('home')} className="p-2 -ml-2 text-slate-500 hover:text-slate-900 active:scale-90 transition-transform">
+               <button onClick={goHome} className="p-2 -ml-2 text-slate-500 hover:text-slate-900 active:scale-90 transition-transform">
                   <ChevronLeft size={24} />
                </button>
                <div className="flex items-center gap-1">
@@ -571,7 +608,6 @@ export default function SpokenModule() {
                            <AnimatePresence>
                              {speechResult?.id === item.id && !isLocked && (
                                <motion.div initial={{opacity:0, height:0}} animate={{opacity:1, height:'auto'}} exit={{opacity:0, height:0}} className="bg-white mx-auto max-w-[360px] rounded-xl mt-2 p-3 shadow-sm border border-slate-100">
-                                  {/* 这里可以放上面定义的 renderComparison 组件内容 */}
                                   <div className="flex justify-between items-center mb-2">
                                      <span className="text-[10px] font-bold text-slate-400">评分</span>
                                      <span className={`text-xs font-black ${speechResult.data.accuracy > 0.8 ? 'text-green-500' : 'text-red-500'}`}>{Math.round(speechResult.data.accuracy * 100)}%</span>
