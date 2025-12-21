@@ -37,10 +37,12 @@ function getPinyinComparison(targetText, userText) {
 }
 
 // ============================================================================
-// 1. 核心音频引擎 (已修改为走 CF 缓存代理)
+// 1. 核心音频引擎 (强制单例播放，防止重叠)
 // ============================================================================
 const AudioEngine = {
   current: null,
+  
+  // 停止当前所有播放
   stop() {
     if (this.current) {
       this.current.pause();
@@ -48,25 +50,40 @@ const AudioEngine = {
       this.current = null;
     }
   },
+
+  // 播放音频 (URL)
   play(url) {
     return new Promise((resolve) => {
-      if (typeof window === 'undefined' || !url) { resolve(); return; }
+      // 1. 强制停止上一段音频
       this.stop(); 
+
+      if (typeof window === 'undefined' || !url) { resolve(); return; }
+      
       const audio = new Audio(url);
       this.current = audio;
-      audio.onended = () => { this.current = null; resolve(); };
-      audio.onerror = () => { this.current = null; resolve(); };
-      audio.play().catch(() => { this.current = null; resolve(); });
+      
+      audio.onended = () => { 
+        this.current = null; 
+        resolve(); 
+      };
+      audio.onerror = () => { 
+        this.current = null; 
+        resolve(); 
+      };
+      
+      // 捕获播放错误（如交互策略限制）
+      audio.play().catch(() => { 
+        this.current = null; 
+        resolve(); 
+      });
     });
   },
+
+  // TTS 播放
   playTTS(text, voice, rate) {
-    // 🔥 核心修改：使用 GET 请求访问自己的 CF 代理接口
-    // rate 参数处理：有些接口接受 -50 到 50，有些接受 0.5 到 2，这里保持原样传递给后端处理
     const r = parseInt(rate) || 0; 
-    
-    // 使用你自己的域名 API，而不是直接访问第三方
+    // 使用 CF 代理接口
     const url = `/api/tts?t=${encodeURIComponent(text)}&v=${voice}&r=${r}`;
-    
     return this.play(url);
   }
 };
@@ -77,6 +94,9 @@ const AudioEngine = {
 const RecorderEngine = {
   mediaRecorder: null, chunks: [],
   async start() {
+    // 开始录音前，先停止音频播放
+    AudioEngine.stop();
+    
     if (typeof navigator === 'undefined' || !navigator.mediaDevices) return false;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -104,6 +124,9 @@ const RecorderEngine = {
 const SpeechEngine = {
   recognition: null,
   start(onResult, onError) {
+    // 识别前停止播放
+    AudioEngine.stop();
+
     if (typeof window === 'undefined') return;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { alert("浏览器不支持语音识别"); if(onError) onError(); return; }
@@ -150,7 +173,7 @@ const SettingsPanel = ({ settings, setSettings, onClose }) => {
              <div className="grid grid-cols-2 gap-2">
                 {[
                   { label: '小晓 (女)', val: 'zh-CN-XiaoxiaoMultilingualNeural' },
-                  { label: '云希 (男)', val: 'zh-CN-YunyiMultilingualNeural' },
+                  { label: '云希 (男)', val: 'zh-CN-Yunxia:DragonHDFlashLatestNeural' },
                   { label: '云夏 (男童)', val: 'zh-CN-YunxiaNeural' },
                   { label: '小颜 (通用)', val: 'zh-CN-XiaoyanNeural' }
                 ].map(opt => (
@@ -218,9 +241,11 @@ const SpellingModal = ({ item, settings, onClose }) => {
   const chars = item.chinese.split('');
   const isMounted = useRef(true);
 
-  // 挂载时自动逐字拼读 (原音 - 走 R2 静态资源，无需改动)
+  // 挂载时自动逐字拼读
   useEffect(() => {
     isMounted.current = true;
+    AudioEngine.stop(); // 打开弹窗时停止外部播放
+    
     const autoSpell = async () => {
         await new Promise(r => setTimeout(r, 200)); 
         if (!isMounted.current) return;
@@ -242,7 +267,6 @@ const SpellingModal = ({ item, settings, onClose }) => {
 
   const handleCharClick = (index) => {
     setActiveCharIndex(index);
-    AudioEngine.stop();
     const char = chars[index];
     const py = pinyin(char, { toneType: 'symbol' });
     const r2Url = `https://audio.886.best/chinese-vocab-audio/%E6%8B%BC%E8%AF%BB%E9%9F%B3%E9%A2%91/${encodeURIComponent(py)}.mp3`;
@@ -251,7 +275,6 @@ const SpellingModal = ({ item, settings, onClose }) => {
 
   const playWhole = () => {
      setActiveCharIndex('all');
-     // 这里的 playTTS 已经改成走 CF 代理了
      AudioEngine.playTTS(item.chinese, settings.zhVoice, settings.zhRate).then(() => setActiveCharIndex(-1));
   };
 
@@ -328,7 +351,6 @@ export default function SpokenModule() {
   const [isHeaderVisible, setIsHeaderVisible] = useState(true); 
 
   // 播放与交互
-  // 更新默认发音人配置
   const [settings, setSettings] = useState({ 
       zhVoice: 'zh-CN-XiaoxiaoMultilingualNeural', 
       zhRate: -20, 
@@ -353,21 +375,22 @@ export default function SpokenModule() {
   // 1. 初始化
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('hsk_user') || '{}');
-    setIsUnlocked((user.unlocked_levels || '').includes('SP')); // 假设口语特训的代号是 SP
+    setIsUnlocked((user.unlocked_levels || '').includes('SP')); 
 
     const savedSet = localStorage.getItem('spoken_settings');
     if (savedSet) setSettings(JSON.parse(savedSet));
     
+    // 加载收藏，用于持久化
     const savedFavs = JSON.parse(localStorage.getItem('spoken_favs') || '[]');
     setFavorites(savedFavs);
   }, []);
 
-  // 2. 监听 History API (修复手势返回)
+  // 2. 监听 History API
   useEffect(() => {
     const onPopState = (event) => {
-      // 浏览器后退（如手势返回）时触发
       if (view === 'list') {
-        setView('home'); // 拦截并返回封面，不退出
+        AudioEngine.stop(); // 退出时停止播放
+        setView('home'); 
       }
     };
     
@@ -380,11 +403,9 @@ export default function SpokenModule() {
 
   useMotionValueEvent(scrollY, "change", (latest) => {
     const previous = scrollY.getPrevious();
-    // 导航栏显隐
     if (latest > previous && latest > 50) setIsHeaderVisible(false);
     else setIsHeaderVisible(true);
     
-    // 实时保存阅读进度
     if (view === 'list') {
         localStorage.setItem('spoken_scroll_pos', latest.toString());
     }
@@ -400,19 +421,16 @@ export default function SpokenModule() {
     return Array.from(map.entries()).map(([cat, subs]) => ({ name: cat, subs: Array.from(subs) }));
   }, [phrases]);
 
-  // 5. 进入列表页 (含进度恢复)
+  // 5. 进入列表页
   const enterList = (targetSub = null) => {
-    // 推入历史记录，支持手势返回
     window.history.pushState({ page: 'list' }, '', '');
     setView('list');
     
     setTimeout(() => {
         if (targetSub) {
-            // 如果指定了跳转目录
             const el = itemRefs.current[targetSub];
             if (el) el.scrollIntoView({ behavior: 'auto', block: 'start' });
         } else {
-            // 否则恢复上次进度
             const savedPos = localStorage.getItem('spoken_scroll_pos');
             if (savedPos) window.scrollTo({ top: parseInt(savedPos), behavior: 'auto' });
             else window.scrollTo(0, 0);
@@ -421,7 +439,8 @@ export default function SpokenModule() {
   };
 
   const goHome = () => {
-    window.history.back(); // 模拟浏览器返回
+    AudioEngine.stop();
+    window.history.back(); 
   };
 
   // --- 业务逻辑 ---
@@ -434,14 +453,31 @@ export default function SpokenModule() {
   };
 
   const handleCardPlay = async (item) => {
-    if (playingId === item.id) { AudioEngine.stop(); setPlayingId(null); return; }
+    // 如果正在播放这个卡片，点击则停止
+    if (playingId === item.id) { 
+        AudioEngine.stop(); 
+        setPlayingId(null); 
+        return; 
+    }
+    
+    // 设置新播放ID，AudioEngine.play会自动停止之前的音频
     setPlayingId(item.id);
     
     if (settings.zhEnabled) await AudioEngine.playTTS(item.chinese, settings.zhVoice, settings.zhRate);
-    if (AudioEngine.current?.paused) return; 
+    
+    // 检查是否被用户中断
+    if (AudioEngine.current === null) {
+       setPlayingId(null); 
+       return; 
+    }
     
     if (settings.myEnabled) {
       if (settings.zhEnabled) await new Promise(r => setTimeout(r, 400));
+      // 再次检查是否被中断
+      if (AudioEngine.current === null && settings.zhEnabled) {
+         setPlayingId(null); 
+         return; 
+      }
       await AudioEngine.playTTS(item.burmese, settings.myVoice, settings.myRate);
     }
     setPlayingId(null);
@@ -449,9 +485,12 @@ export default function SpokenModule() {
 
   const handleSpeech = (item) => {
     if (recordingId === item.id) { 
-        SpeechEngine.stop(); setRecordingId(null); 
+        SpeechEngine.stop(); 
+        setRecordingId(null); 
     } else {
-      AudioEngine.stop(); setRecordingId(item.id); setSpeechResult(null);
+      AudioEngine.stop(); // 录音前停止播放
+      setRecordingId(item.id); 
+      setSpeechResult(null);
       SpeechEngine.start((transcript) => {
         const scoreData = getPinyinComparison(item.chinese, transcript);
         setSpeechResult({ id: item.id, data: scoreData });
@@ -463,7 +502,7 @@ export default function SpokenModule() {
   const toggleFav = (id) => {
     const newFavs = favorites.includes(id) ? favorites.filter(i => i !== id) : [...favorites, id];
     setFavorites(newFavs);
-    localStorage.setItem('spoken_favs', JSON.stringify(newFavs));
+    localStorage.setItem('spoken_favs', JSON.stringify(newFavs)); // 保存到本地供其他代码调用
   };
 
   const toggleCat = (catName) => {
@@ -486,8 +525,11 @@ export default function SpokenModule() {
                   <p className="text-slate-600 text-xs font-medium line-clamp-2">全场景覆盖：生活、工作、情感表达。从入门到精通的口语语料库。</p>
                </div>
                
-               {/* 网址胶囊 */}
-               <div className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/20 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/10 z-20">
+               {/* 网址胶囊 (可点击) */}
+               <div 
+                  onClick={() => window.location.href = 'https://886.best'}
+                  className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/20 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/10 z-20 cursor-pointer active:scale-95 transition-transform hover:bg-black/30"
+               >
                    <Globe size={12} className="text-white"/> <span className="text-[10px] font-bold text-white tracking-widest">886.best</span>
                </div>
             </div>
@@ -547,8 +589,11 @@ export default function SpokenModule() {
       {/* ================= VIEW 2: LIST (内容) ================= */}
       {view === 'list' && (
         <div className="min-h-screen pb-32 bg-[#F5F7FA]">
-            {/* 1. 网址胶囊 (始终悬浮) */}
-            <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-1.5 pointer-events-none drop-shadow-sm">
+            {/* 1. 网址胶囊 (始终悬浮，可点击) */}
+            <div 
+                onClick={() => window.location.href = 'https://886.best'}
+                className="fixed top-4 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-1.5 pointer-events-auto cursor-pointer drop-shadow-sm hover:scale-105 transition-transform bg-white/50 px-2 py-1 rounded-full backdrop-blur-sm"
+            >
                 <Globe size={14} className="text-slate-800"/>
                 <span className="text-xs font-black text-slate-800 tracking-tight">886.best</span>
             </div>
@@ -625,6 +670,7 @@ export default function SpokenModule() {
             <div className="pt-20 px-3 space-y-4">
                {phrases.map((item, index) => {
                   const isNewSub = index === 0 || phrases[index - 1].sub !== item.sub;
+                  // VIP 判断逻辑：第50句以后
                   const isLocked = !isUnlocked && index >= 50;
 
                   return (
@@ -639,14 +685,14 @@ export default function SpokenModule() {
                            <div 
                              className={`relative bg-white pt-10 pb-4 px-4 rounded-[1.5rem] shadow-sm border border-slate-100 flex flex-col items-center text-center transition-all max-w-[360px] mx-auto overflow-visible mt-6
                              ${playingId === item.id ? 'ring-2 ring-blue-500 bg-blue-50/10' : ''}
-                             ${isLocked ? 'cursor-not-allowed' : 'active:scale-[0.98] cursor-pointer'}`}
+                             ${isLocked ? 'cursor-pointer' : 'active:scale-[0.98] cursor-pointer'}`}
                              onClick={() => isLocked ? setShowVip(true) : handleCardPlay(item)}
                            >
-                              {/* Locked Overlay */}
+                              {/* Locked Overlay - 点击时触发 VIP 弹窗 */}
                               {isLocked && (
                                 <div className="absolute inset-0 z-20 bg-white/60 backdrop-blur-[2px] rounded-[1.5rem] flex flex-col items-center justify-center">
-                                   <div className="w-10 h-10 bg-slate-900 text-white rounded-full flex items-center justify-center shadow-lg mb-2"><Lock size={18}/></div>
-                                   <span className="text-[10px] font-bold text-slate-900 px-2 py-0.5 border border-slate-900 rounded-full">VIP 内容</span>
+                                   <div className="w-10 h-10 bg-slate-900 text-white rounded-full flex items-center justify-center shadow-lg mb-2 animate-bounce"><Lock size={18}/></div>
+                                   <span className="text-[10px] font-bold text-slate-900 px-2 py-0.5 border border-slate-900 rounded-full">VIP 点击解锁</span>
                                 </div>
                               )}
 
