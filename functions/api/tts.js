@@ -7,13 +7,16 @@ export async function onRequestGet(context) {
 
     if (!t) return new Response('Missing text', { status: 400 });
 
-    // 1. 处理默认值
-    const finalVoice = v || 'zh-CN-XiaoyouNeural';
-    // 如果是中文且没传语速，默认 -20；如果传了则用传的
-    const finalRate = r !== null ? r : (finalVoice.startsWith('zh') ? '-20' : '0');
+    // 1. 逻辑：处理默认语速和发音人
+    const voice = v || 'zh-CN-XiaoyouNeural';
+    // 中文默认 -20，其他默认 0
+    let rate = r;
+    if (rate === null || rate === undefined || rate === 'undefined') {
+        rate = voice.startsWith('zh') ? '-20' : '0';
+    }
 
-    // 2. 拼凑外部接口地址 (确保参数名 text, voice, rate 与目标接口一致)
-    const targetUrl = `https://libretts.is-an.org/api/tts?text=${encodeURIComponent(t)}&voice=${finalVoice}&rate=${finalRate}`;
+    // 2. 构造目标接口 URL
+    const targetUrl = `https://libretts.is-an.org/api/tts?text=${encodeURIComponent(t)}&voice=${voice}&rate=${rate}`;
 
     try {
         const response = await fetch(targetUrl, {
@@ -23,23 +26,24 @@ export async function onRequestGet(context) {
             }
         });
 
-        // 3. 检查原始接口是否真的返回了内容
         if (!response.ok) {
-            return new Response('Origin Error', { status: response.status });
+            return new Response('TTS Origin Error', { status: response.status });
         }
 
-        // 4. 关键：创建一个新的 Response，手动设置正确的 Content-Type
-        const audioData = await response.arrayBuffer();
-        
-        return new Response(audioData, {
+        // 3. 关键修复：使用流式传输，并强制指定 Content-Type
+        const { readable, writable } = new TransformStream();
+        response.body.pipeTo(writable);
+
+        return new Response(readable, {
             headers: {
-                'Content-Type': 'audio/mpeg', // 必须强制设为音频格式
+                'Content-Type': 'audio/mpeg',
                 'Cache-Control': 'public, s-maxage=7776000, max-age=2592000',
                 'Access-Control-Allow-Origin': '*',
-                'cf-cache-status': response.headers.get('cf-cache-status') || 'MISS'
+                'X-Debug-URL': targetUrl, // 调试用：看最终请求的地址
+                'X-Debug-Rate': rate      // 调试用：看最终语速
             }
         });
     } catch (e) {
-        return new Response(e.message, { status: 500 });
+        return new Response(JSON.stringify({ error: e.message }), { status: 500 });
     }
 }
