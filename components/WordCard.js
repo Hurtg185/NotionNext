@@ -46,8 +46,7 @@ async function toggleFavorite(word) {
             store.delete(word.id);
             return false;
         } else {
-            const wordToStore = { ...word };
-            store.put(wordToStore);
+            store.put({ ...word });
             return true;
         }
     } catch (e) { return false; }
@@ -110,10 +109,7 @@ const initSounds = () => {
  */
 const playTTS = (text, voice, rate, onEndCallback) => {
     stopAllAudio();
-    if (!text || !voice) {
-        if(onEndCallback) onEndCallback();
-        return;
-    };
+    if (!text || !voice) return;
 
     // 语速映射
     const rateValue = Math.round(rate / 2);
@@ -231,7 +227,6 @@ const SpellingModal = ({ wordObj, settings, level, onClose }) => {
         </div>
     );
 };
-
 // =================================================================================
 // ===== 主组件: WordCard =====
 // =================================================================================
@@ -255,22 +250,18 @@ const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level 
   // 1. 核心修复：防止 418 错误，挂载后加载配置
   useEffect(() => {
     setMounted(true);
-    try {
-        const saved = localStorage.getItem('learningWordCardSettings');
-        if (saved) setSettings(prev => ({ ...prev, ...JSON.parse(saved) }));
-        
-        const savedIndex = localStorage.getItem(`word_progress_${progressKey}`);
-        if (savedIndex) setCurrentIndex(parseInt(savedIndex, 10) || 0);
-    } catch (e) { console.error("Error reading from localStorage", e); }
+    const saved = localStorage.getItem('learningWordCardSettings');
+    if (saved) setSettings(prev => ({ ...prev, ...JSON.parse(saved) }));
+    
+    const savedIndex = localStorage.getItem(`word_progress_${progressKey}`);
+    if (savedIndex) setCurrentIndex(parseInt(savedIndex, 10) || 0);
   }, [progressKey]);
 
   // 2. 保存设置与进度
   useEffect(() => {
     if (mounted) {
-        try {
-            localStorage.setItem('learningWordCardSettings', JSON.stringify(settings));
-            localStorage.setItem(`word_progress_${progressKey}`, currentIndex);
-        } catch (e) { console.error("Error saving to localStorage", e); }
+        localStorage.setItem('learningWordCardSettings', JSON.stringify(settings));
+        localStorage.setItem(`word_progress_${progressKey}`, currentIndex);
     }
   }, [settings, currentIndex, progressKey, mounted]);
 
@@ -302,7 +293,7 @@ const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level 
             }, settings, level);
         }
     };
-    const t = setTimeout(playSeq, 600);
+    const t = setTimeout(playSeq, 500);
     return () => clearTimeout(t);
   }, [currentIndex, isRevealed, isOpen, mounted, level, currentCard, settings]);
 
@@ -312,7 +303,7 @@ const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level 
   }, [words.length]);
 
   const bind = useDrag(({ down, movement: [mx, my], last, event }) => {
-    if (event.target.closest('[data-no-gesture]') || down) return;
+    if (event.target.closest('[data-no-gesture]')) return;
     if (last && Math.abs(my) > 60) navigate(my > 0 ? -1 : 1);
   }, { filterTaps: true, preventDefault: true });
 
@@ -370,7 +361,9 @@ const WordCard = ({ words = [], isOpen, onClose, progressKey = 'default', level 
             </div>
         </div>
         
+        {/* 弹窗 */}
         {isSpellingOpen && <SpellingModal wordObj={currentCard} settings={settings} level={level} onClose={()=>setIsSpellingOpen(false)} />}
+        {isRecordingOpen && <PronunciationComparison correctWord={currentCard.chinese} settings={settings} onClose={()=>setIsRecordingOpen(false)} />}
         {isJumping && (<div style={styles.jumpModalOverlay} onClick={()=>setIsJumping(false)}><div style={styles.jumpModalContent} onClick={e=>e.stopPropagation()}><h3>Go to</h3><input type="number" style={styles.jumpModalInput} onChange={e=>{const v=parseInt(e.target.value); if(v>0&&v<=words.length){setCurrentIndex(v-1); setIsJumping(false);}}} /></div></div>)}
         {isSettingsOpen && (<div style={styles.settingsModal} onClick={() => setIsSettingsOpen(false)}><div style={styles.settingsContent} onClick={e => e.stopPropagation()}><h3 style={{marginBottom:'20px'}}>Audio Settings</h3><div style={{marginBottom:'15px'}}><label style={{display:'block', fontSize:'0.8rem', color:'#666'}}>Chinese Voice</label><select style={styles.settingSelect} value={settings.voiceChinese} onChange={e => setSettings({...settings, voiceChinese: e.target.value})}>{TTS_VOICES.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}</select></div><button style={styles.jumpModalButton} onClick={() => setIsSettingsOpen(false)}>Close</button></div></div>)}
         {writerChar && <HanziModal word={writerChar} onClose={() => setWriterChar(null)} />}
