@@ -1,241 +1,9092 @@
-export default [
-  // ==========================================
-  // 1️⃣ 起床与挣扎
-  // ==========================================
-  { id: 101, category: "一天生活", sub: "起床与挣扎", chinese: "该起床了。", pinyin: "Gāi qǐchuáng le.", burmese: "အိပ်ရာထဖို့ အချိန်တန်ပြီ။", xieyin: "ကိုက် ချီ ချွမ်း လယ်" },
-  { id: 102, category: "一天生活", sub: "起床与挣扎", chinese: "起床了没有？", pinyin: "Qǐchuáng le méiyǒu?", burmese: "အိပ်ရာထပြီလား။", xieyin: "ချီ ချွမ်း လယ် မေ ယို" },
-  { id: 103, category: "一天生活", sub: "起床与挣扎", chinese: "快起床！", pinyin: "Kuài qǐchuáng!", burmese: "မြန်မြန်ထ။", xieyin: "ခွိုက် ချီ ချွမ်း" },
-  { id: 104, category: "一天生活", sub: "起床与挣扎", chinese: "再不起就迟到了。", pinyin: "Zài bù qǐ jiù chídào le.", burmese: "မထရင် နောက်ကျတော့မယ်။", xieyin: "ဇိုက် ပု ချီ ကျို့ ချီ တောက် လယ်" },
-  { id: 105, category: "一天生活", sub: "起床与挣扎", chinese: "赶紧起来，别赖床了。", pinyin: "Gǎnjǐn qǐlái, bié làichuáng le.", burmese: "မြန်မြန်ထ၊ အိပ်ရာခိုမနေနဲ့တော့။", xieyin: "ကန် ကျိန် ချီ လိုက်၊ ပျယ် လိုက် ချွမ်း လယ်" },
-  { id: 106, category: "一天生活", sub: "起床与挣扎", chinese: "几点了？", pinyin: "Jǐ diǎn le?", burmese: "ဘယ်နှစ်နာရီ ရှိပြီလဲ။", xieyin: "ကျီ တျန် လယ်" },
-  { id: 107, category: "一天生活", sub: "起床与挣扎", chinese: "闹钟响了吗？", pinyin: "Nàozhōng xiǎng le ma?", burmese: "နှိုးစက် မြည်ပြီလား။", xieyin: "နောက် ဂျုံး ရှǎng လယ် မာ" },
-  { id: 108, category: "一天生活", sub: "起床与挣扎", chinese: "再睡一会儿。", pinyin: "Zài shuì yíhuìr.", burmese: "ခဏလောက် ထပ်အိပ်ဦးမယ်။", xieyin: "ဇိုက် ရွှေ့ ယီ ဟွေ့ရ်" },
-  { id: 109, category: "一天生活", sub: "起床与挣扎", chinese: "五分钟就好。", pinyin: "Wǔ fēnzhōng jiù hǎo.", burmese: "ငါးမိနစ်လောက်ပါ။", xieyin: "ဝူ ဖန်း ဂျုံး ကျို့ ဟောင်" },
-  { id: 110, category: "一天生活", sub: "起床与挣扎", chinese: "真不想起。", pinyin: "Zhēn bùxiǎng qǐ.", burmese: "တကယ် မထချင်ဘူး။", xieyin: "ကျန်း ပု ရှǎng ချီ" },
-  { id: 111, category: "一天生活", sub: "起床与挣扎", chinese: "太困了。", pinyin: "Tài kùn le.", burmese: "အရမ်း အိပ်ချင်နေတယ်။", xieyin: "ထိုက် ခွန့် လယ်" },
-  { id: 112, category: "一天生活", sub: "起床与挣扎", chinese: "昨晚睡太晚了。", pinyin: "Zuówǎn shuì tài wǎn le.", burmese: "မနေ့ညက အိပ်တာ နောက်ကျသွားတယ်။", xieyin: "ကျို ဝမ် ရွှေ့ ထိုက် ဝမ် လယ်" },
-  { id: 113, category: "一天生活", sub: "起床与挣扎", chinese: "今天要早起。", pinyin: "Jīntiān yào zǎoqǐ.", burmese: "ဒီနေ့ စောစော ထရမယ်။", xieyin: "ကျင်း ထျဲန် ယောက် ဇောင် ချီ" },
-  { id: 114, category: "一天生活", sub: "起床与挣扎", chinese: "今天周末，多睡会。", pinyin: "Jīntiān zhōumò, duō shuì huì.", burmese: "ဒီနေ့ ပိတ်ရက်ပဲ၊ ပိုအိပ်လိုက်ဦးမယ်။", xieyin: "ကျင်း ထျဲန် ဂျိုး မော့၊ တွန်း ရွှေ့ ဟွေ့" },
-  { id: 115, category: "一天生活", sub: "起床与挣扎", chinese: "你昨晚睡得真香。", pinyin: "Nǐ zuówǎn shuì de zhēn xiāng.", burmese: "မနေ့ညက မင်းအိပ်ပျော်လိုက်တာ။", xieyin: "နီ ကျို ဝမ် ရွှေ့ တယ် ကျန်း ရှမ်း" },
-  { id: 116, category: "一天生活", sub: "起床与挣扎", chinese: "太阳晒屁股了。", pinyin: "Tàiyáng shài pìgu le.", burmese: "နေဖင်ထိုးနေပြီ (မိုးလင်းနေပြီ)။", xieyin: "ထိုက် ယောင် ရှိုက် ဖိ ကူ လယ်" },
-  { id: 117, category: "一天生活", sub: "起床与挣扎", chinese: "又是新的一天。", pinyin: "Yòu shì xīn de yìtiān.", burmese: "နောက်ထပ် နေ့သစ် တစ်နေ့ပဲ။", xieyin: "ယို့ ရှီ ရှင်း တယ် ယိ ထျဲန်" },
-  { id: 118, category: "一天生活", sub: "起床与挣扎", chinese: "外面天阴了。", pinyin: "Wàimiàn tiān yīn le.", burmese: "အပြင်မှာ မိုးအုံ့နေတယ်။", xieyin: "ဝိုက် မြန့် ထျဲန် ယင်း လယ်" },
-  { id: 119, category: "一天生活", sub: "起床与挣扎", chinese: "赶紧去洗脸。", pinyin: "Gǎnjǐn qù xǐliǎn.", burmese: "သွား မျက်နှာသစ်တော့။", xieyin: "ကန် ကျိန် ချွိ ရှီ လျဲန်" },
-  { id: 120, category: "一天生活", sub: "起床与挣扎", chinese: "动作快点。", pinyin: "Dòngzuò kuài diǎn.", burmese: "သွက်သွက် လုပ်။", xieyin: "တုန်း ဇော့ ခွိုက် တျန်" },
-
-  // ==========================================
-  // 2️⃣ 洗漱与清爽
-  // ==========================================
-  { id: 201, category: "一天生活", sub: "洗漱与清爽", chinese: "去洗脸。", pinyin: "Qù xǐliǎn.", burmese: "မျက်နှာသွားသစ်မယ်။", xieyin: "ချွိ ရှီ လျဲန်" },
-  { id: 202, category: "一天生活", sub: "洗漱与清爽", chinese: "刷个牙。", pinyin: "Shuā gè yá.", burmese: "သွားတိုက်လိုက်ဦးမယ်။", xieyin: "ရွှား ကဲ့ ယာ" },
-  { id: 203, category: "一天生活", sub: "洗漱与清爽", chinese: "水有点凉。", pinyin: "Shuǐ yǒudiǎn liáng.", burmese: "ရေ နည်းနည်း အေးတယ်။", xieyin: "ရွှေ ယို တျန် လျောင်" },
-  { id: 204, category: "一天生活", sub: "洗漱与清爽", chinese: "用热水吧。", pinyin: "Yòng rèshuǐ ba.", burmese: "ရေနွေး သုံးလိုက်ပါ။", xieyin: "ယုန်း ရဲ့ ရွှေ ပါ" },
-  { id: 205, category: "一天生活", sub: "洗漱与清爽", chinese: "牙膏快没了。", pinyin: "Yágāo kuài méi le.", burmese: "သွားတိုက်ဆေး ကုန်တော့မယ်။", xieyin: "ယာ ကောင်း ခွိုက် မေ လယ်" },
-  { id: 206, category: "一天生活", sub: "洗漱与清爽", chinese: "洗好了。", pinyin: "Xǐ hǎo le.", burmese: "ပြီးပြီ။", xieyin: "ရှီ ဟောင် လယ်" },
-  { id: 207, category: "一天生活", sub: "洗漱与清爽", chinese: "清醒多了。", pinyin: "Qīngxǐng duō le.", burmese: "လန်းဆန်းသွားပြီ။", xieyin: "ချင်း ရှင်း တွန်း လယ်" },
-  { id: 208, category: "一天生活", sub: "洗漱与清爽", chinese: "还没洗完。", pinyin: "Hái méi xǐ wán.", burmese: "မပြီးသေးဘူး။", xieyin: "ဟိုင် မေ ရှီ ဝမ်" },
-  { id: 209, category: "一天生活", sub: "洗漱与清爽", chinese: "马上好。", pinyin: "Mǎshàng hǎo.", burmese: "ခဏလေး၊ ပြီးတော့မယ်။", xieyin: "မာ ရှန့် ဟောင်" },
-  { id: 210, category: "一天生活", sub: "洗漱与清爽", chinese: "头有点乱。", pinyin: "Tóu yǒudiǎn luàn.", burmese: "ခေါင်းက နည်းနည်း ရှုပ်နေတယ်။", xieyin: "ထို ယို တျန် လွန့်" },
-  { id: 211, category: "一天生活", sub: "洗漱与清爽", chinese: "洗个头。", pinyin: "Xǐ gè tóu.", burmese: "ခေါင်းလျှော်လိုက်မယ်။", xieyin: "ရှီ ကဲ့ ထို" },
-  { id: 212, category: "一天生活", sub: "洗漱与清爽", chinese: "毛巾在哪？", pinyin: "Máojīn zài nǎ?", burmese: "မျက်နှာသုတ်ပုဝါ ဘယ်မှာလဲ။", xieyin: "မောင် ကျင်း ဇိုက် နာ" },
-  { id: 213, category: "一天生活", sub: "洗漱与清爽", chinese: "洗面奶没了。", pinyin: "Xǐmiànnǎi méi le.", burmese: "မျက်နှာသစ်ဆေး ကုန်သွားပြီ။", xieyin: "ရှီ မြန့် နိုင် မေ လယ်" },
-  { id: 214, category: "一天生活", sub: "洗漱与清爽", chinese: "香皂在哪？", pinyin: "Xiāngzào zài nǎ?", burmese: "ဆပ်ပြာခဲ ဘယ်မှာလဲ။", xieyin: "ရှမ်း ဇောက် ဇိုက် နာ" },
-  { id: 215, category: "一天生活", sub: "洗漱与清爽", chinese: "镜子有点脏。", pinyin: "Jìngzi yǒudiǎn zāng.", burmese: "မှန် နည်းနည်း ညစ်ပတ်နေတယ်။", xieyin: "ကျင့် ဇိ ယို တျန် ဇန်း" },
-  { id: 216, category: "一天生活", sub: "洗漱与清爽", chinese: "没刮胡子呢。", pinyin: "Méi guā húzi ne.", burmese: "မုတ်ဆိတ် မရိတ်ရသေးဘူး။", xieyin: "မေ ကွာ ဟူ ဇိ နယ်" },
-  { id: 217, category: "一天生活", sub: "洗漱与清爽", chinese: "厕所有人吗？", pinyin: "Cèsuǒ yǒu rén ma?", burmese: "အိမ်သာထဲ လူရှိလား။", xieyin: "ချဲ့ ဆွော် ယို ရန် မာ" },
-  { id: 218, category: "一天生活", sub: "洗漱与清爽", chinese: "快点出来，我要用。", pinyin: "Kuài diǎn chūlái, wǒ yào yòng.", burmese: "မြန်မြန်ထွက်၊ ငါဝင်ချင်လို့။", xieyin: "ခွိုက် တျန် ချူး လိုက်၊ ဝေါ် ယောက် ယုန်း" },
-  { id: 219, category: "一天生活", sub: "洗漱与清爽", chinese: "纸没了，递给我。", pinyin: "Zhǐ méi le, dì gěi wǒ.", burmese: "တစ်ရှူးကုန်သွားပြီ၊ ပေးပါဦး။", xieyin: "ဂျီ မေ လယ်၊ တိ ကေ့ ဝေါ်" },
-  { id: 220, category: "一天生活", sub: "洗漱与清爽", chinese: "把头发吹干。", pinyin: "Bǎ tóufa chuī gān.", burmese: "ဆံပင် ခြောက်အောင် မှုတ်လိုက်ဦး။", xieyin: "ပါ ထို ဖာ ချွီး ကန်း" },
-
-  // ==========================================
-  // 3️⃣ 穿衣打扮
-  // ==========================================
-  { id: 301, category: "一天生活", sub: "穿衣打扮", chinese: "穿什么？", pinyin: "Chuān shénme?", burmese: "ဘာဝတ်မလဲ။", xieyin: "ချွမ်း ရှင် မယ်" },
-  { id: 302, category: "一天生活", sub: "穿衣打扮", chinese: "今天穿这件吧。", pinyin: "Jīntiān chuān zhè jiàn ba.", burmese: "ဒီနေ့ ဒါပဲ ဝတ်လိုက်မယ်။", xieyin: "ကျင်း ထျဲန် ချွမ်း ကျဲ့ ကျန့် ပါ" },
-  { id: 303, category: "一天生活", sub: "穿衣打扮", chinese: "这件太厚了。", pinyin: "Zhè jiàn tài hòu le.", burmese: "ဒီအင်္ကျီက အရမ်းထူတယ်။", xieyin: "ကျဲ့ ကျန့် ထိုက် ဟို့ လယ်" },
-  { id: 304, category: "一天生活", sub: "穿衣打扮", chinese: "外面冷吗？", pinyin: "Wàimiàn lěng ma?", burmese: "အပြင်မှာ အေးလား။", xieyin: "ဝိုက် မြန့် လိန့် မာ" },
-  { id: 305, category: "一天生活", sub: "穿衣打扮", chinese: "这衣服合适吗？", pinyin: "Zhè yīfu héshì ma?", burmese: "ဒီအင်္ကျီနဲ့ လိုက်ရဲ့လား။", xieyin: "ကျဲ့ ယီး ဖူ ဟော် ရှိ မာ" },
-  { id: 306, category: "一天生活", sub: "穿衣打扮", chinese: "有点小。", pinyin: "Yǒudiǎn xiǎo.", burmese: "နည်းနည်း သေးတယ်။", xieyin: "ယို တျန် ရှောင်" },
-  { id: 307, category: "一天生活", sub: "穿衣打扮", chinese: "不太好看。", pinyin: "Bú tài hǎokàn.", burmese: "သိပ် မလှဘူး။", xieyin: "ပု ထိုက် ဟောင် ခန့်" },
-  { id: 308, category: "一天生活", sub: "穿衣打扮", chinese: "来不及挑了。", pinyin: "Láibují tiāo le.", burmese: "ရွေးနေဖို့ အချိန်မရှိတော့ဘူး။", xieyin: "လိုက် ပု ကျီ ထျောင်း လယ်" },
-  { id: 309, category: "一天生活", sub: "穿衣打扮", chinese: "这件衣服脏了。", pinyin: "Zhè jiàn yīfu zāng le.", burmese: "ဒီအင်္ကျီ ညစ်ပတ်နေပြီ။", xieyin: "ကျဲ့ ကျန့် ယီး ဖူ ဇန်း လယ်" },
-  { id: 310, category: "一天生活", sub: "穿衣打扮", chinese: "穿外套吧，有风。", pinyin: "Chuān wàitào ba, yǒu fēng.", burmese: "အပေါ်ထပ် ဝတ်သွား၊ လေတိုက်တယ်။", xieyin: "ချွမ်း ဝိုက် ထောင့် ပါ၊ ယို ဖုန်း" },
-  { id: 311, category: "一天生活", sub: "穿衣打扮", chinese: "鞋子脏了，去擦擦。", pinyin: "Xiézi zāng le, qù cāca.", burmese: "ဖိနပ် ညစ်ပတ်နေတယ်၊ သွားတိုက်လိုက်ဦး။", xieyin: "ရှဲ ဇိ ဇန်း လယ်၊ ချွိ ဆား ဆား" },
-  { id: 312, category: "一天生活", sub: "穿衣打扮", chinese: "最近显胖，换一件。", pinyin: "Zuìjìn xiǎn pàng, huàn yí jiàn.", burmese: "ဒီရက်ပိုင်း ဝလာတယ်၊ တခြားဟာ လဲလိုက်မယ်။", xieyin: "ဇွေ့ ကျင့် ရှန် ဖန့်၊ ဟွန့် ယီ ကျန့်" },
-  { id: 313, category: "一天生活", sub: "穿衣打扮", chinese: "帮我把拉链拉上。", pinyin: "Bāng wǒ bǎ lāliàn lā shàng.", burmese: "ဇစ် လာဆွဲပေးပါဦး။", xieyin: "ပန်း ဝေါ် ပါ လား လျဲန် လား ရှန့်" },
-  { id: 314, category: "一天生活", sub: "穿衣打扮", chinese: "袜子没找着。", pinyin: "Wàzi méi zhǎozháo.", burmese: "ခြေအိတ် ရှာမတွေ့ဘူး။", xieyin: "ဝါ့ ဇိ မေ ဂျောင် ဂျောင်" },
-  { id: 315, category: "一天生活", sub: "穿衣打扮", chinese: "裤带系好。", pinyin: "Kùdài jì hǎo.", burmese: "ခါးပတ် သေချာပတ်။", xieyin: "ခူး တိုက် ကျိ ဟောင်" },
-  { id: 316, category: "一天生活", sub: "穿衣打扮", chinese: "都是褶子。", pinyin: "Dōu shì zhězi.", burmese: "ကြေမွနေတာပဲ။", xieyin: "တိုး ရှီ ဂျယ် ဇိ" },
-  { id: 317, category: "一天生活", sub: "穿衣打扮", chinese: "穿哪双鞋？", pinyin: "Chuān nǎ shuāng xié?", burmese: "ဘယ်ဖိနပ် စီးမလဲ။", xieyin: "ချွမ်း နာ ရွှန်း ရှဲ" },
-  { id: 318, category: "一天生活", sub: "穿衣打扮", chinese: "穿拖鞋就行。", pinyin: "Chuān tuōxié jiù xíng.", burmese: "ညှပ်ဖိနပ်ပဲ စီးသွားမယ်။", xieyin: "ချွမ်း ထော ရှဲ ကျို့ ရှင်း" },
-  { id: 319, category: "一天生活", sub: "穿衣打扮", chinese: "衣服穿反了。", pinyin: "Yīfu chuān fǎn le.", burmese: "အင်္ကျီ ပြောင်းပြန် ဝတ်ထားတယ်။", xieyin: "ယီး ဖူ ချွမ်း ဖန် လယ်" },
-  { id: 320, category: "一天生活", sub: "穿衣打扮", chinese: "好了，完美。", pinyin: "Hǎo le, wánměi.", burmese: "ကဲ... ပြည့်စုံသွားပြီ။", xieyin: "ဟောင် လယ်၊ ဝမ် မဲ့" },
-
-  // ==========================================
-  // 4️⃣ 出门前找东西
-  // ==========================================
-  { id: 401, category: "一天生活", sub: "出门前找东西", chinese: "找一下手机。", pinyin: "Zhǎo yíxià shǒujī.", burmese: "ဖုန်း ခဏလောက် ရှာလိုက်ဦးမယ်။", xieyin: "ဂျောင် ယီ ရှာ့ ရှို ကျီး" },
-  { id: 402, category: "一天生活", sub: "出门前找东西", chinese: "手机呢？", pinyin: "Shǒujī ne?", burmese: "ဖုန်း ဘယ်ရောက်သွားလဲ။", xieyin: "ရှို ကျီး နယ်" },
-  { id: 403, category: "一天生活", sub: "出门前找东西", chinese: "看见我耳机了吗？", pinyin: "Kànjiàn wǒ ěrjī le ma?", burmese: "ငါ့ နားကြပ် တွေ့မိလား။", xieyin: "ခန့် ကျန့် ဝေါ် အာ ကျီး လယ် မာ" },
-  { id: 404, category: "一天生活", sub: "出门前找东西", chinese: "钥匙带了吗？", pinyin: "Yàoshi dài le ma?", burmese: "သော့ ပါလား။", xieyin: "ယောက် ရှီ တိုက် လယ် မာ" },
-  { id: 405, category: "一天生活", sub: "出门前找东西", chinese: "钱包忘了。", pinyin: "Qiánbāo wàng le.", burmese: "ပိုက်ဆံအိတ် မေ့ကျန်ခဲ့တယ်။", xieyin: "ချျဲန် ပေါင်း ဝန့် လယ်" },
-  { id: 406, category: "一天生活", sub: "出门前找东西", chinese: "没电了。", pinyin: "Méi diàn le.", burmese: "အားကုန်နေပြီ။", xieyin: "မေ တျန့် လယ်" },
-  { id: 407, category: "一天生活", sub: "出门前找东西", chinese: "带伞了吗？", pinyin: "Dài sǎn le ma?", burmese: "ထီး ပါလား။", xieyin: "တိုက် ဆန် လယ် မာ" },
-  { id: 408, category: "一天生活", sub: "出门前找东西", chinese: "口罩带了吗？", pinyin: "Kǒuzhào dài le ma?", burmese: "Mask ပါလား။", xieyin: "ခို ဂျောင့် တိုက် လယ် မာ" },
-  { id: 409, category: "一天生活", sub: "出门前找东西", chinese: "充电宝带了没？", pinyin: "Chōngdiànbǎo dài le méi?", burmese: "Power bank ပါလား။", xieyin: "ချုံး တျန့် ပေါင် တိုက် လယ် မေ" },
-  { id: 410, category: "一天生活", sub: "出门前找东西", chinese: "忘拿水杯了。", pinyin: "Wàng ná shuǐbēi le.", burmese: "ရေဘူး ယူဖို့ မေ့သွားတယ်။", xieyin: "ဝန့် နာ ရွှေ ပေး လယ်" },
-  { id: 411, category: "一天生活", sub: "出门前找东西", chinese: "别找了，下次再说。", pinyin: "Bié zhǎo le, xiàcì zàishuō.", burmese: "မရှာနဲ့တော့၊ နောက်မှပဲ ကြည့်တော့မယ်။", xieyin: "ပျယ် ဂျောင် လယ်၊ ရှာ့ ဆွေ့ ဇိုက် ရွှော" },
-  { id: 412, category: "一天生活", sub: "出门前找东西", chinese: "再检查一下。", pinyin: "Zài jiǎnchá yíxià.", burmese: "နောက်တစ်ခေါက် ပြန်စစ်လိုက်ဦး။", xieyin: "ဇိုက် ကျျဲန် ခြား ယီ ရှာ့" },
-  { id: 413, category: "一天生活", sub: "出门前找东西", chinese: "眼镜在哪？", pinyin: "Yǎnjìng zài nǎ?", burmese: "မျက်မှန် ဘယ်မှာလဲ။", xieyin: "ယန် ကျင့် ဇိုက် နာ" },
-  { id: 414, category: "一天生活", sub: "出门前找东西", chinese: "垃圾袋顺便提着。", pinyin: "Lājīdài shùnbiàn tí zhe.", burmese: "အမှိုက်အိတ်ပါ တစ်ခါတည်း ဆွဲသွား။", xieyin: "လား ကျီး တိုက် ရွှန့် ပြန့် ထီ ဂျယ်" },
-  { id: 415, category: "一天生活", sub: "出门前找东西", chinese: "门钥匙在包里吗？", pinyin: "Mén yàoshi zài bāo lǐ ma?", burmese: "တံခါးသော့ အိတ်ထဲမှာလား။", xieyin: "မန် ယောက် ရှီ ဇိုက် ပေါင်း လီ မာ" },
-  { id: 416, category: "一天生活", sub: "出门前找东西", chinese: "就在那儿，瞎啊。", pinyin: "Jiù zài nàr, xiā a.", burmese: "အဲ့နားမှာလေ၊ ကန်းနေလား။", xieyin: "ကျို့ ဇိုက် နာရ်၊ ရှာ အာ" },
-  { id: 417, category: "一天生活", sub: "出门前找东西", chinese: "找到了。", pinyin: "Zhǎodào le.", burmese: "တွေ့ပြီ။", xieyin: "ဂျောင် တောက် လယ်" },
-  { id: 418, category: "一天生活", sub: "出门前找东西", chinese: "电脑带了吗？", pinyin: "Diànnǎo dài le ma?", burmese: "ကွန်ပျူတာ ပါလား။", xieyin: "တျန့် နောင် တိုက် လယ် မာ" },
-  { id: 419, category: "一天生活", sub: "出门前找东西", chinese: "别丢三落四的。", pinyin: "Bié diū sān là sì de.", burmese: "ဟိုမေ့ ဒီမေ့ မလုပ်နဲ့။", xieyin: "ပျယ် တျူး ဆန်း လား ဆွေ့ တယ်" },
-  { id: 420, category: "一天生活", sub: "出门前找东西", chinese: "确定没漏东西？", pinyin: "Quèdìng méi lòu dōngxi?", burmese: "ကျန်ခဲ့တာ မရှိဘူးနော်၊ သေချာလား။", xieyin: "ချွဲ့ တင့် မေ လို့ တုန်း ရှီ" },
-
-  // ==========================================
-  // 5️⃣ 早餐时刻
-  // ==========================================
-  { id: 501, category: "一天生活", sub: "早餐时刻", chinese: "吃早饭了吗？", pinyin: "Chī zǎofàn le ma?", burmese: "မနက်စာ စားပြီးပြီလား။", xieyin: "ချီ ဇောင် ဖန့် လယ် မာ" },
-  { id: 502, category: "一天生活", sub: "早餐时刻", chinese: "还没吃。", pinyin: "Hái méi chī.", burmese: "မစားရသေးဘူး။", xieyin: "ဟိုင် မေ ချီ" },
-  { id: 503, category: "一天生活", sub: "早餐时刻", chinese: "吃点什么？", pinyin: "Chī diǎn shénme?", burmese: "ဘာ စားမလဲ။", xieyin: "ချီ တျန် ရှင် မယ်" },
-  { id: 504, category: "一天生活", sub: "早餐时刻", chinese: "没时间吃。", pinyin: "Méi shíjiān chī.", burmese: "စားဖို့ အချိန်မရှိဘူး။", xieyin: "မေ ရှီ ကျျဲန် ချီ" },
-  { id: 505, category: "一天生活", sub: "早餐时刻", chinese: "路上买。", pinyin: "Lù shang mǎi.", burmese: "လမ်းကျမှ ဝယ်စားမယ်။", xieyin: "လူး ရှန့် မိုင်" },
-  { id: 506, category: "一天生活", sub: "早餐时刻", chinese: "没胃口。", pinyin: "Méi wèikǒu.", burmese: "ခံတွင်း မတွေ့ဘူး။", xieyin: "မေ ဝေ့ ခို" },
-  { id: 507, category: "一天生活", sub: "早餐时刻", chinese: "喝杯咖啡。", pinyin: "Hē bēi kāfēi.", burmese: "ကော်ဖီ တစ်ခွက်လောက် သောက်မယ်။", xieyin: "ဟေး ပေး ခါး ဖေး" },
-  { id: 508, category: "一天生活", sub: "早餐时刻", chinese: "吃包子还是馒头？", pinyin: "Chī bāozi háishì mántou?", burmese: "ပေါက်စီ စားမလား၊ ဖက်ထုပ် စားမလား။", xieyin: "ချီ ပေါင်း ဇိ ဟိုင် ရှီ မန် ထို" },
-  { id: 509, category: "一天生活", sub: "早餐时刻", chinese: "给我煎个鸡蛋吧。", pinyin: "Gěi wǒ jiān gè jīdàn ba.", burmese: "ကြက်ဥ တစ်လုံးလောက် ကြော်ပေးပါ။", xieyin: "ကေ့ ဝေါ် ကျျဲန် ကဲ့ ကျီး တန့် ပါ" },
-  { id: 510, category: "一天生活", sub: "早餐时刻", chinese: "我不吃早饭。", pinyin: "Wǒ bù chī zǎofàn.", burmese: "ကျွန်တော် မနက်စာ မစားဘူး။", xieyin: "ဝေါ် ပု ချီ ဇောင် ဖန့်" },
-  { id: 511, category: "一天生活", sub: "早餐时刻", chinese: "吃完赶紧走。", pinyin: "Chī wán gǎnjǐn zǒu.", burmese: "စားပြီးရင် မြန်မြန်သွားမယ်။", xieyin: "ချီ ဝမ် ကန် ကျိန် ဇို" },
-  { id: 512, category: "一天生活", sub: "早餐时刻", chinese: "鸡蛋要全熟的。", pinyin: "Jīdàn yào quán shú de.", burmese: "ကြက်ဥ ကျက်ကျက်ကြော်နော်။", xieyin: "ကျီး တန့် ယောက် ခြွမ် ရှူ တယ်" },
-  { id: 513, category: "一天生活", sub: "早餐时刻", chinese: "面包糊了。", pinyin: "Miànbāo hú le.", burmese: "ပေါင်မုန့် တူးသွားပြီ။", xieyin: "မြန့် ပေါင်း ဟူး လယ်" },
-  { id: 514, category: "一天生活", sub: "早餐时刻", chinese: "还有牛奶吗？", pinyin: "Hái yǒu niúnǎi ma?", burmese: "နွားနို့ ရှိသေးလား။", xieyin: "ဟိုင် ယို နျူ နိုင် မာ" },
-  { id: 515, category: "一天生活", sub: "早餐时刻", chinese: "别光喝水。", pinyin: "Bié guāng hē shuǐ.", burmese: "ရေချည်းပဲ မသောက်နဲ့လေ။", xieyin: "ပျယ် ကွန်း ဟေး ရွှေ" },
-  { id: 516, category: "一天生活", sub: "早餐时刻", chinese: "这豆浆太甜了。", pinyin: "Zhè dòujiāng tài tián le.", burmese: "ဒီ ပဲနို့က အရမ်းချိုတာပဲ။", xieyin: "ကျဲ့ တို့ ကျျန်း ထိုက် ထျဲန် လယ်" },
-  { id: 517, category: "一天生活", sub: "早餐时刻", chinese: "吃快点，要迟到了。", pinyin: "Chī kuài diǎn, yào chídào le.", burmese: "မြန်မြန် စား၊ နောက်ကျတော့မယ်။", xieyin: "ချီ ခွိုက် တျန်၊ ယောက် ချီ တောက် လယ်" },
-  { id: 518, category: "一天生活", sub: "早餐时刻", chinese: "别噎着。", pinyin: "Bié yē zhe.", burmese: "နင်မယ်နော်၊ ဖြည်းဖြည်းစား။", xieyin: "ပျယ် ယေး ဂျယ်" },
-  { id: 519, category: "一天生活", sub: "早餐时刻", chinese: "闻着真香。", pinyin: "Wén zhe zhēn xiāng.", burmese: "အနံ့က မွှေးနေတာပဲ။", xieyin: "ဝမ် ဂျယ် ကျန်း ရှမ်း" },
-  { id: 520, category: "一天生活", sub: "早餐时刻", chinese: "还要排队。", pinyin: "Hái yào páiduì.", burmese: "တန်းစီရဦးမယ်။", xieyin: "ဟိုင် ယောက် ဖိုင် တွေ့" },
-
-  // ==========================================
-  // 6️⃣ 出门离家
-  // ==========================================
-  { id: 601, category: "一天生活", sub: "出门离家", chinese: "我要出门了。", pinyin: "Wǒ yào chūmén le.", burmese: "ကျွန်တော် သွားတော့မယ်။", xieyin: "ဝေါ် ယောက် ချူး မန် လယ်" },
-  { id: 602, category: "一天生活", sub: "出门离家", chinese: "路上小心。", pinyin: "Lùshang xiǎoxīn.", burmese: "လမ်း ဂရုစိုက်နော်။", xieyin: "လူး ရှန့် ရှောင် ရှင်း" },
-  { id: 603, category: "一天生活", sub: "出门离家", chinese: "别忘了带钥匙。", pinyin: "Bié wàng le dài yàoshi.", burmese: "သော့ယူဖို့ မမေ့နဲ့ဦး။", xieyin: "ပျယ် ဝန့် လယ် တိုက် ယောက် ရှီ" },
-  { id: 604, category: "一天生活", sub: "出门离家", chinese: "早点回来。", pinyin: "Zǎodiǎn huílái.", burmese: "စောစော ပြန်လာနော်။", xieyin: "ဇောင် တျန် ဟွေး လိုက်" },
-  { id: 605, category: "一天生活", sub: "出门离家", chinese: "门关了吗？", pinyin: "Mén guān le ma?", burmese: "တံခါး ပိတ်ခဲ့လား။", xieyin: "မန် ကွမ်း လယ် မာ" },
-  { id: 606, category: "一天生活", sub: "出门离家", chinese: "我走了，拜拜。", pinyin: "Wǒ zǒu le, báibái.", burmese: "သွားပြီနော်... တာ့တာ။", xieyin: "ဝေါ် ဇို လယ်၊ ပိုက် ပိုက်" },
-  { id: 607, category: "一天生活", sub: "出门离家", chinese: "垃圾别忘了扔。", pinyin: "Lājī bié wàng le rēng.", burmese: "အမှိုက်ပစ်ဖို့ မမေ့နဲ့နော်။", xieyin: "လား ကျီး ပျယ် ဝန့် လယ် ရန်း" },
-  { id: 608, category: "一天生活", sub: "出门离家", chinese: "路上慢点骑。", pinyin: "Lùshang màn diǎn qí.", burmese: "ဆိုင်ကယ် ဖြည်းဖြည်း မောင်းနော်။", xieyin: "လူး ရှန့် မန့် တျန် ချီ" },
-  { id: 609, category: "一天生活", sub: "出门离家", chinese: "等一下，我忘拿东西了。", pinyin: "Děng yíxià, wǒ wàng ná dōngxi le.", burmese: "ခဏလေး၊ ပစ္စည်းမေ့ ကျန်ခဲ့လို့။", xieyin: "တိန် ယီ ရှာ့၊ ဝေါ် ဝန့် နာ တုန်း ရှီ လယ်" },
-  { id: 610, category: "一天生活", sub: "出门离家", chinese: "电梯来了。", pinyin: "Diàntī lái le.", burmese: "ဓာတ်လှေကား လာပြီ။", xieyin: "တျန့် ထီး လိုက် လယ်" },
-  { id: 611, category: "一天生活", sub: "出门离家", chinese: "走楼梯吧。", pinyin: "Zǒu lóutī ba.", burmese: "လှေကားကနေ သွားမယ်။", xieyin: "ဇို လို ထီး ပါ" },
-  { id: 612, category: "一天生活", sub: "出门离家", chinese: "还没穿鞋呢。", pinyin: "Hái méi chuān xié ne.", burmese: "ဖိနပ်တောင် မစီးရသေးဘူး။", xieyin: "ဟိုင် မေ ချွမ်း ရှဲ နယ်" },
-  { id: 613, category: "一天生活", sub: "出门离家", chinese: "帮我开下门。", pinyin: "Bāng wǒ kāi xià mén.", burmese: "တံခါး ဖွင့်ပေးပါဦး။", xieyin: "ပန်း ဝေါ် ခိုင် ရှာ့ မန်" },
-  { id: 614, category: "一天生活", sub: "出门离家", chinese: "回头见。", pinyin: "Huítóu jiàn.", burmese: "နောက်မှ တွေ့မယ်။", xieyin: "ဟွေး ထို ကျန့်" },
-  { id: 615, category: "一天生活", sub: "出门离家", chinese: "下班我去接你。", pinyin: "Xiàbān wǒ qù jiē nǐ.", burmese: "အလုပ်ဆင်းရင် လာကြိုမယ်။", xieyin: "ရှာ့ ပန်း ဝေါ် ချွိ ကျဲ နီ" },
-  { id: 616, category: "一天生活", sub: "出门离家", chinese: "别忘了关窗。", pinyin: "Bié wàng le guān chuāng.", burmese: "ပြတင်းပေါက် ပိတ်ဖို့ မမေ့နဲ့။", xieyin: "ပျယ် ဝန့် လယ် ကွမ်း ချွမ်း" },
-  { id: 617, category: "一天生活", sub: "出门离家", chinese: "灯都关了吗？", pinyin: "Dēng dōu guān le ma?", burmese: "မီးတွေ ပိတ်ခဲ့ပြီလား။", xieyin: "တန်း တိုး ကွမ်း လယ် မာ" },
-  { id: 618, category: "一天生活", sub: "出门离家", chinese: "我在楼下等你。", pinyin: "Wǒ zài lóuxià děng nǐ.", burmese: "အောက်က စောင့်နေမယ်။", xieyin: "ဝေါ် ဇိုက် လို ရှာ့ တိန် နီ" },
-  { id: 619, category: "一天生活", sub: "出门离家", chinese: "别急。", pinyin: "Bié jí.", burmese: "မလောပါနဲ့။", xieyin: "ပျယ် ကျီ" },
-  { id: 620, category: "一天生活", sub: "出门离家", chinese: "走起。", pinyin: "Zǒu qǐ.", burmese: "သွားကြစို့။", xieyin: "ဇို ချီ" },
-
-  // ==========================================
-  // 7️⃣ 交通/通勤
-  // ==========================================
-  { id: 701, category: "一天生活", sub: "交通/通勤", chinese: "今天堵吗？", pinyin: "Jīntiān dǔ ma?", burmese: "ဒီနေ့ ကားပိတ်လား။", xieyin: "ကျင်း ထျဲန် တူ မာ" },
-  { id: 702, category: "一天生活", sub: "交通/通勤", chinese: "有点堵。", pinyin: "Yǒudiǎn dǔ.", burmese: "နည်းနည်း ပိတ်တယ်။", xieyin: "ယို တျန် တူ" },
-  { id: 703, category: "一天生活", sub: "交通/通勤", chinese: "坐公交。", pinyin: "Zuò gōngjiāo.", burmese: "ဘတ်စ်ကား စီးမယ်။", xieyin: "ဇော့ ကုန်း ကျောင်း" },
-  { id: 704, category: "一天生活", sub: "交通/通勤", chinese: "人太多了。", pinyin: "Rén tài duō le.", burmese: "လူတွေ အရမ်းများတယ်။", xieyin: "ရန် ထိုက် တွန်း လယ်" },
-  { id: 705, category: "一天生活", sub: "交通/通勤", chinese: "挤死了。", pinyin: "Jǐ sǐ le.", burmese: "ကျပ်လိုက်တာ။", xieyin: "ကျီ ဆစ် လယ်" },
-  { id: 706, category: "一天生活", sub: "交通/通勤", chinese: "快迟到了。", pinyin: "Kuài chídào le.", burmese: "နောက်ကျတော့မယ်။", xieyin: "ခွိုက် ချီ တောက် လယ်" },
-  { id: 707, category: "一天生活", sub: "交通/通勤", chinese: "还来得及。", pinyin: "Hái láidejí.", burmese: "မီပါသေးတယ်။", xieyin: "ဟိုင် လိုက် တယ် ကျီ" },
-  { id: 708, category: "一天生活", sub: "交通/通勤", chinese: "到公司了。", pinyin: "Dào gōngsī le.", burmese: "ရုံး ရောက်ပြီ။", xieyin: "တောက် ကုန်း ဆစ် လယ်" },
-  { id: 709, category: "一天生活", sub: "交通/通勤", chinese: "有没有座位？", pinyin: "Yǒu méiyǒu zuòwèi?", burmese: "ထိုင်ခုံ ရှိလား။", xieyin: "ယို မေ ယို ဇော့ ဝေ့" },
-  { id: 710, category: "一天生活", sub: "交通/通勤", chinese: "没有位置了。", pinyin: "Méiyǒu wèizhì le.", burmese: "နေရာ မရှိတော့ဘူး။", xieyin: "မေ ယို ဝေ့ ဂျိ လယ်" },
-  { id: 711, category: "一天生活", sub: "交通/通勤", chinese: "下一站就到。", pinyin: "Xià yí zhàn jiù dào.", burmese: "နောက်မှတ်တိုင်ဆို ရောက်ပြီ။", xieyin: "ရှာ့ ယီ ကျန့် ကျို့ တောက်" },
-  { id: 712, category: "一天生活", sub: "交通/通勤", chinese: "打车吧，来不及了。", pinyin: "Dǎchē ba, láibují le.", burmese: "အငှားကား စီးရအောင်၊ မမီတော့ဘူး။", xieyin: "တာ ချေး ပါ၊ လိုက် ပု ကျီ လယ်" },
-  { id: 713, category: "一天生活", sub: "交通/通勤", chinese: "师傅，走不走？", pinyin: "Shīfu, zǒu bù zǒu?", burmese: "ဆရာ... သွားမလား။", xieyin: "ရှီး ဖူ၊ ဇို ပု ဇို" },
-  { id: 714, category: "一天生活", sub: "交通/通勤", chinese: "就在这儿停。", pinyin: "Jiù zài zhèr tíng.", burmese: "ဒီနားလေး ရပ်ပေးပါ။", xieyin: "ကျို့ ဇိုက် ကျဲ့ရ် ထိန်" },
-  { id: 715, category: "一天生活", sub: "交通/通勤", chinese: "谁踩我脚了。", pinyin: "Shéi cǎi wǒ jiǎo le.", burmese: "ဘယ်သူ ငါ့ခြေထောက်ကို နင်းတာလဲ။", xieyin: "ရွှေ ဆိုင် ဝေါ် ကျောင် လယ်" },
-  { id: 716, category: "一天生活", sub: "交通/通勤", chinese: "坐反了。", pinyin: "Zuò fǎn le.", burmese: "ကားမှားစီးမိပြီ။", xieyin: "ဇော့ ဖန် လယ်" },
-  { id: 717, category: "一天生活", sub: "交通/通勤", chinese: "别挡在门口。", pinyin: "Bié dǎng zài ménkǒu.", burmese: "အပေါက်ဝမှာ ပိတ်မရပ်နဲ့။", xieyin: "ပျယ် တန် ဇိုက် မန် ခို" },
-  { id: 718, category: "一天生活", sub: "交通/通勤", chinese: "别睡着了，坐过站。", pinyin: "Bié shuìzháo le, zuò guò zhàn.", burmese: "မအိပ်နဲ့ဦး၊ မှတ်တိုင် ကျော်သွားမယ်။", xieyin: "ပျယ် ရွှေ့ ဂျောင် လယ်၊ ဇော့ ကွန့် ကျန့်" },
-  { id: 719, category: "一天生活", sub: "交通/通勤", chinese: "师傅，快点开。", pinyin: "Shīfu, kuài diǎn kāi.", burmese: "ဆရာ... မြန်မြန် မောင်းပေးပါ။", xieyin: "ရှီး ဖူ၊ ခွိုက် တျန် ခိုင်" },
-  { id: 720, category: "一天生活", sub: "交通/通勤", chinese: "谢谢师傅。", pinyin: "Xièxie shīfu.", burmese: "ကျေးဇူးပါ ဆရာ။", xieyin: "ရှဲ့ ရှဲ့ ရှီး ဖူ" },
-
-  // ==========================================
-  // 8️⃣ 白天/干活
-  // ==========================================
-  { id: 801, category: "一天生活", sub: "白天/干活", chinese: "忙不忙？", pinyin: "Máng bù máng?", burmese: "အလုပ်ရှုပ်လား။", xieyin: "မန် ပု မန်" },
-  { id: 802, category: "一天生活", sub: "白天/干活", chinese: "挺忙的。", pinyin: "Tǐng máng de.", burmese: "တော်တော် ရှုပ်တယ်။", xieyin: "ထိန် မန် တယ်" },
-  { id: 803, category: "一天生活", sub: "白天/干活", chinese: "累不累？", pinyin: "Lèi bú lèi?", burmese: "ပင်ပန်းလား။", xieyin: "လေ့ ပု လေ့" },
-  { id: 804, category: "一天生活", sub: "白天/干活", chinese: "累死了。", pinyin: "Lèi sǐ le.", burmese: "သေလောက်အောင် ပင်ပန်းတယ်။", xieyin: "လေ့ ဆစ် လယ်" },
-  { id: 805, category: "一天生活", sub: "白天/干活", chinese: "先忙一下。", pinyin: "Xiān máng yíxià.", burmese: "အလုပ်ဖြတ်လုပ်လိုက်ဦးမယ်။", xieyin: "ရှဲန် မန် ယီ ရှာ့" },
-  { id: 806, category: "一天生活", sub: "白天/干活", chinese: "等会儿说。", pinyin: "Děnghuìr shuō.", burmese: "ခဏနေမှ ပြောမယ်။", xieyin: "တိန် ဟွေ့ရ် ရွှော" },
-  { id: 807, category: "一天生活", sub: "白天/干活", chinese: "饿了，吃点东西。", pinyin: "È le, chī diǎn dōngxi.", burmese: "ဗိုက်ဆာပြီ၊ တစ်ခုခု စားရအောင်။", xieyin: "အဲ့ လယ်၊ ချီ တျန် တုန်း ရှီ" },
-  { id: 808, category: "一天生活", sub: "白天/干活", chinese: "赶紧干活，别偷懒。", pinyin: "Gǎnjǐn gànhuó, bié tōulǎn.", burmese: "အလုပ်လုပ်၊ ပျင်းမနေနဲ့။", xieyin: "ကန် ကျိန် ကန့် ဟို၊ ပျယ် ထိုး လန်" },
-  { id: 809, category: "一天生活", sub: "白天/干活", chinese: "老板来了。", pinyin: "Lǎobǎn lái le.", burmese: "သူဌေး လာပြီ။", xieyin: "လောင် ပန် လိုက် လယ်" },
-  { id: 810, category: "一天生活", sub: "白天/干活", chinese: "这个怎么弄？", pinyin: "Zhège zěnme nòng?", burmese: "ဒါ ဘယ်လိုလုပ်ရမလဲ။", xieyin: "ကျဲ့ ကဲ့ ဇန် မဲ့ နုန်း" },
-  { id: 811, category: "一天生活", sub: "白天/干活", chinese: "帮我一下。", pinyin: "Bāng wǒ yíxià.", burmese: "ငါ့ကို ကူညီပါဦး။", xieyin: "ပန်း ဝေါ် ယီ ရှာ့" },
-  { id: 812, category: "一天生活", sub: "白天/干活", chinese: "开个会吧。", pinyin: "Kāi gè huì ba.", burmese: "အစည်းအဝေး လုပ်ရအောင်။", xieyin: "ခိုင် ကဲ့ ဟွေ့ ပါ" },
-  { id: 813, category: "一天生活", sub: "白天/干活", chinese: "请假条写了吗？", pinyin: "Qǐngjiàtiáo xiě le ma?", burmese: "ခွင့်စာ ရေးပြီးပြီလား။", xieyin: "ချိန် ကျိုက် ထျောင်း ရှယ် လယ် မာ" },
-  { id: 814, category: "一天生活", sub: "白天/干活", chinese: "什么时候发工资？", pinyin: "Shénme shíhou fā gōngzī?", burmese: "လစာ ဘယ်တော့ထုတ်မလဲ။", xieyin: "ရှင် မဲ့ ရှီ ဟို့ ဖား ကုန်း ဇီ" },
-  { id: 815, category: "一天生活", sub: "白天/干活", chinese: "活儿真多。", pinyin: "Huór zhēn duō.", burmese: "အလုပ်တွေ အရမ်းများတာပဲ။", xieyin: "ဟိုရ် ကျန်း တွန်း" },
-  { id: 816, category: "一天生活", sub: "白天/干活", chinese: "差不多了。", pinyin: "Chàbuduō le.", burmese: "ပြီးခါနီးပြီ။", xieyin: "ခြား ပု တွန်း လယ်" },
-  { id: 817, category: "一天生活", sub: "白天/干活", chinese: "不太行，重做。", pinyin: "Bú tài xíng, chóng zuò.", burmese: "အဆင်မပြေဘူး၊ ပြန်လုပ်။", xieyin: "ပု ထိုက် ရှင်း၊ ချုန်း ဇော့" },
-  { id: 818, category: "一天生活", sub: "白天/干活", chinese: "还没到下班时间。", pinyin: "Hái méi dào xiàbān shíjiān.", burmese: "အလုပ်ဆင်းချိန် မရောက်သေးဘူး။", xieyin: "ဟိုင် မေ တောက် ရှာ့ ပန်း ရှီ ကျျဲန်" },
-  { id: 819, category: "一天生活", sub: "白天/干活", chinese: "电脑卡了。", pinyin: "Diànnǎo kǎ le.", burmese: "ကွန်ပျူတာ ဟန်းနေတယ်။", xieyin: "တျန့် နောင် ခါ လယ်" },
-  { id: 820, category: "一天生活", sub: "白天/干活", chinese: "没保存。", pinyin: "Méi bǎocún.", burmese: "Save မလုပ်လိုက်ရဘူး။", xieyin: "မေ ပေါင် ဆွန်း" },
-
-  // ==========================================
-  // 9️⃣ 下班/晚餐/外卖
-  // ==========================================
-  { id: 901, category: "一天生活", sub: "下班/晚餐", chinese: "下班了吗？", pinyin: "Xiàbān le ma?", burmese: "အလုပ်ဆင်းပြီလား။", xieyin: "ရှာ့ ပန်း လယ် မာ" },
-  { id: 902, category: "一天生活", sub: "下班/晚餐", chinese: "终于下班了。", pinyin: "Zhōngyú xiàbān le.", burmese: "တော်ပါသေးရဲ့ အလုပ်ဆင်းပြီ။", xieyin: "ဂျုံး ယွီ ရှာ့ ပန်း လယ်" },
-  { id: 903, category: "一天生活", sub: "下班/晚餐", chinese: "回家吧。", pinyin: "Huíjiā ba.", burmese: "အိမ်ပြန်ကြစို့။", xieyin: "ဟွေး ကျား ပါ" },
-  { id: 904, category: "一天生活", sub: "下班/晚餐", chinese: "到家了。", pinyin: "Dào jiā le.", burmese: "အိမ်ရောက်ပြီ။", xieyin: "တောက် ကျား လယ်" },
-  { id: 905, category: "一天生活", sub: "下班/晚餐", chinese: "今晚加班吗？", pinyin: "Jīnwǎn jiābān ma?", burmese: "ဒီည အချိန်ပို ဆင်းရမလား။", xieyin: "ကျင်း ဝမ် ကျား ပန်း မာ" },
-  { id: 906, category: "一天生活", sub: "下班/晚餐", chinese: "吃饭了吗？", pinyin: "Chīfàn le ma?", burmese: "ထမင်း စားပြီးပြီလား။", xieyin: "ချီ ဖန့် လယ် မာ" },
-  { id: 907, category: "一天生活", sub: "下班/晚餐", chinese: "做饭还是外卖？", pinyin: "Zuòfàn háishì wàimài?", burmese: "ချက်စားမလား၊ မှာစားမလား။", xieyin: "ဇော့ ဖန့် ဟိုင် ရှီ ဝိုက် မိုက်" },
-  { id: 908, category: "一天生活", sub: "下班/晚餐", chinese: "点外卖吧。", pinyin: "Diǎn wàimài ba.", burmese: "Delivery မှာစားရအောင်။", xieyin: "တျန် ဝိုက် မိုက် ပါ" },
-  { id: 909, category: "一天生活", sub: "下班/晚餐", chinese: "好吃吗？", pinyin: "Hǎochī ma?", burmese: "စားကောင်းလား။", xieyin: "ဟောင် ချီ မာ" },
-  { id: 910, category: "一天生活", sub: "下班/晚餐", chinese: "有点咸。", pinyin: "Yǒudiǎn xián.", burmese: "နည်းနည်း ငန်တယ်။", xieyin: "ယို တျန် ရှျဲန်" },
-  { id: 911, category: "一天生活", sub: "下班/晚餐", chinese: "吃饱了。", pinyin: "Chī bǎo le.", burmese: "ဗိုက်ဝပြီ။", xieyin: "ချီ ပေါင် လယ်" },
-  { id: 912, category: "一天生活", sub: "下班/晚餐", chinese: "饭做好了。", pinyin: "Fàn zuò hǎo le.", burmese: "ထမင်း ချက်ပြီးပြီ။", xieyin: "ဖန့် ဇော့ ဟောင် လယ်" },
-  { id: 913, category: "一天生活", sub: "下班/晚餐", chinese: "太辣了，受不了。", pinyin: "Tài là le, shòubuliǎo.", burmese: "အရမ်းစပ်တယ်၊ မခံနိုင်ဘူး။", xieyin: "ထိုက် လား လယ်၊ ရှို့ ပု လျောင်" },
-  { id: 914, category: "一天生活", sub: "下班/晚餐", chinese: "谁洗碗。", pinyin: "Shéi xǐ wǎn.", burmese: "ဘယ်သူ ပန်းကန်ဆေးမလဲ။", xieyin: "ရွှေ ရှီ ဝမ်" },
-  { id: 915, category: "一天生活", sub: "下班/晚餐", chinese: "锅热了，倒油。", pinyin: "Guō rè le, dào yóu.", burmese: "အိုးပူပြီ၊ ဆီထည့်လိုက်။", xieyin: "ကွန်း ရဲ့ လယ်၊ တောက် ယို" },
-  { id: 916, category: "一天生活", sub: "下班/晚餐", chinese: "饭熟了没？", pinyin: "Fàn shú le méi?", burmese: "ထမင်း ကျက်ပြီလား။", xieyin: "ဖန့် ရှူ လယ် မေ" },
-  { id: 917, category: "一天生活", sub: "下班/晚餐", chinese: "火开小点，要糊了。", pinyin: "Huǒ kāi xiǎo diǎn, yào hú le.", burmese: "မီးလျှော့လိုက်၊ တူးတော့မယ်။", xieyin: "ဟွော် ခိုင် ရှောင် တျန်၊ ယောက် ဟူး လယ်" },
-  { id: 918, category: "一天生活", sub: "下班/晚餐", chinese: "别动，我来切。", pinyin: "Bié dòng, wǒ lái qiē.", burmese: "မလုပ်နဲ့၊ ငါ လှီးပေးမယ်။", xieyin: "ပျယ် တုန်း၊ ဝေါ် လိုက် ချဲ" },
-  { id: 919, category: "一天生活", sub: "下班/晚餐", chinese: "快递到了，去取一下。", pinyin: "Kuàidì dào le, qù qǔ yíxià.", burmese: "ပစ္စည်းရောက်ပြီ၊ သွားယူလိုက်ဦး။", xieyin: "ခွိုက် တိ တောက် လယ်၊ ချွိ ချွီ ယီ ရှာ့" },
-  { id: 920, category: "一天生活", sub: "下班/晚餐", chinese: "外卖员打电话了。", pinyin: "Wàimàiyuán dǎ diànhuà le.", burmese: "Delivery သမား ဖုန်းဆက်နေတယ်။", xieyin: "ဝိုက် မိုက် ယွမ် တာ တျန့် ဟွန့် လယ်" },
-
-  // ==========================================
-  // 🔟 家务/洗衣/夜间
-  // ==========================================
-  { id: 1001, category: "一天生活", sub: "家务/夜间", chinese: "地脏了，去拖地。", pinyin: "Dì zāng le, qù tuōdì.", burmese: "ကြမ်းပြင် ညစ်ပတ်နေပြီ၊ သွား တိုက်လိုက်။", xieyin: "တိ ဇန်း လယ်၊ ချွိ ထော တိ" },
-  { id: 1002, category: "一天生活", sub: "家务/夜间", chinese: "帮我扫扫地。", pinyin: "Bāng wǒ sǎosǎo dì.", burmese: "တံမြက်စည်း လဲပေးပါဦး။", xieyin: "ပန်း ဝေါ် ဆောင် ဆောင် တိ" },
-  { id: 1003, category: "一天生活", sub: "家务/夜间", chinese: "衣服该洗了。", pinyin: "Yīfu gāi xǐ le.", burmese: "အင်္ကျီ လျှော်ဖို့လိုပြီ။", xieyin: "ယီး ဖူ ကိုက် ရှီ လယ်" },
-  { id: 1004, category: "一天生活", sub: "家务/夜间", chinese: "去擦桌子。", pinyin: "Qù cā zhuōzi.", burmese: "စားပွဲ သွားသုတ်လိုက်။", xieyin: "ချွိ ဆား ဂျွန်း ဇိ" },
-  { id: 1005, category: "一天生活", sub: "家务/夜间", chinese: "垃圾满了，倒掉。", pinyin: "Lājī mǎn le, dào diào.", burmese: "အမှိုက်ပြည့်နေပြီ၊ သွားသွန်လိုက်။", xieyin: "လား ကျီး မန် လယ်၊ တောက် တျောင့်" },
-  { id: 1006, category: "一天生活", sub: "家务/夜间", chinese: "衣服干了没？", pinyin: "Yīfu gān le méi?", burmese: "အင်္ကျီ ခြောက်ပြီလား။", xieyin: "ယီး ဖူ ကန်း လယ် မေ" },
-  { id: 1007, category: "一天生活", sub: "家务/夜间", chinese: "别乱扔东西。", pinyin: "Bié luàn rēng dōngxi.", burmese: "ပစ္စည်းတွေ လျှောက်မပစ်ထားနဲ့။", xieyin: "ပျယ် လွန့် ရန်း တုန်း ရှီ" },
-  { id: 1008, category: "一天生活", sub: "家务/夜间", chinese: "灯坏了，得换个灯泡。", pinyin: "Dēng huài le, děi huàn gè dēngpào.", burmese: "မီးလုံး ပျက်နေတယ်၊ လဲရမယ်။", xieyin: "တန်း ဟွိုက် လယ်၊ တေ ဟွန့် ကဲ့ တန်း ဖောင့်" },
-  { id: 1009, category: "一天生活", sub: "家务/夜间", chinese: "厕所堵了。", pinyin: "Cèsuǒ dǔ le.", burmese: "အိမ်သာ ပိတ်နေတယ်။", xieyin: "ချဲ့ ဆွော် တူ လယ်" },
-  { id: 1010, category: "一天生活", sub: "家务/夜间", chinese: "洗个澡。", pinyin: "Xǐ gè zǎo.", burmese: "ရေချိုးလိုက်ဦးမယ်။", xieyin: "ရှီ ကဲ့ ဇောင်" },
-  { id: 1011, category: "一天生活", sub: "家务/夜间", chinese: "水温刚好。", pinyin: "Shuǐwēn gāng hǎo.", burmese: "ရေအပူချိန် အတော်ပဲ။", xieyin: "ရွှေ ဝင်း ကန်း ဟောင်" },
-  { id: 1012, category: "一天生活", sub: "家务/夜间", chinese: "躺一会儿。", pinyin: "Tǎng yíhuìr.", burmese: "ခဏလောက် လှဲလိုက်ဦးမယ်။", xieyin: "ထန် ယီ ဟွေ့ရ်" },
-  { id: 1013, category: "一天生活", sub: "家务/夜间", chinese: "看会儿手机。", pinyin: "Kàn huìr shǒujī.", burmese: "ဖုန်း ခဏ သုံးလိုက်ဦးမယ်။", xieyin: "ခန့် ဟွေ့ရ် ရှို ကျီး" },
-  { id: 1014, category: "一天生活", sub: "家务/夜间", chinese: "今天太累了。", pinyin: "Jīntiān tài lèi le.", burmese: "ဒီနေ့ အရမ်းပင်ပန်းတယ်။", xieyin: "ကျင်း ထျဲန် ထိုက် လေ့ လယ်" },
-  { id: 1015, category: "一天生活", sub: "家务/夜间", chinese: "手机没电了，去充电。", pinyin: "Shǒujī méi diàn le, qù chōngdiàn.", burmese: "ဖုန်းအားကုန်ပြီ၊ အားသွင်းလိုက်ဦး။", xieyin: "ရှို ကျီး မေ တျန့် လယ်၊ ချွိ ချုံး တျန့်" },
-  { id: 1016, category: "一天生活", sub: "家务/夜间", chinese: "定闹钟。", pinyin: "Dìng nàozhōng.", burmese: "နှိုးစက် ပေးလိုက်ဦး။", xieyin: "တင့် နောက် ဂျုံး" },
-  { id: 1017, category: "一天生活", sub: "家务/夜间", chinese: "明天要早起。", pinyin: "Míngtiān yào zǎoqǐ.", burmese: "မနက်ဖြန် စောစော ထရမယ်။", xieyin: "မင်း ထျဲန် ယောက် ဇောင် ချီ" },
-  { id: 1018, category: "一天生活", sub: "家务/夜间", chinese: "晚安。", pinyin: "Wǎn'ān.", burmese: "အိပ်တော့မယ် (Good Night)။", xieyin: "ဝမ် အန်း" },
-  { id: 1019, category: "一天生活", sub: "家务/夜间", chinese: "做个好梦。", pinyin: "Zuò gè hǎo mèng.", burmese: "အိပ်မက် လှလှ မက်ပါစေ။", xieyin: "ဇော့ ကဲ့ ဟောင် မဲ့" },
-  { id: 1020, category: "一天生活", sub: "家务/夜间", chinese: "关灯睡觉。", pinyin: "Guān dēng shuìjiào.", burmese: "မီးပိတ်ပြီး အိပ်တော့မယ်။", xieyin: "ကွမ်း တန်း ရွှေ့ ကျောင့်" }
-];
+[
+  {
+    "id": 1,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "你好",
+    "burmese": "မင်္ဂလာပါ။",
+    "xieyin": "နီဟောင်"
+  },
+  {
+    "id": 2,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "你们好",
+    "burmese": "မင်္ဂလာပါ (အားလုံး)။",
+    "xieyin": "နီမန်ဟောင်"
+  },
+  {
+    "id": 3,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "大家好",
+    "burmese": "အားလုံးပဲ မင်္ဂလာပါ။",
+    "xieyin": "တာ့ကျားဟောင်"
+  },
+  {
+    "id": 4,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "早上好",
+    "burmese": "မင်္ဂလာနံနက်ခင်းပါ။",
+    "xieyin": "ဇောင်ရှန်ဟောင်"
+  },
+  {
+    "id": 5,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "中午好",
+    "burmese": "မင်္ဂလာနေ့လည်ခင်းပါ။",
+    "xieyin": "ကျုံးဝူဟောင်"
+  },
+  {
+    "id": 6,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "下午好",
+    "burmese": "မင်္ဂလာနေ့ခင်းပါ။",
+    "xieyin": "ရှာ့ဝူဟောင်"
+  },
+  {
+    "id": 7,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "晚上好",
+    "burmese": "မင်္ဂလာညချမ်းပါ။",
+    "xieyin": "ဝမ်ရှန်ဟောင်"
+  },
+  {
+    "id": 8,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "你好吗",
+    "burmese": "နေကောင်းလား။",
+    "xieyin": "နီဟောင်မ"
+  },
+  {
+    "id": 9,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "我很好",
+    "burmese": "နေကောင်းပါတယ်။",
+    "xieyin": "ဝေါ်ဟန်ဟောင်"
+  },
+  {
+    "id": 10,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "你怎么样",
+    "burmese": "ခင်ဗျားရော ဘယ်လိုလဲ။",
+    "xieyin": "နီ ဇန်မယောင့်"
+  },
+  {
+    "id": 11,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "还不错",
+    "burmese": "မဆိုးပါဘူး။",
+    "xieyin": "ဟိုင်ပုချွ"
+  },
+  {
+    "id": 12,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "最近怎么样",
+    "burmese": "ဒီရက်ပိုင်း အဆင်ပြေလား။",
+    "xieyin": "ကျွေ့ကျင် ဇန်မယောင့်"
+  },
+  {
+    "id": 13,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "挺好的",
+    "burmese": "အဆင်ပြေပါတယ်။",
+    "xieyin": "ထင်ဟောင်သဲ့"
+  },
+  {
+    "id": 14,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "忙吗",
+    "burmese": "အလုပ်ရှုပ်နေလား။",
+    "xieyin": "မောင်မ"
+  },
+  {
+    "id": 15,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "有点忙",
+    "burmese": "နည်းနည်း ရှုပ်နေတယ်။",
+    "xieyin": "ယိုတျဲန် မောင်"
+  },
+  {
+    "id": 16,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "不忙",
+    "burmese": "မရှုပ်ပါဘူး။",
+    "xieyin": "ပုမောင်"
+  },
+  {
+    "id": 17,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "吃饭了吗",
+    "burmese": "ထမင်းစားပြီးပြီလား။",
+    "xieyin": "ချီးဖန့် လယ်မ"
+  },
+  {
+    "id": 18,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "吃过了",
+    "burmese": "စားပြီးပြီ။",
+    "xieyin": "ချီးကောလ"
+  },
+  {
+    "id": 19,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "还没吃",
+    "burmese": "မစားရသေးဘူး။",
+    "xieyin": "ဟိုင်မေးချီး"
+  },
+  {
+    "id": 20,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "刚下班吗",
+    "burmese": "အလုပ်ဆင်းတာ ခုလေးတင်လား။",
+    "xieyin": "ကောင်ရှာ့ပန်းမ"
+  },
+  {
+    "id": 21,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "出去啊",
+    "burmese": "အပြင်သွားမလို့လား။",
+    "xieyin": "ချူးချွိ အာ"
+  },
+  {
+    "id": 22,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "回来了啊",
+    "burmese": "ပြန်ရောက်လာပြီလား။",
+    "xieyin": "ဟွေးလိုင် လယ်အာ"
+  },
+  {
+    "id": 23,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "去哪儿",
+    "burmese": "ဘယ်သွားမလို့လဲ။",
+    "xieyin": "ချွိ နာရ်"
+  },
+  {
+    "id": 24,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "上班去",
+    "burmese": "အလုပ်သွားမလို့။",
+    "xieyin": "ရှန့်ပန်း ချွိ"
+  },
+  {
+    "id": 25,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "上学去",
+    "burmese": "ကျောင်းသွားမလို့။",
+    "xieyin": "ရှန့်ရွှယ် ချွိ"
+  },
+  {
+    "id": 26,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "回家",
+    "burmese": "အိမ်ပြန်မလို့။",
+    "xieyin": "ဟွေးကျား"
+  },
+  {
+    "id": 27,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "出门一下",
+    "burmese": "အပြင်ခဏ သွားမလို့။",
+    "xieyin": "ချူးမန် ယီရှာ့"
+  },
+  {
+    "id": 28,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "最近忙什么",
+    "burmese": "ဒီရက်ပိုင်း ဘာတွေလုပ်နေလဲ။",
+    "xieyin": "ကျွေ့ကျင် မောင် ရှင်မ"
+  },
+  {
+    "id": 29,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "没什么，老样子",
+    "burmese": "ထွေထွေထူးထူး မရှိပါဘူး၊ ဒီလိုပါပဲ။",
+    "xieyin": "မေးရှင်မ လောင်ယောင့်ကျိ"
+  },
+  {
+    "id": 30,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "工作怎么样",
+    "burmese": "အလုပ်အဆင်ပြေလား။",
+    "xieyin": "ကုန်းဇော့ ဇန်မယောင့်"
+  },
+  {
+    "id": 31,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "还行",
+    "burmese": "အဆင်ပြေပါတယ်။",
+    "xieyin": "ဟိုင်ရှင်း"
+  },
+  {
+    "id": 32,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "还可以",
+    "burmese": "မဆိုးပါဘူး။",
+    "xieyin": "ဟိုင်ခေါ်ယီ"
+  },
+  {
+    "id": 33,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "过得怎么样",
+    "burmese": "နေထိုင်ရတာ အဆင်ပြေလား။",
+    "xieyin": "ကောသဲ့ ဇန်မယောင့်"
+  },
+  {
+    "id": 34,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "一般般",
+    "burmese": "သာမန်ပါပဲ။",
+    "xieyin": "ယီပန်းပန်း"
+  },
+  {
+    "id": 35,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "不错",
+    "burmese": "ကောင်းပါတယ်။",
+    "xieyin": "ပုချွ"
+  },
+  {
+    "id": 36,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "马马虎虎",
+    "burmese": "မဆိုးပါဘူး။ (ဒီလိုပါပဲ)",
+    "xieyin": "မာမာဟူးဟူး"
+  },
+  {
+    "id": 37,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "凑合",
+    "burmese": "ဖြစ်သလိုပဲ နေလိုက်ပါတယ်။",
+    "xieyin": "ချိုးဟယ်"
+  },
+  {
+    "id": 38,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "身体好吗",
+    "burmese": "ကျန်းမာရေး ကောင်းလား။",
+    "xieyin": "ရှန်းထီ ဟောင်မ"
+  },
+  {
+    "id": 39,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "身体不错",
+    "burmese": "ကျန်းမာရေး ကောင်းပါတယ်။",
+    "xieyin": "ရှန်းထီ ပုချွ"
+  },
+  {
+    "id": 40,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "保重身体",
+    "burmese": "ကျန်းမာရေး ဂရုစိုက်နော်။",
+    "xieyin": "ပေါက်ကျုံး ရှန်းထီ"
+  },
+  {
+    "id": 41,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "注意身体",
+    "burmese": "ကျန်းမာရေး ဂရုစိုက်ပါ။",
+    "xieyin": "ကျူးယိ ရှန်းထီ"
+  },
+  {
+    "id": 42,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "多休息",
+    "burmese": "များများ အနားယူနော်။",
+    "xieyin": "တွော ရှူးရှီ"
+  },
+  {
+    "id": 43,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "别太累",
+    "burmese": "အရမ်း မပင်ပန်းစေနဲ့ဦး။",
+    "xieyin": "ပျဲထိုက်လေ့"
+  },
+  {
+    "id": 44,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "今天天气真好",
+    "burmese": "ဒီနေ့ ရာသီဥတု သိပ်ကောင်းတာပဲ။",
+    "xieyin": "ကျင်းထျန်း ထျန်းချိ ဂျမ်းဟောင်"
+  },
+  {
+    "id": 45,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "天气不错",
+    "burmese": "ရာသီဥတု ကောင်းတယ်။",
+    "xieyin": "ထျန်းချိ ပုချွ"
+  },
+  {
+    "id": 46,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "有点冷",
+    "burmese": "နည်းနည်း အေးတယ်။",
+    "xieyin": "ယိုတျဲန် လိန့်"
+  },
+  {
+    "id": 47,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "有点热",
+    "burmese": "နည်းနည်း ပူတယ်။",
+    "xieyin": "ယိုတျဲန် ရဲ့"
+  },
+  {
+    "id": 48,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "下雨了",
+    "burmese": "မိုးရွာနေတယ်။",
+    "xieyin": "ရှာ့ယွီ လယ်"
+  },
+  {
+    "id": 49,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "刮风了",
+    "burmese": "လေတိုက်နေတယ်။",
+    "xieyin": "ကွားဖုန်း လယ်"
+  },
+  {
+    "id": 50,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "今天真热",
+    "burmese": "ဒီနေ့ တော်တော် ပူတယ်။",
+    "xieyin": "ကျင်းထျန်း ဂျမ်းရဲ့"
+  },
+  {
+    "id": 51,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "今天真冷",
+    "burmese": "ဒီနေ့ တော်တော် အေးတယ်။",
+    "xieyin": "ကျင်းထျန်း ဂျမ်းလိန့်"
+  },
+  {
+    "id": 52,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "穿暖和点",
+    "burmese": "အနွေးထည် ဝတ်ထားနော်။",
+    "xieyin": "ချွမ်း နွမ်းဟော် တျဲန်"
+  },
+  {
+    "id": 53,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "带伞了吗",
+    "burmese": "ထီးပါလား။",
+    "xieyin": "တိုင်းဆန် လယ်မ"
+  },
+  {
+    "id": 54,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "路上小心",
+    "burmese": "လမ်းမှာ ဂရုစိုက်နော်။",
+    "xieyin": "လုရှန် ရှောင်ရှင်း"
+  },
+  {
+    "id": 55,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "注意安全",
+    "burmese": "ဘေးကင်းအောင် ဂရုစိုက်ပါ။",
+    "xieyin": "ကျူးယိ အန်ချွမ်း"
+  },
+  {
+    "id": 56,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "慢走",
+    "burmese": "ဂရုစိုက်ပြန်နော်။",
+    "xieyin": "မန့်ဇǒu"
+  },
+  {
+    "id": 57,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "有空常来",
+    "burmese": "အားရင် ခဏခဏ လာလည်နော်။",
+    "xieyin": "ယိုခုံ ချောင်လိုင်"
+  },
+  {
+    "id": 58,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "欢迎光临",
+    "burmese": "ကြိုဆိုပါတယ်။",
+    "xieyin": "ဟွမ်းယင်း ကွမ်းလင်"
+  },
+  {
+    "id": 59,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "请进",
+    "burmese": "ဝင်ခဲ့ပါ။",
+    "xieyin": "ချင်းကျင့်"
+  },
+  {
+    "id": 60,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "请坐",
+    "burmese": "ထိုင်ပါ။",
+    "xieyin": "ချင်းဇွေ့"
+  },
+  {
+    "id": 61,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "请喝茶",
+    "burmese": "လက်ဖက်ရည် သောက်ပါဦး။",
+    "xieyin": "ချင်း ဟောချာ"
+  },
+  {
+    "id": 62,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "别客气",
+    "burmese": "အားမနာပါနဲ့။",
+    "xieyin": "ပျဲ ခဲ့ချိ"
+  },
+  {
+    "id": 63,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "不客气",
+    "burmese": "ရပါတယ် (အားမနာပါနဲ့)။",
+    "xieyin": "ပု ခဲ့ချိ"
+  },
+  {
+    "id": 64,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "打扰一下",
+    "burmese": "တစ်ဆိတ်လောက် ခင်ဗျာ။",
+    "xieyin": "တာရာ့ ယီရှာ့"
+  },
+  {
+    "id": 65,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "麻烦你了",
+    "burmese": "ဒုက္ခပေးမိပြီ။",
+    "xieyin": "မာဖန် နီလယ်"
+  },
+  {
+    "id": 66,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "不麻烦",
+    "burmese": "ရပါတယ်၊ မရှုပ်ပါဘူး။",
+    "xieyin": "ပု မာဖန်"
+  },
+  {
+    "id": 67,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "辛苦了",
+    "burmese": "ပင်ပန်းသွားပြီနော်။",
+    "xieyin": "ရှင်းခူ လယ်"
+  },
+  {
+    "id": 68,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "让你久等了",
+    "burmese": "စောင့်ရတာ ကြာသွားပြီ။",
+    "xieyin": "ရန့်နီ ကျိုเติန့် လယ်"
+  },
+  {
+    "id": 69,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "没关系",
+    "burmese": "ကိစ္စမရှိပါဘူး။",
+    "xieyin": "မေးကွမ်းရှီး"
+  },
+  {
+    "id": 70,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "没事",
+    "burmese": "ရပါတယ် / ဘာမှမဖြစ်ပါဘူး။",
+    "xieyin": "မေးရှေ့"
+  },
+  {
+    "id": 71,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "别担心",
+    "burmese": "စိတ်မပူပါနဲ့။",
+    "xieyin": "ပျဲတန်ရှင်း"
+  },
+  {
+    "id": 72,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "放心",
+    "burmese": "စိတ်ချပါ။",
+    "xieyin": "ဖောင့်ရှင်း"
+  },
+  {
+    "id": 73,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "您先忙",
+    "burmese": "ဆက်လုပ်ပါဦး။",
+    "xieyin": "နင်ရှန်းမောင်"
+  },
+  {
+    "id": 74,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "你先忙",
+    "burmese": "ခင်ဗျား အလုပ်ဆက်လုပ်ပါဦး။",
+    "xieyin": "နီရှန်းမောင်"
+  },
+  {
+    "id": 75,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "真巧",
+    "burmese": "တိုက်ဆိုင်လိုက်တာ။",
+    "xieyin": "ဂျမ်းချောင်"
+  },
+  {
+    "id": 76,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "这么巧",
+    "burmese": "ဒီလောက်တောင် တိုက်ဆိုင်ရလား။",
+    "xieyin": "ကျဲ့မောချောင်"
+  },
+  {
+    "id": 77,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "好久不见",
+    "burmese": "မတွေ့တာ ကြာပြီနော်။",
+    "xieyin": "ဟောင်ကျို ပုကျန့်"
+  },
+  {
+    "id": 78,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "最近好吗",
+    "burmese": "လတ်တလော နေကောင်းလား။",
+    "xieyin": "ကျွေ့ကျင် ဟောင်မ"
+  },
+  {
+    "id": 79,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "老样子",
+    "burmese": "ဒီလိုပါပဲ (ဟိုအရင်လိုပါပဲ)။",
+    "xieyin": "လောင်ယောင့်ကျိ"
+  },
+  {
+    "id": 80,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "一切照旧",
+    "burmese": "အားလုံး အရင်တိုင်းပါပဲ။",
+    "xieyin": "ယီချဲ့ ကျောင့်ကျို့"
+  },
+  {
+    "id": 81,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "没什么变化",
+    "burmese": "ဘာမှ မပြောင်းလဲပါဘူး။",
+    "xieyin": "မေးရှင်မ ပြန့်ဟွား"
+  },
+  {
+    "id": 82,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "家人好吗",
+    "burmese": "မိသားစုတွေ နေကောင်းလား။",
+    "xieyin": "ကျားရန် ဟောင်မ"
+  },
+  {
+    "id": 83,
+    "category": "问候与寒暄",
+    "sub": "打招呼",
+    "chinese": "代问家人好",
+    "burmese": "မိသားစုကို သတိရကြောင်း ပြောပေးပါနော်။",
+    "xieyin": "သိုက်ဝန့် ကျားရန်ဟောင်"
+  },
+  {
+    "id": 84,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "你好，我叫...",
+    "burmese": "မင်္ဂလာပါ၊ ကျွန်တော့်နာမည် ... ပါ။",
+    "xieyin": "နီဟောင် ဝေါ်ကျောင့်..."
+  },
+  {
+    "id": 85,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "很高兴认识你",
+    "burmese": "တွေ့ရတာ ဝမ်းသာပါတယ်။",
+    "xieyin": "ဟန်ကောင်းရှင်း ရန့်ရှစ်နီ"
+  },
+  {
+    "id": 86,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "认识你很高兴",
+    "burmese": "ခင်ဗျားနဲ့ သိရတာ ဝမ်းသာပါတယ်။",
+    "xieyin": "ရန့်ရှစ်နီ ဟန်ကောင်းရှင်း"
+  },
+  {
+    "id": 87,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "很高兴能认识你。",
+    "burmese": "သိခွင့်ရတာ ဝမ်းသာပါတယ်။",
+    "xieyin": "ဟန်ကောင်းရှင်း နိန် ရန့်ရှစ်နီ"
+  },
+  {
+    "id": 88,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "请问怎么称呼您？",
+    "burmese": "ခင်ဗျားကို ဘယ်လိုခေါ်ရမလဲ။",
+    "xieyin": "ချင်းဝန့် ဇန်မ ချိန်ဟူး နင်"
+  },
+  {
+    "id": 89,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "请问你贵姓",
+    "burmese": "နာမည်ဘယ်လိုခေါ်လဲ (အသိုင်းအဝိုင်းနာမည်)။",
+    "xieyin": "ချင်းဝန့် နီကွေ့ရှင်း"
+  },
+  {
+    "id": 90,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "我姓...",
+    "burmese": "ကျွန်တော့် မျိုးရိုးနာမည်က ... ပါ။",
+    "xieyin": "ဝေါ်ရှင်း..."
+  },
+  {
+    "id": 91,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "我叫...",
+    "burmese": "ကျွန်တော့် နာမည်က ... ပါ။",
+    "xieyin": "ဝေါ်ကျောင့်..."
+  },
+  {
+    "id": 92,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "你叫什么名字",
+    "burmese": "နာမည် ဘယ်လိုခေါ်လဲ။",
+    "xieyin": "နီကျောင့် ရှင်မ မင်ဇ"
+  },
+  {
+    "id": 93,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "我是...",
+    "burmese": "ကျွန်တော်က ... ပါ။",
+    "xieyin": "ဝေါ်ရှေ့..."
+  },
+  {
+    "id": 94,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "你从哪里来",
+    "burmese": "ဘယ်ကနေ လာတာလဲ။",
+    "xieyin": "နီ ချုံ နာလီ လိုင်"
+  },
+  {
+    "id": 95,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "我从缅甸仰光来",
+    "burmese": "ကျွန်တော် မြန်မာပြည် ရန်ကုန်က လာပါတယ်။",
+    "xieyin": "ဝေါ် ချုံ မြန်တျန့် ရန်ကွမ်း လိုင်"
+  },
+  {
+    "id": 96,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "你是哪国人",
+    "burmese": "ဘယ်နိုင်ငံသားလဲ။",
+    "xieyin": "နီရှေ့ နာကွော် ရန်"
+  },
+  {
+    "id": 97,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "我是中国人",
+    "burmese": "ကျွန်တော်က တရုတ်လူမျိုးပါ။",
+    "xieyin": "ဝေါ်ရှေ့ ကျုံးကွော် ရန်"
+  },
+  {
+    "id": 98,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "我是缅甸人",
+    "burmese": "ကျွန်တော်က မြန်မာလူမျိုးပါ။",
+    "xieyin": "ဝေါ်ရှေ့ မြန်တျန့် ရန်"
+  },
+  {
+    "id": 99,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "你多大了",
+    "burmese": "အသက် ဘယ်လောက်ရှိပြီလဲ။",
+    "xieyin": "နီ တွောတာ့ လယ်"
+  },
+  {
+    "id": 100,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "我19岁",
+    "burmese": "ကျွန်တော် ၁၉ နှစ်ပါ။",
+    "xieyin": "ဝေါ် ရှီကျို ဆွေ့"
+  },
+  {
+    "id": 101,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "你做什么工作",
+    "burmese": "ဘာအလုပ် လုပ်လဲ။",
+    "xieyin": "နီ ဇော့ ရှင်မ ကုန်းဇော့"
+  },
+  {
+    "id": 102,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "我是学生",
+    "burmese": "ကျွန်တော်က ကျောင်းသားပါ။",
+    "xieyin": "ဝေါ်ရှေ့ ရွှယ်ရှင်း"
+  },
+  {
+    "id": 103,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "我是老师",
+    "burmese": "ကျွန်တော်က ဆရာပါ။",
+    "xieyin": "ဝေါ်ရှေ့ လောင်ရှီး"
+  },
+  {
+    "id": 104,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "我是医生",
+    "burmese": "ကျွန်တော်က ဆရာဝန်ပါ။",
+    "xieyin": "ဝေါ်ရှေ့ ယီရှမ်း"
+  },
+  {
+    "id": 105,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "我在服装厂工作",
+    "burmese": "ကျွန်တော် အထည်စက်ရုံမှာ လုပ်ပါတယ်။",
+    "xieyin": "ဝေါ် ဇိုက် ဖူကျွမ်းချောင် ကုန်းဇော့"
+  },
+  {
+    "id": 106,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "我在饭店上班",
+    "burmese": "ကျွန်တော် စားသောက်ဆိုင်မှာ လုပ်ပါတယ်။",
+    "xieyin": "ဝေါ် ဇိုက် ဖန့်တျန့် ရှန့်ပန်း"
+  },
+  {
+    "id": 107,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "你在哪里学习",
+    "burmese": "ဘယ်မှာ ကျောင်းတက်နေတာလဲ။",
+    "xieyin": "နီ ဇိုက် နာလီ ရွှယ်ရှီ"
+  },
+  {
+    "id": 108,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "你来中国多久了",
+    "burmese": "တရုတ်ပြည်ရောက်တာ ဘယ်လောက်ကြာပြီလဲ။",
+    "xieyin": "နီ လိုင် ကျုံးကွော် တွောကျို လယ်"
+  },
+  {
+    "id": 109,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "我刚来",
+    "burmese": "အခုမှ ရောက်တာပါ။",
+    "xieyin": "ဝေါ် ကောင်းလိုင်"
+  },
+  {
+    "id": 110,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "我来6个月了",
+    "burmese": "၆ လ ရှိပြီ။",
+    "xieyin": "ဝေါ် လိုင် လျို့ကော့ ယွဲ့ လယ်"
+  },
+  {
+    "id": 111,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "我来1年了",
+    "burmese": "၁ နှစ် ရှိပြီ။",
+    "xieyin": "ဝေါ် လိုင် ယီနျန် လယ်"
+  },
+  {
+    "id": 112,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "你会说中文吗",
+    "burmese": "တရုတ်စကား ပြောတတ်လား။",
+    "xieyin": "နီ ဟွေး ရွှော ကျုံးဝမ် မ"
+  },
+  {
+    "id": 113,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "会一点",
+    "burmese": "နည်းနည်း တတ်တယ်။",
+    "xieyin": "ဟွေး ယီတျဲန်"
+  },
+  {
+    "id": 114,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "不太会",
+    "burmese": "သိပ် မတတ်ဘူး။",
+    "xieyin": "ပုထိုက် ဟွေး"
+  },
+  {
+    "id": 115,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "你的中文很好",
+    "burmese": "ခင်ဗျား တရုတ်စကား တော်တော်ကောင်းတာပဲ။",
+    "xieyin": "နီသဲ့ ကျုံးဝမ် ဟန်ဟောင်"
+  },
+  {
+    "id": 116,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "哪里哪里",
+    "burmese": "မဟုတ်ပါဘူးဗျာ (အမွှမ်းတင်လွန်းပါပြီ)။",
+    "xieyin": "နာလီ နာလီ"
+  },
+  {
+    "id": 117,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "还差得远",
+    "burmese": "လိုပါသေးတယ်ဗျာ။",
+    "xieyin": "ဟိုင် ခြားသဲ့ ယွမ်"
+  },
+  {
+    "id": 118,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "你在学中文吗",
+    "burmese": "တရုတ်စာ သင်နေတာလား။",
+    "xieyin": "နီ ဇိုက် ရွှယ် ကျုံးဝမ် မ"
+  },
+  {
+    "id": 119,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "是的，我在学",
+    "burmese": "ဟုတ်တယ်၊ သင်နေတယ်။",
+    "xieyin": "ရှေ့သဲ့ ဝေါ် ဇိုက်ရွှယ်"
+  },
+  {
+    "id": 120,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "中文很难",
+    "burmese": "တရုတ်စာက ခက်တယ်။",
+    "xieyin": "ကျုံးဝမ် ဟန်နန်"
+  },
+  {
+    "id": 121,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "中文很有意思",
+    "burmese": "တရုတ်စာက စိတ်ဝင်စားဖို့ ကောင်းတယ်။",
+    "xieyin": "ကျုံးဝမ် ဟန် ယိုယိစ"
+  },
+  {
+    "id": 122,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "你喜欢中国吗",
+    "burmese": "တရုတ်ပြည်ကို ကြိုက်လား။",
+    "xieyin": "နီ ရှီဟွမ်း ကျုံးကွော် မ"
+  },
+  {
+    "id": 123,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "很喜欢",
+    "burmese": "အရမ်းကြိုက်တယ်။",
+    "xieyin": "ဟန် ရှီဟွမ်း"
+  },
+  {
+    "id": 124,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "中国菜好吃吗",
+    "burmese": "တရုတ်အစားအစာ စားကောင်းလား။",
+    "xieyin": "ကျုံးကွော် ချိုက် ဟောင်ချီး မ"
+  },
+  {
+    "id": 125,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "很好吃",
+    "burmese": "အရမ်း စားကောင်းတယ်။",
+    "xieyin": "ဟန် ဟောင်ချီး"
+  },
+  {
+    "id": 126,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "你习惯这里吗",
+    "burmese": "ဒီမှာနေရတာ အသားကျပြီလား။",
+    "xieyin": "နီ ရှီကွန့် ကျဲ့လီ မ"
+  },
+  {
+    "id": 127,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "还在适应",
+    "burmese": "အသားကျအောင် နေနေတုန်းပဲ။",
+    "xieyin": "ဟိုင် ဇိုက် ရှေ့ယင့်"
+  },
+  {
+    "id": 128,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "慢慢就习惯了",
+    "burmese": "ဖြည်းဖြည်းချင်း အသားကျသွားမှာပါ။",
+    "xieyin": "မန့်မန့် ကျို့ ရှီကွန့် လယ်"
+  },
+  {
+    "id": 129,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "有机会一起吃饭",
+    "burmese": "အခွင့်အရေးရရင် ထမင်းတူတူစားကြမယ်။",
+    "xieyin": "ယို ဂျီဟွေး ယီချီ ချီးဖန့်"
+  },
+  {
+    "id": 130,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "需要帮忙吗",
+    "burmese": "အကူအညီလိုလား။",
+    "xieyin": "ရွှီးယောင့် ပန်းမောင် မ"
+  },
+  {
+    "id": 131,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "谢谢你",
+    "burmese": "ကျေးဇူးတင်ပါတယ်။",
+    "xieyin": "ရှဲ့ရှဲ့ နီ"
+  },
+  {
+    "id": 132,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "不客气",
+    "burmese": "ရပါတယ် (အားမနာပါနဲ့)။",
+    "xieyin": "ပု ခဲ့ချိ"
+  },
+  {
+    "id": 133,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "这是我的名片",
+    "burmese": "ဒါ ကျွန်တော့် လိပ်စာကဒ်ပါ။",
+    "xieyin": "ကျဲ့ရှေ့ ဝေါ်သဲ့ မင်ပျန့်"
+  },
+  {
+    "id": 134,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "保持联系",
+    "burmese": "အဆက်အသွယ် လုပ်နော်။",
+    "xieyin": "ပေါက်ချီ လျန်ရှီး"
+  },
+  {
+    "id": 135,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "加个微信吧",
+    "burmese": "WeChat အကောင့်လေး ပေးပါလား။",
+    "xieyin": "ကျားကော့ ဝေရှင်း ပါ"
+  },
+  {
+    "id": 136,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "你的电话号码是多少",
+    "burmese": "ဖုန်းနံပါတ် ဘယ်လောက်လဲ။",
+    "xieyin": "နီသဲ့ တျန့်ဟွား ဟောင့်မာ ရှေ့ တွောရှောင်"
+  },
+  {
+    "id": 137,
+    "category": "问候与寒暄",
+    "sub": "初次见面",
+    "chinese": "你先忙，不打扰了",
+    "burmese": "အလုပ်ဆက်လုပ်ပါဦး၊ မနှောင့်ယှက်တော့ဘူး။",
+    "xieyin": "နီ ရှန်းမောင်၊ ပု တာရာ့ လယ်"
+  },
+  {
+    "id": 138,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "好久不见",
+    "burmese": "မတွေ့တာ ကြာပြီနော်။",
+    "xieyin": "ဟောင်ကျို ပုကျန့်"
+  },
+  {
+    "id": 139,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "好久没见",
+    "burmese": "မတွေ့တာ ကြာပြီ။",
+    "xieyin": "ဟောင်ကျို မေးကျန့်"
+  },
+  {
+    "id": 140,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "真没想到遇见你",
+    "burmese": "တွေ့ရမယ်လို့ ထင်မထားဘူး။",
+    "xieyin": "ဂျမ်း မေးရှန်သောက် ယွိကျန့် နီ"
+  },
+  {
+    "id": 141,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "你变化真大",
+    "burmese": "တော်တော် ပြောင်းလဲသွားတယ်နော်။",
+    "xieyin": "နီ ပြန့်ဟွား ဂျမ်းတာ့"
+  },
+  {
+    "id": 142,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "你一点没变",
+    "burmese": "နည်းနည်းလေးမှ မပြောင်းလဲဘူးနော်။",
+    "xieyin": "နီ ယီတျဲန် မေးပြန့်"
+  },
+  {
+    "id": 143,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "你还是老样子",
+    "burmese": "အရင်အတိုင်းပါပဲလား။",
+    "xieyin": "နီ ဟိုင်ရှေ့ လောင်ယောင့်ကျိ"
+  },
+  {
+    "id": 144,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "你看起来不错",
+    "burmese": "ကြည့်ရတာ အဆင်ပြေပုံရတယ်။",
+    "xieyin": "နီ ခန့်ချီလိုင် ပုချွ"
+  },
+  {
+    "id": 145,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "你瘦了",
+    "burmese": "ပိန်သွားတယ်နော်။",
+    "xieyin": "နီ ရှို့ လယ်"
+  },
+  {
+    "id": 146,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "你胖了",
+    "burmese": "ဝလာတယ်နော်။",
+    "xieyin": "နီ ဖောင့် လယ်"
+  },
+  {
+    "id": 147,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "你更漂亮了",
+    "burmese": "ပိုလှလာတယ်နော်။",
+    "xieyin": "နီ ကောင့် ပြောင့်လျန့် လယ်"
+  },
+  {
+    "id": 148,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "你更帅了",
+    "burmese": "ပိုချောလာတယ်နော်။",
+    "xieyin": "နီ ကောင့် ရွှိုက် လယ်"
+  },
+  {
+    "id": 149,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "最近在哪儿发展",
+    "burmese": "အခု ဘယ်မှာ အလုပ်လုပ်နေလဲ။",
+    "xieyin": "ကျွေ့ကျင် ဇိုက်နာရ် ဖားကျန်"
+  },
+  {
+    "id": 150,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "还在原来的地方",
+    "burmese": "နေရာဟောင်းမှာပဲ ရှိသေးတယ်။",
+    "xieyin": "ဟိုင်ဇိုက် ယွမ်းလိုင်သဲ့ တီးဖောင့်"
+  },
+  {
+    "id": 151,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "我换工作了",
+    "burmese": "အလုပ် ပြောင်းလိုက်ပြီ။",
+    "xieyin": "ဝေါ် ဟွန့် ကုန်းဇော့ လယ်"
+  },
+  {
+    "id": 152,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "我搬家了",
+    "burmese": "အိမ်ပြောင်းလိုက်ပြီ။",
+    "xieyin": "ဝေါ် ပန်းကျား လယ်"
+  },
+  {
+    "id": 153,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "我结婚了",
+    "burmese": "အိမ်ထောင်ကျသွားပြီ။",
+    "xieyin": "ဝေါ် ကျဲဟွန်း လယ်"
+  },
+  {
+    "id": 154,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "我有孩子了",
+    "burmese": "ကလေးတောင် ရနေပြီ။",
+    "xieyin": "ဝေါ် ယို ဟိုင်ဇ လယ်"
+  },
+  {
+    "id": 155,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "恭喜恭喜",
+    "burmese": "ဂုဏ်ယူပါတယ်ဗျာ။",
+    "xieyin": "ကုန်းရှီ ကုန်းရှီ"
+  },
+  {
+    "id": 156,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "真为你高兴",
+    "burmese": "ဝမ်းသာပါတယ်။",
+    "xieyin": "ဂျမ်း ဝေ့နီ ကောင်းရှင်း"
+  },
+  {
+    "id": 157,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "时间过得真快",
+    "burmese": "အချိန်ကုန်တာ မြန်လိုက်တာ။",
+    "xieyin": "ရှီကျန်း ကောသဲ့ ဂျမ်းခွိုက်"
+  },
+  {
+    "id": 158,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "一转眼这么多年了",
+    "burmese": "ခဏလေးနဲ့ နှစ်တွေအများကြီး ကြာသွားပြီ။",
+    "xieyin": "ယီကျွမ်ယန် ကျဲ့မော တွောနျန် လယ်"
+  },
+  {
+    "id": 159,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "我们上次见面是什么时候",
+    "burmese": "နောက်ဆုံးတွေ့ခဲ့တာ ဘယ်တုန်းကလဲ။",
+    "xieyin": "ဝေါ်မန် ရှန့်ချိ ကျန့်မျန့် ရှေ့ ရှင်မ ရှီဟို့"
+  },
+  {
+    "id": 160,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "好像是一年前",
+    "burmese": "လွန်ခဲ့တဲ့ တစ်နှစ်က ထင်တယ်။",
+    "xieyin": "ဟောင်ရှန့် ရှေ့ ယီနျန် ချန်"
+  },
+  {
+    "id": 161,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "好像是两年前",
+    "burmese": "လွန်ခဲ့တဲ့ ၂ နှစ်က ထင်တယ်။",
+    "xieyin": "ဟောင်ရှန့် ရှေ့ လျန်နျန် ချန်"
+  },
+  {
+    "id": 162,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "你还记得我吗",
+    "burmese": "ကျွန်တော့်ကို မှတ်မိသေးလား။",
+    "xieyin": "နီ ဟိုင် ကျိသဲ့ ဝေါ် မ"
+  },
+  {
+    "id": 163,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "当然记得",
+    "burmese": "မှတ်မိတာပေါ့။",
+    "xieyin": "တောင်ရန် ကျိသဲ့"
+  },
+  {
+    "id": 164,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "差点没认出来",
+    "burmese": "မမှတ်မိလုနီးပါးပဲ။",
+    "xieyin": "ခြားတျဲန် မေး ရန့်ချူးလိုင်"
+  },
+  {
+    "id": 165,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "你现在在做什么",
+    "burmese": "အခု ဘာလုပ်နေလဲ။",
+    "xieyin": "နီ ရှန့်ဇိုက် ဇိုက် ဇော့ ရှင်မ"
+  },
+  {
+    "id": 166,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "还是老本行",
+    "burmese": "အရင်အလုပ်ပါပဲ။",
+    "xieyin": "ဟိုင်ရှေ့ လောင်ပန်ဟောင်"
+  },
+  {
+    "id": 167,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "改行了",
+    "burmese": "အလုပ်ပြောင်းလိုက်ပြီ (လိုင်းပြောင်းလိုက်ပြီ)။",
+    "xieyin": "ကိုင်ဟောင် လယ်"
+  },
+  {
+    "id": 168,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "你父母好吗",
+    "burmese": "မိဘတွေ နေကောင်းလား။",
+    "xieyin": "နီ ဖူးမူ ဟောင်မ"
+  },
+  {
+    "id": 169,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "他们都好",
+    "burmese": "အားလုံး နေကောင်းကြပါတယ်။",
+    "xieyin": "ထာမန် တိုးဟောင်"
+  },
+  {
+    "id": 170,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "你孩子多大了",
+    "burmese": "ကလေး အသက်ဘယ်လောက်ရှိပြီလဲ။",
+    "xieyin": "နီ ဟိုင်ဇ တွောတာ့ လယ်"
+  },
+  {
+    "id": 171,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "上小学了",
+    "burmese": "မူလတန်း တက်နေပြီ။",
+    "xieyin": "ရှန့် ရှောင်ရွှယ် လယ်"
+  },
+  {
+    "id": 172,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "上中学了",
+    "burmese": "အလယ်တန်း/အထက်တန်း တက်နေပြီ။",
+    "xieyin": "ရှန့် ကျုံးရွှယ် လယ်"
+  },
+  {
+    "id": 173,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "上大学了",
+    "burmese": "တက္ကသိုလ် တက်နေပြီ။",
+    "xieyin": "ရှန့် တာ့ရွှယ် လယ်"
+  },
+  {
+    "id": 174,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "工作还顺利吗",
+    "burmese": "အလုပ်အဆင်ပြေလား။",
+    "xieyin": "ကုန်းဇော့ ဟိုင် ရွှန့်လိ မ"
+  },
+  {
+    "id": 175,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "还行",
+    "burmese": "အဆင်ပြေပါတယ်။",
+    "xieyin": "ဟိုင်ရှင်း"
+  },
+  {
+    "id": 176,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "生活怎么样",
+    "burmese": "နေထိုင်မှုဘဝ အဆင်ပြေလား။",
+    "xieyin": "ရှင်းဟော် ဇန်မယောင့်"
+  },
+  {
+    "id": 177,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "过得去",
+    "burmese": "အဆင်ပြေပါတယ်။",
+    "xieyin": "ကောသဲ့ချွိ"
+  },
+  {
+    "id": 178,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "日子还不错",
+    "burmese": "အဆင်ပြေပါတယ်။",
+    "xieyin": "ရေ့ဇ ဟိုင်ပုချွ"
+  },
+  {
+    "id": 179,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "有时间聚聚",
+    "burmese": "အားရင် တွေ့ကြတာပေါ့။",
+    "xieyin": "ယို ရှီကျန်း ကျွေ့ကျွေ့"
+  },
+  {
+    "id": 180,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "一起吃个饭吧",
+    "burmese": "အတူတူ ထမင်းစားကြမယ်။",
+    "xieyin": "ယီချီ ချီးကော့ ဖန့် ပါ"
+  },
+  {
+    "id": 181,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "改天约",
+    "burmese": "နောက်ရက် ချိန်းကြမယ်။",
+    "xieyin": "ကိုင်ထျန်း ယွဲ့"
+  },
+  {
+    "id": 182,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "保持联系",
+    "burmese": "အဆက်အသွယ် မပြတ်စေနဲ့နော်။",
+    "xieyin": "ပေါက်ချီ လျန်ရှီး"
+  },
+  {
+    "id": 183,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "常联系",
+    "burmese": "အဆက်အသွယ် လုပ်နော်။",
+    "xieyin": "ချောင် လျန်ရှီး"
+  },
+  {
+    "id": 184,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "别断了联系",
+    "burmese": "အဆက်အသွယ် မဖြတ်လိုက်နဲ့နော်။",
+    "xieyin": "ပျဲ တွန့်လယ် လျန်ရှီး"
+  },
+  {
+    "id": 185,
+    "category": "问候与寒暄",
+    "sub": "久别重逢",
+    "chinese": "再见",
+    "burmese": "ပြန်တော့မယ်နော် (နှုတ်ဆက်ပါတယ်)။",
+    "xieyin": "ဇိုက်ကျန့်"
+  },
+  {
+    "id": 186,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我叫...",
+    "burmese": "ကျွန်တော့် နာမည် ... ပါ။",
+    "xieyin": "ဝေါ်ကျောင့်..."
+  },
+  {
+    "id": 187,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我的名字是...",
+    "burmese": "ကျွန်တော့် နာမည်က ... ပါ။",
+    "xieyin": "ဝေါ်သဲ့ မင်ဇ ရှေ့..."
+  },
+  {
+    "id": 188,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我来自...",
+    "burmese": "... က လာပါတယ်။",
+    "xieyin": "ဝေါ် လိုင်ဇွေ့..."
+  },
+  {
+    "id": 189,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我是缅甸人",
+    "burmese": "ကျွန်တော်က မြန်မာပါ။",
+    "xieyin": "ဝေါ်ရှေ့ မြန်တျန့် ရန်"
+  },
+  {
+    "id": 190,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我今年 19 岁",
+    "burmese": "ကျွန်တော့်အသက် ၁၉ နှစ်ပါ။",
+    "xieyin": "ဝေါ် ကျင်းနျန် ရှီကျို ဆွေ့"
+  },
+  {
+    "id": 191,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我属羊",
+    "burmese": "ကျွန်တော်က ဆိတ်နှစ်ဖွားပါ။",
+    "xieyin": "ဝေါ် ရှူ့ ယောင်"
+  },
+  {
+    "id": 192,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我住在仰光",
+    "burmese": "ရန်ကုန်မှာ နေပါတယ်။",
+    "xieyin": "ဝေါ် ကျု့ဇိုက် ရန်ကွမ်း"
+  },
+  {
+    "id": 193,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我的家乡是曼德勒",
+    "burmese": "ကျွန်တော့် ဇာတိက မန္တလေးပါ။",
+    "xieyin": "ဝေါ်သဲ့ ကျားရှောင် ရှေ့ မန့်တယ်လေး"
+  },
+  {
+    "id": 194,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我是独生子女",
+    "burmese": "ကျွန်တော်က တစ်ဦးတည်းသော သား/သမီး ပါ။",
+    "xieyin": "ဝေါ်ရှေ့ တူရှန်း ဇီနွီ"
+  },
+  {
+    "id": 195,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我有兄弟姐妹",
+    "burmese": "ကျွန်တော့်မှာ မောင်နှမတွေ ရှိတယ်။",
+    "xieyin": "ဝေါ်ယို ရှုန်းတိ ကျဲမေ့"
+  },
+  {
+    "id": 196,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我结婚了",
+    "burmese": "အိမ်ထောင် ရှိပါတယ်။",
+    "xieyin": "ဝေါ် ကျဲဟွန်း လယ်"
+  },
+  {
+    "id": 197,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我单身",
+    "burmese": "လူလွတ်ပါ။",
+    "xieyin": "ဝေါ် တန်းရှမ်း"
+  },
+  {
+    "id": 198,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我有男朋友",
+    "burmese": "ရည်းစား(ကောင်လေး) ရှိတယ်။",
+    "xieyin": "ဝေါ်ယို နန်ဖောင်ယို"
+  },
+  {
+    "id": 199,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "他有女朋友",
+    "burmese": "သူ့မှာ ရည်းစား(ကောင်မလေး) ရှိတယ်။",
+    "xieyin": "ထာယို နွီဖောင်ယို"
+  },
+  {
+    "id": 200,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "你没有男朋友吗",
+    "burmese": "ရည်းစား မရှိဘူးလား။",
+    "xieyin": "နီ မေးယို နန်ဖောင်ယို မ"
+  },
+  {
+    "id": 201,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我没有女朋友",
+    "burmese": "ကျွန်တော့်မှာ ရည်းစား မရှိပါဘူး။",
+    "xieyin": "ဝေါ် မေးယို နွီဖောင်ယို"
+  },
+  {
+    "id": 202,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我是学生",
+    "burmese": "ကျောင်းသားပါ။",
+    "xieyin": "ဝေါ်ရှေ့ ရွှယ်ရှင်း"
+  },
+  {
+    "id": 203,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我在学校读书",
+    "burmese": "ကျောင်းတက်နေပါတယ်။",
+    "xieyin": "ဝေါ် ဇိုက် ရွှယ်ရှောင့် တွူရှူး"
+  },
+  {
+    "id": 204,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我工作",
+    "burmese": "အလုပ်လုပ်ပါတယ်။",
+    "xieyin": "ဝေါ် ကုန်းဇော့"
+  },
+  {
+    "id": 205,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我在找工作",
+    "burmese": "အလုပ်ရှာနေပါတယ်။",
+    "xieyin": "ဝေါ် ဇိုက်ကျောင် ကုန်းဇော့"
+  },
+  {
+    "id": 206,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我在电子厂上班",
+    "burmese": "အီလက်ထရွန်းနစ် စက်ရုံမှာ လုပ်ပါတယ်။",
+    "xieyin": "ဝေါ် ဇိုက် တျန့်ဇီချောင် ရှန့်ပန်း"
+  },
+  {
+    "id": 207,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我是自由职业者",
+    "burmese": "အလွတ်တန်း အလုပ်လုပ်ပါတယ်။ (Freelance)",
+    "xieyin": "ဝေါ်ရှေ့ ဇေ့ယို ဂျီယဲ့ကျယ်"
+  },
+  {
+    "id": 208,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我退休了",
+    "burmese": "အငြိမ်းစား ယူလိုက်ပါပြီ။",
+    "xieyin": "ဝေါ် ထွေ့ရှူး လယ်"
+  },
+  {
+    "id": 209,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我喜欢...",
+    "burmese": "... ကို ကြိုက်တယ်။",
+    "xieyin": "ဝေါ် ရှီဟွမ်း"
+  },
+  {
+    "id": 210,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我爱...",
+    "burmese": "... ကို ချစ်တယ်။",
+    "xieyin": "ဝေါ် အိုက်"
+  },
+  {
+    "id": 211,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我喜欢运动",
+    "burmese": "အားကစား ဝါသနာပါတယ်။",
+    "xieyin": "ဝေါ် ရှီဟွမ်း ယွမ်တုံ့"
+  },
+  {
+    "id": 212,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我喜欢看电影",
+    "burmese": "ရုပ်ရှင်ကြည့်ရတာ ကြိုက်တယ်။",
+    "xieyin": "ဝေါ် ရှီဟွမ်း ခန့် တျန့်ယင်"
+  },
+  {
+    "id": 213,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我喜欢听音乐",
+    "burmese": "သီချင်းနားထောင်ရတာ ကြိုက်တယ်။",
+    "xieyin": "ဝေါ် ရှီဟွမ်း ထင်း ယင်းယွဲ့"
+  },
+  {
+    "id": 214,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我喜欢旅行",
+    "burmese": "ခရီးသွားရတာ ကြိုက်တယ်။",
+    "xieyin": "ဝေါ် ရှီဟွမ်း လွီရှင်း"
+  },
+  {
+    "id": 215,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我喜欢读书",
+    "burmese": "စာဖတ်ရတာ ကြိုက်တယ်။",
+    "xieyin": "ဝေါ် ရှီဟွမ်း တွူရှူး"
+  },
+  {
+    "id": 216,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我喜欢美食",
+    "burmese": "အစားကောင်းစားရတာ ကြိုက်တယ်။",
+    "xieyin": "ဝေါ် ရှီဟွမ်း မေ့ရှီ"
+  },
+  {
+    "id": 217,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我会说汉语",
+    "burmese": "တရုတ်စကား ပြောတတ်တယ်။",
+    "xieyin": "ဝေါ် ဟွေးရွှော ဟန့်ယွီ"
+  },
+  {
+    "id": 218,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我会说一点中文",
+    "burmese": "တရုတ်စကား နည်းနည်း ပြောတတ်တယ်။",
+    "xieyin": "ဝေါ် ဟွေးရွှော ယီတျဲန် ကျုံးဝမ်"
+  },
+  {
+    "id": 219,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我正在学中文",
+    "burmese": "တရုတ်စာ သင်နေပါတယ်။",
+    "xieyin": "ဝေါ် ကျောင့်ဇိုက် ရွှယ် ကျုံးဝမ်"
+  },
+  {
+    "id": 220,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我中文不太好",
+    "burmese": "ကျွန်တော့် တရုတ်စာက သိပ်မကောင်းဘူး။",
+    "xieyin": "ဝေါ် ကျုံးဝမ် ပုထိုက်ဟောင်"
+  },
+  {
+    "id": 221,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "请多指教",
+    "burmese": "များများ သင်ပြပေးပါဦး။",
+    "xieyin": "ချင်း တွော ဂျီကျောင့်"
+  },
+  {
+    "id": 222,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "请多关照",
+    "burmese": "ကူညီစောင့်ရှောက်ပေးပါဦး။",
+    "xieyin": "ချင်း တွော ကွမ်းကျောင့်"
+  },
+  {
+    "id": 223,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我很高兴认识大家",
+    "burmese": "အားလုံးနဲ့ တွေ့ရတာ ဝမ်းသာပါတယ်။",
+    "xieyin": "ဝေါ် ဟန်ကောင်းရှင်း ရန့်ရှစ် တာ့ကျား"
+  },
+  {
+    "id": 224,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "希望和大家成为朋友",
+    "burmese": "အားလုံးနဲ့ မိတ်ဆွေ ဖြစ်ချင်ပါတယ်။",
+    "xieyin": "ရှီးဝန့် ဟယ် တာ့ကျား ချိန်ဝေ ဖောင်ယို"
+  },
+  {
+    "id": 225,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "请大家多多帮助",
+    "burmese": "အားလုံးပဲ ကူညီပေးကြပါဦး။",
+    "xieyin": "ချင်း တာ့ကျား တွောတွော ပန်းကျု"
+  },
+  {
+    "id": 226,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "谢谢大家",
+    "burmese": "အားလုံးကို ကျေးဇူးတင်ပါတယ်။",
+    "xieyin": "ရှဲ့ရှဲ့ တာ့ကျား"
+  },
+  {
+    "id": 227,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "这就是我",
+    "burmese": "ဒါ ကျွန်တော်ပါ။",
+    "xieyin": "ကျဲ့ ကျို့ရှေ့ ဝေါ်"
+  },
+  {
+    "id": 228,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "大概就是这样",
+    "burmese": "အဲဒီလိုပါပဲ (ဒါပါပဲ)။",
+    "xieyin": "တာ့ကိုက် ကျို့ရှေ့ ကျဲ့ယောင့်"
+  },
+  {
+    "id": 229,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我的介绍完了",
+    "burmese": "မိတ်ဆက်လို့ ပြီးပါပြီ။",
+    "xieyin": "ဝေါ်သဲ့ ကျဲရှောင့် ဝမ်လယ်"
+  },
+  {
+    "id": 230,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "你们有什么问题吗",
+    "burmese": "မေးစရာ ရှိလား။",
+    "xieyin": "နီမန် ယို ရှင်မ ဝန့်ထီ မ"
+  },
+  {
+    "id": 231,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我可以回答",
+    "burmese": "ကျွန်တော် ဖြေပေးပါ့မယ်။",
+    "xieyin": "ဝေါ် ခေါ်ယီ ဟွေးတား"
+  },
+  {
+    "id": 232,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我不太清楚",
+    "burmese": "ကျွန်တော် သိပ်မရှင်းဘူး။",
+    "xieyin": "ဝေါ် ပုထိုက် ချင်းချူ"
+  },
+  {
+    "id": 233,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "让我想想",
+    "burmese": "စဉ်းစားပါရစေဦး။",
+    "xieyin": "ရန့်ဝေါ် ရှန်ရှန်"
+  },
+  {
+    "id": 234,
+    "category": "问候与寒暄",
+    "sub": "自我介绍",
+    "chinese": "我不知道",
+    "burmese": "ကျွန်တော် မသိဘူး။",
+    "xieyin": "ဝေါ် ပု ဂျီးတောက်"
+  },
+  {
+    "id": 235,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "有空吗",
+    "burmese": "အားလား။",
+    "xieyin": "ယိုခုံ မ"
+  },
+  {
+    "id": 236,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "有时间吗",
+    "burmese": "အချိန်ရှိလား။",
+    "xieyin": "ယို ရှီကျန်း မ"
+  },
+  {
+    "id": 237,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "忙不忙",
+    "burmese": "အလုပ်ရှုပ်လား။",
+    "xieyin": "မောင် ပု မောင်"
+  },
+  {
+    "id": 238,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "有空来我家坐坐",
+    "burmese": "အားရင် အိမ်လာလည်လေ။",
+    "xieyin": "ယိုခုံ လိုင် ဝေါ်ကျား ဇွေ့ဇွေ့"
+  },
+  {
+    "id": 239,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "有时间一起...",
+    "burmese": "အချိန်ရှိရင် အတူတူ ...",
+    "xieyin": "ယိုရှီကျန်း ယီချီ..."
+  },
+  {
+    "id": 240,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "一起吃个饭吧",
+    "burmese": "ထမင်း အတူတူစားရအောင်။",
+    "xieyin": "ယီချီ ချီးကော့ ဖန့် ပါ"
+  },
+  {
+    "id": 241,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "一起喝咖啡吧",
+    "burmese": "ကော်ဖီ အတူတူသောက်ရအောင်။",
+    "xieyin": "ယီချီ ဟော ကာဖေး ပါ"
+  },
+  {
+    "id": 242,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "一起喝茶吧",
+    "burmese": "လက်ဖက်ရည် အတူတူသောက်ရအောင်။",
+    "xieyin": "ယီချီ ဟောချာ ပါ"
+  },
+  {
+    "id": 243,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "一起看电影吧",
+    "burmese": "ရုပ်ရှင် အတူတူကြည့်ရအောင်။",
+    "xieyin": "ယီချီ ခန့် တျန့်ယင် ပါ"
+  },
+  {
+    "id": 244,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "一起去逛街吧",
+    "burmese": "ဈေးလျှောက် အတူတူသွားရအောင်။",
+    "xieyin": "ယီချီ ချွိ ကွောင့်ကျဲ ပါ"
+  },
+  {
+    "id": 245,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "一起去公园吧",
+    "burmese": "ပန်းခြံ အတူတူသွားရအောင်။",
+    "xieyin": "ယီချီ ချွိ ကုန်းယွမ် ပါ"
+  },
+  {
+    "id": 246,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "一起运动吧",
+    "burmese": "အတူတူ လေ့ကျင့်ခန်း လုပ်ရအောင်။",
+    "xieyin": "ယီချီ ယွမ်တုံ့ ပါ"
+  },
+  {
+    "id": 247,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "来我家玩吧",
+    "burmese": "အိမ်လာလည်လေ။",
+    "xieyin": "လိုင် ဝေါ်ကျား ဝမ် ပါ"
+  },
+  {
+    "id": 248,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "参加我的生日聚会吧",
+    "burmese": "ကျွန်တော့် မွေးနေ့ပွဲ လာခဲ့နော်။",
+    "xieyin": "ချန်းကျား ဝေါ်သဲ့ ရှင်းရေ့ ကျွေ့ဟွေး ပါ"
+  },
+  {
+    "id": 249,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "参加我们的活动吧",
+    "burmese": "ကျွန်တော်တို့ပွဲကို လာပါလား။",
+    "xieyin": "ချန်းကျား ဝေါ်မန်သဲ့ ဟော်တုံ့ ပါ"
+  },
+  {
+    "id": 250,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "你能来吗",
+    "burmese": "လာနိုင်လား။",
+    "xieyin": "နီ နိန်လိုင် မ"
+  },
+  {
+    "id": 251,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "你来吗",
+    "burmese": "လာမှာလား။",
+    "xieyin": "နီ လိုင် မ"
+  },
+  {
+    "id": 252,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "你有时间吗",
+    "burmese": "အချိန်ရလား။",
+    "xieyin": "နီ ယို ရှီကျန်း မ"
+  },
+  {
+    "id": 253,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "你方便吗",
+    "burmese": "အဆင်ပြေလား။",
+    "xieyin": "နီ ဖောင့်ပြန့် မ"
+  },
+  {
+    "id": 254,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "什么时候方便",
+    "burmese": "ဘယ်အချိန် အဆင်ပြေမလဲ။",
+    "xieyin": "ရှင်မ ရှီဟို့ ဖောင့်ပြန့်"
+  },
+  {
+    "id": 255,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "你什么时候有空",
+    "burmese": "ဘယ်အချိန် အားလဲ။",
+    "xieyin": "နီ ရှင်မ ရှီဟို့ ယိုခုံ"
+  },
+  {
+    "id": 256,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "周末有空吗",
+    "burmese": "စနေတနင်္ဂနွေ အားလား။",
+    "xieyin": "ကျိုးမော့ ယိုခုံ မ"
+  },
+  {
+    "id": 257,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "明天有空吗",
+    "burmese": "မနက်ဖြန် အားလား။",
+    "xieyin": "မင်းထျန်း ယိုခုံ မ"
+  },
+  {
+    "id": 258,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "今天晚上有空吗",
+    "burmese": "ဒီနေ့ည အားလား။",
+    "xieyin": "ကျင်းထျန်း ဝမ်ရှန် ယိုခုံ မ"
+  },
+  {
+    "id": 259,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "下午有空吗",
+    "burmese": "နေ့ခင်း အားလား။",
+    "xieyin": "ရှာ့ဝူ ယိုခုံ မ"
+  },
+  {
+    "id": 260,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "上午有空吗",
+    "burmese": "မနက်ပိုင်း အားလား။",
+    "xieyin": "ရှန့်ဝူ ယိုခုံ မ"
+  },
+  {
+    "id": 261,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "几点合适",
+    "burmese": "ဘယ်အချိန် အဆင်ပြေလဲ။",
+    "xieyin": "ကျီတျဲန် ဟယ်ရှေ့"
+  },
+  {
+    "id": 262,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "在哪里见面",
+    "burmese": "ဘယ်မှာ တွေ့မလဲ။",
+    "xieyin": "ဇိုက် နာလီ ကျန့်မျန့်"
+  },
+  {
+    "id": 263,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "在老地方见",
+    "burmese": "နေရာဟောင်းမှာပဲ တွေ့မယ်။",
+    "xieyin": "ဇိုက် လောင်တီးဖောင့် ကျန့်"
+  },
+  {
+    "id": 264,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "我去接你",
+    "burmese": "ကျွန်တော် လာကြိုမယ်။",
+    "xieyin": "ဝေါ် ချွိကျဲ နီ"
+  },
+  {
+    "id": 265,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "我自己去",
+    "burmese": "ကိုယ့်ဘာသာ သွားလိုက်မယ်။",
+    "xieyin": "ဝေါ် ဇေ့ကျီ ချွိ"
+  },
+  {
+    "id": 266,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "需要我去接你吗",
+    "burmese": "လာကြိုရမလား။",
+    "xieyin": "ရွှီးယောင့် ဝေါ် ချွိကျဲ နီ မ"
+  },
+  {
+    "id": 267,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "不用了，谢谢",
+    "burmese": "ရပါတယ်၊ ကျေးဇူးပါ။",
+    "xieyin": "ပုယောင့် လယ်၊ ရှဲ့ရှဲ့"
+  },
+  {
+    "id": 268,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "好的，谢谢",
+    "burmese": "ဟုတ်ကဲ့၊ ကျေးဇူးပါ။",
+    "xieyin": "ဟောင်သဲ့၊ ရှဲ့ရှဲ့"
+  },
+  {
+    "id": 269,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "我一定去",
+    "burmese": "သေချာပေါက် လာခဲ့မယ်။",
+    "xieyin": "ဝေါ် ယီသင့် ချွိ"
+  },
+  {
+    "id": 270,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "我尽量去",
+    "burmese": "တတ်နိုင်သမျှ လာခဲ့မယ်။",
+    "xieyin": "ဝေါ် ကျင့်လျောင့် ချွိ"
+  },
+  {
+    "id": 271,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "我可能去不了",
+    "burmese": "မလာနိုင်လောက်ဘူး ထင်တယ်။",
+    "xieyin": "ဝေါ် ခေါ်နိန် ချွိပုလောင်"
+  },
+  {
+    "id": 272,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "我有事",
+    "burmese": "ကိစ္စ ရှိလို့။",
+    "xieyin": "ဝေါ် ယိုရှေ့"
+  },
+  {
+    "id": 273,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "我有安排",
+    "burmese": "ချိန်းထားတာ ရှိလို့။",
+    "xieyin": "ဝေါ် ယို အန်ဖိုင်"
+  },
+  {
+    "id": 274,
+    "category": "问候与寒暄",
+    "sub": "邀请",
+    "chinese": "下次吧",
+    "burmese": "နောက်တစ်ခေါက်မှပဲ (လုပ်ကြတာပေါ့)။",
+    "xieyin": "ရှာ့ချိ ပါ"
+  },
+  {
+    "id": 275,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "再见",
+    "burmese": "တာ့တာ (နှုတ်ဆက်ပါတယ်)။",
+    "xieyin": "ဇိုက်ကျန့်"
+  },
+  {
+    "id": 276,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "拜拜",
+    "burmese": "ဘိုင်ဘိုင်။",
+    "xieyin": "ပိုင်ပိုင်"
+  },
+  {
+    "id": 277,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "再会",
+    "burmese": "နောက်မှ တွေ့မယ်။",
+    "xieyin": "ဇိုက်ဟွေး"
+  },
+  {
+    "id": 278,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "明天见",
+    "burmese": "မနက်ဖြန် တွေ့မယ်။",
+    "xieyin": "မင်းထျန်း ကျန့်"
+  },
+  {
+    "id": 279,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "后天见",
+    "burmese": "သဘက်ခါ တွေ့မယ်။",
+    "xieyin": "ဟို့ထျန်း ကျန့်"
+  },
+  {
+    "id": 280,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "下周见",
+    "burmese": "နောက်အပတ် တွေ့မယ်။",
+    "xieyin": "ရှာ့ကျိုး ကျန့်"
+  },
+  {
+    "id": 281,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "一会儿见",
+    "burmese": "ခဏနေ တွေ့မယ်။",
+    "xieyin": "ယီဟွေ့ရ် ကျန့်"
+  },
+  {
+    "id": 282,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "改天见",
+    "burmese": "နောက်ရက်မှ တွေ့မယ်။",
+    "xieyin": "ကိုင်ထျန်း ကျန့်"
+  },
+  {
+    "id": 283,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "有空再聊",
+    "burmese": "အားမှ ပြောကြတာပေါ့။",
+    "xieyin": "ယိုခုံ ဇိုက်လျောင်"
+  },
+  {
+    "id": 284,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "改天再聊",
+    "burmese": "နောက်ရက်မှ ပြောကြမယ်။",
+    "xieyin": "ကိုင်ထျန်း ဇိုက်လျောင်"
+  },
+  {
+    "id": 285,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "我先走了",
+    "burmese": "သွားနှင့်ပြီနော်။",
+    "xieyin": "ဝေါ် ရှန်းဇǒu လယ်"
+  },
+  {
+    "id": 286,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "我得走了",
+    "burmese": "သွားရတော့မယ်။",
+    "xieyin": "ဝေါ် သေ ဇǒu လယ်"
+  },
+  {
+    "id": 287,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "时间不早了",
+    "burmese": "မိုးချုပ်တော့မယ် (အချိန်လင့်နေပြီ)။",
+    "xieyin": "ရှီကျန်း ပုဇောင် လယ်"
+  },
+  {
+    "id": 288,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "不早了，我该走了",
+    "burmese": "နောက်ကျနေပြီ၊ ပြန်မှဖြစ်တော့မယ်။",
+    "xieyin": "ပုဇောင် လယ်၊ ဝေါ်ကိုင် ဇǒu လယ်"
+  },
+  {
+    "id": 289,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "谢谢你的招待",
+    "burmese": "ဧည့်ခံတာ ကျေးဇူးပါပဲ။",
+    "xieyin": "ရှဲ့ရှဲ့ နီသဲ့ ဇောင်းတိုင်း"
+  },
+  {
+    "id": 290,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "谢谢你的邀请",
+    "burmese": "ဖိတ်ခေါ်တာ ကျေးဇူးပါပဲ။",
+    "xieyin": "ရှဲ့ရှဲ့ နီသဲ့ ယောင်းချင်း"
+  },
+  {
+    "id": 291,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "今天很开心",
+    "burmese": "ဒီနေ့ အရမ်းပျော်ဖို့ကောင်းတယ်။",
+    "xieyin": "ကျင်းထျန်း ဟန်ခိုင်ရှင်း"
+  },
+  {
+    "id": 292,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "玩得很开心",
+    "burmese": "ပျော်ဖို့ကောင်းခဲ့ပါတယ်။",
+    "xieyin": "ဝမ်သဲ့ ဟန်ခိုင်ရှင်း"
+  },
+  {
+    "id": 293,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "聊得很愉快",
+    "burmese": "စကားပြောရတာ ပျော်ဖို့ကောင်းပါတယ်။",
+    "xieyin": "လျောင်သဲ့ ဟန် ယူခွိုက်"
+  },
+  {
+    "id": 294,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "保持联系",
+    "burmese": "အဆက်အသွယ် လုပ်နော်။",
+    "xieyin": "ပေါက်ချီ လျန်ရှီး"
+  },
+  {
+    "id": 295,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "常联系",
+    "burmese": "အဆက်အသွယ် လုပ်ဦးနော်။",
+    "xieyin": "ချောင် လျန်ရှီး"
+  },
+  {
+    "id": 296,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "打电话给我",
+    "burmese": "ဖုန်းဆက်လိုက်နော်။",
+    "xieyin": "တာ တျန့်ဟွား ကေ့ဝေါ်"
+  },
+  {
+    "id": 297,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "微信联系",
+    "burmese": "WeChat ကနေ ပြောလိုက်နော်။",
+    "xieyin": "ဝေရှင်း လျန်ရှီး"
+  },
+  {
+    "id": 298,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "有什么事随时联系我",
+    "burmese": "ကိစ္စရှိရင် အချိန်မရွေး ဆက်သွယ်လိုက်နော်။",
+    "xieyin": "ယို ရှင်မရှေ့ ဆွီရှီ လျန်ရှီး ဝေါ်"
+  },
+  {
+    "id": 299,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "路上小心",
+    "burmese": "လမ်းမှာ ဂရုစိုက်နော်။",
+    "xieyin": "လုရှန် ရှောင်ရှင်း"
+  },
+  {
+    "id": 300,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "路上慢点",
+    "burmese": "လမ်းမှာ ဖြည်းဖြည်းသွားနော်။",
+    "xieyin": "လုရှန် မန့်တျဲန်"
+  },
+  {
+    "id": 301,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "注意安全",
+    "burmese": "ဘေးကင်းအောင် ဂရုစိုက်ပါ။",
+    "xieyin": "ကျူးယိ အန်ချွမ်း"
+  },
+  {
+    "id": 302,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "慢走",
+    "burmese": "ဂရုစိုက်ပြန်နော်။",
+    "xieyin": "မန့်ဇǒu"
+  },
+  {
+    "id": 303,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "开车小心",
+    "burmese": "ကား မောင်းတာ ဂရုစိုက်နော်။",
+    "xieyin": "ခိုင်းချော ရှောင်ရှင်း"
+  },
+  {
+    "id": 304,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "到家告诉我",
+    "burmese": "အိမ်ရောက်ရင် ပြောနော်။",
+    "xieyin": "တောက်ကျား ကောင့်စု ဝေါ်"
+  },
+  {
+    "id": 305,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "别送了，快回去",
+    "burmese": "လိုက်မပို့ပါနဲ့တော့၊ ပြန်ပါတော့။",
+    "xieyin": "ပျဲ ဆောင့် လယ်၊ ခွိုက် ဟွေးချွိ"
+  },
+  {
+    "id": 306,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "有空再来玩",
+    "burmese": "အားရင် လာလည်ဦးနော်။",
+    "xieyin": "ယိုခုံ ဇိုက်လိုင် ဝမ်"
+  },
+  {
+    "id": 307,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "改天我请你吃饭",
+    "burmese": "နောက်ရက်ကျမှ ထမင်းလိုက်ကျွေးမယ်။",
+    "xieyin": "ကိုင်ထျန်း ဝေါ် ချင်းနီ ချီးဖန့်"
+  },
+  {
+    "id": 308,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "我希望下次还能再见面",
+    "burmese": "နောက်တစ်ခါ ထပ်တွေ့ချင်ပါသေးတယ်။",
+    "xieyin": "ဝေါ် ရှီးဝန့် ရှာ့ချိ ဟိုင်နိန် ဇိုက် ကျန့်မျန့်"
+  },
+  {
+    "id": 309,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "照顾好自己",
+    "burmese": "ကိုယ့်ကိုယ်ကို ဂရုစိုက်နော်။",
+    "xieyin": "ကျောင့်ကု ဟောင် ဇေ့ကျီ"
+  },
+  {
+    "id": 310,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "你也保重",
+    "burmese": "ခင်ဗျားလည်း ဂရုစိုက်နော်။",
+    "xieyin": "နီယဲ့ ပေါက်ကျုံး"
+  },
+  {
+    "id": 311,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "保重",
+    "burmese": "ဂရုစိုက်ပါ။",
+    "xieyin": "ပေါက်ကျုံး"
+  },
+  {
+    "id": 312,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "祝你一切顺利",
+    "burmese": "အားလုံး အဆင်ပြေပါစေ။",
+    "xieyin": "ကျု့နီ ယီချဲ့ ရွှန့်လိ"
+  },
+  {
+    "id": 313,
+    "category": "问候与寒暄",
+    "sub": "道别",
+    "chinese": "祝你幸福",
+    "burmese": "ပျော်ရွှင်ပါစေ။",
+    "xieyin": "ကျု့နီ ရှင်းဖူ"
+  },
+  
+  {
+    "id": 644,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "该起床了。",
+    "burmese": "ထဖို့ အချိန်တန်ပြီ။",
+    "xieyin": "ကိုင် ချီချွမ်း လယ်"
+  },
+  {
+    "id": 645,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "起床了没有？",
+    "burmese": "အိပ်ရာထပြီလား။",
+    "xieyin": "ချီချွမ်း လယ် မေးယို"
+  },
+  {
+    "id": 646,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "快起床！",
+    "burmese": "မြန်မြန် ထတော့။",
+    "xieyin": "ခွိုက် ချီချွမ်း"
+  },
+  {
+    "id": 647,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "再不起就迟到了。",
+    "burmese": "မထရင် နောက်ကျတော့မယ်။",
+    "xieyin": "ဇိုက် ပုချီ ကျို့ ခြီတောက် လယ်"
+  },
+  {
+    "id": 648,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "赶紧起来，别睡了。",
+    "burmese": "မြန်မြန်ထ၊ ဆက်မအိပ်နဲ့တော့။",
+    "xieyin": "ကန်ကျิ่น ချီလိုင်၊ ပျဲ ရွှေ့ လယ်"
+  },
+  {
+    "id": 649,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "再不起床就真迟到了。",
+    "burmese": "အခု မထရင် တကယ် နောက်ကျတော့မယ်။",
+    "xieyin": "ဇိုက် ပု ချီချွမ်း ကျို့ ဂျမ်း ခြီတောက် လယ်"
+  },
+  {
+    "id": 650,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "几点了？要迟到了。",
+    "burmese": "ဘယ်နှနာရီ ရှိပြီလဲ၊ နောက်ကျတော့မယ်။",
+    "xieyin": "ကျီတျဲန် လယ်၊ ယောင့် ခြီတောက် လယ်"
+  },
+  {
+    "id": 651,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "把闹钟关掉。",
+    "burmese": "နှိုးစက် ပိတ်လိုက်ပါ။",
+    "xieyin": "ပါ နောက်ကျုံး ကွမ်းတယောက်"
+  },
+  {
+    "id": 652,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "再睡一会儿。",
+    "burmese": "ခဏလောက် ထပ်အိပ်ဦးမယ်။",
+    "xieyin": "ဇိုက် ရွှေ့ ယီဟွေ့ရ်"
+  },
+  {
+    "id": 653,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "五分钟就好。",
+    "burmese": "၅ မိနစ်လောက်ပါပဲ။",
+    "xieyin": "ဝူဖန်းကျုံး ကျို့ဟောင်"
+  },
+  {
+    "id": 654,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "真不想起床。",
+    "burmese": "တကယ် မထချင်သေးဘူး။",
+    "xieyin": "ဂျမ်း ပုရှန် ချီချွမ်း"
+  },
+  {
+    "id": 655,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "太困了。",
+    "burmese": "အိပ်ချင်နေတုန်းပဲ။",
+    "xieyin": "ထိုက် ခွန့် လယ်"
+  },
+  {
+    "id": 656,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "没睡醒。",
+    "burmese": "အိပ်ရေး မဝသေးဘူး။",
+    "xieyin": "မေး ရွှေ့ရှင်း"
+  },
+  {
+    "id": 657,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "眼睛都睁不开。",
+    "burmese": "မျက်လုံးတောင် ဖွင့်မရဘူး။",
+    "xieyin": "ယန်ကျင်း တိုး ဂျန်းပုခိုင်း"
+  },
+  {
+    "id": 658,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "昨晚睡太晚了。",
+    "burmese": "မနေ့ညက အိပ်တာ အရမ်းနောက်ကျသွားတယ်။",
+    "xieyin": "ဇော်ဝမ် ရွှေ့ ထိုက်ဝမ် လယ်"
+  },
+  {
+    "id": 659,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "没睡好。",
+    "burmese": "အိပ်လို့ မကောင်းဘူး။ (အိပ်ရေးမဝဘူး)",
+    "xieyin": "မေး ရွှေ့ဟောင်"
+  },
+  {
+    "id": 660,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "今天要早起。",
+    "burmese": "ဒီနေ့ စောစော ထရမယ်။",
+    "xieyin": "ကျင်းထျန်း ယောင့် ဇောင်ချီ"
+  },
+  {
+    "id": 661,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "今天不用早起。",
+    "burmese": "ဒီနေ့ စောစော ထစရာ မလိုဘူး။",
+    "xieyin": "ကျင်းထျန်း ပုယောင့် ဇောင်ချီ"
+  },
+  {
+    "id": 662,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "先躺一会儿。",
+    "burmese": "ခဏလောက် လှဲနေဦးမယ်။",
+    "xieyin": "ရှန်း ထန် ယီဟွေ့ရ်"
+  },
+  {
+    "id": 663,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "不行，得起了。",
+    "burmese": "မဖြစ်ဘူး၊ ထမှ ရတော့မယ်။",
+    "xieyin": "ပုရှင်း၊ သေ ချီ လယ်"
+  },
+  {
+    "id": 664,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "好，起来了。",
+    "burmese": "အေးပါ၊ ထပါပြီ။",
+    "xieyin": "ဟောင်၊ ချီလိုင် လယ်"
+  },
+  {
+    "id": 665,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "今天周末，多睡会。",
+    "burmese": "ဒီနေ့ ပိတ်ရက်ပဲ၊ ပိုအိပ်လိုက်ဦးမယ်။",
+    "xieyin": "ကျင်းထျန်း ကျိုးမော့၊ တွောရွှေ့ ဟွေ့"
+  },
+  {
+    "id": 666,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "你昨晚睡得真香。",
+    "burmese": "မင်း မနေ့ညက အိပ်ပျော်လိုက်တာမှ အပီပဲ။",
+    "xieyin": "နီ ဇော်ဝမ် ရွှေ့သဲ့ ဂျမ်းရှန်း"
+  },
+  {
+    "id": 667,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "昨晚被吵醒了。",
+    "burmese": "မနေ့ညက ဆူညံသံကြောင့် လန့်နိုးတယ်။",
+    "xieyin": "ဇော်ဝမ် ပေ့ ချောင်ရှင်း လယ်"
+  },
+  {
+    "id": 668,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "谁在敲门？",
+    "burmese": "ဘယ်သူ တံခါးခေါက်နေတာလဲ။",
+    "xieyin": "ရွှေ ဇိုက် ချောင်းမန်"
+  },
+  {
+    "id": 669,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "天都亮透了。",
+    "burmese": "မိုးလင်းနေပြီ။",
+    "xieyin": "ထျန်း တိုး လျောင့်ထို့ လယ်"
+  },
+  {
+    "id": 670,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "太阳晒屁股了。",
+    "burmese": "နေဖင်ထိုးနေပြီ။",
+    "xieyin": "ထိုက်ယန် ရှိုက် ဖိကူ လယ်"
+  },
+  {
+    "id": 671,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "帮我把窗帘拉开。",
+    "burmese": "လိုက်ကာလေး ဖွင့်ပေးပါဦး။",
+    "xieyin": "ပန်းဝေါ် ပါ ချွမ်းလျန် လားခိုင်း"
+  },
+  {
+    "id": 672,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "还在发呆呢？",
+    "burmese": "ငေးနေတုန်းပဲလား။",
+    "xieyin": "ဟိုင်ဇိုက် ဖားတိုင် နက"
+  },
+  {
+    "id": 673,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "别睡了，快点。",
+    "burmese": "မအိပ်နဲ့တော့၊ မြန်မြန်လုပ်။",
+    "xieyin": "ပျဲ ရွှေ့ လယ်၊ ခွိုက်တျဲန်"
+  },
+  {
+    "id": 674,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "再不起来我要掀你被子了。",
+    "burmese": "မထရင် စောင်ဆွဲလှန်လိုက်တော့မယ်နော်။",
+    "xieyin": "ဇိုက် ပုချီလိုင် ဝေါ် ယောင့် ရှန်း နီ ပေ့ဇ လယ်"
+  },
+  {
+    "id": 675,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "还是被窝里舒服。",
+    "burmese": "စောင်ပုံထဲကပဲ ကောင်းပါတယ်။",
+    "xieyin": "ဟိုင်ရှေ့ ပေ့ဝေါလီ ရှူးဖု"
+  },
+  {
+    "id": 676,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "外面天阴了。",
+    "burmese": "အပြင်မှာ မိုးအုံ့နေတယ်။",
+    "xieyin": "ဝိုက်မျန့် ထျန်းရင်း လယ်"
+  },
+  {
+    "id": 677,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "昨晚下雨了吗？",
+    "burmese": "မနေ့ညက မိုးရွာသေးလား။",
+    "xieyin": "ဇော်ဝမ် ရှာ့ယွီ လယ် မ"
+  },
+  {
+    "id": 678,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "把灯打开，看不见。",
+    "burmese": "မီးဖွင့်လိုက်ပါ၊ ဘာမှ မမြင်ရဘူး။",
+    "xieyin": "ပါ တိန်း တာ့ခိုင်း၊ ခန့်ပုကျန့်"
+  },
+  {
+    "id": 679,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "伸手拿一下衣服。",
+    "burmese": "အင်္ကျီလေး လှမ်းယူပေးပါဦး။",
+    "xieyin": "ရှန်းရှို နာယီရှာ့ ယီးဖု"
+  },
+  {
+    "id": 680,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "赶紧去洗脸。",
+    "burmese": "မျက်နှာ မြန်မြန်သွားသစ်တော့။",
+    "xieyin": "ကန်ကျิ่น ချွိ ရှီလျန်"
+  },
+  {
+    "id": 681,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "你先起还是我先起？",
+    "burmese": "မင်း အရင်ထမလား၊ ငါ အရင်ထရမလား။",
+    "xieyin": "နီ ရှန်းချီ ဟိုင်ရှေ့ ဝေါ် ရှန်းချီ"
+  },
+  {
+    "id": 682,
+    "category": "一天生活",
+    "sub": "起床",
+    "chinese": "动作快点。",
+    "burmese": "မြန်မြန်လုပ်နော်။",
+    "xieyin": "တုံ့ဇော့ ခွိုက်တျဲန်"
+  },
+  {
+    "id": 683,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "去洗脸。",
+    "burmese": "မျက်နှာ သွားသစ်လိုက်ဦးမယ်။",
+    "xieyin": "ချွိ ရှီလျန်"
+  },
+  {
+    "id": 684,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "刷个牙。",
+    "burmese": "သွားတိုက်လိုက်ဦးမယ်။",
+    "xieyin": "ရွှာကော့ ယာ"
+  },
+  {
+    "id": 685,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "洗把脸。",
+    "burmese": "မျက်နှာ သစ်လိုက်မယ်။",
+    "xieyin": "ရှီ ပါ လျန်"
+  },
+  {
+    "id": 686,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "水有点凉。",
+    "burmese": "ရေ နည်းနည်း အေးတယ်။",
+    "xieyin": "ရွှေ ယိုတျဲန် လျောင်"
+  },
+  {
+    "id": 687,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "用热水吧。",
+    "burmese": "ရေနွေးပဲ သုံးလိုက်မယ်။",
+    "xieyin": "ယုံ့ ရဲ့ရွှေ ပါ"
+  },
+  {
+    "id": 688,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "水太热了。",
+    "burmese": "ရေ အရမ်းပူတယ်။",
+    "xieyin": "ရွှေ ထိုက်ရဲ့ လယ်"
+  },
+  {
+    "id": 689,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "牙刷在哪？",
+    "burmese": "သွားပွတ်တံ ဘယ်မှာလဲ။",
+    "xieyin": "ယာရွှာ ဇိုက် နာ"
+  },
+  {
+    "id": 690,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "牙膏快没了。",
+    "burmese": "သွားတိုက်ဆေး ကုန်တော့မယ်။",
+    "xieyin": "ယာကောင်း ခွိုက်မေးလယ်"
+  },
+  {
+    "id": 691,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "你去买牙膏。",
+    "burmese": "သွားတိုက်ဆေး သွားဝယ်လိုက်ဦး။",
+    "xieyin": "နီ ချွိမိုင် ယာကောင်း"
+  },
+  {
+    "id": 692,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "牙刷该换了。",
+    "burmese": "သွားပွတ်တံ လဲရတော့မယ်။",
+    "xieyin": "ယာရွှာ ကိုင်ဟွန့် လယ်"
+  },
+  {
+    "id": 693,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "洗好了。",
+    "burmese": "ဆေးလို့ ပြီးပြီ။",
+    "xieyin": "ရှီ ဟောင်လယ်"
+  },
+  {
+    "id": 694,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "清醒多了。",
+    "burmese": "တော်တော် လန်းဆန်းသွားပြီ။",
+    "xieyin": "ချင်းရှင်း တွောလယ်"
+  },
+  {
+    "id": 695,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "还没洗完。",
+    "burmese": "ဆေးလို့ မပြီးသေးဘူး။",
+    "xieyin": "ဟိုင် မေးရှီဝမ်"
+  },
+  {
+    "id": 696,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "马上好。",
+    "burmese": "ခဏလေး၊ ပြီးတော့မယ်။",
+    "xieyin": "မာရှန် ဟောင်"
+  },
+  {
+    "id": 697,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "洗个头。",
+    "burmese": "ခေါင်းလျှော်လိုက်ဦးမယ်။",
+    "xieyin": "ရှီကော့ ထို"
+  },
+  {
+    "id": 698,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "你洗脸了没？",
+    "burmese": "မင်း မျက်နှာသစ်ပြီးပြီလား။",
+    "xieyin": "နီ ရှီလျန် လယ်မေး"
+  },
+  {
+    "id": 699,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "别忘了刷牙。",
+    "burmese": "သွားတိုက်ဖို့ မမေ့နဲ့။",
+    "xieyin": "ပျဲ ဝေါင့်လယ် ရွှာယာ"
+  },
+  {
+    "id": 700,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "毛巾在哪？",
+    "burmese": "မျက်နှာသုတ်ပဝါ ဘယ်မှာလဲ။",
+    "xieyin": "မောင်ကျင်း ဇိုက် နာ"
+  },
+  {
+    "id": 701,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "洗面奶没了。",
+    "burmese": "မျက်နှာသစ်ဆေး ကုန်သွားပြီ။",
+    "xieyin": "ရှီမျန့်နိုင်း မေးလယ်"
+  },
+  {
+    "id": 702,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "把脸洗干净点。",
+    "burmese": "မျက်နှာ ပြောင်အောင်သစ်နော်။",
+    "xieyin": "ပါ လျန် ရှီ ကန်းကျင့် တျဲန်"
+  },
+  {
+    "id": 703,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "用凉水洗。",
+    "burmese": "ရေအေးနဲ့ပဲ သစ်လိုက်မယ်။",
+    "xieyin": "ယုံ့ လျောင်ရွှေ ရှီ"
+  },
+  {
+    "id": 704,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "我在刷牙呢。",
+    "burmese": "ငါ သွားတိုက်နေတာ။",
+    "xieyin": "ဝေါ် ဇိုက် ရွှာယာ နက"
+  },
+  {
+    "id": 705,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "马上就洗好了。",
+    "burmese": "ပြီးတော့မယ်။",
+    "xieyin": "မာရှန် ကျို့ ရှီဟောင် လယ်"
+  },
+  {
+    "id": 706,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "香皂在哪？",
+    "burmese": "ဆပ်ပြာခဲ ဘယ်မှာလဲ။",
+    "xieyin": "ရှန်းဇောက် ဇိုက် နာ"
+  },
+  {
+    "id": 707,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "帮我递一下梳子。",
+    "burmese": "ဘီးလေး လှမ်းပေးပါဦး။",
+    "xieyin": "ပန်းဝေါ် တိယီရှာ့ ရှူးဇ"
+  },
+  {
+    "id": 708,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "镜子有点脏。",
+    "burmese": "မှန်က နည်းနည်း ညစ်ပတ်နေတယ်။",
+    "xieyin": "ကျင့်ဇ ယိုတျဲန် ဇောင်း"
+  },
+  {
+    "id": 709,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "没刮胡子呢。",
+    "burmese": "မုတ်ဆိတ် မရိတ်ရသေးဘူး။",
+    "xieyin": "မေး ကွားဟူဇ နက"
+  },
+  {
+    "id": 710,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "刮胡刀没电了。",
+    "burmese": "မုတ်ဆိတ်ရိတ်စက် အားကုန်နေပြီ။",
+    "xieyin": "ကွားဟူတောင်း မေးတျန့် လယ်"
+  },
+  {
+    "id": 711,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "厕所有人吗？",
+    "burmese": "အိမ်သာထဲ လူရှိလား။",
+    "xieyin": "ချဲ့စွော် ယိုရန် မ"
+  },
+  {
+    "id": 712,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "快点出来，我要用。",
+    "burmese": "မြန်မြန်ထွက်၊ ငါ ဝင်ချင်လို့။",
+    "xieyin": "ခွိုက်တျဲန် ချူးလိုင်၊ ဝေါ် ယောင့်ယုံ့"
+  },
+  {
+    "id": 713,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "别在里面玩手机。",
+    "burmese": "အထဲမှာ ဖုန်းထိုင်သုံးမနေနဲ့။",
+    "xieyin": "ပျဲ ဇိုက် လီမျန့် ဝမ် ရှိုဂျီး"
+  },
+  {
+    "id": 714,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "还没便完啊？",
+    "burmese": "ကိစ္စ မပြီးသေးဘူးလား။",
+    "xieyin": "ဟိုင်မေး ပျန့်ဝမ် အာ"
+  },
+  {
+    "id": 715,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "纸没了，递给我。",
+    "burmese": "တစ်သျှူးကုန်သွားပြီ၊ လှမ်းပေးပါဦး။",
+    "xieyin": "ကျီ မေးလယ်၊ တိကေ့ဝေါ်"
+  },
+  {
+    "id": 716,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "还有备用的纸吗？",
+    "burmese": "အပို တစ်သျှူး ရှိသေးလား။",
+    "xieyin": "ဟိုင်ယို ပေ့ယုံ့ သဲ့ ကျီ မ"
+  },
+  {
+    "id": 717,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "这一大早的，真忙。",
+    "burmese": "မနက်စောစောစီးစီး အလုပ်ရှုပ်လိုက်တာ။",
+    "xieyin": "ကျဲ့ ယီတာ့ဇောင် သဲ့၊ ဂျမ်းမောင်"
+  },
+  {
+    "id": 718,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "谁把地弄湿了？",
+    "burmese": "ဘယ်သူ ကြမ်းပြင်ကို ရေစိုအောင်လုပ်တာလဲ။",
+    "xieyin": "ရွှေ ပါ တီး နုံ့ရှီး လယ်"
+  },
+  {
+    "id": 719,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "牙刷放错位置了。",
+    "burmese": "သွားပွတ်တံ နေရာမှားထားမိပြီ။",
+    "xieyin": "ယာရွှာ ဖောင့်ချွေ့ ဝေ့ကျိ လယ်"
+  },
+  {
+    "id": 720,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "漱口水还有吗？",
+    "burmese": "ပလုတ်ကျင်းဆေးရည် ရှိသေးလား။",
+    "xieyin": "ရှု့ခိုရွှေ ဟိုင်ယို မ"
+  },
+  {
+    "id": 721,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "水龙头坏了，滴水。",
+    "burmese": "ဘုံဘိုင်ခေါင်း ပျက်နေတယ်၊ ရေယိုနေတယ်။",
+    "xieyin": "ရွှေလုံထို ဟွိုက်လယ်၊ တီးရွှေ"
+  },
+  {
+    "id": 722,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "把头发吹干。",
+    "burmese": "ခေါင်းခြောက်အောင် မှုတ်လိုက်မယ်။",
+    "xieyin": "ပါ ထိုဖာ ချွီးကန်း"
+  },
+  {
+    "id": 723,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "吹风机在哪？",
+    "burmese": "ဆံပင်မှုတ်စက် ဘယ်မှာလဲ။",
+    "xieyin": "ချွီးဖုန်းဂျီး ဇိုက် နာ"
+  },
+  {
+    "id": 724,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "帮我吹一下后边。",
+    "burmese": "အနောက်ဘက်လေး ကူမှုတ်ပေးပါဦး။",
+    "xieyin": "ပန်းဝေါ် ချွီးယီရှာ့ ဟို့ပျန်း"
+  },
+  {
+    "id": 725,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "脸上长痘了。",
+    "burmese": "မျက်နှာမှာ ဝက်ခြံပေါက်နေတယ်။",
+    "xieyin": "လျန်ရှန် ကျǎngတို့ လယ်"
+  },
+  {
+    "id": 726,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "该擦点面霜了。",
+    "burmese": "မျက်နှာ လိမ်းဆေး လိမ်းရတော့မယ်။",
+    "xieyin": "ကိုင် ခြားတျဲန် မျန့်ရွှမ်း လယ်"
+  },
+  {
+    "id": 727,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "这水味儿不对。",
+    "burmese": "ရေနံ့က တစ်မျိုးကြီးပဲ။",
+    "xieyin": "ကျဲ့ရွှေ ဝေ့ရ် ပုတွေ့"
+  },
+  {
+    "id": 728,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "停水了吗？",
+    "burmese": "ရေမလာတော့ဘူးလား။",
+    "xieyin": "ထင်းရွှေ လယ် မ"
+  },
+  {
+    "id": 729,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "水压太小。",
+    "burmese": "ရေအား နည်းလွန်းတယ်။",
+    "xieyin": "ရွှေယား ထိုက်ရှောင်"
+  },
+  {
+    "id": 730,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "好了，换你洗。",
+    "burmese": "ပြီးပြီ၊ မင်းဝင်တော့။",
+    "xieyin": "ဟောင်လယ်၊ ဟွန့်နီ ရှီ"
+  },
+  {
+    "id": 731,
+    "category": "一天生活",
+    "sub": "洗漱与清爽",
+    "chinese": "终于清爽了。",
+    "burmese": "တော်တော် လန်းဆန်းသွားပြီ။",
+    "xieyin": "ကျုံးယွီ ချင်းရွှမ် လယ်"
+  },
+  {
+    "id": 732,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "穿什么？",
+    "burmese": "ဘာဝတ်ရမလဲ။",
+    "xieyin": "ချွမ်း ရှင်မ"
+  },
+  {
+    "id": 733,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "今天穿这件吧。",
+    "burmese": "ဒီနေ့ ဒါပဲ ဝတ်လိုက်မယ်။",
+    "xieyin": "ကျင်းထျန်း ချွမ်း ကျဲ့ကျန့် ပါ"
+  },
+  {
+    "id": 734,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "换一件。",
+    "burmese": "နောက်တစ်ထည် လဲလိုက်မယ်။",
+    "xieyin": "ဟွန့် ယီကျန့်"
+  },
+  {
+    "id": 735,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "这件太厚了。",
+    "burmese": "ဒီအင်္ကျီက ထူလွန်းတယ်။",
+    "xieyin": "ကျဲ့ကျန့် ထိုက်ဟို့ လယ်"
+  },
+  {
+    "id": 736,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "这件太薄了。",
+    "burmese": "ဒီအင်္ကျီက ပါးလွန်းတယ်။",
+    "xieyin": "ကျဲ့ကျန့် ထိုက်ပေါက် လယ်"
+  },
+  {
+    "id": 737,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "外面冷吗？",
+    "burmese": "အပြင်မှာ အေးလား။",
+    "xieyin": "ဝိုက်မျန့် လိန့် မ"
+  },
+  {
+    "id": 738,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "外面热不热？",
+    "burmese": "အပြင်မှာ ပူလား။",
+    "xieyin": "ဝိုက်မျန့် ရဲ့ပုရဲ့"
+  },
+  {
+    "id": 739,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "这衣服合适吗？",
+    "burmese": "ဒီအင်္ကျီနဲ့ လိုက်လား။",
+    "xieyin": "ကျဲ့ ယီးဖု ဟယ်ရှေ့ မ"
+  },
+  {
+    "id": 740,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "有点大。",
+    "burmese": "နည်းနည်း ကြီးနေတယ်။",
+    "xieyin": "ယိုတျဲန် တာ့"
+  },
+  {
+    "id": 741,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "有点小。",
+    "burmese": "နည်းနည်း သေးနေတယ်။",
+    "xieyin": "ယိုတျဲန် ရှောင်"
+  },
+  {
+    "id": 742,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "颜色可以。",
+    "burmese": "အရောင်ကတော့ အဆင်ပြေတယ်။",
+    "xieyin": "ယန်ဆဲ့ ခေါ်ယီ"
+  },
+  {
+    "id": 743,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "不太好看。",
+    "burmese": "ကြည့်လို့ သိပ်မကောင်းဘူး။",
+    "xieyin": "ပုထိုက် ဟောင်ခန့်"
+  },
+  {
+    "id": 744,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "就这样吧。",
+    "burmese": "ဒီလိုပဲ ထားလိုက်တော့။",
+    "xieyin": "ကျို့ ကျဲ့ယောင့် ပါ"
+  },
+  {
+    "id": 745,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "来不及挑了。",
+    "burmese": "ရွေးနေဖို့ အချိန်မရှိတော့ဘူး။",
+    "xieyin": "လိုင်ပုဂျီ ထျောင်း လယ်"
+  },
+  {
+    "id": 746,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "这件衣服脏了。",
+    "burmese": "ဒီအင်္ကျီ ညစ်ပတ်နေတယ်။",
+    "xieyin": "ကျဲ့ကျန့် ယီးဖု ဇောင်း လယ်"
+  },
+  {
+    "id": 747,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "换件干净的。",
+    "burmese": "သန့်တာ တစ်ထည် လဲလိုက်မယ်။",
+    "xieyin": "ဟွန့်ကျန့် ကန်းကျင့် သဲ့"
+  },
+  {
+    "id": 748,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "穿外套吧，有风。",
+    "burmese": "လေတိုက်တယ်၊ အပေါ်ထပ် ဝတ်သွား။",
+    "xieyin": "ချွမ်း ဝိုက်ထောက် ပါ၊ ယိုဖုန်း"
+  },
+  {
+    "id": 749,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "不用穿毛衣，不冷。",
+    "burmese": "ဆွယ်တာ ဝတ်စရာမလိုဘူး၊ မအေးပါဘူး။",
+    "xieyin": "ပုယောင့် ချွမ်း မောင်ယီ၊ ပုလိန့်"
+  },
+  {
+    "id": 750,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "裤子太短了。",
+    "burmese": "ဘောင်းဘီ တိုလွန်းတယ်။",
+    "xieyin": "ခူးဇ ထိုက်တုမ် လယ်"
+  },
+  {
+    "id": 751,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "鞋子脏了，去擦擦。",
+    "burmese": "ဖိနပ် ညစ်ပတ်နေတယ်၊ သွားတိုက်လိုက်ဦး။",
+    "xieyin": "ရှဲဇ ဇောင်းလယ်၊ ချွိ ခြားခြား"
+  },
+  {
+    "id": 752,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "随便穿一件就行了。",
+    "burmese": "ကြုံရာတစ်ထည် ဝတ်သွားလိုက်မယ်။",
+    "xieyin": "ဆွီပျန့် ချွမ်း ယီကျန့် ကျို့ရှင်း လယ်"
+  },
+  {
+    "id": 753,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "最近显胖，换一件。",
+    "burmese": "ဒီရက်ပိုင်း ဝလာသလိုပဲ၊ နောက်တစ်ထည် လဲလိုက်မယ်။",
+    "xieyin": "ကျွေ့ကျင် ရှန်ဖောင့်၊ ဟွန့် ယီကျန့်"
+  },
+  {
+    "id": 754,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "这衣服没干，还有点潮。",
+    "burmese": "ဒီအင်္ကျီ မခြောက်သေးဘူး၊ စိုနေသေးတယ်။",
+    "xieyin": "ကျဲ့ ယီးဖု မေးကန်း၊ ဟိုင် ယိုတျဲန် ချောင်"
+  },
+  {
+    "id": 755,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "帮我把拉链拉上。",
+    "burmese": "ဇစ် ကူဆွဲပေးပါဦး။",
+    "xieyin": "ပန်းဝေါ် ပါ လားလျန့် လားရှန့်"
+  },
+  {
+    "id": 756,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "领子歪了。",
+    "burmese": "ကော်လာ စောင်းနေတယ်။",
+    "xieyin": "လင်ဇ ဝိုင်း လယ်"
+  },
+  {
+    "id": 757,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "袜子没找着。",
+    "burmese": "ခြေအိတ် ရှာမတွေ့ဘူး။",
+    "xieyin": "ဝါ့ဇ မေး ကျောင်ကျောင်း"
+  },
+  {
+    "id": 758,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "两只袜子不一样。",
+    "burmese": "ခြေအိတ်နှစ်ဖက် မတူဘူး ဖြစ်နေတယ်။",
+    "xieyin": "လျǎngကျီ ဝါ့ဇ ပုယီးယောင့်"
+  },
+  {
+    "id": 759,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "裤带系好。",
+    "burmese": "ခါးပတ် သေချာပတ်။",
+    "xieyin": "ခူးတိုက် ဂျိဟောင်"
+  },
+  {
+    "id": 760,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "这衣服得烫一下。",
+    "burmese": "ဒီအင်္ကျီ မီးပူတိုက်မှ ရမယ်။",
+    "xieyin": "ကျဲ့ ယီးဖု သေ ထောင့် ယီရှာ့"
+  },
+  {
+    "id": 761,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "都是褶子。",
+    "burmese": "ကြေမွနေတာပဲ။",
+    "xieyin": "တိုးရှေ့ ကျယ်ဇ"
+  },
+  {
+    "id": 762,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "穿哪双鞋？",
+    "burmese": "ဘယ်ဖိနပ် စီးရမလဲ။",
+    "xieyin": "ချွမ်း နာရွှမ်း ရှဲ"
+  },
+  {
+    "id": 763,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "穿运动鞋吧。",
+    "burmese": "အားကစားဖိနပ်ပဲ စီးလိုက်မယ်။",
+    "xieyin": "ချွမ်း ယွမ်တုံ့ရှဲ ပါ"
+  },
+  {
+    "id": 764,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "这双鞋磨脚。",
+    "burmese": "ဒီဖိနပ်က ခြေထောက်ပေါက်တယ်။",
+    "xieyin": "ကျဲ့ရွှမ်းရှဲ မော်ကျောင်"
+  },
+  {
+    "id": 765,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "穿拖鞋就行。",
+    "burmese": "ဖိနပ်ပါးပဲ စီးသွားလိုက်မယ်။",
+    "xieyin": "ချွမ်း ထွောရှဲ ကျို့ရှင်း"
+  },
+  {
+    "id": 766,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "照照镜子。",
+    "burmese": "မှန်ကြည့်လိုက်ဦးမယ်။",
+    "xieyin": "ကျောင့်ကျောင့် ကျင့်ဇ"
+  },
+  {
+    "id": 767,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "裙子太长了。",
+    "burmese": "စကတ်က ရှည်လွန်းတယ်။",
+    "xieyin": "ချွင်ဇ ထိုက်ချောင် လယ်"
+  },
+  {
+    "id": 768,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "纽扣掉了。",
+    "burmese": "ကြယ်သီး ပြုတ်ကျသွားပြီ။",
+    "xieyin": "နျူခို့ တယောက် လယ်"
+  },
+  {
+    "id": 769,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "帮我钉个扣子。",
+    "burmese": "ကြယ်သီးလေး ပြန်တပ်ပေးပါဦး။",
+    "xieyin": "ပန်းဝေါ် တင်းကော့ ခို့ဇ"
+  },
+  {
+    "id": 770,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "衣服穿反了。",
+    "burmese": "အင်္ကျီ ပြောင်းပြန် ဝတ်ထားတယ်။",
+    "xieyin": "ယီးဖု ချွမ်းဖန် လယ်"
+  },
+  {
+    "id": 771,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "里外穿反了。",
+    "burmese": "အထဲနဲ့အပြင် ပြောင်းပြန် ဖြစ်နေတယ်။",
+    "xieyin": "လီဝိုက် ချွမ်းဖန် လယ်"
+  },
+  {
+    "id": 772,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "这件显白。",
+    "burmese": "ဒီအင်္ကျီက အသားဖြူတယ်လို့ ထင်ရတယ်။",
+    "xieyin": "ကျဲ့ကျန့် ရှန်ပိုင်"
+  },
+  {
+    "id": 773,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "这件显年轻。",
+    "burmese": "ဒါက ပိုနုတယ်လို့ ထင်ရတယ်။",
+    "xieyin": "ကျဲ့ကျန့် ရှန် နျန်ချင်း"
+  },
+  {
+    "id": 774,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "衣服缩水了。",
+    "burmese": "အင်္ကျီက ကျုံ့သွားပြီ။",
+    "xieyin": "ယီးဖု ဆွောရွှေ လယ်"
+  },
+  {
+    "id": 775,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "帮我拿件内衣。",
+    "burmese": "အတွင်းခံ တစ်ထည်လောက် ယူပေးပါဦး။",
+    "xieyin": "ပန်းဝေါ် နာကျန့် နေ့ယီ"
+  },
+  {
+    "id": 776,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "领带怎么系？",
+    "burmese": "နက်ကတိုင် ဘယ်လိုစည်းရလဲ။",
+    "xieyin": "လင်တိုက် ဇန်မ ဂျိ"
+  },
+  {
+    "id": 777,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "随便弄弄。",
+    "burmese": "ဖြစ်သလိုပဲ လုပ်လိုက်မယ်။",
+    "xieyin": "ဆွီပျန့် နုံ့နုံ့"
+  },
+  {
+    "id": 778,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "穿这么正式干嘛？",
+    "burmese": "ဘာလို့ အဲ့လောက်တောင် စမတ်ကျနေတာလဲ။",
+    "xieyin": "ချွမ်း ကျဲ့မော ဂျင့်ရှေ့ ကန်မာ"
+  },
+  {
+    "id": 779,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "见客户要穿好点。",
+    "burmese": "ဖောက်သည်နဲ့ တွေ့ရမှာမို့ သေချာဝတ်ထားတာ။",
+    "xieyin": "ကျန့် ခဲ့ဟူး ယောင့် ချွမ်း ဟောင်တျဲန်"
+  },
+  {
+    "id": 780,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "这件过时了。",
+    "burmese": "ဒါကြီးက ခေတ်မမီတော့ဘူး။",
+    "xieyin": "ကျဲ့ကျန့် ကောရှီ လယ်"
+  },
+  {
+    "id": 781,
+    "category": "一天生活",
+    "sub": "穿衣打扮",
+    "chinese": "好了，完美。",
+    "burmese": "ကဲ.. ပြီးပြီ၊ ရှယ်ပဲ။",
+    "xieyin": "ဟောင်လယ်၊ ဝမ်မေ"
+  },
+  {
+    "id": 782,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "找一下手机。",
+    "burmese": "ဖုန်း လိုက်ရှာဦးမယ်။",
+    "xieyin": "ကျောင် ယီရှာ့ ရှိုဂျီး"
+  },
+  {
+    "id": 783,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "手机呢？",
+    "burmese": "ဖုန်းရော။",
+    "xieyin": "ရှိုဂျီး နက"
+  },
+  {
+    "id": 784,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "手机在这。",
+    "burmese": "ဖုန်း ဒီမှာလေ။",
+    "xieyin": "ရှိုဂျီး ဇိုက် ကျဲ့"
+  },
+  {
+    "id": 785,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "手机在哪里？",
+    "burmese": "ဖုန်း ဘယ်မှာလဲ။",
+    "xieyin": "ရှိုဂျီး ဇိုက် နာလီ"
+  },
+  {
+    "id": 786,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "看见我耳机了吗？",
+    "burmese": "ငါ့ နားကြပ် တွေ့လား။",
+    "xieyin": "ခန့်ကျန့် ဝေါ် အာ့ဂျီး လယ် မ"
+  },
+  {
+    "id": 787,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "钥匙带了吗？",
+    "burmese": "သော့ ပါလား။",
+    "xieyin": "ယော့ရှီ တိုင်းလယ် မ"
+  },
+  {
+    "id": 788,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "带了。",
+    "burmese": "ပါတယ်။",
+    "xieyin": "တိုင်းလယ်"
+  },
+  {
+    "id": 789,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "钱包呢？",
+    "burmese": "ပိုက်ဆံအိတ်ရော။",
+    "xieyin": "ချန်ပေါက် နက"
+  },
+  {
+    "id": 790,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "钱包忘了。",
+    "burmese": "ပိုက်ဆံအိတ် မေ့ကျန်ခဲ့ပြီ။",
+    "xieyin": "ချန်ပေါက် ဝေါင့်လယ်"
+  },
+  {
+    "id": 791,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "充电了吗？",
+    "burmese": "အားသွင်းခဲ့လား။",
+    "xieyin": "ချုန်းတျန့် လယ် မ"
+  },
+  {
+    "id": 792,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "没电了。",
+    "burmese": "အားကုန်နေပြီ။",
+    "xieyin": "မေးတျန့် လယ်"
+  },
+  {
+    "id": 793,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "带伞了吗？",
+    "burmese": "ထီး ပါလား။",
+    "xieyin": "တိုင်းဆန် လယ် မ"
+  },
+  {
+    "id": 794,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "今天下雨。",
+    "burmese": "ဒီနေ့ မိုးရွာမှာ။",
+    "xieyin": "ကျင်းထျန်း ရှာ့ယွီ"
+  },
+  {
+    "id": 795,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "口罩带了吗？",
+    "burmese": "Mask (နှာခေါင်းစည်း) ပါလား။",
+    "xieyin": "ခိုကျောက် တိုင်းလယ် မ"
+  },
+  {
+    "id": 796,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "充电宝带了没？",
+    "burmese": "Power Bank ပါလား။",
+    "xieyin": "ချုန်းတျန့်ပေါက် တိုင်းလယ် မေး"
+  },
+  {
+    "id": 797,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "伞放包里了。",
+    "burmese": "ထီး အိတ်ထဲ ထည့်ထားတယ်။",
+    "xieyin": "ဆန် ဖောင့် ပေါက်လီ လယ်"
+  },
+  {
+    "id": 798,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "忘拿水杯了。",
+    "burmese": "ရေဘူး ယူဖို့ မေ့နေတယ်။",
+    "xieyin": "ဝေါင့်နာ ရွှေပေး လယ်"
+  },
+  {
+    "id": 799,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "我在找钱包。",
+    "burmese": "ပိုက်ဆံအိတ် ရှာနေတာ။",
+    "xieyin": "ဝေါ် ဇိုက်ကျောင် ချန်ပေါက်"
+  },
+  {
+    "id": 800,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "别找了，下次再说。",
+    "burmese": "မရှာနဲ့တော့၊ နောက်မှပဲ ကြည့်တော့။",
+    "xieyin": "ပျဲကျောင် လယ်၊ ရှာ့ချိ ဇိုက်ရွှော"
+  },
+  {
+    "id": 801,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "再检查一下。",
+    "burmese": "နောက်တစ်ခေါက် ပြန်စစ်ကြည့်။",
+    "xieyin": "ဇိုက် ကျန်ခြား ယီရှာ့"
+  },
+  {
+    "id": 802,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "好像少了点东西。",
+    "burmese": "တစ်ခုခု လိုနေသလိုပဲ။",
+    "xieyin": "ဟောင်ရှန့် ရှောင်လယ် တျဲန် တုန်းရှီး"
+  },
+  {
+    "id": 803,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "算了，走吧。",
+    "burmese": "ထားလိုက်တော့၊ သွားမယ်။",
+    "xieyin": "ဆွန့်လယ်၊ ဇǒu ပါ"
+  },
+  {
+    "id": 804,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "都好了。",
+    "burmese": "အကုန် အဆင်သင့် ဖြစ်ပြီ။",
+    "xieyin": "တိုး ဟောင်လယ်"
+  },
+  {
+    "id": 805,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "眼镜在哪？",
+    "burmese": "မျက်မှန် ဘယ်မှာလဲ။",
+    "xieyin": "ယန်ကျင့် ဇိုက် နာ"
+  },
+  {
+    "id": 806,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "我的烟呢？",
+    "burmese": "ငါ့ ဆေးလိပ်ရော။",
+    "xieyin": "ဝေါ်သဲ့ ယန်း နက"
+  },
+  {
+    "id": 807,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "帮我拿个袋子。",
+    "burmese": "အိတ်တစ်လုံးလောက် ယူပေးပါဦး။",
+    "xieyin": "ပန်းဝေါ် နာကော့ တိုက်ဇ"
+  },
+  {
+    "id": 808,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "垃圾袋顺便提着。",
+    "burmese": "အမှိုက်အိတ်ပါ တစ်ခါတည်း ဆွဲသွား။",
+    "xieyin": "လာဂျီးတိုက် ရွှန့်ပျန့် ထီးကျက"
+  },
+  {
+    "id": 809,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "门钥匙在包里吗？",
+    "burmese": "တံခါးသော့ အိတ်ထဲမှာလား။",
+    "xieyin": "မန်ယော့ရှီ ဇိုက် ပေါက်လီ မ"
+  },
+  {
+    "id": 810,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "我手机壳呢？",
+    "burmese": "ငါ့ ဖုန်းကာဗာရော။",
+    "xieyin": "ဝေါ် ရှိုဂျီးခယ် နက"
+  },
+  {
+    "id": 811,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "帮我找找车钥匙。",
+    "burmese": "ကားသော့ ကူရှာပေးပါဦး။",
+    "xieyin": "ပန်းဝေါ် ကျောင်ကျောင် ချောယော့ရှီ"
+  },
+  {
+    "id": 812,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "放在玄关了。",
+    "burmese": "အဝင်ပေါက်နားမှာ တင်ထားတယ်။",
+    "xieyin": "ဖောင့် ဇိုက် ရွှမ်ကွမ်း လယ်"
+  },
+  {
+    "id": 813,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "没看见啊。",
+    "burmese": "မတွေ့ပါဘူး။",
+    "xieyin": "မေး ခန့်ကျန့် အာ"
+  },
+  {
+    "id": 814,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "就在那儿，瞎啊。",
+    "burmese": "အဲ့မှာ ရှိနေတာကို၊ ကန်းနေလား။ (ရင်းနှီးသူချင်း နောက်ပြောင်ခြင်း)",
+    "xieyin": "ကျို့ ဇိုက်နာရ်၊ ရှာ အာ"
+  },
+  {
+    "id": 815,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "找到了。",
+    "burmese": "တွေ့ပြီ။",
+    "xieyin": "ကျောင်တောက် လယ်"
+  },
+  {
+    "id": 816,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "纸巾带了吗？",
+    "burmese": "တစ်သျှူး ပါလား။",
+    "xieyin": "ကျီကျင်း တိုင်းလယ် မ"
+  },
+  {
+    "id": 817,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "笔记本在包里。",
+    "burmese": "မှတ်စုစာအုပ် အိတ်ထဲမှာ။",
+    "xieyin": "ပီကျိပန် ဇိုက် ပေါက်လီ"
+  },
+  {
+    "id": 818,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "电脑带了吗？",
+    "burmese": "ကွန်ပျူတာ ပါလား။",
+    "xieyin": "တျန့်နောင် တိုင်းလယ် မ"
+  },
+  {
+    "id": 819,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "充电线带上。",
+    "burmese": "အားသွင်းကြိုး ယူသွားဦး။",
+    "xieyin": "ချုန်းတျန့်ရှန့် တိုင်းရှန့်"
+  },
+  {
+    "id": 820,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "别丢三落四的。",
+    "burmese": "ဟိုမေ့ဒီမေ့ မလုပ်နဲ့။",
+    "xieyin": "ပျဲ တျူးစန်း လော့ဆစ် သဲ့"
+  },
+  {
+    "id": 821,
+    "category": "一天生活",
+    "sub": "出门前找东西",
+    "chinese": "确定没漏东西？",
+    "burmese": "ဘာမှ မကျန်ခဲ့ဘူးနော်။",
+    "xieyin": "ချွေ့သင့် မေးလို့ တုန်းရှီး"
+  },
+  {
+    "id": 822,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "吃早饭了吗？",
+    "burmese": "မနက်စာ စားပြီးပြီလား။",
+    "xieyin": "ချီး ဇောင်ဖန့် လယ် မ"
+  },
+  {
+    "id": 823,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "还没吃。",
+    "burmese": "မစားရသေးဘူး။",
+    "xieyin": "ဟိုင်မေး ချီး"
+  },
+  {
+    "id": 824,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "吃点什么？",
+    "burmese": "ဘာစားမလဲ။",
+    "xieyin": "ချီးတျဲန် ရှင်မ"
+  },
+  {
+    "id": 825,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "随便吃点。",
+    "burmese": "ကြုံတာ စားလိုက်မယ်။",
+    "xieyin": "ဆွီပျန့် ချီးတျဲန်"
+  },
+  {
+    "id": 826,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "没时间吃。",
+    "burmese": "စားဖို့ အချိန်မရှိတော့ဘူး။",
+    "xieyin": "မေး ရှီကျန်း ချီး"
+  },
+  {
+    "id": 827,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "路上买。",
+    "burmese": "လမ်းကြုံ ဝယ်စားလိုက်မယ်။",
+    "xieyin": "လုရှန် မိုင်"
+  },
+  {
+    "id": 828,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "吃不下。",
+    "burmese": "မစားနိုင်တော့ဘူး။",
+    "xieyin": "ချီးပုရှာ့"
+  },
+  {
+    "id": 829,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "没胃口。",
+    "burmese": "စားချင်စိတ် မရှိဘူး။",
+    "xieyin": "မေး ဝေ့ခို"
+  },
+  {
+    "id": 830,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "喝点水。",
+    "burmese": "ရေသောက်လိုက်မယ်။",
+    "xieyin": "ဟောတျဲန် ရွှေ"
+  },
+  {
+    "id": 831,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "喝杯咖啡。",
+    "burmese": "ကော်ဖီတစ်ခွက် သောက်လိုက်မယ်။",
+    "xieyin": "ဟောပေး ကာဖေး"
+  },
+  {
+    "id": 832,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "吃完了。",
+    "burmese": "စားလို့ ပြီးပြီ။",
+    "xieyin": "ချီးဝမ် လယ်"
+  },
+  {
+    "id": 833,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "不吃了。",
+    "burmese": "မစားတော့ဘူး။",
+    "xieyin": "ပုချီး လယ်"
+  },
+  {
+    "id": 834,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "吃包子还是馒头？",
+    "burmese": "ပေါက်စီ စားမလား၊ မန်ထို စားမလား။",
+    "xieyin": "ချီး ပေါက်ဇ ဟိုင်ရှေ့ မန်ထို"
+  },
+  {
+    "id": 835,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "豆浆热好了。",
+    "burmese": "ပဲနို့ပူပူလေး ရပြီ။",
+    "xieyin": "တို့ကျမ်း ရဲ့ဟောင် လယ်"
+  },
+  {
+    "id": 836,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "给我煎个鸡蛋吧。",
+    "burmese": "ကြက်ဥကြော်လေး တစ်လုံးလောက် လုပ်ပေးပါ။",
+    "xieyin": "ကေ့ဝေါ် ကျန်းကော့ ဂျီးတန့် ပါ"
+  },
+  {
+    "id": 837,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "粥凉了，热一下。",
+    "burmese": "ဆန်ပြုတ် အေးသွားပြီ၊ ပြန်နွှေးလိုက်ဦး။",
+    "xieyin": "ကျိုး လျန်လယ်၊ ရဲ့ ယီရှာ့"
+  },
+  {
+    "id": 838,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "我不吃早饭。",
+    "burmese": "ကျွန်တော် မနက်စာ မစားဘူး။",
+    "xieyin": "ဝေါ် ပုချီး ဇောင်ဖန့်"
+  },
+  {
+    "id": 839,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "买个煎饼果子。",
+    "burmese": "ကျန်ပင်းမုန့် တစ်ခုလောက် ဝယ်လိုက်မယ်။",
+    "xieyin": "မိုင်ကော့ ကျန်ပင်းကော်ဇ"
+  },
+  {
+    "id": 840,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "吃完赶紧走。",
+    "burmese": "စားပြီးရင် မြန်မြန်သွားမယ်။",
+    "xieyin": "ချီးဝမ် ကန်ကျิ่น ဇǒu"
+  },
+  {
+    "id": 841,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "早餐你吃什么？",
+    "burmese": "မနက်စာ ဘာစားမလဲ။",
+    "xieyin": "ဇောင်ချန်း နီ ချီး ရှင်မ"
+  },
+  {
+    "id": 842,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "油条太油了。",
+    "burmese": "အီကြာကွေးက ဆီများလွန်းတယ်။",
+    "xieyin": "ယိုထျောင် ထိုက် ယို လယ်"
+  },
+  {
+    "id": 843,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "给我拿张纸巾。",
+    "burmese": "တစ်သျှူးလေး ပေးပါဦး။",
+    "xieyin": "ကေ့ဝေါ် နာကျွမ်း ကျီကျင်း"
+  },
+  {
+    "id": 844,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "鸡蛋要全熟的。",
+    "burmese": "ကြက်ဥကို ကျက်အောင်ကြော်ပေး။",
+    "xieyin": "ဂျီးတန့် ယောင့် ခြွမ်းရှူ သဲ့"
+  },
+  {
+    "id": 845,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "面包糊了。",
+    "burmese": "ပေါင်မုန့် တူးသွားပြီ။",
+    "xieyin": "မျန့်ပေါက် ဟူး လယ်"
+  },
+  {
+    "id": 846,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "涂点果酱。",
+    "burmese": "ယို သုတ်လိုက်။",
+    "xieyin": "ထူတျဲန် ကော်ကျန့်"
+  },
+  {
+    "id": 847,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "还有牛奶吗？",
+    "burmese": "နွားနို့ ရှိသေးလား။",
+    "xieyin": "ဟိုင်ယို နျူနိုင်း မ"
+  },
+  {
+    "id": 848,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "喝完了，还没买。",
+    "burmese": "ကုန်သွားပြီ၊ မဝယ်ရသေးဘူး။",
+    "xieyin": "ဟောဝမ် လယ်၊ ဟိုင်မေး မိုင်"
+  },
+  {
+    "id": 849,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "别光喝水。",
+    "burmese": "ရေချည်းပဲ သောက်မနေနဲ့။",
+    "xieyin": "ပျဲ ကွမ်း ဟောရွှေ"
+  },
+  {
+    "id": 850,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "路上买个三明治。",
+    "burmese": "လမ်းမှာ ဆန်းဒဝစ်ချ် ဝင်ဝယ်လိုက်မယ်။",
+    "xieyin": "လုရှန် မိုင်ကော့ ဆန်းမင်းဂျိ"
+  },
+  {
+    "id": 851,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "这豆浆太甜了。",
+    "burmese": "ဒီပဲနို့က အရမ်းချိုတယ်။",
+    "xieyin": "ကျဲ့ တို့ကျမ်း ထိုက်ထျန် လယ်"
+  },
+  {
+    "id": 852,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "没放糖吗？",
+    "burmese": "သကြား မထည့်ထားဘူးလား။",
+    "xieyin": "မေးဖောင့် ထန် မ"
+  },
+  {
+    "id": 853,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "咸豆腐脑。",
+    "burmese": "တိုဖူးပျော့ (အငန်)။",
+    "xieyin": "ရှန် တို့ဖူးနောင်"
+  },
+  {
+    "id": 854,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "吃快点，要迟到了。",
+    "burmese": "မြန်မြန်စား၊ နောက်ကျတော့မယ်။",
+    "xieyin": "ချီး ခွိုက်တျဲန်၊ ယောင့် ခြီတောက် လယ်"
+  },
+  {
+    "id": 855,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "别噎着。",
+    "burmese": "နင်မယ်နော်။",
+    "xieyin": "ပျဲ ယဲကျက"
+  },
+  {
+    "id": 856,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "剩下的你吃了。",
+    "burmese": "ကျန်တာ မင်းစားလိုက်တော့။",
+    "xieyin": "ရှန့်ရှာ့ သဲ့ နီချီး လယ်"
+  },
+  {
+    "id": 857,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "别浪费粮食。",
+    "burmese": "အစားအသောက် အလဟဿ မဖြစ်စေနဲ့။",
+    "xieyin": "ပျဲ လောင့်ဖေ့ လျန်ရှီ"
+  },
+  {
+    "id": 858,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "这早饭挺丰盛。",
+    "burmese": "မနက်စာက စုံလင်လှချည်လား။",
+    "xieyin": "ကျဲ့ ဇောင်ဖန့် ထင် ဖုန်းရှန့်"
+  },
+  {
+    "id": 859,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "早上得吃好。",
+    "burmese": "မနက်စာကို ကောင်းကောင်းစားရတယ်။",
+    "xieyin": "ဇောင်ရှန် သေ ချီးဟောင်"
+  },
+  {
+    "id": 860,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "还没到饭点。",
+    "burmese": "ထမင်းစားချိန် မရောက်သေးဘူး။",
+    "xieyin": "ဟိုင်မေး တောက် ဖန့်တျဲန်"
+  },
+  {
+    "id": 861,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "闻着真香。",
+    "burmese": "အနံ့ မွှေးနေတာပဲ။",
+    "xieyin": "ဝန်ကျက ဂျမ်းရှန်း"
+  },
+  {
+    "id": 862,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "想吃油茶了。",
+    "burmese": "ဆီထမင်း စားချင်တယ်။ (油茶 = local variation, adjusted to local food or literal translation)",
+    "xieyin": "ရှန်ချီး ယိုချာ လယ်"
+  },
+  {
+    "id": 863,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "去路边摊买。",
+    "burmese": "လမ်းဘေးဆိုင်မှာ သွားဝယ်မယ်။",
+    "xieyin": "ချွိ လုပျန်းထန်း မိုင်"
+  },
+  {
+    "id": 864,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "这家店人多。",
+    "burmese": "ဒီဆိုင် လူများတယ်။",
+    "xieyin": "ကျဲ့ကျားတျန့် ရန်တွော"
+  },
+  {
+    "id": 865,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "还要排队。",
+    "burmese": "တန်းစီရဦးမယ်။",
+    "xieyin": "ဟိုင်ယောင့် ဖိုင်တွေ့"
+  },
+  {
+    "id": 866,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "换一家买吧。",
+    "burmese": "တခြားဆိုင် သွားဝယ်ရအောင်။",
+    "xieyin": "ဟွန့် ယီကျား မိုင် ပါ"
+  },
+  {
+    "id": 867,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "没零钱，扫码。",
+    "burmese": "အကြွေမရှိဘူး၊ ဖုန်းနဲ့ရှင်းမယ်။",
+    "xieyin": "မေး လင်းချန်၊ ဆောင်မာ"
+  },
+  {
+    "id": 868,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "记得拿吸管。",
+    "burmese": "ပိုက်ယူဖို့ မမေ့နဲ့။",
+    "xieyin": "ကျိသဲ့ နာ ရှီးကွမ်"
+  },
+  {
+    "id": 869,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "还没加辣。",
+    "burmese": "အစပ် မထည့်ရသေးဘူး။",
+    "xieyin": "ဟိုင်မေး ကျားလား"
+  },
+  {
+    "id": 870,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "多放点葱花。",
+    "burmese": "ကြက်သွန်မြိတ် များများ ထည့်ပေး။",
+    "xieyin": "တွောဖောင့် တျဲန် ချုန်းဟွား"
+  },
+  {
+    "id": 871,
+    "category": "一天生活",
+    "sub": "早餐时刻",
+    "chinese": "走吧，吃饱了。",
+    "burmese": "သွားမယ်၊ ဗိုက်ဝပြီ။",
+    "xieyin": "ဇǒu ပါ၊ ချီးပေါက် လယ်"
+  },
+  {
+    "id": 872,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "我要出门了。",
+    "burmese": "ကျွန်တော် သွားတော့မယ်။",
+    "xieyin": "ဝေါ် ယောင့် ချူးမန် လယ်"
+  },
+  {
+    "id": 873,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "先走了。",
+    "burmese": "သွားနှင့်ပြီ။",
+    "xieyin": "ရှန်း ဇǒu လယ်"
+  },
+  {
+    "id": 874,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "路上小心。",
+    "burmese": "လမ်းမှာ ဂရုစိုက်နော်။",
+    "xieyin": "လုရှန် ရှောင်ရှင်း"
+  },
+  {
+    "id": 875,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "注意安全。",
+    "burmese": "ဘေးကင်းအောင် ဂရုစိုက်ပါ။",
+    "xieyin": "ကျူးယိ အန်ချွမ်း"
+  },
+  {
+    "id": 876,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "别忘了带钥匙。",
+    "burmese": "သော့ယူဖို့ မမေ့နဲ့နော်။",
+    "xieyin": "ပျဲ ဝေါင့်လယ် တိုင်း ယော့ရှီ"
+  },
+  {
+    "id": 877,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "早点回来。",
+    "burmese": "စောစော ပြန်လာနော်။",
+    "xieyin": "ဇောင်တျဲန် ဟွေးလိုင်"
+  },
+  {
+    "id": 878,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "门关了吗？",
+    "burmese": "တံခါး ပိတ်ခဲ့လား။",
+    "xieyin": "မန် ကွမ်းလယ် မ"
+  },
+  {
+    "id": 879,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "关好了。",
+    "burmese": "ပိတ်လိုက်ပါပြီ။",
+    "xieyin": "ကွမ်း ဟောင်လယ်"
+  },
+  {
+    "id": 880,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "我走了，拜拜。",
+    "burmese": "သွားပြီနော်၊ တာ့တာ။",
+    "xieyin": "ဝေါ် ဇǒu လယ်၊ ပိုင်ပိုင်"
+  },
+  {
+    "id": 881,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "记得锁门。",
+    "burmese": "တံခါး သော့ခတ်ဖို့ သတိရနော်။",
+    "xieyin": "ကျိသဲ့ ဆော်မန်"
+  },
+  {
+    "id": 882,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "垃圾别忘了扔。",
+    "burmese": "အမှိုက်ပစ်ဖို့ မမေ့နဲ့။",
+    "xieyin": "လာဂျီး ပျဲ ဝေါင့်လယ် ရန်း"
+  },
+  {
+    "id": 883,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "路上慢点骑。",
+    "burmese": "ဖြည်းဖြည်း မောင်းသွားနော်။",
+    "xieyin": "လုရှန် မန့်တျဲန် ချီ"
+  },
+  {
+    "id": 884,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "早点回来吃饭。",
+    "burmese": "ထမင်းစားဖို့ စောစောပြန်လာ။",
+    "xieyin": "ဇောင်တျဲန် ဟွေးလိုင် ချီးဖန့်"
+  },
+  {
+    "id": 885,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "我走了，不用等我。",
+    "burmese": "သွားပြီ၊ စောင့်မနေနဲ့တော့။",
+    "xieyin": "ဝေါ် ဇǒu လယ်၊ ပုယောင့် เติန့် ဝေါ်"
+  },
+  {
+    "id": 886,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "钥匙还在门上。",
+    "burmese": "သော့ တံခါးမှာ တန်းလန်းကြီး။",
+    "xieyin": "ယော့ရှီ ဟိုင်ဇိုက် မန်ရှန်"
+  },
+  {
+    "id": 887,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "等一下，我忘拿东西了。",
+    "burmese": "ခဏလေး၊ ပစ္စည်းမေ့ကျန်ခဲ့လို့။",
+    "xieyin": "เติန့်ယီရှာ့၊ ဝေါ် ဝေါင့်နာ တုန်းရှီး လယ်"
+  },
+  {
+    "id": 888,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "电梯来了。",
+    "burmese": "ဓာတ်လှေကား လာပြီ။",
+    "xieyin": "တျန့်ထီး လိုင်လယ်"
+  },
+  {
+    "id": 889,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "走楼梯吧。",
+    "burmese": "လှေကားကပဲ ဆင်းရအောင်။",
+    "xieyin": "ဇǒu လောင်ထီး ပါ"
+  },
+  {
+    "id": 890,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "别在门口站着。",
+    "burmese": "တံခါးဝမှာ ရပ်မနေနဲ့။",
+    "xieyin": "ပျဲ ဇိုက် မန်ခို ကျန့်ကျက"
+  },
+  {
+    "id": 891,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "还没穿鞋呢。",
+    "burmese": "ဖိနပ်တောင် မစီးရသေးဘူး။",
+    "xieyin": "ဟိုင်မေး ချွမ်းရှဲ နက"
+  },
+  {
+    "id": 892,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "帮我开下门。",
+    "burmese": "တံခါးလေး ဖွင့်ပေးပါဦး။",
+    "xieyin": "ပန်းဝေါ် ခိုင်းရှာ့ မန်"
+  },
+  {
+    "id": 893,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "回头见。",
+    "burmese": "နောက်မှ တွေ့မယ်။",
+    "xieyin": "ဟွေးထို ကျန့်"
+  },
+  {
+    "id": 894,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "下班我去接你。",
+    "burmese": "အလုပ်ဆင်းရင် လာကြိုမယ်။",
+    "xieyin": "ရှာ့ပန်း ဝေါ် ချွိကျဲ နီ"
+  },
+  {
+    "id": 895,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "别忘了关窗。",
+    "burmese": "ပြတင်းပေါက်ပိတ်ဖို့ မမေ့နဲ့။",
+    "xieyin": "ပျဲ ဝေါင့်လယ် ကွမ်းချွမ်း"
+  },
+  {
+    "id": 896,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "灯都关了吗？",
+    "burmese": "မီးတွေ ပိတ်ခဲ့လား။",
+    "xieyin": "တိန်း တိုး ကွမ်းလယ် မ"
+  },
+  {
+    "id": 897,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "煤气关了没？",
+    "burmese": "ဂက်စ် ပိတ်ခဲ့လား။",
+    "xieyin": "မေချိ ကွမ်းလယ် မေး"
+  },
+  {
+    "id": 898,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "把防盗门锁好。",
+    "burmese": "သံပန်းတံခါး သေချာခတ်။",
+    "xieyin": "ပါ ဖောင်တောင့်မန် ဆော်ဟောင်"
+  },
+  {
+    "id": 899,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "邻居打个招呼。",
+    "burmese": "အိမ်နီးချင်းကို နှုတ်ဆက်လိုက်ဦး။",
+    "xieyin": "လင်ကျူး တာကော့ ကျောင်းဟူး"
+  },
+  {
+    "id": 900,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "这一大早人真多。",
+    "burmese": "မနက်စောစောစီးစီး လူများလိုက်တာ။",
+    "xieyin": "ကျဲ့ ယီတာ့ဇောင် ရန် ဂျမ်းတွော"
+  },
+  {
+    "id": 901,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "风真凉快。",
+    "burmese": "လေတိုက်တာ အေးနေတာပဲ။",
+    "xieyin": "ဖုန်း ဂျမ်း လျောင်ခွိုက်"
+  },
+  {
+    "id": 902,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "太阳出来了。",
+    "burmese": "နေထွက်လာပြီ။",
+    "xieyin": "ထိုက်ယန် ချူးလိုင် လယ်"
+  },
+  {
+    "id": 903,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "快点跑，赶不上车了。",
+    "burmese": "မြန်မြန်ပြေး၊ ကားမမီဘဲ နေမယ်။",
+    "xieyin": "ခွိုက်တျဲန် ဖောင်၊ ကန်ပုရှန့် ချော လယ်"
+  },
+  {
+    "id": 904,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "手机忘带了，快回去拿。",
+    "burmese": "ဖုန်းကျန်ခဲ့ပြီ၊ ပြန်ပြေးယူလိုက်ဦး။",
+    "xieyin": "ရှိုဂျီး ဝေါင့်တိုင်း လယ်၊ ခွိုက် ဟွေးချွိ နာ"
+  },
+  {
+    "id": 905,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "我在楼下等你。",
+    "burmese": "အောက်ထပ်မှာ စောင့်နေမယ်။",
+    "xieyin": "ဝေါ် ဇိုက် လောင်ရှာ့ เติန့် နီ"
+  },
+  {
+    "id": 906,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "就在这儿别动。",
+    "burmese": "ဒီနားမှာပဲ နေနော်၊ ဘယ်မှမသွားနဲ့။",
+    "xieyin": "ကျို့ ဇိုက် ကျဲ့ရ် ပျဲတုံ့"
+  },
+  {
+    "id": 907,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "哎呀，还是忘了。",
+    "burmese": "ဟာ... မေ့ပြန်ပြီ။",
+    "xieyin": "အိုက်ယား၊ ဟိုင်ရှေ့ ဝေါင့်လယ်"
+  },
+  {
+    "id": 908,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "算了，不拿了。",
+    "burmese": "ထားလိုက်တော့၊ မယူတော့ဘူး။",
+    "xieyin": "ဆွန့်လယ်၊ ပုနာ လယ်"
+  },
+  {
+    "id": 909,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "别急。",
+    "burmese": "မလောပါနဲ့။",
+    "xieyin": "ပျဲဂျီး"
+  },
+  {
+    "id": 910,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "时间还够。",
+    "burmese": "အချိန်မီပါသေးတယ်။",
+    "xieyin": "ရှီကျန်း ဟိုင်ကို့"
+  },
+  {
+    "id": 911,
+    "category": "一天生活",
+    "sub": "出门离家",
+    "chinese": "走起。",
+    "burmese": "သွားကြစို့။",
+    "xieyin": "ဇǒu ချီ"
+  },
+  {
+    "id": 912,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "今天堵吗？",
+    "burmese": "ဒီနေ့ ကားပိတ်လား။",
+    "xieyin": "ကျင်းထျန်း တူ မ"
+  },
+  {
+    "id": 913,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "有点堵。",
+    "burmese": "နည်းနည်း ပိတ်တယ်။",
+    "xieyin": "ယိုတျဲန် တူ"
+  },
+  {
+    "id": 914,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "特别堵。",
+    "burmese": "အရမ်း ပိတ်တယ်။",
+    "xieyin": "ထဲ့ပျဲ တူ"
+  },
+  {
+    "id": 915,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "坐公交。",
+    "burmese": "ဘတ်စ်ကား စီးမယ်။",
+    "xieyin": "ဇွေ့ ကုန်းကျောင်း"
+  },
+  {
+    "id": 916,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "坐地铁。",
+    "burmese": "မြေအောက်ရထား စီးမယ်။",
+    "xieyin": "ဇွေ့ တီးထျဲ့"
+  },
+  {
+    "id": 917,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "人太多了。",
+    "burmese": "လူတွေ အရမ်းများတာပဲ။",
+    "xieyin": "ရန် ထိုက်တွော လယ်"
+  },
+  {
+    "id": 918,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "挤死了。",
+    "burmese": "ကျပ်လိုက်တာ။",
+    "xieyin": "ဂျီ စီ လယ်"
+  },
+  {
+    "id": 919,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "没座位。",
+    "burmese": "ထိုင်ခုံ မရှိဘူး။",
+    "xieyin": "မေး ဇွေ့ဝေ့"
+  },
+  {
+    "id": 920,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "站着吧。",
+    "burmese": "မတ်တတ်ရပ်လိုက်မယ်။",
+    "xieyin": "ကျန့်ကျက ပါ"
+  },
+  {
+    "id": 921,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "快迟到了。",
+    "burmese": "နောက်ကျတော့မယ်။",
+    "xieyin": "ခွိုက် ခြီတောက် လယ်"
+  },
+  {
+    "id": 922,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "还来得及。",
+    "burmese": "မီပါသေးတယ်။",
+    "xieyin": "ဟိုင် လိုင်သဲ့ဂျီ"
+  },
+  {
+    "id": 923,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "到了没？",
+    "burmese": "ရောက်ပြီလား။",
+    "xieyin": "တောက်လယ် မေး"
+  },
+  {
+    "id": 924,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "快到了。",
+    "burmese": "ရောက်တော့မယ်။",
+    "xieyin": "ခွိုက်တောက် လယ်"
+  },
+  {
+    "id": 925,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "到公司了。",
+    "burmese": "ရုံး ရောက်ပြီ။",
+    "xieyin": "တောက် ကုန်းဆီး လယ်"
+  },
+  {
+    "id": 926,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "到学校了。",
+    "burmese": "ကျောင်း ရောက်ပြီ။",
+    "xieyin": "တောက် ရွှယ်ရှောင့် လယ်"
+  },
+  {
+    "id": 927,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "在等公交呢。",
+    "burmese": "ဘတ်စ်ကား စောင့်နေတာ။",
+    "xieyin": "ဇိုက် เติန့် ကုန်းကျောင်း နက"
+  },
+  {
+    "id": 928,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "公交来了，快走。",
+    "burmese": "ကားလာပြီ၊ မြန်မြန်သွား။",
+    "xieyin": "ကုန်းကျောင်း လိုင်လယ်၊ ခွိုက် ဇǒu"
+  },
+  {
+    "id": 929,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "有没有座位？",
+    "burmese": "ထိုင်ခုံ ရလား။",
+    "xieyin": "ယိုမေးယို ဇွေ့ဝေ့"
+  },
+  {
+    "id": 930,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "没有抢到座位。",
+    "burmese": "ထိုင်ခုံ မလုလိုက်နိုင်ဘူး။",
+    "xieyin": "မေးယို ချǎngတောက် ဇွေ့ဝေ့"
+  },
+  {
+    "id": 931,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "没有位置了。",
+    "burmese": "နေရာ မရှိတော့ဘူး။",
+    "xieyin": "မေးယို ဝေ့ကျိ လယ်"
+  },
+  {
+    "id": 932,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "还有几站？",
+    "burmese": "ဘယ်နှမှတ်တိုင် လိုသေးလဲ။",
+    "xieyin": "ဟိုင်ယို ကျီကျန့်"
+  },
+  {
+    "id": 933,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "下一站就到。",
+    "burmese": "နောက်တစ်မှတ်တိုင်ဆို ရောက်ပြီ။",
+    "xieyin": "ရှာ့ယီကျန့် ကျို့တောက်"
+  },
+  {
+    "id": 934,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "今天没堵车。",
+    "burmese": "ဒီနေ့ ကားမပိတ်ဘူး။",
+    "xieyin": "ကျင်းထျန်း မေး တူချော"
+  },
+  {
+    "id": 935,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "打车吧，来不及了。",
+    "burmese": "တက္ကစီပဲ စီးရအောင်၊ နောက်ကျနေပြီ။",
+    "xieyin": "တာချော ပါ၊ လိုင်ပုဂျီ လယ်"
+  },
+  {
+    "id": 936,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "骑车快点。",
+    "burmese": "ဆိုင်ကယ် မြန်မြန်မောင်း။",
+    "xieyin": "ချီချော ခွိုက်တျဲန်"
+  },
+  {
+    "id": 937,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "师傅，走不走？",
+    "burmese": "ဆရာရေ.. သွားမှာလား။",
+    "xieyin": "ရှီးဖု၊ ဇǒu ပု ဇǒu"
+  },
+  {
+    "id": 938,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "就在这儿停。",
+    "burmese": "ဒီနားမှာ ရပ်ပေးပါ။",
+    "xieyin": "ကျို့ ဇိုက် ကျဲ့ရ် ထင်း"
+  },
+  {
+    "id": 939,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "往里挤一挤。",
+    "burmese": "အထဲကို နည်းနည်း တိုးပေးကြပါ။",
+    "xieyin": "ဝမ်လီ ဂျီယီဂျီ"
+  },
+  {
+    "id": 940,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "谁踩我脚了。",
+    "burmese": "ဘယ်သူ ခြေထောက် လာနင်းတာလဲ။",
+    "xieyin": "ရွှေ ခြိုင် ဝေါ်ကျောင် လယ်"
+  },
+  {
+    "id": 941,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "别挤我。",
+    "burmese": "လာမတိုးနဲ့။",
+    "xieyin": "ပျဲ ဂျီ ဝေါ်"
+  },
+  {
+    "id": 942,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "师傅开下后门。",
+    "burmese": "ဆရာရေ နောက်တံခါး ဖွင့်ပေးပါ။",
+    "xieyin": "ရှီးဖု ခိုင်းရှာ့ ဟို့မန်"
+  },
+  {
+    "id": 943,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "下车请注意。",
+    "burmese": "ကားဆင်းရင် ဂရုစိုက်ပါ။",
+    "xieyin": "ရှာ့ချော ချင်း ကျူးယိ"
+  },
+  {
+    "id": 944,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "还没到站呢。",
+    "burmese": "မှတ်တိုင် မရောက်သေးဘူး။",
+    "xieyin": "ဟိုင်မေး တောက်ကျန့် နက"
+  },
+  {
+    "id": 945,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "坐反了。",
+    "burmese": "ကားမှားစီးမိပြီ။ (ဘက်မှားစီးမိပြီ)",
+    "xieyin": "ဇွေ့ဖန် လယ်"
+  },
+  {
+    "id": 946,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "快下车，换乘。",
+    "burmese": "မြန်မြန်ဆင်း၊ ကားပြောင်းစီးရမယ်။",
+    "xieyin": "ခွိုက် ရှာ့ချော၊ ဟွန့်ချန်"
+  },
+  {
+    "id": 947,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "地铁卡没钱了。",
+    "burmese": "ရထားကဒ် ပိုက်ဆံကုန်သွားပြီ။",
+    "xieyin": "တီးထျဲ့ခါ မေးချန် လယ်"
+  },
+  {
+    "id": 948,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "帮我充点钱。",
+    "burmese": "ပိုက်ဆံ ကူဖြည့်ပေးပါဦး။",
+    "xieyin": "ပန်းဝေါ် ချုန်းတျဲန် ချန်"
+  },
+  {
+    "id": 949,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "手机扫码进站。",
+    "burmese": "ဖုန်းနဲ့ စကင်ဖတ်ပြီး ဝင်။",
+    "xieyin": "ရှိုဂျီး ဆောင်မာ ကျင့်ကျန့်"
+  },
+  {
+    "id": 950,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "别挡在门口。",
+    "burmese": "တံခါးဝမှာ ပိတ်မရပ်နဲ့။",
+    "xieyin": "ပျဲ တန် ဇိုက် မန်ခို"
+  },
+  {
+    "id": 951,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "还有空位吗？",
+    "burmese": "နေရာလွတ် ရှိသေးလား။",
+    "xieyin": "ဟိုင်ယို ခုံဝေ့ မ"
+  },
+  {
+    "id": 952,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "把包背在前面。",
+    "burmese": "အိတ်ကို အရှေ့မှာ လွယ်ထား။",
+    "xieyin": "ပါ ပေါက် ပေ့ ဇိုက် ချန်မျန့်"
+  },
+  {
+    "id": 953,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "别睡着了，坐过站。",
+    "burmese": "အိပ်မပျော်စေနဲ့၊ မှတ်တိုင် လွန်သွားမယ်။",
+    "xieyin": "ပျဲ ရွှေ့ကျောင် လယ်၊ ဇွေ့ ကောကျန့်"
+  },
+  {
+    "id": 954,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "信号不好。",
+    "burmese": "လိုင်းမကောင်းဘူး။",
+    "xieyin": "ရှင်းဟောင့် ပုဟောင်"
+  },
+  {
+    "id": 955,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "视频卡住了。",
+    "burmese": "ဗီဒီယို ထစ်နေတယ်။",
+    "xieyin": "ရှေ့ဖင်း ခါကျု့ လယ်"
+  },
+  {
+    "id": 956,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "师傅，快点开。",
+    "burmese": "ဆရာရေ မြန်မြန်မောင်းပေးပါ။",
+    "xieyin": "ရှီးဖု၊ ခွိုက်တျဲန် ခိုင်း"
+  },
+  {
+    "id": 957,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "绕路了吗？",
+    "burmese": "လမ်းပတ်မောင်းနေတာလား။",
+    "xieyin": "ရောက်လု လယ် မ"
+  },
+  {
+    "id": 958,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "这条路不堵。",
+    "burmese": "ဒီလမ်း ကားမပိတ်ဘူး။",
+    "xieyin": "ကျဲ့ထျောင်လု ပုတူ"
+  },
+  {
+    "id": 959,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "到了叫我一声。",
+    "burmese": "ရောက်ရင် ပြောပါဦး။",
+    "xieyin": "တောက်လယ် ကျောင့်ဝေါ် ယီရှမ်း"
+  },
+  {
+    "id": 960,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "谢谢师傅。",
+    "burmese": "ကျေးဇူးပဲ ဆရာ။",
+    "xieyin": "ရှဲ့ရှဲ့ ရှီးဖု"
+  },
+  {
+    "id": 961,
+    "category": "一天生活",
+    "sub": "交通/通勤",
+    "chinese": "慢走。",
+    "burmese": "ဂရုစိုက်ပြန်နော်။",
+    "xieyin": "မန့်ဇǒu"
+  },
+  {
+    "id": 962,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "忙不忙？",
+    "burmese": "အလုပ်ရှုပ်လား။",
+    "xieyin": "မောင် ပု မောင်"
+  },
+  {
+    "id": 963,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "挺忙的。",
+    "burmese": "တော်တော် အလုပ်ရှုပ်တယ်။",
+    "xieyin": "ထင်မောင် သဲ့"
+  },
+  {
+    "id": 964,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "特别忙。",
+    "burmese": "အရမ်း အလုပ်ရှုပ်တယ်။",
+    "xieyin": "ထဲ့ပျဲ မောင်"
+  },
+  {
+    "id": 965,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "累不累？",
+    "burmese": "ပင်ပန်းလား။",
+    "xieyin": "လေ့ ပု လေ့"
+  },
+  {
+    "id": 966,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "有点累。",
+    "burmese": "နည်းနည်း ပင်ပန်းတယ်။",
+    "xieyin": "ယိုတျဲန် လေ့"
+  },
+  {
+    "id": 967,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "累死了。",
+    "burmese": "ပင်ပန်းလွန်းလို့ သေတော့မယ်။",
+    "xieyin": "လေ့ စီ လယ်"
+  },
+  {
+    "id": 968,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "事情多不多？",
+    "burmese": "အလုပ်တွေ များလား။",
+    "xieyin": "ရှေ့ချင်း တွော ပု တွော"
+  },
+  {
+    "id": 969,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "太多了。",
+    "burmese": "အရမ်း များတယ်။",
+    "xieyin": "ထိုက်တွော လယ်"
+  },
+  {
+    "id": 970,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "先忙一下。",
+    "burmese": "အလုပ်လုပ်လိုက်ဦးမယ်။",
+    "xieyin": "ရှန်း မောင် ယီရှာ့"
+  },
+  {
+    "id": 971,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "等会儿说。",
+    "burmese": "ခဏနေမှ ပြောမယ်။",
+    "xieyin": "เติန့်ဟွေ့ရ် ရွှော"
+  },
+  {
+    "id": 972,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "有点忙，等会吧。",
+    "burmese": "နည်းနည်း ရှုပ်နေလို့၊ ခဏနေမှနော်။",
+    "xieyin": "ယိုတျဲန် မောင်၊ เติန့်ဟွေ့ ပါ"
+  },
+  {
+    "id": 973,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "不忙，怎么了？",
+    "burmese": "မရှုပ်ပါဘူး၊ ဘာဖြစ်လို့လဲ။",
+    "xieyin": "ပုမောင်၊ ဇန်မ လယ်"
+  },
+  {
+    "id": 974,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "累死我了，先歇会。",
+    "burmese": "ပင်ပန်းလိုက်တာ၊ ခဏ နားလိုက်ဦးမယ်။",
+    "xieyin": "လေ့ စီ ဝေါ် လယ်၊ ရှန်း ရှဲဟွေ့"
+  },
+  {
+    "id": 975,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "饿了，吃点东西。",
+    "burmese": "ဗိုက်ဆာပြီ၊ မုန့်စားလိုက်ဦးမယ်။",
+    "xieyin": "အဲ့လယ်၊ ချီးတျဲန် တုန်းရှီး"
+  },
+  {
+    "id": 976,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "渴了，喝点水。",
+    "burmese": "ရေဆာပြီ၊ ရေသောက်လိုက်ဦးမယ်။",
+    "xieyin": "ခယ်လယ်၊ ဟောတျဲန် ရွှေ"
+  },
+  {
+    "id": 977,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "没事干，玩手机。",
+    "burmese": "လုပ်စရာမရှိလို့ ဖုန်းထိုင်ပွတ်နေတာ။",
+    "xieyin": "မေးရှေ့ ကန့်၊ ဝမ် ရှိုဂျီး"
+  },
+  {
+    "id": 978,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "赶紧干活，别偷懒。",
+    "burmese": "အလုပ် မြန်မြန်လုပ်၊ ခိုမနေနဲ့။",
+    "xieyin": "ကန်ကျิ่น ကန့်ဟော်၊ ပျဲ ထိုးလန်"
+  },
+  {
+    "id": 979,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "老板来了，快干活。",
+    "burmese": "သူဌေးလာပြီ၊ အလုပ်လုပ်ကြ။",
+    "xieyin": "လောင်ပန် လိုင်လယ်၊ ခွိုက် ကန့်ဟော်"
+  },
+  {
+    "id": 980,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "这个怎么弄？",
+    "burmese": "ဒါ ဘယ်လို လုပ်ရလဲ။",
+    "xieyin": "ကျဲ့ကော့ ဇန်မ နုံ့"
+  },
+  {
+    "id": 981,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "我不会。",
+    "burmese": "ကျွန်တော် မလုပ်တတ်ဘူး။",
+    "xieyin": "ဝေါ် ပုဟွေး"
+  },
+  {
+    "id": 982,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "还没做完。",
+    "burmese": "လုပ်လို့ မပြီးသေးဘူး။",
+    "xieyin": "ဟိုင်မေး ဇော့ဝမ်"
+  },
+  {
+    "id": 983,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "帮我一下。",
+    "burmese": "ကူပါဦး။",
+    "xieyin": "ပန်းဝေါ် ယီရှာ့"
+  },
+  {
+    "id": 984,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "把这个搬走。",
+    "burmese": "ဒါလေး ရွှေ့ပေးပါ။",
+    "xieyin": "ပါ ကျဲ့ကော့ ပန်းဇǒu"
+  },
+  {
+    "id": 985,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "开个会吧。",
+    "burmese": "အစည်းအဝေး လုပ်ရအောင်။",
+    "xieyin": "ခိုင်းကော့ ဟွေး ပါ"
+  },
+  {
+    "id": 986,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "都到齐了吗？",
+    "burmese": "လူစုံပြီလား။",
+    "xieyin": "တိုး တောက်ချီ လယ် မ"
+  },
+  {
+    "id": 987,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "请假条写了吗？",
+    "burmese": "ခွင့်စာ ရေးပြီးပြီလား။",
+    "xieyin": "ချင်းကျားထျောင် ရှယ်လယ် မ"
+  },
+  {
+    "id": 988,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "什么时候休息？",
+    "burmese": "ဘယ်တော့ နားမှာလဲ။",
+    "xieyin": "ရှင်မ ရှီဟို့ ရှူးရှီ"
+  },
+  {
+    "id": 989,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "什么时候发工资？",
+    "burmese": "လစာ ဘယ်တော့ ထုတ်မလဲ။",
+    "xieyin": "ရှင်မ ရှီဟို့ ဖား ကုန်းဇီး"
+  },
+  {
+    "id": 990,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "还没到账。",
+    "burmese": "ပိုက်ဆံ မဝင်သေးဘူး။",
+    "xieyin": "ဟိုင်မေး တောက်ကျောင့်"
+  },
+  {
+    "id": 991,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "活儿真多。",
+    "burmese": "အလုပ်တွေကလည်း များလိုက်တာ။",
+    "xieyin": "ဟော်ရ် ဂျမ်းတွော"
+  },
+  {
+    "id": 992,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "手酸了。",
+    "burmese": "လက်တွေ ညောင်းနေပြီ။",
+    "xieyin": "ရှို ဆွမ်း လယ်"
+  },
+  {
+    "id": 993,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "站不住了。",
+    "burmese": "မတ်တတ် မရပ်နိုင်တော့ဘူး။",
+    "xieyin": "ကျန့်ပုကျု့ လယ်"
+  },
+  {
+    "id": 994,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "换班了。",
+    "burmese": "ဂျူတီ ချိန်းပြီ။",
+    "xieyin": "ဟွန့်ပန်း လယ်"
+  },
+  {
+    "id": 995,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "把东西收拾好。",
+    "burmese": "ပစ္စည်းတွေ သေချာသိမ်း။",
+    "xieyin": "ပါ တုန်းရှီး ရှိုးရှစ် ဟောင်"
+  },
+  {
+    "id": 996,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "还没搞定。",
+    "burmese": "မပြီးသေးဘူး။",
+    "xieyin": "ဟိုင်မေး ကောင်တင့်"
+  },
+  {
+    "id": 997,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "差不多了。",
+    "burmese": "ပြီးခါနီးပြီ။",
+    "xieyin": "ခြားပုတွော လယ်"
+  },
+  {
+    "id": 998,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "这样行吗？",
+    "burmese": "ဒီလိုဆို အဆင်ပြေလား။",
+    "xieyin": "ကျဲ့ယောင့် ရှင်း မ"
+  },
+  {
+    "id": 999,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "不太行，重做。",
+    "burmese": "သိပ်မဟန်ဘူး၊ ပြန်လုပ်။",
+    "xieyin": "ပုထိုက်ရှင်း၊ ခြုံဇော့"
+  },
+  {
+    "id": 1000,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "还没到下班时间。",
+    "burmese": "အလုပ်ဆင်းချိန် မရောက်သေးဘူး။",
+    "xieyin": "ဟိုင်မေး တောက် ရှာ့ပန်း ရှီကျန်း"
+  },
+  {
+    "id": 1001,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "困得不行了。",
+    "burmese": "အိပ်ငိုက်လွန်းလို့ မရတော့ဘူး။",
+    "xieyin": "ခွန့်သဲ့ ပုရှင်း လယ်"
+  },
+  {
+    "id": 1002,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "去洗手间抽根烟。",
+    "burmese": "အိမ်သာသွားပြီး ဆေးလိပ်တစ်လိပ်လောက် သောက်လိုက်ဦးမယ်။",
+    "xieyin": "ချွိ ရှီရှိုကျန်း ချိုးကန်းယန်း"
+  },
+  {
+    "id": 1003,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "别让人看见。",
+    "burmese": "သူများ မမြင်စေနဲ့။",
+    "xieyin": "ပျဲ ရန့်ရန် ခန့်ကျန့်"
+  },
+  {
+    "id": 1004,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "工资发了请吃饭。",
+    "burmese": "လစာထုတ်ရင် ထမင်းလိုက်ကျွေး။",
+    "xieyin": "ကုန်းဇီး ဖားလယ် ချင်း ချီးဖန့်"
+  },
+  {
+    "id": 1005,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "下周再请。",
+    "burmese": "နောက်တစ်ပတ်ကျမှ ကျွေးမယ်။",
+    "xieyin": "ရှာ့ကျိုး ဇိုက်ချင်း"
+  },
+  {
+    "id": 1006,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "没钱了，省着点。",
+    "burmese": "ပိုက်ဆံမရှိတော့ဘူး၊ ချွေတာဦးမှ။",
+    "xieyin": "မေးချန် လယ်၊ ရှန်ကျက တျဲန်"
+  },
+  {
+    "id": 1007,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "电脑卡了。",
+    "burmese": "ကွန်ပျူတာ ဟန်းနေတယ်။",
+    "xieyin": "တျန့်နောင် ခါ လယ်"
+  },
+  {
+    "id": 1008,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "没保存。",
+    "burmese": "Save မလုပ်လိုက်ရဘူး။",
+    "xieyin": "မေး ပေါက်ချွန်း"
+  },
+  {
+    "id": 1009,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "气死我了。",
+    "burmese": "ဒေါသထွက်လိုက်တာ။",
+    "xieyin": "ချိ စီ ဝေါ် လယ်"
+  },
+  {
+    "id": 1010,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "重新打。",
+    "burmese": "ပြန်ရိုက်ရတော့မယ်။",
+    "xieyin": "ခြုံရှင်း တာ"
+  },
+  {
+    "id": 1011,
+    "category": "一天生活",
+    "sub": "白天/干活",
+    "chinese": "还没干完，急什么。",
+    "burmese": "မပြီးသေးဘူး၊ ဘာလောနေတာလဲ။",
+    "xieyin": "ဟိုင်မေး ကန့်ဝမ်၊ ဂျီး ရှင်မ"
+  },
+  {
+    "id": 1012,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "下班了吗？",
+    "burmese": "အလုပ်ဆင်းပြီလား။",
+    "xieyin": "ရှာ့ပန်း လယ် မ"
+  },
+  {
+    "id": 1013,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "下班了。",
+    "burmese": "အလုပ်ဆင်းပြီ။",
+    "xieyin": "ရှာ့ပန်း လယ်"
+  },
+  {
+    "id": 1014,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "终于下班了。",
+    "burmese": "တော်ပါသေးရဲ့၊ အလုပ်ဆင်းရပြီ။",
+    "xieyin": "ကျုံးယွီ ရှာ့ပန်း လယ်"
+  },
+  {
+    "id": 1015,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "回家吧。",
+    "burmese": "အိမ်ပြန်ရအောင်။",
+    "xieyin": "ဟွေးကျား ပါ"
+  },
+  {
+    "id": 1016,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "路上堵不堵？",
+    "burmese": "လမ်းမှာ ကားပိတ်လား။",
+    "xieyin": "လုရှန် တူ ပု တူ"
+  },
+  {
+    "id": 1017,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "有点堵。",
+    "burmese": "နည်းနည်း ပိတ်တယ်။",
+    "xieyin": "ယိုတျဲန် တူ"
+  },
+  {
+    "id": 1018,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "到家了。",
+    "burmese": "အိမ်ရောက်ပြီ။",
+    "xieyin": "တောက်ကျား လယ်"
+  },
+  {
+    "id": 1019,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "好累啊。",
+    "burmese": "ပင်ပန်းလိုက်တာ။",
+    "xieyin": "ဟောင်လေ့ အာ"
+  },
+  {
+    "id": 1020,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "今晚加班吗？",
+    "burmese": "ဒီည အိုတီ (OT) ဆင်းရမလား။",
+    "xieyin": "ကျင်းဝမ် ကျားပန်း မ"
+  },
+  {
+    "id": 1021,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "不加班，准时走。",
+    "burmese": "မဆင်းဘူး၊ အချိန်မှန် ပြန်မယ်။",
+    "xieyin": "ပု ကျားပန်း၊ ကျွမ်ရှီ ဇǒu"
+  },
+  {
+    "id": 1022,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "今晚加班，晚点回。",
+    "burmese": "ဒီည အိုတီဆင်းရမယ်၊ နောက်ကျမှ ပြန်ရောက်မယ်။",
+    "xieyin": "ကျင်းဝမ် ကျားပန်း၊ ဝမ်တျဲန် ဟွေး"
+  },
+  {
+    "id": 1023,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "顺路一起走吧。",
+    "burmese": "လမ်းကြုံရင် အတူတူပြန်ရအောင်။",
+    "xieyin": "ရွှန့်လု ယီချီ ဇǒu ပါ"
+  },
+  {
+    "id": 1024,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "等我一下，马上好。",
+    "burmese": "ခဏစောင့်၊ ပြီးတော့မယ်။",
+    "xieyin": "เติန့်ဝေါ် ယီရှာ့၊ မာရှန် ဟောင်"
+  },
+  {
+    "id": 1025,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "终于可以回家了。",
+    "burmese": "အိမ်ပြန်ရတော့မယ်။",
+    "xieyin": "ကျုံးယွီ ခေါ်ယီ ဟွေးကျား လယ်"
+  },
+  {
+    "id": 1026,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "我去买菜，今晚去我家吃饭。",
+    "burmese": "ငါ ဈေးသွားဝယ်လိုက်မယ်၊ ဒီည ငါ့အိမ်လာစားလေ။",
+    "xieyin": "ဝေါ် ချွိ မိုင်ချိုက်၊ ကျင်းဝမ် ချွိ ဝေါ်ကျား ချီးဖန့်"
+  },
+  {
+    "id": 1027,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "今天不想做饭。",
+    "burmese": "ဒီနေ့ ထမင်းမချက်ချင်ဘူး။",
+    "xieyin": "ကျင်းထျန်း ပုရှန် ဇော့ဖန့်"
+  },
+  {
+    "id": 1028,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "吃饭了吗？",
+    "burmese": "ထမင်းစားပြီးပြီလား။",
+    "xieyin": "ချီးဖန့် လယ် မ"
+  },
+  {
+    "id": 1029,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "还没。",
+    "burmese": "မစားရသေးဘူး။",
+    "xieyin": "ဟိုင်မေး"
+  },
+  {
+    "id": 1030,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "吃什么？",
+    "burmese": "ဘာစားမလဲ။",
+    "xieyin": "ချီး ရှင်မ"
+  },
+  {
+    "id": 1031,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "做饭还是外卖？",
+    "burmese": "ချက်စားမလား၊ မှာစားမလား။",
+    "xieyin": "ဇော့ဖန့် ဟိုင်ရှေ့ ဝိုက်မိုက်"
+  },
+  {
+    "id": 1032,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "我来做。",
+    "burmese": "ကျွန်တော် ချက်လိုက်မယ်။",
+    "xieyin": "ဝေါ် လိုင်ဇော့"
+  },
+  {
+    "id": 1033,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "点外卖吧。",
+    "burmese": "ပါဆယ် (Delivery) ပဲ မှာစားလိုက်ရအောင်။",
+    "xieyin": "တျဲန် ဝိုက်မိုက် ပါ"
+  },
+  {
+    "id": 1034,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "好吃吗？",
+    "burmese": "စားကောင်းလား။",
+    "xieyin": "ဟောင်ချီး မ"
+  },
+  {
+    "id": 1035,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "挺好吃。",
+    "burmese": "တော်တော် စားကောင်းတယ်။",
+    "xieyin": "ထင် ဟောင်ချီး"
+  },
+  {
+    "id": 1036,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "有点咸。",
+    "burmese": "နည်းနည်း ငန်တယ်။",
+    "xieyin": "ယိုတျဲန် ရှန်"
+  },
+  {
+    "id": 1037,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "有点淡。",
+    "burmese": "နည်းနည်း ပေါ့တယ်။",
+    "xieyin": "ယိုတျဲန် တန့်"
+  },
+  {
+    "id": 1038,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "吃饱了。",
+    "burmese": "ဗိုက်ဝပြီ။",
+    "xieyin": "ချီးပေါက် လယ်"
+  },
+  {
+    "id": 1039,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "不吃了。",
+    "burmese": "မစားတော့ဘူး။",
+    "xieyin": "ပုချီး လယ်"
+  },
+  {
+    "id": 1040,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "饭做好了。",
+    "burmese": "ထမင်းချက်ပြီးပြီ။",
+    "xieyin": "ဖန့် ဇော့ဟောင် လယ်"
+  },
+  {
+    "id": 1041,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "炒个青菜吧。",
+    "burmese": "အရွက်ကြော် တစ်မယ်လောက် ကြော်လိုက်မယ်။",
+    "xieyin": "ချောင်ကော့ ချင်းချိုက် ပါ"
+  },
+  {
+    "id": 1042,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "肉炖好了，快尝尝。",
+    "burmese": "အသားနှပ် ထားတာ ရပြီ၊ မြည်းကြည့်။",
+    "xieyin": "ရို့ တွန် ဟောင်လယ်၊ ခွိုက် ခြံခြံ"
+  },
+  {
+    "id": 1043,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "太辣了，受不了。",
+    "burmese": "စပ်လွန်းလို့ မခံနိုင်တော့ဘူး။",
+    "xieyin": "ထိုက်လား လယ်၊ ရှို့ပုလျောင်"
+  },
+  {
+    "id": 1044,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "下次少放点辣。",
+    "burmese": "နောက်ခါကျရင် အစပ်လျှော့ထည့်။",
+    "xieyin": "ရှာ့ချိ ရှောင်ဖောင့် တျဲန် လား"
+  },
+  {
+    "id": 1045,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "你太能吃辣了。",
+    "burmese": "မင်းက အစပ် တော်တော်စားနိုင်တာပဲ။",
+    "xieyin": "နီ ထိုက်နိန် ချီးလား လယ်"
+  },
+  {
+    "id": 1046,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "喝啤酒吗？",
+    "burmese": "ဘီယာ သောက်မလား။",
+    "xieyin": "ဟော ဖီကျို မ"
+  },
+  {
+    "id": 1047,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "你要喝什么饮料？",
+    "burmese": "ဘာအချိုရည် သောက်မလဲ။",
+    "xieyin": "နီ ယောင့်ဟော ရှင်မ ယင်လျောင့်"
+  },
+  {
+    "id": 1048,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "给我一杯雪碧。",
+    "burmese": "Sprite တစ်ခွက် ပေးပါ။",
+    "xieyin": "ကေ့ဝေါ် ယီပေး ရွှယ်ပိ"
+  },
+  {
+    "id": 1049,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "谁洗碗。",
+    "burmese": "ဘယ်သူ ပန်းကန်ဆေးမလဲ။",
+    "xieyin": "ရွှေ ရှီဝမ်"
+  },
+  {
+    "id": 1050,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "吃完看会电视。",
+    "burmese": "စားပြီးရင် တီဗီ ခဏကြည့်မယ်။",
+    "xieyin": "ချီးဝမ် ခန့်ဟွေ့ တျန့်ရှေ့"
+  },
+  {
+    "id": 1051,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "没盐了，去买一袋。",
+    "burmese": "ဆားကုန်ပြီ၊ တစ်ထုပ် သွားဝယ်လိုက်။",
+    "xieyin": "မေးယန် လယ်၊ ချွိမိုင် ယီတိုက်"
+  },
+  {
+    "id": 1052,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "菜洗干净了吗？",
+    "burmese": "အရွက်တွေ စင်အောင်ဆေးပြီးပြီလား။",
+    "xieyin": "ချိုက် ရှီ ကန်းကျင့် လယ် မ"
+  },
+  {
+    "id": 1053,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "帮我剥个蒜。",
+    "burmese": "ကြက်သွန်ဖြူ ခွာပေးပါဦး။",
+    "xieyin": "ပန်းဝေါ် ပေါ ကော့ ဆွန့်"
+  },
+  {
+    "id": 1054,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "锅热了，倒油。",
+    "burmese": "အိုးပူပြီ၊ ဆီထည့်လိုက်တော့။",
+    "xieyin": "ကွော် ရဲ့လယ်၊ တောက်ယို"
+  },
+  {
+    "id": 1055,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "饭熟了没？",
+    "burmese": "ထမင်း ကျက်ပြီလား။",
+    "xieyin": "ဖန့် ရှူလယ် မေး"
+  },
+  {
+    "id": 1056,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "闻着挺香。",
+    "burmese": "အနံ့ မွှေးနေတာပဲ။",
+    "xieyin": "ဝန်ကျက ထင်ရှန်း"
+  },
+  {
+    "id": 1057,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "火开小点，要糊了。",
+    "burmese": "မီးလျှော့လိုက်ဦး၊ တူးတော့မယ်။",
+    "xieyin": "ဟွော် ခိုင်း ရှောင်တျဲန်၊ ယောင့်ဟူး လယ်"
+  },
+  {
+    "id": 1058,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "还有剩菜吗？",
+    "burmese": "ဟင်းကျန်သေးလား။",
+    "xieyin": "ဟိုင်ယို ရှန့်ချိုက် မ"
+  },
+  {
+    "id": 1059,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "别浪费，吃完它。",
+    "burmese": "နှမြောစရာကြီး၊ ကုန်အောင်စားလိုက်။",
+    "xieyin": "ပျဲ လောင့်ဖေ့၊ ချီးဝမ် ထာ"
+  },
+  {
+    "id": 1060,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "这鱼新鲜不？",
+    "burmese": "ဒီငါး လတ်ဆတ်ရဲ့လား။",
+    "xieyin": "ကျဲ့ယွီ ရှင်းရှန်း ပု"
+  },
+  {
+    "id": 1061,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "汤太淡了，加点盐。",
+    "burmese": "ဟင်းရည် ပေါ့လွန်းတယ်၊ ဆားနည်းနည်းထည့်။",
+    "xieyin": "ထန်း ထိုက်တန့် လယ်၊ ကျားတျဲန် ယန်"
+  },
+  {
+    "id": 1062,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "别动，我来切。",
+    "burmese": "မလုပ်နဲ့၊ ငါ လှီးလိုက်မယ်။",
+    "xieyin": "ပျဲတုံ့၊ ဝေါ် လိုင်ချဲ"
+  },
+  {
+    "id": 1063,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "碗还没洗呢。",
+    "burmese": "ပန်းကန် မဆေးရသေးဘူး။",
+    "xieyin": "ဝမ် ဟိုင်မေး ရှီ နက"
+  },
+  {
+    "id": 1064,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "抹布在哪儿？",
+    "burmese": "ရေစိုဝတ် ဘယ်မှာလဲ။",
+    "xieyin": "မာပု ဇိုက် နာရ်"
+  },
+  {
+    "id": 1065,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "厨房太乱了。",
+    "burmese": "မီးဖိုချောင် ရှုပ်ပွနေတာပဲ။",
+    "xieyin": "ချူးဖောင် ထိုက်လွန့် လယ်"
+  },
+  {
+    "id": 1066,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "快递到了，去取一下。",
+    "burmese": "ပါဆယ် ရောက်ပြီ၊ သွားယူလိုက်ပါဦး။",
+    "xieyin": "ခွိုက်တီး တောက်လယ်၊ ချွိ ချွီ ယီရှာ့"
+  },
+  {
+    "id": 1067,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "外卖放门口了。",
+    "burmese": "မှာထားတာ တံခါးဝမှာ ထားခဲ့ပြီတဲ့။",
+    "xieyin": "ဝိုက်မိုက် ဖောင့် မန်ခို လယ်"
+  },
+  {
+    "id": 1068,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "取件码多少？",
+    "burmese": "ပစ္စည်းယူရမယ့်ကုဒ်က ဘယ်လောက်လဲ။",
+    "xieyin": "ချွီကျန့်မာ တွောရှောင်"
+  },
+  {
+    "id": 1069,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "地址没写错吧。",
+    "burmese": "လိပ်စာ မှားမရေးထားဘူးမလား။",
+    "xieyin": "တီးကျီ မေးရှယ်ချွေ့ ပါ"
+  },
+  {
+    "id": 1070,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "外卖员打电话了。",
+    "burmese": "Delivery သမား ဖုန်းဆက်နေပြီ။",
+    "xieyin": "ဝိုက်မိုက်ယွမ် တာ တျန့်ဟွား လယ်"
+  },
+  {
+    "id": 1071,
+    "category": "一天生活",
+    "sub": "下班/晚餐/外卖",
+    "chinese": "下楼去拿。",
+    "burmese": "အောက်ထပ်ဆင်းပြီး သွားယူလိုက်။",
+    "xieyin": "ရှာ့လောင် ချွိ နာ"
+  },
+  {
+    "id": 1072,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "地脏了，去拖地。",
+    "burmese": "ကြမ်းပြင် ညစ်ပတ်နေပြီ၊ ကြမ်းတိုက်လိုက်ဦး။",
+    "xieyin": "တီး ဇောင်းလယ်၊ ချွိ ထွမ်းတီး"
+  },
+  {
+    "id": 1073,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "地有点脏了。",
+    "burmese": "ကြမ်းပြင် နည်းနည်း ညစ်ပတ်နေပြီ။",
+    "xieyin": "တီး ယိုတျဲန် ဇောင်း လယ်"
+  },
+  {
+    "id": 1074,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "帮我扫扫地。",
+    "burmese": "တံမြက်စည်း ကူလှည်းပေးပါဦး။",
+    "xieyin": "ပန်းဝေါ် ဆောင်ဆောင် တီး"
+  },
+  {
+    "id": 1075,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "衣服该洗了。",
+    "burmese": "အဝတ်တွေ လျှော်ရတော့မယ်။",
+    "xieyin": "ယီးဖု ကိုင်ရှီ လယ်"
+  },
+  {
+    "id": 1076,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "碗洗了没。",
+    "burmese": "ပန်းကန် ဆေးပြီးပြီလား။",
+    "xieyin": "ဝမ် ရှီလယ် မေး"
+  },
+  {
+    "id": 1077,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "去擦桌子。",
+    "burmese": "စားပွဲ သွားသုတ်လိုက်။",
+    "xieyin": "ချွိ ခြား ကျွမ်းဇ"
+  },
+  {
+    "id": 1078,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "垃圾满了，倒掉。",
+    "burmese": "အမှိုက်ပြည့်နေပြီ၊ သွားသွန်လိုက်။",
+    "xieyin": "လာဂျီး မန်လယ်၊ တောက်တယောက်"
+  },
+  {
+    "id": 1079,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "帮我递个抹布。",
+    "burmese": "ရေစိုဝတ် လှမ်းပေးပါဦး။",
+    "xieyin": "ပန်းဝေါ် တိကော့ မာပု"
+  },
+  {
+    "id": 1080,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "衣服干了没？",
+    "burmese": "အဝတ်တွေ ခြောက်ပြီလား။",
+    "xieyin": "ယီးဖု ကန်းလယ် မေး"
+  },
+  {
+    "id": 1081,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "该洗衣服了。",
+    "burmese": "အဝတ်လျှော်ရတော့မယ်။",
+    "xieyin": "ကိုင် ရှီ ယီးဖု လယ်"
+  },
+  {
+    "id": 1082,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "别乱扔东西。",
+    "burmese": "ပစ္စည်းတွေ လျှောက်မပစ်ထားနဲ့။",
+    "xieyin": "ပျဲ လွန့်ရန်း တုန်းရှီး"
+  },
+  {
+    "id": 1083,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "还没干透，再晾会儿。",
+    "burmese": "ကောင်းကောင်း မခြောက်သေးဘူး၊ ထပ်လှန်းထားဦး။",
+    "xieyin": "ဟိုင်မေး ကန်းထို့၊ ဇိုက် လျောင့် ဟွေ့ရ်"
+  },
+  {
+    "id": 1084,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "帮我收一下衣服，要下雨了。",
+    "burmese": "အဝတ် ကူသိမ်းပေးပါဦး၊ မိုးရွာတော့မယ်။",
+    "xieyin": "ပန်းဝေါ် ရှိုးယီရှာ့ ယီးဖု၊ ယောင့် ရှာ့ယွီ လယ်"
+  },
+  {
+    "id": 1085,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "灯坏了，得换个灯泡。",
+    "burmese": "မီးလုံးပျက်သွားပြီ၊ လဲမှရမယ်။",
+    "xieyin": "တိန်း ဟွိုက်လယ်၊ သေ ဟွန့်ကော့ တိန်းဖောင့်"
+  },
+  {
+    "id": 1086,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "厕所堵了。",
+    "burmese": "အိမ်သာ ပိတ်နေတယ်။",
+    "xieyin": "ချဲ့စွော် တူ လယ်"
+  },
+  {
+    "id": 1087,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "水龙头没关好。",
+    "burmese": "ဘုံဘိုင်ခေါင်း သေချာ မပိတ်ခဲ့ဘူး။",
+    "xieyin": "ရွှေလုံထို မေး ကွမ်းဟောင်"
+  },
+  {
+    "id": 1088,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "洗个澡。",
+    "burmese": "ရေချိုးလိုက်ဦးမယ်။",
+    "xieyin": "ရှီကော့ ဇောက်"
+  },
+  {
+    "id": 1089,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "洗头。",
+    "burmese": "ခေါင်းလျှော်မယ်။",
+    "xieyin": "ရှီထို"
+  },
+  {
+    "id": 1090,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "水太热了。",
+    "burmese": "ရေ အရမ်းပူတယ်။",
+    "xieyin": "ရွှေ ထိုက်ရဲ့ လယ်"
+  },
+  {
+    "id": 1091,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "水刚好。",
+    "burmese": "ရေအပူချိန် အနေတော်ပဲ။",
+    "xieyin": "ရွှေ ကန်းဟောင်"
+  },
+  {
+    "id": 1092,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "洗完了。",
+    "burmese": "ချိုးလို့ ပြီးပြီ။",
+    "xieyin": "ရှီဝမ် လယ်"
+  },
+  {
+    "id": 1093,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "真舒服。",
+    "burmese": "နေလို့ကောင်းလိုက်တာ။",
+    "xieyin": "ဂျမ်း ရှူးဖု"
+  },
+  {
+    "id": 1094,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "该洗澡了。",
+    "burmese": "ရေချိုးရတော့မယ်။",
+    "xieyin": "ကိုင် ရှီဇောက် လယ်"
+  },
+  {
+    "id": 1095,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "热水器开了吗。",
+    "burmese": "ရေပူစက် ဖွင့်ထားလား။",
+    "xieyin": "ရဲ့ရွှေချိ ခိုင်းလယ် မ"
+  },
+  {
+    "id": 1096,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "水温刚好。",
+    "burmese": "ရေအပူချိန် အနေတော်ပဲ။",
+    "xieyin": "ရွှေဝန်း ကန်းဟောင်"
+  },
+  {
+    "id": 1097,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "洗发水没了。",
+    "burmese": "ခေါင်းလျှော်ရည် ကုန်သွားပြီ။",
+    "xieyin": "ရှီဖာရွှေ မေးလယ်"
+  },
+  {
+    "id": 1098,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "毛巾没拿，递给我。",
+    "burmese": "သဘက် မေ့ကျန်ခဲ့လို့၊ လှမ်းပေးပါဦး။",
+    "xieyin": "မောင်ကျင်း မေးနာ၊ တိကေ့ဝေါ်"
+  },
+  {
+    "id": 1099,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "你洗澡了吗。",
+    "burmese": "ရေချိုးပြီးပြီလား။",
+    "xieyin": "နီ ရှီဇောက် လယ် မ"
+  },
+  {
+    "id": 1100,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "你先洗吧。",
+    "burmese": "မင်း အရင်ချိုးလိုက်လေ။",
+    "xieyin": "နီ ရှန်းရှီ ပါ"
+  },
+  {
+    "id": 1101,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "躺一会儿。",
+    "burmese": "ခဏလောက် လှဲလိုက်ဦးမယ်။",
+    "xieyin": "ထန် ယီဟွေ့ရ်"
+  },
+  {
+    "id": 1102,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "看会儿手机。",
+    "burmese": "ဖုန်းခဏ သုံးလိုက်ဦးမယ်။",
+    "xieyin": "ခန့်ဟွေ့ရ် ရှိုဂျီး"
+  },
+  {
+    "id": 1103,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "刷视频。",
+    "burmese": "ဗီဒီယို ကြည့်နေတာ။",
+    "xieyin": "ရွှာ ရှေ့ဖင်း"
+  },
+  {
+    "id": 1104,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "今天太累了。",
+    "burmese": "ဒီနေ့ အရမ်းပင်ပန်းတယ်။",
+    "xieyin": "ကျင်းထျန်း ထိုက်လေ့ လယ်"
+  },
+  {
+    "id": 1105,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "不想动。",
+    "burmese": "မလှုပ်ချင်တော့ဘူး။",
+    "xieyin": "ပုရှန် တုံ့"
+  },
+  {
+    "id": 1106,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "手机没电了，去充电。",
+    "burmese": "ဖုန်းအားကုန်နေပြီ၊ အားသွင်းလိုက်ဦးမယ်။",
+    "xieyin": "ရှိုဂျီး မေးတျန့် လယ်၊ ချွိ ချုန်းတျန့်"
+  },
+  {
+    "id": 1107,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "关灯。",
+    "burmese": "မီးပိတ်လိုက်မယ်။",
+    "xieyin": "ကွမ်းတိန်း"
+  },
+  {
+    "id": 1108,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "定闹钟。",
+    "burmese": "နှိုးစက် ပေးလိုက်မယ်။",
+    "xieyin": "တင့် နောက်ကျုံး"
+  },
+  {
+    "id": 1109,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "明天几点起？",
+    "burmese": "မနက်ဖြန် ဘယ်အချိန် ထမှာလဲ။",
+    "xieyin": "မင်းထျန်း ကျီတျဲန် ချီ"
+  },
+  {
+    "id": 1110,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "窗户关一下。",
+    "burmese": "ပြတင်းပေါက် ပိတ်လိုက်ပါဦး။",
+    "xieyin": "ချွမ်းဟူး ကွမ်း ယီရှာ့"
+  },
+  {
+    "id": 1111,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "把被子盖好。",
+    "burmese": "စောင် သေချာခြုံနော်။",
+    "xieyin": "ပါ ပေ့ဇ ကိုက်ဟောင်"
+  },
+  {
+    "id": 1112,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "明天要早起。",
+    "burmese": "မနက်ဖြန် စောစော ထရမယ်။",
+    "xieyin": "မင်းထျန်း ယောင့် ဇောင်ချီ"
+  },
+  {
+    "id": 1113,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "把手机放远点。",
+    "burmese": "ဖုန်းကို ဝေးဝေးမှာ ထားလိုက်။",
+    "xieyin": "ပါ ရှိုဂျီး ဖောင့် ယွမ်တျဲန်"
+  },
+  {
+    "id": 1114,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "晚安。",
+    "burmese": "အိပ်တော့မယ်နော် (ဂွတ်နိုက်)။",
+    "xieyin": "ဝမ်အန်း"
+  },
+  {
+    "id": 1115,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "做个好梦。",
+    "burmese": "အိမ်မက်လှလှ မက်ပါစေ။",
+    "xieyin": "ဇော့ကော့ ဟောင်မောင့်"
+  },
+  {
+    "id": 1116,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "手机充上了吗？",
+    "burmese": "ဖုန်း အားဝင်ရဲ့လား။",
+    "xieyin": "ရှိုဂျီး ချုန်းရှန့် လယ် မ"
+  },
+  {
+    "id": 1117,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "明天休息。",
+    "burmese": "မနက်ဖြန် နားရက်။",
+    "xieyin": "မင်းထျန်း ရှူးရှီ"
+  },
+  {
+    "id": 1118,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "眼镜放床头了。",
+    "burmese": "မျက်မှန် အိပ်ရာခေါင်းရင်းမှာ တင်ထားတယ်။",
+    "xieyin": "ယန်ကျင့် ဖောင့် ချွမ်းထို လယ်"
+  },
+  {
+    "id": 1119,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "别熬夜。",
+    "burmese": "ညဉ့်နက်တဲ့အထိ မနေနဲ့။",
+    "xieyin": "ပျဲ အောင်ယဲ့"
+  },
+  {
+    "id": 1120,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "做梦了。",
+    "burmese": "အိမ်မက်မက်တယ်။",
+    "xieyin": "ဇော့မောင့် လယ်"
+  },
+  {
+    "id": 1121,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "谁在打呼噜？",
+    "burmese": "ဘယ်သူ ဟောက်နေတာလဲ။",
+    "xieyin": "ရွှေ ဇိုက် တာဟူးလူး"
+  },
+  {
+    "id": 1122,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "声音小点。",
+    "burmese": "အသံတိုးတိုး လုပ်။",
+    "xieyin": "ရှန်းယင်း ရှောင်တျဲန်"
+  },
+  {
+    "id": 1123,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "睡不着。",
+    "burmese": "အိပ်မပျော်ဘူး။",
+    "xieyin": "ရွှေ့ပုကျောင်း"
+  },
+  {
+    "id": 1124,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "有点冷，盖厚点。",
+    "burmese": "နည်းနည်းအေးတယ်၊ ထူထူခြုံ။",
+    "xieyin": "ယိုတျဲန် လိန့်၊ ကိုက် ဟို့တျဲန်"
+  },
+  {
+    "id": 1125,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "太热了，睡不着。",
+    "burmese": "ပူလွန်းလို့ အိပ်မပျော်ဘူး။",
+    "xieyin": "ထိုက်ရဲ့ လယ်၊ ရွှေ့ပုကျောင်း"
+  },
+  {
+    "id": 1126,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "困死了。",
+    "burmese": "အိပ်ချင်လွန်းလို့ သေတော့မယ်။",
+    "xieyin": "ခွန့် စီ လယ်"
+  },
+  {
+    "id": 1127,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "关灯睡觉。",
+    "burmese": "မီးပိတ်ပြီး အိပ်တော့မယ်။",
+    "xieyin": "ကွမ်းတိန်း ရွှေ့ကျောင့်"
+  },
+  {
+    "id": 1128,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "我要睡觉了。",
+    "burmese": "ကျွန်တော် အိပ်တော့မယ်။",
+    "xieyin": "ဝေါ် ယောင့် ရွှေ့ကျောင့် လယ်"
+  },
+  {
+    "id": 1129,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "你先睡。",
+    "burmese": "မင်း အရင်အိပ်နှင့်။",
+    "xieyin": "နီ ရှန်းရွှေ့"
+  },
+  {
+    "id": 1130,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "我晚点睡。",
+    "burmese": "ငါ နောက်ကျမှ အိပ်မယ်။",
+    "xieyin": "ဝေါ် ဝမ်တျဲန် ရွှေ့"
+  },
+  {
+    "id": 1131,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "没关系。",
+    "burmese": "ကိစ္စမရှိပါဘူး။",
+    "xieyin": "မေးကွမ်းရှီး"
+  },
+  {
+    "id": 1132,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "怎么了？",
+    "burmese": "ဘာဖြစ်လို့လဲ။",
+    "xieyin": "ဇန်မ လယ်"
+  },
+  {
+    "id": 1133,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "没事。",
+    "burmese": "ဘာမှ မဖြစ်ပါဘူး။",
+    "xieyin": "မေးရှေ့"
+  },
+  {
+    "id": 1134,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "好的。",
+    "burmese": "ဟုတ်ပြီ။",
+    "xieyin": "ဟောင်သဲ့"
+  },
+  {
+    "id": 1135,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "明天见。",
+    "burmese": "မနက်ဖြန် တွေ့မယ်။",
+    "xieyin": "မင်းထျန်း ကျန့်"
+  },
+  {
+    "id": 1136,
+    "category": "一天生活",
+    "sub": "家务/洗衣/夜间",
+    "chinese": "拜拜",
+    "burmese": "တာ့တာ (နှုတ်ဆက်ပါတယ်)။",
+    "xieyin": "ပိုင်ပိုင်"
+  },
+  
+  {
+    "id": 314,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "欢迎光临！",
+    "burmese": "ကြိုဆိုပါတယ်။",
+    "xieyin": "ဟွမ်းယင်း ကွမ်းလင်"
+  },
+  {
+    "id": 315,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "几位用餐？",
+    "burmese": "ဘယ်နှယောက် သုံးဆောင်မလဲ။",
+    "xieyin": "ကျီဝေ့ ယုံ့ချန်း"
+  },
+  {
+    "id": 316,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "有提前预约吗？",
+    "burmese": "ကြိုချိန်းထားတာ ရှိလား။",
+    "xieyin": "ယို ထီချန် ယွိယွဲ့ မ"
+  },
+  {
+    "id": 317,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "请问您贵姓？",
+    "burmese": "နာမည် ဘယ်လိုခေါ်လဲ။",
+    "xieyin": "ချင်းဝန့် နင် ကွေ့ရှင်း"
+  },
+  {
+    "id": 318,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "帮您查一下预约信息。",
+    "burmese": "ဘိုကင် စာရင်း ကြည့်ပေးပါမယ်။",
+    "xieyin": "ပန်းနင် ခြားယီရှာ့ ယွိယွဲ့ ရှင်းရှီး"
+  },
+  {
+    "id": 319,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "请跟我来。",
+    "burmese": "ကျွန်တော့်နောက် လိုက်ခဲ့ပါ။",
+    "xieyin": "ချင်း ကန်းဝေါ် လိုင်"
+  },
+  {
+    "id": 320,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "这边请。",
+    "burmese": "ဒီဘက် ကြွပါ။",
+    "xieyin": "ကျဲ့ပျန်း ချင်း"
+  },
+  {
+    "id": 321,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "坐窗边可以吗？",
+    "burmese": "ပြတင်းပေါက်နား ထိုင်မလား။",
+    "xieyin": "ဇွေ့ ချွမ်းပျန်း ခေါ်ယီမ"
+  },
+  {
+    "id": 322,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "坐角落可以吗？",
+    "burmese": "ထောင့်ကျတဲ့နေရာ ထိုင်မလား။",
+    "xieyin": "ဇွေ့ ကျောင်လော့ ခေါ်ယီမ"
+  },
+  {
+    "id": 323,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "您想坐包间还是大厅？",
+    "burmese": "အခန်းနဲ့ ထိုင်မလား၊ အပြင်မှာ ထိုင်မလား။",
+    "xieyin": "နင်ရှန် ဇွေ့ ပေါက်ကျန်း ဟိုင်ရှေ့ တာ့ထင်း"
+  },
+  {
+    "id": 324,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "实在抱歉，目前暂无空位。",
+    "burmese": "တောင်းပန်ပါတယ်၊ လောလောဆယ် ခုံမရှိတော့ဘူး။",
+    "xieyin": "ရှီဇိုက် ပေါက်ချန့်၊ မုချန် ဇန့်ဝူ ခုံဝေ့"
+  },
+  {
+    "id": 325,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "需要您稍等一会儿。",
+    "burmese": "ခဏလောက် စောင့်ပေးပါဦး။",
+    "xieyin": "ရွှီးယောင့် နင် ရှားเติန့် ယီဟွေ့ရ်"
+  },
+  {
+    "id": 326,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "大概需要等半小时左右。",
+    "burmese": "နာရီဝက်လောက် စောင့်ရပါမယ်။",
+    "xieyin": "တာ့ကိုက် ရွှီးယောင့် เติန့် ပန့်ရှောင်ရှီ ဇော်ယို့"
+  },
+  {
+    "id": 327,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "这是您的号码牌。",
+    "burmese": "ဒါ ခင်ဗျားရဲ့ နံပါတ်ကဒ်ပါ။",
+    "xieyin": "ကျဲ့ရှေ့ နင်သဲ့ ဟောင့်မာဖိုင်"
+  },
+  {
+    "id": 328,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "麻烦在休息区稍候。",
+    "burmese": "နားနေဆောင်မှာ ခဏစောင့်ပေးပါ။",
+    "xieyin": "မာဖန် ဇိုက် ရှူးရှီချွီး ရှားဟို့"
+  },
+  {
+    "id": 329,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "有位子了，这边请进。",
+    "burmese": "နေရာရပါပြီ၊ ဒီဘက် ဝင်ခဲ့ပါ။",
+    "xieyin": "ယို ဝေ့ဇ လယ်၊ ကျဲ့ပျန်း ချင်းကျင့်"
+  },
+  {
+    "id": 330,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "这桌您看可以吗？",
+    "burmese": "ဒီဝိုင်း အဆင်ပြေလား။",
+    "xieyin": "ကျဲ့ကျွမ်း နင်ခန့် ခေါ်ယီမ"
+  },
+  {
+    "id": 331,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "空调太冷了是吗？",
+    "burmese": "အဲကွန်း အရမ်းအေးနေလား။",
+    "xieyin": "ခုံးထျောင် ထိုက်လိန့် လယ် ရှေ့မ"
+  },
+  {
+    "id": 332,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "空调太热了是吗？",
+    "burmese": "အဲကွန်း အရမ်းပူနေလား။",
+    "xieyin": "ခုံးထျောင် ထိုက်ရဲ့ လယ် ရှေ့မ"
+  },
+  {
+    "id": 333,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "我帮您调一下。",
+    "burmese": "ကျွန်တော် ချိန်ညှိပေးပါမယ်။",
+    "xieyin": "ဝေါ် ပန်းနင် ထျောင် ယီရှာ့"
+  },
+  {
+    "id": 334,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "想换个位置的话，",
+    "burmese": "နေရာ ပြောင်းချင်ရင်၊",
+    "xieyin": "ရှန် ဟွန့်ကော့ ဝေ့ကျိ သဲ့ဟွား"
+  },
+  {
+    "id": 335,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "我给您安排那边的空位。",
+    "burmese": "ဟိုဘက်က နေရာလွတ်မှာ စီစဉ်ပေးမယ်။",
+    "xieyin": "ဝေါ် ကေ့နင် အန်ဖိုင် နာပျန်းသဲ့ ခုံဝေ့"
+  },
+  {
+    "id": 336,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "麻烦加个座。",
+    "burmese": "ခုံတစ်လုံးလောက် ထပ်ချပေးပါ။",
+    "xieyin": "မာဖန် ကျားကော့ ဇွေ့"
+  },
+  {
+    "id": 337,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "麻烦拿个婴儿椅。",
+    "burmese": "ကလေးထိုင်ခုံလေး တစ်လုံးလောက် ပေးပါ။",
+    "xieyin": "မာဖန် နာကော့ ယင်းအယ်ရ်ယီ"
+  },
+  {
+    "id": 338,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "给您菜单。",
+    "burmese": "မီနူး ရပါပြီ။",
+    "xieyin": "ကေ့နင် ချိုက်တန်း"
+  },
+  {
+    "id": 339,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "扫码点餐就可以。",
+    "burmese": "ကုဒ်ကို စကင်ဖတ်ပြီး မှာလို့ရပါတယ်။",
+    "xieyin": "ဆောင်မာ တျဲန်ချန်း ကျို့ ခေါ်ယီ"
+  },
+  {
+    "id": 340,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "需要我帮您点吗？",
+    "burmese": "ကျွန်တော် မှာပေးရမလား။",
+    "xieyin": "ရွှီးယောင့် ဝေါ် ပန်းနင် တျဲန်မ"
+  },
+  {
+    "id": 341,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "请问先喝点什么？",
+    "burmese": "အရင်ဆုံး ဘာသောက်မလဲ။",
+    "xieyin": "ချင်းဝန့် ရှန်း ဟောတျဲန် ရှင်မ"
+  },
+  {
+    "id": 342,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "有普洱、铁观音、菊花茶。",
+    "burmese": "ပူးအာ၊ ထဲ့ကွမ်းယင်း နဲ့ ဂန္ဓမာပန်း လက်ဖက်ရည် ရှိပါတယ်။",
+    "xieyin": "ယို ဖူအယ်၊ ထဲ့ကွမ်းယင်း၊ ကျွီဟွားချာ"
+  },
+  {
+    "id": 343,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "也可以先给您倒杯热水。",
+    "burmese": "ရေနွေး အရင် ငှဲ့ပေးလို့ရပါတယ်။",
+    "xieyin": "ယဲ့ ခေါ်ယီ ရှန်းကေ့နင် တောက်ပေး ရဲ့ရွှေ"
+  },
+  {
+    "id": 344,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "这是免费的餐前小吃，",
+    "burmese": "ဒါက အခမဲ့ ပေးတဲ့ အမြည်းပါ။",
+    "xieyin": "ကျဲ့ရှေ့ မြန်ဖေ့သဲ့ ချန်းချန် ရှောင်ချီး"
+  },
+  {
+    "id": 345,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "请慢用。",
+    "burmese": "သုံးဆောင်ပါဦး။",
+    "xieyin": "ချင်း မန့်ယုံ့"
+  },
+  {
+    "id": 346,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "筷子和餐具在这边。",
+    "burmese": "တူ နဲ့ ဇွန်းခက်ရင်း ဒီမှာပါ။",
+    "xieyin": "ခွိုက်ဇ ဟယ် ချန်းကျွိ ဇိုက် ကျဲ့ပျန်း"
+  },
+  {
+    "id": 347,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "我帮您拆一下餐具。",
+    "burmese": "ပန်းကန်ခွက်ယောက်တွေကို ဖောက်ပေးပါမယ်။",
+    "xieyin": "ဝေါ် ပန်းနင် ခြားယီရှာ့ ချန်းကျွိ"
+  },
+  {
+    "id": 348,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "地上有水",
+    "burmese": "ကြမ်းပြင်မှာ ရေရှိတယ်။",
+    "xieyin": "တီးရှန် ယိုရွှေ"
+  },
+  {
+    "id": 349,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "您小心滑倒。",
+    "burmese": "ချော်မလဲအောင် သတိထားပါ။",
+    "xieyin": "နင် ရှောင်ရှင်း ဟွားတောင်"
+  },
+  {
+    "id": 350,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "洗手间在那边。",
+    "burmese": "အိမ်သာ ဟိုဘက်မှာပါ။",
+    "xieyin": "ရှီရှောင်ကျန်း ဇိုက် နာပျန်း"
+  },
+  {
+    "id": 351,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "走到底左转就到。",
+    "burmese": "အဆုံးထိလျှောက်ပြီး ဘယ်ဘက်ကွေ့လိုက်ရင် ရောက်ပြီ။",
+    "xieyin": "ဇǒu တောက်တီ ဇော်ကျွမ် ကျို့တောက်"
+  },
+  {
+    "id": 352,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "餐厅内禁止吸烟。",
+    "burmese": "ဆိုင်ထဲမှာ ဆေးလိပ်မသောက်ရပါ။",
+    "xieyin": "ချန်းထင်းနေ့ ကျင့်ကျိ ရှီးယန်း"
+  },
+  {
+    "id": 353,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "抽烟请去门外指定区域。",
+    "burmese": "ဆေးလိပ်သောက်မယ်ဆို အပြင်က သတ်မှတ်ထားတဲ့နေရာ သွားပေးပါ။",
+    "xieyin": "ချိုးယန်း ချင်း ချွိ မန်ဝိုက် ဂျီသင့် ချွီးယွိ"
+  },
+  {
+    "id": 354,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "您先看看菜单，",
+    "burmese": "မီနူး အရင်ကြည့်ထားပါဦး၊",
+    "xieyin": "နင် ရှန်း ခန့်ခန့် ချိုက်တန်း"
+  },
+  {
+    "id": 355,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "服务员很快过来。",
+    "burmese": "ဝိတ်တာ ခဏနေ လာပါလိမ့်မယ်။",
+    "xieyin": "ဖူဝူးယွမ် ဟန်ခွိုက် ကောလိုင်"
+  },
+  {
+    "id": 356,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "楼上还有空位",
+    "burmese": "အပေါ်ထပ်မှာ နေရာလွတ် ရှိသေးတယ်။",
+    "xieyin": "လောင်ရှန် ဟိုင်ယို ခုံဝေ့"
+  },
+  {
+    "id": 357,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "您不介意的话可以上楼。",
+    "burmese": "အဆင်ပြေရင် အပေါ်ထပ် တက်လို့ရပါတယ်။",
+    "xieyin": "နင် ပုကျဲယိ သဲ့ဟွား ခေါ်ယီ ရှန့်လောင်"
+  },
+  {
+    "id": 358,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "小心台阶。",
+    "burmese": "လှေကား သတိထားနော်။",
+    "xieyin": "ရှောင်ရှင်း ထိုင်ကျဲ"
+  },
+  {
+    "id": 359,
+    "category": "餐饮服务",
+    "sub": "前台接待",
+    "chinese": "祝您用餐愉快！",
+    "burmese": "စိတ်တိုင်းကျ သုံးဆောင်နိုင်ပါစေ။",
+    "xieyin": "ကျု့နင် ယုံ့ချန်း ယူခွိုက်"
+  },
+  {
+    "id": 360,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "请问现在可以点餐了吗？",
+    "burmese": "အခု မှာလို့ ရပြီလား။",
+    "xieyin": "ချင်းဝန့် ရှန့်ဇိုက် ခေါ်ယီ တျဲန်ချန်း လယ်မ"
+  },
+  {
+    "id": 361,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "您想点点什么？",
+    "burmese": "ဘာများ မှာချင်ပါသလဲ။",
+    "xieyin": "နင် ရှန် တျဲန်တျဲန် ရှင်မ"
+  },
+  {
+    "id": 362,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "需要我给您推荐招牌菜吗？",
+    "burmese": "ဆိုင်ရဲ့ နာမည်ကြီးဟင်း ညွှန်းပေးရမလား။",
+    "xieyin": "ရွှီးယောင့် ဝေါ် ကေ့နင် ထွေးကျန့် ကျောင်းဖိုင်ချိုက် မ"
+  },
+  {
+    "id": 363,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "这是我们的招牌菜",
+    "burmese": "ဒါက ကျွန်တော်တို့ဆိုင်ရဲ့ နာမည်ကြီး ဟင်းပါ။",
+    "xieyin": "ကျဲ့ရှေ့ ဝေါ်မန်သဲ့ ကျောင်းဖိုင်ချိုက်"
+  },
+  {
+    "id": 364,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "这款招牌菜口感很不错。",
+    "burmese": "ဒီဟင်းက အရသာ အရမ်းကောင်းပါတယ်။",
+    "xieyin": "ကျဲ့ခွမ်း ကျောင်းဖိုင်ချိုက် ခိုကန် ဟန် ပုချွ"
+  },
+  {
+    "id": 365,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "我们的食材很新鲜。",
+    "burmese": "ကျွန်တော်တို့ ပစ္စည်းတွေက လတ်ဆတ်ပါတယ်။",
+    "xieyin": "ဝေါ်မန်သဲ့ ရှီချိုင် ဟန် ရှင်းရှန်း"
+  },
+  {
+    "id": 366,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "您能吃辣吗？",
+    "burmese": "အစပ် စားနိုင်လား။",
+    "xieyin": "နင် နိန် ချီးလား မ"
+  },
+  {
+    "id": 367,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "有微辣、中辣、特辣三种选择。",
+    "burmese": "အစပ် နည်းနည်း၊ အသင့်အတင့်၊ အစပ်ဆုံး သုံးမျိုး ရွေးလို့ရတယ်။",
+    "xieyin": "ယို ဝေလား၊ ကျုံးလား၊ ထဲ့လား စန်းကျုံ ရွှမ်ကျယ်"
+  },
+  {
+    "id": 368,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "这个菜有点麻，",
+    "burmese": "ဒီဟင်းက နည်းနည်း ထုံစပ်စပ် ဖြစ်မယ်၊",
+    "xieyin": "ကျဲ့ကော့ချိုက် ယိုတျဲန် မာ"
+  },
+  {
+    "id": 369,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "您能接受吗？",
+    "burmese": "စားနိုင်ပါ့မလား။",
+    "xieyin": "နင် နိန် ကျဲရှို့ မ"
+  },
+  {
+    "id": 370,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "这个牛肉很嫩。",
+    "burmese": "ဒီအမဲသားက အရမ်းနူးတယ်။",
+    "xieyin": "ကျဲ့ကော့ နျူရို့ ဟန်နွန့်"
+  },
+  {
+    "id": 371,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "这款鱼汤很鲜。",
+    "burmese": "ဒီငါးဟင်းရည်က အရသာ အရမ်းရှိတယ်။",
+    "xieyin": "ကျဲ့ခွမ်း ယွီထန်း ဟန်ရှန်း"
+  },
+  {
+    "id": 372,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "这款鱼没刺，",
+    "burmese": "ဒီငါးက အရိုးမပါဘူး၊",
+    "xieyin": "ကျဲ့ခွမ်း ယွီ မေးချိ"
+  },
+  {
+    "id": 373,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "适合小朋友吃。",
+    "burmese": "ကလေးတွေစားဖို့ အဆင်ပြေတယ်။",
+    "xieyin": "ရှေ့ဟယ် ရှောင်ဖောင်ယို ချီး"
+  },
+  {
+    "id": 374,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "您想做得清淡点吗？",
+    "burmese": "အရသာ ပေါ့ပေါ့လေး လုပ်ပေးရမလား။",
+    "xieyin": "နင် ရှန် ဇော့သဲ့ ချင်းတန့် တျဲန် မ"
+  },
+  {
+    "id": 375,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "可以少放油盐。",
+    "burmese": "ဆီ နဲ့ ဆား လျှော့ထည့်လို့ ရပါတယ်။",
+    "xieyin": "ခေါ်ယီ ရှောင်ဖောင့် ယိုယန်"
+  },
+  {
+    "id": 376,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "也可以不加味精。",
+    "burmese": "အချိုမှုန့် မထည့်ဘဲ လုပ်လို့လည်း ရပါတယ်။",
+    "xieyin": "ယဲ့ ခေါ်ယီ ပုကျား ဝေ့ကျင်း"
+  },
+  {
+    "id": 377,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "不好意思，这个菜卖完了。",
+    "burmese": "တောင်းပန်ပါတယ်၊ ဒီဟင်း ကုန်သွားပါပြီ။",
+    "xieyin": "ပုဟောင်ယိစ၊ ကျဲ့ကော့ချိုက် မိုက်ဝမ် လယ်"
+  },
+  {
+    "id": 378,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "您看看换成其他的可以吗？",
+    "burmese": "တခြားတစ်ခု ပြောင်းလို့ အဆင်ပြေမလား။",
+    "xieyin": "နင် ခန့်ခန့် ဟွန့်ချန် ချီထာသဲ့ ခေါ်ယီမ"
+  },
+  {
+    "id": 379,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "这个菜制作时间稍长，",
+    "burmese": "ဒီဟင်းက လုပ်ရတာ နည်းနည်း ကြာမယ်၊",
+    "xieyin": "ကျဲ့ကော့ချိုက် ဂျိဇော့ ရှီကျန်း ရှားချောင်"
+  },
+  {
+    "id": 380,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "大概需要二十分钟。",
+    "burmese": "မိနစ် ၂၀ လောက် စောင့်ရမယ်။",
+    "xieyin": "တာ့ကိုက် ရွှီးယောင့် အာ့ရှီ ဖန်းကျုံး"
+  },
+  {
+    "id": 381,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "您能等吗？",
+    "burmese": "စောင့်နိုင်လား။",
+    "xieyin": "နင် နိန် เติန့် မ"
+  },
+  {
+    "id": 382,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "米饭要几碗？",
+    "burmese": "ထမင်း ဘယ်နှပွဲ ယူမလဲ။",
+    "xieyin": "မီဖန့် ယောင့် ကျီဝမ်"
+  },
+  {
+    "id": 383,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "先给您上三碗，不够再加。",
+    "burmese": "၃ ပွဲ အရင်ချပေးမယ်၊ မလောက်ရင် ထပ်မှာနော်။",
+    "xieyin": "ရှန်းကေ့နင် ရှန့် စန်းဝမ်၊ ပုကို့ ဇိုက်ကျား"
+  },
+  {
+    "id": 384,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "要不先点这些，不够再加？",
+    "burmese": "ဒါတွေ အရင်မှာလိုက်မယ်၊ မလောက်မှ ထပ်မှာမလား။",
+    "xieyin": "ယောင့်ပု ရှန်းတျဲန် ကျဲ့ရှဲ၊ ပုကို့ ဇိုက်ကျား"
+  },
+  {
+    "id": 385,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "点好了是吗？",
+    "burmese": "မှာလို့ ပြီးပြီလား။",
+    "xieyin": "တျဲန်ဟောင် လယ် ရှေ့မ"
+  },
+  {
+    "id": 386,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "我给您重复一下订单。",
+    "burmese": "မှာထားတာလေးတွေ ပြန်ပြောပြပါမယ်။",
+    "xieyin": "ဝေါ် ကေ့နင် ခြုံဖု ယီရှာ့ တင့်တန်း"
+  },
+  {
+    "id": 387,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "请问喝什么饮料？",
+    "burmese": "သောက်စရာ ဘာယူမလဲ။",
+    "xieyin": "ချင်းဝန့် ဟော ရှင်မ ယင်လျောင့်"
+  },
+  {
+    "id": 388,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "有啤酒、可乐、鲜榨果汁。",
+    "burmese": "ဘီယာ၊ ကိုကာကိုလာ နဲ့ လတ်လတ်ဆတ်ဆတ် သစ်သီးဖျော်ရည် ရှိပါတယ်။",
+    "xieyin": "ယို ဖီကျို၊ ခေါ်လဲ့၊ ရှန်းကျား ကော်ဂျီး"
+  },
+  {
+    "id": 389,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "啤酒要冰的还是常温的？",
+    "burmese": "ဘီယာ အေးတာယူမလား၊ ရိုးရိုးပဲလား။",
+    "xieyin": "ဖီကျို ယောင့် ပင်းသဲ့ ဟိုင်ရှေ့ ချောင်ဝန်း သဲ့"
+  },
+  {
+    "id": 390,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "这款果汁是现榨的，",
+    "burmese": "ဒီဖျော်ရည်က အခုမှ ကြိတ်မှာဆိုတော့၊",
+    "xieyin": "ကျဲ့ခွမ်း ကော်ဂျီး ရှေ့ ရှန့်ကျား သဲ့"
+  },
+  {
+    "id": 391,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "需要等几分钟。",
+    "burmese": "မိနစ်အနည်းငယ် စောင့်ရမယ်။",
+    "xieyin": "ရွှီးယောင့် เติန့် ကျီဖန်းကျုံး"
+  },
+  {
+    "id": 392,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "您介意吗？",
+    "burmese": "အဆင်ပြေပါ့မလား။",
+    "xieyin": "နင် ကျဲယိ မ"
+  },
+  {
+    "id": 393,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "这种酒暂时没货了。",
+    "burmese": "ဒီအရက် လောလောဆယ် ပစ္စည်းပြတ်နေတယ်။",
+    "xieyin": "ကျဲ့ကျုံ ကျို ဇန့်ရှီ မေးဟွေ့ လယ်"
+  },
+  {
+    "id": 394,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "换成饮料可以吗？",
+    "burmese": "အချိုရည် ပြောင်းယူမလား။",
+    "xieyin": "ဟွန့်ချန် ယင်လျောင့် ခေါ်ယီမ"
+  },
+  {
+    "id": 395,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "纸巾分收费和免费的。",
+    "burmese": "တစ်သျှူးက ပိုက်ဆံပေးရတာနဲ့ အလကားရတာ ရှိတယ်။",
+    "xieyin": "ကျီကျင်း ဖန်း ရှိုးဖေ့ ဟယ် မြန်ဖေ့ သဲ့"
+  },
+  {
+    "id": 396,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "免费的纸巾在这边。",
+    "burmese": "အခမဲ့ တစ်သျှူးက ဒီမှာပါ။",
+    "xieyin": "မြန်ဖေ့သဲ့ ကျီကျင်း ဇိုက် ကျဲ့ပျန်း"
+  },
+  {
+    "id": 397,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "这道菜是我们的活动赠品，",
+    "burmese": "ဒီဟင်းက ပရိုမိုးရှင်း လက်ဆောင်ပါ၊",
+    "xieyin": "ကျဲ့တောက်ချိုက် ရှေ့ ဝေါ်မန်သဲ့ ဟော်တုံ့ ဇောင့်ဖင်"
+  },
+  {
+    "id": 398,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "送给您的。",
+    "burmese": "မေတ္တာလက်ဆောင် ပေးတာပါ။",
+    "xieyin": "ဆောင့်ကေ့ နင်သဲ့"
+  },
+  {
+    "id": 399,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "这个菜需要现杀现做。",
+    "burmese": "ဒီဟင်းက အကောင်လတ်လတ်ဆတ်ဆတ် သတ်ပြီးချက်ရမှာ။",
+    "xieyin": "ကျဲ့ကော့ချိုက် ရွှီးယောင့် ရှန့်ရှား ရှန့်ဇော့"
+  },
+  {
+    "id": 400,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "我帮您称一下重量。",
+    "burmese": "အလေးချိန် ချိန်ပေးပါမယ်။",
+    "xieyin": "ဝေါ် ပန်းနင် ချိန်ယီရှာ့ ကျုံးလျောင့်"
+  },
+  {
+    "id": 401,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "三斤二两可以吗？",
+    "burmese": "၁ ပိဿာ နဲ့ ၆၀ သားလောက် (၃.၂ ကျင်း) အဆင်ပြေလား။",
+    "xieyin": "စန်းကျင်း အာ့လျǎng ခေါ်ယီမ"
+  },
+  {
+    "id": 402,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "菜已经下单了，",
+    "burmese": "အော်ဒါ တင်လိုက်ပါပြီ၊",
+    "xieyin": "ချိုက် ယီကျင်း ရှာ့တန်း လယ်"
+  },
+  {
+    "id": 403,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "厨师正在做。",
+    "burmese": "စားဖိုမှူး ချက်နေပါပြီ။",
+    "xieyin": "ချူးရှီး ကျောင့်ဇိုက် ဇော့"
+  },
+  {
+    "id": 404,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "您稍等。",
+    "burmese": "ခဏ စောင့်ပေးနော်။",
+    "xieyin": "နင် ရှားเติန့်"
+  },
+  {
+    "id": 405,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "还需要加菜随时叫我。",
+    "burmese": "ဟင်းထပ်မှာချင်ရင် အချိန်မရွေး ခေါ်လိုက်နော်။",
+    "xieyin": "ဟိုင် ရွှီးယောင့် ကျားချိုက် ဆွီရှီ ကျောင့်ဝေါ်"
+  },
+  {
+    "id": 406,
+    "category": "餐饮服务",
+    "sub": "点餐服务",
+    "chinese": "还需要加饮料随时叫我。",
+    "burmese": "အချိုရည် ထပ်မှာချင်ရင် အချိန်မရွေး ခေါ်လိုက်နော်။",
+    "xieyin": "ဟိုင် ရွှီးယောင့် ကျား ယင်လျောင့် ဆွီရှီ ကျောင့်ဝေါ်"
+  },
+  {
+    "id": 407,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "三号桌点单，",
+    "burmese": "၃ ယောက်ဝိုင်း အော်ဒါလာပြီ၊",
+    "xieyin": "စန်းဟောင့်ကျွမ်း တျဲန်တန်း"
+  },
+  {
+    "id": 408,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "麻烦尽快做。",
+    "burmese": "မြန်မြန်လေး လုပ်ပေး။",
+    "xieyin": "မာဖန် ကျင့်ခွိုက် ဇော့"
+  },
+  {
+    "id": 409,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "这桌客人赶时间，",
+    "burmese": "ဒီဝိုင်းက ဧည့်သည် လောနေတယ်၊",
+    "xieyin": "ကျဲ့ကျွမ်း ခဲ့ရန် ကန်ရှီကျန်း"
+  },
+  {
+    "id": 410,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "先做这份。",
+    "burmese": "ဒါ အရင်လုပ်ပေး။",
+    "xieyin": "ရှန်းဇော့ ကျဲ့ဖန့်"
+  },
+  {
+    "id": 411,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "师傅，三号桌的菜好了吗？",
+    "burmese": "ဆရာ၊ ၃ ယောက်ဝိုင်းက ဟင်းရပြီလား။",
+    "xieyin": "ရှီးဖု၊ စန်းဟောင့်ကျွမ်း သဲ့ ချိုက် ဟောင်လယ် မ"
+  },
+  {
+    "id": 412,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "客人催单了。",
+    "burmese": "ဧည့်သည် ဟင်းလောနေပြီ။",
+    "xieyin": "ခဲ့ရန် ချွီးတန်း လယ်"
+  },
+  {
+    "id": 413,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "还需要五分钟，别催了。",
+    "burmese": "၅ မိနစ်လောက် လိုသေးတယ်၊ လာမလောနဲ့။",
+    "xieyin": "ဟိုင် ရွှီးယောင့် ဝူဖန်းကျုံး၊ ပျဲ ချွီး လယ်"
+  },
+  {
+    "id": 414,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "汤好了，起锅！",
+    "burmese": "ဟင်းရည် ရပြီ၊ အိုးချလိုက်တော့။",
+    "xieyin": "ထန်း ဟောင်လယ်၊ ချီကွော်"
+  },
+  {
+    "id": 415,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "三号桌的宫保鸡丁好了吗？",
+    "burmese": "၃ ယောက်ဝိုင်းက ကြက်သားဟင်း ရပြီလား။",
+    "xieyin": "စန်းဟောင့်ကျွမ်း သဲ့ ကုန်းပေါက် ဂျီးတင်း ဟောင်လယ် မ"
+  },
+  {
+    "id": 416,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "可以上菜了。",
+    "burmese": "ဟင်းချလို့ ရပြီ။",
+    "xieyin": "ခေါ်ယီ ရှန့်ချိုက် လယ်"
+  },
+  {
+    "id": 417,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "您的菜齐了。",
+    "burmese": "ဟင်းစုံပါပြီ။",
+    "xieyin": "နင်သဲ့ ချိုက် ချီလယ်"
+  },
+  {
+    "id": 418,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "还差最后一道菜。",
+    "burmese": "နောက်ဆုံး တစ်ပွဲပဲ လိုတော့တယ်။",
+    "xieyin": "ဟိုင် ခြား ဇွေ့ဟို့ ယီတောက် ချိုက်"
+  },
+  {
+    "id": 419,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "我帮您催一下后厨。",
+    "burmese": "မီးဖိုချောင်ကို သွားလောပေးပါမယ်။",
+    "xieyin": "ဝေါ် ပန်းနင် ချွီးယီရှာ့ ဟို့ချူး"
+  },
+  {
+    "id": 420,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "后厨没收到这张单子。",
+    "burmese": "မီးဖိုချောင်မှာ ဒီအော်ဒါ မရသေးဘူး။",
+    "xieyin": "ဟို့ချူး မေးရှိုးတောက် ကျဲ့ကျွမ်း တန်းဇ"
+  },
+  {
+    "id": 421,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "麻烦补一张单子。",
+    "burmese": "အော်ဒါစာရွက် ပြန်ဖြည့်ပေးပါ။",
+    "xieyin": "မာဖန် ပူ ယီကျွမ်း တန်းဇ"
+  },
+  {
+    "id": 422,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "客人要退这个菜。",
+    "burmese": "ဧည့်သည် ဒီဟင်း ပြန်Cancel ချင်လို့တဲ့။",
+    "xieyin": "ခဲ့ရန် ယောင့် ထွေ့ ကျဲ့ကော့ ချိုက်"
+  },
+  {
+    "id": 423,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "还没做的话就取消。",
+    "burmese": "မချက်ရသေးရင် ဖျက်လိုက်တော့။",
+    "xieyin": "ဟိုင် မေးဇော့ သဲ့ဟွား ကျို့ ချွီးရှောင်"
+  },
+  {
+    "id": 424,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "已经做了就没法退了。",
+    "burmese": "ချက်ပြီးနေပြီဆိုရင်တော့ ဖျက်လို့မရတော့ဘူး။",
+    "xieyin": "ယီကျင်း ဇော့လယ် ကျို့ မေးဖာ ထွေ့လယ်"
+  },
+  {
+    "id": 425,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "师傅，这个菜别放香菜",
+    "burmese": "ဆရာ၊ ဒီဟင်းထဲ နံနံပင် မထည့်နဲ့။",
+    "xieyin": "ရှီးဖု၊ ကျဲ့ကော့ချိုက် ပျဲဖောင့် ရှန်းချိုက်"
+  },
+  {
+    "id": 426,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "一定记好。",
+    "burmese": "သေချာ မှတ်ထားနော်။",
+    "xieyin": "ယီသင့် ကျိဟောင်"
+  },
+  {
+    "id": 427,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "这个菜客人说太咸了",
+    "burmese": "ဒီဟင်းက အရမ်းငန်တယ်လို့ ဧည့်သည်ပြောတယ်။",
+    "xieyin": "ကျဲ့ကော့ချိုက် ခဲ့ရန် ရွှော ထိုက်ယန် လယ်"
+  },
+  {
+    "id": 428,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "，要重做一份。",
+    "burmese": "နောက်တစ်ပွဲ ပြန်လုပ်ပေးရမယ်။",
+    "xieyin": "ယောင့် ခြုံဇော့ ယီဖန့်"
+  },
+  {
+    "id": 429,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "麻烦您再炒一下。",
+    "burmese": "ပြန်ကြော်ပေးပါဦး။",
+    "xieyin": "မာဖန် နင် ဇိုက် ချောင် ယီရှာ့"
+  },
+  {
+    "id": 430,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "火开大点。",
+    "burmese": "မီးမြှင့်လိုက်။",
+    "xieyin": "ဟွော် ခိုင်း တာ့တျဲန်"
+  },
+  {
+    "id": 431,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "火开小点。",
+    "burmese": "မီးလျှော့လိုက်။",
+    "xieyin": "ဟွော် ခိုင်း ရှောင်တျဲန်"
+  },
+  {
+    "id": 432,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "汤熬久一点。",
+    "burmese": "ဟင်းရည်ကို ကြာကြာလေး တည်ထား။",
+    "xieyin": "ထန်း အောင် ကျိုယီတျဲန်"
+  },
+  {
+    "id": 433,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "记得关火别烧干了。",
+    "burmese": "မီးပိတ်ဖို့ သတိရနော်၊ ရေခမ်းကုန်မယ်။",
+    "xieyin": "ကျိသဲ့ ကွမ်းဟွော် ပျဲ ရှောက်ကန်း လယ်"
+  },
+  {
+    "id": 434,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "没煤气了，",
+    "burmese": "ဂက်စ် ကုန်သွားပြီ၊",
+    "xieyin": "မေး မေချိ လယ်"
+  },
+  {
+    "id": 435,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "赶紧换气瓶。",
+    "burmese": "ဂက်စ်အိုး မြန်မြန်လဲ။",
+    "xieyin": "ကန်ကျิ่น ဟွန့် ချိဖင်း"
+  },
+  {
+    "id": 436,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "抽油烟机坏了，满屋子烟",
+    "burmese": "အညှော်စုပ်စက် ပျက်နေလို့ အခန်းထဲ မီးခိုးတွေပြည့်နေပြီ။",
+    "xieyin": "ချိုးယိုယန်းဂျီး ဟွိုက်လယ်၊ မန်ဝူးဇ ယန်း"
+  },
+  {
+    "id": 437,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "找师傅修一下。",
+    "burmese": "ပြင်တဲ့ဆရာ ခေါ်လိုက်။",
+    "xieyin": "ကျောင် ရှီးဖု ရှိုးယီရှာ့"
+  },
+  {
+    "id": 438,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "菜没洗干净，里面有杂质。",
+    "burmese": "အရွက်တွေမစင်ဘူး၊ အမှိုက်တွေပါတယ်။",
+    "xieyin": "ချိုက် မေးရှီ ကန်းကျင့်၊ လီမျန့် ယို ဇာကျိ"
+  },
+  {
+    "id": 439,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "检查仔细点再下锅。",
+    "burmese": "သေချာစစ်ပြီးမှ အိုးထဲထည့်။",
+    "xieyin": "ကျန်ခြား ဇီရှီးတျဲန် ဇိုက် ရှာ့ကွော်"
+  },
+  {
+    "id": 440,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "碗不够用了。",
+    "burmese": "ပန်းကန် မလောက်တော့ဘူး။",
+    "xieyin": "ဝမ် ပုကို့ ယုံ့ လယ်"
+  },
+  {
+    "id": 441,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "洗碗工赶紧把碗洗出来。",
+    "burmese": "ပန်းကန်ဆေးတဲ့လူ မြန်မြန်ဆေးပေး။",
+    "xieyin": "ရှီဝမ်ကုန်း ကန်ကျิ่น ပါဝမ် ရှီချူးလိုင်"
+  },
+  {
+    "id": 442,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "碗上有油要重洗。",
+    "burmese": "ပန်းကန်မှာ ဆီကျန်နေတယ်၊ ပြန်ဆေး။",
+    "xieyin": "ဝမ်ရှန် ယိုယို ယောင့် ခြုံရှီ"
+  },
+  {
+    "id": 443,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "碟子不够了，",
+    "burmese": "ပန်းကန်ပြား မလောက်တော့ဘူး၊",
+    "xieyin": "တျဲဇ ပုကို့ လယ်"
+  },
+  {
+    "id": 444,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "去仓库拿几个。",
+    "burmese": "စတိုခန်းထဲက သွားယူလိုက်။",
+    "xieyin": "ချွိ ချန်းခူး နာ ကျီကော့"
+  },
+  {
+    "id": 445,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "缺角的盘子别用，容易划手。",
+    "burmese": "အနားကွဲနေတဲ့ ပန်းကန်တွေမသုံးနဲ့၊ လက်ရှလိမ့်မယ်။",
+    "xieyin": "ချွဲ့ကျောင် သဲ့ ဖန်ဇ ပျဲယုံ့၊ ရုံယိ ဟွာရှို"
+  },
+  {
+    "id": 446,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "地上的油污擦一下。",
+    "burmese": "ကြမ်းပြင်က ဆီတွေကို သုတ်လိုက်။",
+    "xieyin": "တီးရှန်သဲ့ ယိုဝူး ခြားယီရှာ့"
+  },
+  {
+    "id": 447,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "别乱扔菜叶。",
+    "burmese": "အရွက်တွေ လျှောက်မပစ်နဲ့။",
+    "xieyin": "ပျဲ လွန့်ရန်း ချိုက်ယဲ့"
+  },
+  {
+    "id": 448,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "赶紧把垃圾倒了，都馊了。",
+    "burmese": "အမှိုက်တွေ မြန်မြန်သွားပစ်၊ နံကုန်ပြီ။",
+    "xieyin": "ကန်ကျิ่น ပါ လာဂျီး တောက်လယ်၊ တိုး ဆိုး လယ်"
+  },
+  {
+    "id": 449,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "肉切好了吗？",
+    "burmese": "အသားလှီးပြီးပြီလား။",
+    "xieyin": "ရို့ ချဲဟောင် လယ်မ"
+  },
+  {
+    "id": 450,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "切成丝。",
+    "burmese": "အမျှင်ပုံစံ လှီး။",
+    "xieyin": "ချဲ ချန် ဆီး"
+  },
+  {
+    "id": 451,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "切成块。",
+    "burmese": "အတုံးပုံစံ လှီး။",
+    "xieyin": "ချဲ ချန် ခွိုက်"
+  },
+  {
+    "id": 452,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "别切太厚。",
+    "burmese": "အရမ်းအထူကြီး မလှီးနဲ့။",
+    "xieyin": "ပျဲ ချဲ ထိုက်ဟို့"
+  },
+  {
+    "id": 453,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "盐没了，去领一袋过来。",
+    "burmese": "ဆားကုန်ပြီ၊ တစ်ထုပ် သွားထုတ်ချေ။",
+    "xieyin": "ယန် မေးလယ်၊ ချွိ လင် ယီတိုက် ကောလိုင်"
+  },
+  {
+    "id": 454,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "油没了，去领一桶过来。",
+    "burmese": "ဆီကုန်ပြီ၊ တစ်ပုံး သွားထုတ်ချေ။",
+    "xieyin": "ယို မေးလယ်၊ ချွိ လင် ယီထုံ ကောလိုင်"
+  },
+  {
+    "id": 455,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "这种调料省着点用。",
+    "burmese": "ဒီဟင်းခတ်မှုန့်က ခြိုးခြံချွေတာပြီးသုံး။",
+    "xieyin": "ကျဲ့ကျုံ ထျောင်လျောင့် ရှန်ကျယ်တျဲန် ယုံ့"
+  },
+  {
+    "id": 456,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "这个菜坏了，赶紧扔掉。",
+    "burmese": "ဒီဟင်းသီးဟင်းရွက် ပုပ်နေပြီ၊ လွှင့်ပစ်လိုက်တော့။",
+    "xieyin": "ကျဲ့ကော့ချိုက် ဟွိုက်လယ်၊ ကန်ကျิ่น ရန်းတယောက်"
+  },
+  {
+    "id": 457,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "冰箱坏了，里面的东西都臭了。",
+    "burmese": "ရေခဲသေတ္တာ ပျက်နေလို့ အထဲကပစ္စည်းတွေ နံကုန်ပြီ။",
+    "xieyin": "ပင်းရှောင် ဟွိုက်လယ်၊ လီမျန့်သဲ့ တုန်းရှီး တိုး ချို့ လယ်"
+  },
+  {
+    "id": 458,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "快联系维修。",
+    "burmese": "ပြင်တဲ့လူ မြန်မြန်ခေါ်။",
+    "xieyin": "ခွိုက် လျန်ရှီး ဝေရှူး"
+  },
+  {
+    "id": 459,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "准备出餐。",
+    "burmese": "ဟင်းပွဲထုတ်ဖို့ ပြင်တော့။",
+    "xieyin": "ကျွမ်ဘေ့ ချူးချန်း"
+  },
+  {
+    "id": 460,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "摆盘稍微好看点。",
+    "burmese": "ပန်းကန်ပြင်တာ ကြည့်ကောင်းအောင်လုပ်။",
+    "xieyin": "ပိုင်ဖန် ရှောင်းဝေး ဟောင်ခန့် တျဲန်"
+  },
+  {
+    "id": 461,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "加点葱花点缀一下。",
+    "burmese": "ကြက်သွန်မြိတ်လေး ဖြူးလိုက်ဦး။",
+    "xieyin": "ကျားတျဲန် ချုန်းဟွား တျဲန်ကျွေ့ ယီရှာ့"
+  },
+  {
+    "id": 462,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "师傅辛苦了。",
+    "burmese": "ဆရာရေ ပင်ပန်းပြီနော်။",
+    "xieyin": "ရှီးဖု ရှင်းခူ လယ်"
+  },
+  {
+    "id": 463,
+    "category": "餐饮服务",
+    "sub": "后厨协作",
+    "chinese": "这桌的菜麻烦快点出。",
+    "burmese": "ဒီဝိုင်းက ဟင်း မြန်မြန်လေး ထုတ်ပေးပါ။",
+    "xieyin": "ကျဲ့ကျွမ်း သဲ့ ချိုက် မာဖန် ခွိုက်တျဲန် ချူး"
+  },
+  {
+    "id": 464,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "服务员！",
+    "burmese": "ဒီမှာ (ဝိတ်တာ)။",
+    "xieyin": "ဖူဝူးယွမ်"
+  },
+  {
+    "id": 465,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "怎么菜还不上？",
+    "burmese": "ဟင်းက ဘာလို့ မရောက်သေးတာလဲ။",
+    "xieyin": "ဇန်မ ချိုက် ဟိုင်ပု ရှန့်"
+  },
+  {
+    "id": 466,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "等了半天了。",
+    "burmese": "စောင့်နေတာ ကြာလှပြီ။",
+    "xieyin": "เติန့်လယ် ပန့်ထျန်း လယ်"
+  },
+  {
+    "id": 467,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "实在对不起，",
+    "burmese": "တကယ် တောင်းပန်ပါတယ်၊",
+    "xieyin": "ရှီဇိုက် တွေ့ပုချီ"
+  },
+  {
+    "id": 468,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "厨师这边太忙了。",
+    "burmese": "မီးဖိုချောင်မှာ အရမ်းရှုပ်နေလို့ပါ။",
+    "xieyin": "ချူးရှီး ကျဲ့ပျန်း ထိုက်မောင် လယ်"
+  },
+  {
+    "id": 469,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "我马上帮您催后厨。",
+    "burmese": "မီးဖိုချောင်ကို အခုပဲ သွားလောပေးပါမယ်။",
+    "xieyin": "ဝေါ် မာရှန် ပန်းနင် ချွီး ဟို့ချူး"
+  },
+  {
+    "id": 470,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "这道菜里有头发。",
+    "burmese": "ဟင်းထဲမှာ ဆံပင် ပါနေတယ်။",
+    "xieyin": "ကျဲ့တောက်ချိုက် လီ ယို ထိုဖာ"
+  },
+  {
+    "id": 471,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "这道菜的肉没熟。",
+    "burmese": "ဒီဟင်းက အသား မကျက်သေးဘူး။",
+    "xieyin": "ကျဲ့တောက်ချိုက် သဲ့ ရို့ မေးရှူ"
+  },
+  {
+    "id": 472,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "这道菜味道不对",
+    "burmese": "ဒီဟင်းက အရသာ တစ်မျိုးဖြစ်နေတယ်၊",
+    "xieyin": "ကျဲ့တောက်ချိုက် ဝေ့တောက် ပုတွေ့"
+  },
+  {
+    "id": 473,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "太影响口感了。",
+    "burmese": "စားရတာ အဆင်မပြေဘူး။",
+    "xieyin": "ထိုက် ယင်းရှန် ခိုကန် လယ်"
+  },
+  {
+    "id": 474,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "哎呀，实在抱歉。",
+    "burmese": "ဟာ... တကယ် တောင်းပန်ပါတယ်ဗျာ။",
+    "xieyin": "အိုက်ယား၊ ရှီဇိုက် ပေါက်ချန့်"
+  },
+  {
+    "id": 475,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "我马上给您换一份新的。",
+    "burmese": "အသစ် တစ်ပွဲ ချက်ချင်း လဲပေးပါမယ်။",
+    "xieyin": "ဝေါ် မာရှန် ကေ့နင် ဟွန့် ယီဖန့် ရှင်းသဲ့"
+  },
+  {
+    "id": 476,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "这份算我们赠送的。",
+    "burmese": "ဒီတစ်ပွဲကို ဆိုင်က လက်ဆောင်ပေးလိုက်ပါမယ်။",
+    "xieyin": "ကျဲ့ဖန့် ဆွန့် ဝေါ်မန် ဇောင့်ဆောင့် သဲ့"
+  },
+  {
+    "id": 477,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "碗太脏了，",
+    "burmese": "ပန်းကန်လုံးက ညစ်ပတ်နေတယ်၊",
+    "xieyin": "ဝမ် ထိုက် ဇောင်း လယ်"
+  },
+  {
+    "id": 478,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "帮您换个干净的。",
+    "burmese": "အသန့် တစ်လုံး လဲပေးပါမယ်။",
+    "xieyin": "ပန်းနင် ဟွန့်ကော့ ကန်းကျင့် သဲ့"
+  },
+  {
+    "id": 479,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "这里没纸了，",
+    "burmese": "ဒီမှာ တစ်သျှူး ကုန်နေပြီ၊",
+    "xieyin": "ကျဲ့လီ မေးကျီ လယ်"
+  },
+  {
+    "id": 480,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "我马上拿过来。",
+    "burmese": "အခုပဲ သွားယူပေးပါမယ်။",
+    "xieyin": "ဝေါ် မာရှန် နာ ကောလိုင်"
+  },
+  {
+    "id": 481,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "饮料没放冰是吗？",
+    "burmese": "အချိုရည်က ရေခဲမပါဘူးလား။",
+    "xieyin": "ယင်လျောင့် မေးဖောင့် ပင်း ရှေ့မ"
+  },
+  {
+    "id": 482,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "我帮您加冰。",
+    "burmese": "ရေခဲ ထည့်ပေးပါမယ်။",
+    "xieyin": "ဝေါ် ပန်းနင် ကျားပင်း"
+  },
+  {
+    "id": 483,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "我帮您换一杯冰的。",
+    "burmese": "အအေး တစ်ခွက် လဲပေးပါမယ်။",
+    "xieyin": "ဝေါ် ပန်းနင် ဟွန့် ယီပေး ပင်းသဲ့"
+  },
+  {
+    "id": 484,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "空调不凉。",
+    "burmese": "အဲကွန်းက မအေးဘူး။",
+    "xieyin": "ခုံးထျောင် ပုလျောင်"
+  },
+  {
+    "id": 485,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "风扇坏了。",
+    "burmese": "ပန်ကာ ပျက်နေတယ်။",
+    "xieyin": "ဖုန်းရှန့် ဟွိုက်လယ်"
+  },
+  {
+    "id": 486,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "我帮您看看遥控器。",
+    "burmese": "ရီမု (remote) ကြည့်ပေးပါမယ်။",
+    "xieyin": "ဝေါ် ပန်းနင် ခန့်ခန့် ယောင်ခုံးချိ"
+  },
+  {
+    "id": 487,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "我找师傅检修。",
+    "burmese": "ပြင်တဲ့ဆရာ ခေါ်ပေးပါမယ်။",
+    "xieyin": "ဝေါ် ကျောင် ရှီးဖု ကျန်ရှူး"
+  },
+  {
+    "id": 488,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "这个汤太淡了。",
+    "burmese": "ဟင်းရည်က အရသာ အရမ်းပေါ့တယ်။",
+    "xieyin": "ကျဲ့ကော့ထန်း ထိုက်တန့် လယ်"
+  },
+  {
+    "id": 489,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "给您拿点盐和醋，",
+    "burmese": "ဆား နဲ့ ရှာလကာရည် ယူပေးမယ်၊",
+    "xieyin": "ကေ့နင် နာတျဲန် ယန် ဟယ် ချူး"
+  },
+  {
+    "id": 490,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "您自己调调味。",
+    "burmese": "ကိုယ့်ဘာသာကိုယ် အရသာစပ်လိုက်နော်။",
+    "xieyin": "နင် ဇေ့ကျီ ထျောင်ထျောင် ဝေ့"
+  },
+  {
+    "id": 491,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "您是不是下错单了？",
+    "burmese": "အော်ဒါ မှားတင်လိုက်တာလား။",
+    "xieyin": "နင် ရှေ့ပုရှေ့ ရှာ့ချွိ့ တန်း လယ်"
+  },
+  {
+    "id": 492,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "这道菜我没点。",
+    "burmese": "ဒီဟင်း ကျွန်တော် မမှာထားဘူး။",
+    "xieyin": "ကျဲ့တောက်ချိုက် ဝေါ် မေးတျဲန်"
+  },
+  {
+    "id": 493,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "不好意思，是我弄错了。",
+    "burmese": "တောင်းပန်ပါတယ်၊ ကျွန်တော် မှားသွားလို့ပါ။",
+    "xieyin": "ပုဟောင်ယိစ၊ ရှေ့ ဝေါ် နုံ့ချွေ့ လယ်"
+  },
+  {
+    "id": 494,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "马上帮您换。",
+    "burmese": "ချက်ချင်း လဲပေးပါမယ်။",
+    "xieyin": "မာရှန် ပန်းနင် ဟွန့်"
+  },
+  {
+    "id": 495,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "需要补差价的话我跟您说一声。",
+    "burmese": "ဈေးနှုန်းကွာသွားရင် ပြောပြပေးပါမယ်။",
+    "xieyin": "ရွှီးယောင့် ပူ ခြားကျား သဲ့ဟွား ဝေါ် ကန်းနင် ရွှော ယီရှမ်း"
+  },
+  {
+    "id": 496,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "这个火太大了，",
+    "burmese": "မီး အရမ်းများနေတယ်၊",
+    "xieyin": "ကျဲ့ကော့ဟွော် ထိုက်တာ့ လယ်"
+  },
+  {
+    "id": 497,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "帮您关小点。",
+    "burmese": "မီးလျှော့ပေးပါမယ်။",
+    "xieyin": "ပန်းနင် ကွမ်း ရှောင်တျဲန်"
+  },
+  {
+    "id": 498,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "锅干了，我帮您加点汤。",
+    "burmese": "အိုးကပ်နေပြီ၊ ဟင်းရည် လိုက်ဖြည့်ပေးမယ်။",
+    "xieyin": "ကွော် ကန်းလယ်၊ ဝေါ် ပန်းနင် ကျားတျဲန် ထန်း"
+  },
+  {
+    "id": 499,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "骨头放这儿，",
+    "burmese": "အရိုးတွေ ဒီမှာ ထားလိုက်ပါ၊",
+    "xieyin": "ကူထို ဖောင့် ကျဲ့ရ်"
+  },
+  {
+    "id": 500,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "我帮您换个碟子。",
+    "burmese": "ပန်းကန် လာလဲပေးပါမယ်။",
+    "xieyin": "ဝေါ် ပန်းနင် ဟွန့်ကော့ တျဲဇ"
+  },
+  {
+    "id": 501,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "垃圾放这儿，",
+    "burmese": "အမှိုက်တွေ ဒီမှာ ထားလိုက်ပါ၊",
+    "xieyin": "လာဂျီး ဖောင့် ကျဲ့ရ်"
+  },
+  {
+    "id": 502,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "我帮您收走。",
+    "burmese": "ကျွန်တော် လာသိမ်းပေးပါမယ်။",
+    "xieyin": "ဝေါ် ပန်းနင် ရှိုးဇǒu"
+  },
+  {
+    "id": 503,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "菜凉了是吗？",
+    "burmese": "ဟင်း အေးသွားပြီလား။",
+    "xieyin": "ချိုက် လျန်လယ် ရှေ့မ"
+  },
+  {
+    "id": 504,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "帮您拿去加热一下。",
+    "burmese": "သွားနွှေးပေးပါမယ်။",
+    "xieyin": "ပန်းနင် နာချွိ ကျားရဲ့ ယီရှာ့"
+  },
+  {
+    "id": 505,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "可能口感会差点，",
+    "burmese": "အရသာ နည်းနည်း ပြောင်းသွားနိုင်တယ်၊",
+    "xieyin": "ခေါ်နိန် ခိုကန် ဟွေး ခြားတျဲန်"
+  },
+  {
+    "id": 506,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "您不介意吧？",
+    "burmese": "အဆင်ပြေပါ့မလား။",
+    "xieyin": "နင် ပုကျဲယိ ပါ"
+  },
+  {
+    "id": 507,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "结账。",
+    "burmese": "ပိုက်ဆံရှင်းမယ်။",
+    "xieyin": "ကျဲကျောင့်"
+  },
+  {
+    "id": 508,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "买单。",
+    "burmese": "ဘေလ် (Bill) ယူမယ်။",
+    "xieyin": "မိုင်တန်း"
+  },
+  {
+    "id": 509,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "一共多少钱？",
+    "burmese": "အားလုံး ဘယ်လောက်လဲ။",
+    "xieyin": "ယီကုန့် တွောရှောင် ချန်"
+  },
+  {
+    "id": 510,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "一共三百二十块。",
+    "burmese": "အားလုံး ၃၂၀ ကျပ်ပါ။",
+    "xieyin": "ယီကုန့် စန်းပိုင် အာ့ရှီ ခွိုက်"
+  },
+  {
+    "id": 511,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "满一百减十块，",
+    "burmese": "၁၀၀ ဖိုးပြည့်ရင် ၁၀ ကျပ် လျှော့ပေးတော့၊",
+    "xieyin": "မန် ယီပိုင် ကျန် ရှီခွိုက်"
+  },
+  {
+    "id": 512,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "折后三百一十块。",
+    "burmese": "လျော့ပြီးတော့ ၃၁၀ ကျပ် ကျပါမယ်။",
+    "xieyin": "ကျယ်ဟို့ စန်းပိုင် ယီရှီ ခွိုက်"
+  },
+  {
+    "id": 513,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "您是现金还是扫码支付？",
+    "burmese": "ငွေသားလား ဖုန်းနဲ့ရှင်းမှာလား။",
+    "xieyin": "နင်ရှေ့ ရှန့်ကျင်း ဟိုင်ရှေ့ ဆောင်မာ ဂျီဖု"
+  },
+  {
+    "id": 514,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "微信、支付宝都可以。",
+    "burmese": "WeChat ရော Alipay ရော ရပါတယ်။",
+    "xieyin": "ဝေရှင်း၊ ဂျီဖုပေါက် တိုး ခေါ်ယီ"
+  },
+  {
+    "id": 515,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "扫这个码就行。",
+    "burmese": "ဒီ QR Code ကို စကင်ဖတ်လိုက်ပါ။",
+    "xieyin": "ဆောင် ကျဲ့ကော့မာ ကျို့ရှင်း"
+  },
+  {
+    "id": 516,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "现金找您五十块，您再数数。",
+    "burmese": "ငွေအမ်း ၅၀ ပြန်ပေးမယ်၊ တစ်ချက်လောက် ပြန်ရေကြည့်နော်။",
+    "xieyin": "ရှန့်ကျင်း ကျောင်နင် ဝူရှီ ခွိုက်၊ နင် ဇိုက် ရှူ့ရှူ"
+  },
+  {
+    "id": 517,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "请问需要开发票吗？",
+    "burmese": "ဘောက်ချာ (Voucher) ယူမလား။",
+    "xieyin": "ချင်းဝန့် ရွှီးယောင့် ခိုင်း ဖားပျောင့် မ"
+  },
+  {
+    "id": 518,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "电子发票的话扫这张纸。",
+    "burmese": "အွန်လိုင်း ဘောက်ချာလိုချင်ရင် ဒါလေး စကင်ဖတ်လိုက်ပါ။",
+    "xieyin": "တျန့်ဇီ ဖားပျောင့် သဲ့ဟွား ဆောင် ကျဲ့ကျွမ်း ကျီ"
+  },
+  {
+    "id": 519,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "不好意思，酒水不参与打折。",
+    "burmese": "တောင်းပန်ပါတယ်၊ အသောက်အစားတွေက လျှော့စျေးမပါပါဘူး။",
+    "xieyin": "ပုဟောင်ယိစ၊ ကျိုရွှေ ပု ချန်းယွိ တာ့ကျယ်"
+  },
+  {
+    "id": 520,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "这是我们的规定。",
+    "burmese": "ဒါက ဆိုင်စည်းကမ်းမို့လို့ပါ။",
+    "xieyin": "ကျဲ့ရှေ့ ဝေါ်မန်သဲ့ ကွေးသင့်"
+  },
+  {
+    "id": 521,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "帮我抹个零吧，",
+    "burmese": "အစွန်းထွက်လေး လျှော့ပေးပါလား၊",
+    "xieyin": "ပန်းဝေါ် မော့ကော့ လင်း ပါ"
+  },
+  {
+    "id": 522,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "去掉两块钱。",
+    "burmese": "၂ ကျပ် လျှော့ပေးလိုက်မယ်။",
+    "xieyin": "ချွိတယောက် လျǎngခွိုက် ချန်"
+  },
+  {
+    "id": 523,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "好的，收您三百块。",
+    "burmese": "ဟုတ်ကဲ့၊ ၃၀၀ ယူလိုက်ပါမယ်။",
+    "xieyin": "ဟောင်သဲ့၊ ရှိုးနင် စန်းပိုင် ခွိုက်"
+  },
+  {
+    "id": 524,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "这是您的发票，请收好。",
+    "burmese": "ဒါ ဘောက်ချာပါ၊ သိမ်းထားပါနော်။",
+    "xieyin": "ကျဲ့ရှေ့ နင်သဲ့ ဖားပျောင့်၊ ချင်း ရှိုးဟောင်"
+  },
+  {
+    "id": 525,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "剩下的菜需要打包吗？",
+    "burmese": "ကျန်တဲ့ ဟင်းတွေ ပါဆယ် (Parcel) ထုပ်မလား။",
+    "xieyin": "ရှန့်ရှာ့ သဲ့ချိုက် ရွှီးယောင့် တာ့ပေါင် မ"
+  },
+  {
+    "id": 526,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "打包盒一块钱一个。",
+    "burmese": "ပါဆယ်ဘူးက တစ်ဘူး တစ်ကျပ် ပေးရပါတယ်။",
+    "xieyin": "တာ့ပေါင်ဟယ် ယီခွိုက်ချန် ယီကော့"
+  },
+  {
+    "id": 527,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "袋子也是收费的。",
+    "burmese": "အိတ်လည်း ပိုက်ဆံ ပေးရပါတယ်။",
+    "xieyin": "တိုက်ဇ ယဲ့ရှေ့ ရှိုးဖေ့ သဲ့"
+  },
+  {
+    "id": 528,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "我帮您装好。",
+    "burmese": "ကျွန်တော် ထုပ်ပေးပါမယ်။",
+    "xieyin": "ဝေါ် ပန်းနင် ကျွမ်းဟောင်"
+  },
+  {
+    "id": 529,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "餐巾纸可以带走，没问题。",
+    "burmese": "လက်သုတ်ပဝါ (တစ်သျှူး) ယူသွားလို့ ရပါတယ်။",
+    "xieyin": "ချန်းကျင်းကျီ ခေါ်ယီ တိုင်းဇǒu၊ မေးဝန့်ထီ"
+  },
+  {
+    "id": 530,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "您慢走，欢迎下次光临。",
+    "burmese": "ဂရုစိုက်ပြန်ပါ၊ နောက်လည်း လာအားပေးပါဦး။",
+    "xieyin": "နင် မန့်ဇǒu၊ ဟွမ်းယင်း ရှာ့ချိ ကွမ်းလင်"
+  },
+  {
+    "id": 531,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "路上小心。",
+    "burmese": "လမ်းမှာ ဂရုစိုက်ပါ။",
+    "xieyin": "လုရှန် ရှောင်ရှင်း"
+  },
+  {
+    "id": 532,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "记得带好手机和随身物品。",
+    "burmese": "ဖုန်းနဲ့ ပစ္စည်းတွေ ကျန်မကျန် ကြည့်သွားဦးနော်။",
+    "xieyin": "ကျိသဲ့ တိုင်းဟောင် ရှိုဂျီး ဟယ် ဆွီရှမ်း ဝုဖင်"
+  },
+  {
+    "id": 533,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "这桌买单了吗？",
+    "burmese": "ဒီဝိုင်း ပိုက်ဆံရှင်းပြီးပြီလား။",
+    "xieyin": "ကျဲ့ကျွမ်း မိုင်တန်း လယ်မ"
+  },
+  {
+    "id": 534,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "还没买的话赶紧拦住。",
+    "burmese": "မရှင်းရသေးရင် မြန်မြန် တားထား။",
+    "xieyin": "ဟိုင်မေး မိုင် သဲ့ဟွား ကန်ကျิ่น လန်ကျု့"
+  },
+  {
+    "id": 535,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "别让客人跑单了。",
+    "burmese": "ဧည့်သည် ထွက်မပြေးစေနဲ့။",
+    "xieyin": "ပျဲ ရန့် ခဲ့ရန် ဖောင့်တန်း လယ်"
+  },
+  {
+    "id": 536,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "这个菜没上，怎么算钱了？",
+    "burmese": "ဒီဟင်း မရောက်ဘဲနဲ့ ဘာလို့ ပိုက်ဆံတွက်ထားတာလဲ။",
+    "xieyin": "ကျဲ့ကော့ချိုက် မေးရှန့်၊ ဇန်မ ဆွန့်ချန် လယ်"
+  },
+  {
+    "id": 537,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "马上帮您扣掉。",
+    "burmese": "အခုပဲ ပြန်နှုတ်ပေးပါမယ်။",
+    "xieyin": "မာရှန် ပန်းနင် ခို့တယောက်"
+  },
+  {
+    "id": 538,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "退您十块。",
+    "burmese": "၁၀ ကျပ် ပြန်အမ်းပေးမယ်။",
+    "xieyin": "ထွေ့နင် ရှီခွိုက်"
+  },
+  {
+    "id": 539,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "实在抱歉是我们的疏忽。",
+    "burmese": "တောင်းပန်ပါတယ်၊ ကျွန်တော်တို့ ပေါ့ဆသွားလို့ပါ။",
+    "xieyin": "ရှီဇိုက် ပေါက်ချန့် ရှေ့ ဝေါ်မန်သဲ့ ရှူးဟူး"
+  },
+  {
+    "id": 540,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "谢谢您的好评。",
+    "burmese": "မှတ်ချက်ကောင်းလေး ပေးတဲ့အတွက် ကျေးဇူးပါ။",
+    "xieyin": "ရှဲ့ရှဲ့ နင်သဲ့ ဟောင်ဖင်း"
+  },
+  {
+    "id": 541,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "还请给我们点个赞。",
+    "burmese": "Like လေး လုပ်သွားပေးပါဦး။",
+    "xieyin": "ဟိုင်ချင်း ကေ့ ဝေါ်မန် တျဲန်ကော့ ဇန့်"
+  },
+  {
+    "id": 542,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "我们会继续改进服务。",
+    "burmese": "ဝန်ဆောင်မှု ပိုကောင်းအောင် ကြိုးစားပါ့မယ်။",
+    "xieyin": "ဝေါ်မန် ဟွေး ဂျိရွှိ ကိုင်ကျင့် ဖူဝူး"
+  },
+  {
+    "id": 543,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "需要帮您叫辆车吗？",
+    "burmese": "ကား (Taxi) ခေါ်ပေးရမလား။",
+    "xieyin": "ရွှီးယောင့် ပန်းနင် ကျောင့် လျောင့်ချော မ"
+  },
+  {
+    "id": 544,
+    "category": "餐饮服务",
+    "sub": "客诉与结账",
+    "chinese": "门口有出租车。",
+    "burmese": "ဆိုင်ရှေ့မှာ အငှားကား ရှိပါတယ်။",
+    "xieyin": "မန်ခို ယို ချူးဇူးချော"
+  },
+  {
+    "id": 545,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "扫地。",
+    "burmese": "တံမြက်စည်း လှည်း။",
+    "xieyin": "ဆောင်တီး"
+  },
+  {
+    "id": 546,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "拖地。",
+    "burmese": "ကြမ်းတိုက်။",
+    "xieyin": "ထွမ်းတီး"
+  },
+  {
+    "id": 547,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "地板太油了，",
+    "burmese": "ကြမ်းပြင်မှာ ဆီတွေ အရမ်းများနေတယ်၊",
+    "xieyin": "တီးပန် ထိုက်ယို လယ်"
+  },
+  {
+    "id": 548,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "多放洗洁精拖干净。",
+    "burmese": "ဆပ်ပြာရည်များများသုံးပြီး ပြောင်အောင်တိုက်။",
+    "xieyin": "တွောဖောင့် ရှီကျဲကျင်း ထွမ်း ကန်းကျင့်"
+  },
+  {
+    "id": 549,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "垃圾桶满了，",
+    "burmese": "အမှိုက်ပုံး ပြည့်နေပြီ၊",
+    "xieyin": "လာဂျီးထုံ မန်လယ်"
+  },
+  {
+    "id": 550,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "赶紧倒掉。",
+    "burmese": "မြန်မြန် သွားသွန်။",
+    "xieyin": "ကန်ကျิ่น တောက်တယောက်"
+  },
+  {
+    "id": 551,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "换个新的垃圾袋。",
+    "burmese": "အမှိုက်အိတ်အသစ် လဲလိုက်။",
+    "xieyin": "ဟွန့်ကော့ ရှင်းသဲ့ လာဂျီးတိုက်"
+  },
+  {
+    "id": 552,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "桌子擦干净点，别粘手。",
+    "burmese": "စားပွဲကို လက်မကပ်အောင် သန့်သန့်ရှင်းရှင်းသုတ်။",
+    "xieyin": "ကျွမ်းဇ ခြား ကန်းကျင့် တျဲန်၊ ပျဲ နျန်ရှို"
+  },
+  {
+    "id": 553,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "玻璃上有指印，",
+    "burmese": "မှန်ပေါ်မှာ လက်ရာတွေ ကျန်နေတယ်၊",
+    "xieyin": "ပိုလီရှန် ယို ဂျီယင့်"
+  },
+  {
+    "id": 554,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "喷点玻璃水擦了。",
+    "burmese": "မှန်ကြည်ဆေးဖျန်းပြီး သုတ်လိုက်။",
+    "xieyin": "ဖန်းတျဲန် ပိုလီရွှေ ခြားလယ်"
+  },
+  {
+    "id": 555,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "洗手间有味，",
+    "burmese": "အိမ်သာ နံနေတယ်၊",
+    "xieyin": "ရှီရှိုကျန်း ယိုဝေ့"
+  },
+  {
+    "id": 556,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "赶紧刷马桶。",
+    "burmese": "ဘိုထိုင်ကို မြန်မြန် ဆေးလိုက်။",
+    "xieyin": "ကန်ကျิ่น ရွှာ မာထုံ"
+  },
+  {
+    "id": 557,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "洗手间的纸巾补一下。",
+    "burmese": "အိမ်သာထဲ တစ်သျှူး ဖြည့်လိုက်။",
+    "xieyin": "ရှီရှိုကျန်း သဲ့ ကျီကျင်း ပူယီရှာ့"
+  },
+  {
+    "id": 558,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "灯坏了换个灯泡。",
+    "burmese": "မီးပျက်နေတယ်၊ မီးသီး လဲလိုက်။",
+    "xieyin": "တိန်း ဟွိုက်လယ် ဟွန့်ကော့ တိန်းဖောင့်"
+  },
+  {
+    "id": 559,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "餐具放进消毒柜消毒。",
+    "burmese": "ပန်းကန်ခွက်ယောက်တွေ ပိုးသတ်စက်ထဲ ထည့်လိုက်။",
+    "xieyin": "ချန်းကျွိ ဖောင့်ကျင့် ရှောင်တူကွေ့ ရှောင်တူ"
+  },
+  {
+    "id": 560,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "二十分钟后拿出来晾凉。",
+    "burmese": "မိနစ် ၂၀ နေရင် ထုတ်ပြီး အအေးခံထား။",
+    "xieyin": "အာ့ရှီ ဖန်းကျုံး ဟို့ နာချူးလိုင် လျောင့်လျောင်"
+  },
+  {
+    "id": 561,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "有裂缝的碗直接扔掉。",
+    "burmese": "အက်နေတဲ့ ပန်းကန်တွေ လွှင့်ပစ်လိုက်တော့။",
+    "xieyin": "ယို လျဲ့ဖုန့် သဲ့ဝမ် ဂျီးကျဲ ရန်းတယောက်"
+  },
+  {
+    "id": 562,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "调料瓶空了赶紧补。",
+    "burmese": "အဆာပုလင်း လွတ်နေရင် မြန်မြန်ဖြည့်။",
+    "xieyin": "ထျောင်လျောင့်ဖင်း ခုံးလယ် ကန်ကျิ่น ပူ"
+  },
+  {
+    "id": 563,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "瓶口擦干净。",
+    "burmese": "ပုလင်းဝ ကို သန့်ရှင်းအောင် သုတ်ထား။",
+    "xieyin": "ဖင်းခို ခြား ကန်းကျင့်"
+  },
+  {
+    "id": 564,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "桌椅摆整齐。",
+    "burmese": "ခုံတွေ သေသေချာချာ စီထား။",
+    "xieyin": "ကျွမ်းယီ ပိုင် ကျိန်ချီ"
+  },
+  {
+    "id": 565,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "菜单粘住了撕开。",
+    "burmese": "မီနူးကပ်နေရင် ခွာလိုက်။",
+    "xieyin": "ချိုက်တန်း နျန်ကျု့ လယ် ဆီးခိုင်း"
+  },
+  {
+    "id": 566,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "坏的菜单换张新的。",
+    "burmese": "မီနူး ဟောင်းနေရင် အသစ်လဲ။",
+    "xieyin": "ဟွိုက်သဲ့ ချိုက်တန်း ဟွန့်ကျွမ်း ရှင်းသဲ့"
+  },
+  {
+    "id": 567,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "给地毯吸尘。",
+    "burmese": "ကော်ဇောကို ဖုန်စုပ်စက်နဲ့ စုပ်။",
+    "xieyin": "ကေ့ တီးထန် ရှီးချန်"
+  },
+  {
+    "id": 568,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "盆栽浇水。",
+    "burmese": "ပန်းပင် ရေလောင်း။",
+    "xieyin": "ဖန်ဇိုင်း ကျောင်းရွှေ"
+  },
+  {
+    "id": 569,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "空调滤网该洗了，",
+    "burmese": "အဲကွန်း ဖစ်လ်တာ (Filter) ဆေးရတော့မယ်၊",
+    "xieyin": "ခုံးထျောင် လွီဝမ် ကိုင်ရှီ လယ်"
+  },
+  {
+    "id": 570,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "吹出来的风有味道。",
+    "burmese": "ထွက်လာတဲ့လေက အနံ့နံနေတယ်။",
+    "xieyin": "ချွီးချူးလိုင် သဲ့ဖုန်း ယို ဝေ့တောက်"
+  },
+  {
+    "id": 571,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "蟑螂药放了吗？",
+    "burmese": "ပိုးဟပ်ဆေး ချပြီးပြီလား။",
+    "xieyin": "ကျောင်းလောင်ယောက် ဖောင့်လယ် မ"
+  },
+  {
+    "id": 572,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "老鼠药放了吗？",
+    "burmese": "ကြွက်သတ်ဆေး ချပြီးပြီလား။",
+    "xieyin": "လောင်ရှူ့ယောက် ဖောင့်လယ် မ"
+  },
+  {
+    "id": 573,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "苍蝇太多，拿电蚊拍打。",
+    "burmese": "ယင်ကောင်တွေများနေတယ်၊ ယင်ရိုက်တံနဲ့ ရိုက်။",
+    "xieyin": "ချန်ယင်း ထိုက်တွော၊ နာ တျန့်ဝန်ဖိုင် တာ"
+  },
+  {
+    "id": 574,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "别在客人面前拍苍蝇。",
+    "burmese": "ဧည့်သည်ရှေ့မှာ ယင်ကောင် လိုက်မရိုက်နဲ့။",
+    "xieyin": "ပျဲ ဇိုက် ခဲ့ရန် မျန့်ချန် ဖိုင် ချန်ယင်း"
+  },
+  {
+    "id": 575,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "关好纱窗。",
+    "burmese": "ဇကာတံခါး ပိတ်ထား။",
+    "xieyin": "ကွမ်းဟောင် ရှားချွမ်း"
+  },
+  {
+    "id": 576,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "关好后门。",
+    "burmese": "အနောက်တံခါး ပိတ်ထား။",
+    "xieyin": "ကွမ်းဟောင် ဟို့မန်"
+  },
+  {
+    "id": 577,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "锁好仓库。",
+    "burmese": "စတိုခန်း သော့ခတ်ထား။",
+    "xieyin": "ဆော်ဟောင် ချန်းခူး"
+  },
+  {
+    "id": 578,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "钥匙别乱给人。",
+    "burmese": "သော့ကို လူတိုင်း လျှောက်မပေးနဲ့။",
+    "xieyin": "ယော့ရှီ ပျဲ လွန့်ကေ့ ရန်"
+  },
+  {
+    "id": 579,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "案板和刀要洗干净。",
+    "burmese": "စဉ့်နှီတုံး နဲ့ ဓားကို သန့်ရှင်းနေအောင် ထား။",
+    "xieyin": "အန့်ပန် ဟယ်တောင်း ယောင့် ရှီ ကန်းကျင့်"
+  },
+  {
+    "id": 580,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "刀磨一下，切不动肉了。",
+    "burmese": "ဓားသွေးလိုက်ဦး၊ အသားလှီးမရတော့ဘူး။",
+    "xieyin": "တောင်း မော်ယီရှာ့၊ ချဲပုတုံ့ ရို့ လယ်"
+  },
+  {
+    "id": 581,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "员工头发扎起来。",
+    "burmese": "ဝန်ထမ်းတွေ ဆံပင်စည်းထားကြ။",
+    "xieyin": "ယွမ်ကုန်း ထိုဖာ ဇားချီလိုင်"
+  },
+  {
+    "id": 582,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "戴好口罩和围裙。",
+    "burmese": "Mask နဲ့ ဧပရွန် (Apron) ဝတ်ထား။",
+    "xieyin": "တိုက်ဟောင် ခိုကျောက် ဟယ် ဝေချွင်"
+  },
+  {
+    "id": 583,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "指甲剪短。",
+    "burmese": "လက်သည်း ညှပ်ထား။",
+    "xieyin": "ဂျီကျာ ကျန်တုမ်"
+  },
+  {
+    "id": 584,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "别涂指甲油。",
+    "burmese": "လက်သည်းနီ မဆိုးနဲ့။",
+    "xieyin": "ပျဲထူ ဂျီကျာယို"
+  },
+  {
+    "id": 585,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "别戴首饰。",
+    "burmese": "လက်ဝတ်ရတနာ မဝတ်နဲ့။",
+    "xieyin": "ပျဲတိုက် ရှိုးရှေ့"
+  },
+  {
+    "id": 586,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "洗手液加满。",
+    "burmese": "လက်ဆေးရည် ဖြည့်ထား။",
+    "xieyin": "ရှီရှိုးယဲ့ ကျားမန်"
+  },
+  {
+    "id": 587,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "镜子擦亮点。",
+    "burmese": "မှန်ကို ပြောင်နေအောင် သုတ်။",
+    "xieyin": "ကျင့်ဇ ခြား လျောင့်တျဲန်"
+  },
+  {
+    "id": 588,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "准备迎接卫生检查。",
+    "burmese": "စည်ပင်လာစစ်မှာမို့ ပြင်ဆင်ထား။",
+    "xieyin": "ကျွမ်ဘေ့ ယင်းကျဲ ဝေ့ရှန်း ကျန်ခြား"
+  },
+  {
+    "id": 589,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "开会了。",
+    "burmese": "အစည်းအဝေး လုပ်မယ်။",
+    "xieyin": "ခိုင်းဟွေး လယ်"
+  },
+  {
+    "id": 590,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "谁迟到了？",
+    "burmese": "ဘယ်သူ နောက်ကျလဲ။",
+    "xieyin": "ရွှေ ခြီတောက် လယ်"
+  },
+  {
+    "id": 591,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "按规定扣工资。",
+    "burmese": "စည်းကမ်းအတိုင်း လစာဖြတ်မယ်။",
+    "xieyin": "အန့် ကွေးသင့် ခို့ ကုန်းဇီး"
+  },
+  {
+    "id": 592,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "明天早点到。",
+    "burmese": "မနက်ဖြန် စောစောလာ။",
+    "xieyin": "မင်းထျန်း ဇောင်တျဲန် တောက်"
+  },
+  {
+    "id": 593,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "这个月表现不错，有奖金。",
+    "burmese": "ဒီလ အလုပ်လုပ်တာကောင်းတယ်၊ ဘောနပ်စ် (Bonus) ပေးမယ်။",
+    "xieyin": "ကျဲ့ကော့ယွဲ့ ပျောင်ရှန့် ပုချွ၊ ယို ကျǎngကျင်း"
+  },
+  {
+    "id": 594,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "昨天桌子没收干净，罚站反省。",
+    "burmese": "မနေ့က စားပွဲသိမ်းတာ မသန့်ဘူး၊ မတ်တတ်ရပ်ပြီး ပြန်သုံးသပ်။",
+    "xieyin": "ဇော်ထျန်း ကျွမ်းဇ မေးရှိုး ကန်းကျင့်၊ ဖာကျန့် ဖန်ရှင်း"
+  },
+  {
+    "id": 595,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "请假要提前三天说。",
+    "burmese": "ခွင့်ယူရင် ၃ ရက် ကြိုပြော။",
+    "xieyin": "ချင်းကျား ယောင့် ထီချန် စန်းထျန်း ရွှော"
+  },
+  {
+    "id": 596,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "现在人手不够，尽量别请假。",
+    "burmese": "အခု လူမလောက်ဘူး၊ တတ်နိုင်သလောက် ခွင့်မယူနဲ့။",
+    "xieyin": "ရှန့်ဇိုက် ရန်ရှို ပုကို့၊ ကျင့်လျောင့် ပျဲ ချင်းကျား"
+  },
+  {
+    "id": 597,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "特殊情况可以酌情批准。",
+    "burmese": "အရေးကြီးကိစ္စဆိုရင်တော့ ခွင့်ပေးမယ်။",
+    "xieyin": "ထဲ့ရှူး ချင်းခွန့် ခေါ်ယီ ကျော်ချင်း ဖီးကျွမ်"
+  },
+  {
+    "id": 598,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "十五号发工资。",
+    "burmese": "၁၅ ရက်နေ့ လစာထုတ်မယ်။",
+    "xieyin": "ရှီဝူဟောင့် ဖား ကုန်းဇီး"
+  },
+  {
+    "id": 599,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "这是新来的员工，你带带他。",
+    "burmese": "ဒါ ဝန်ထမ်းအသစ်၊ မင်း သင်ပြပေးလိုက်။",
+    "xieyin": "ကျဲ့ရှေ့ ရှင်းလိုင်သဲ့ ယွမ်ကုန်း၊ နီ တိုင်းတိုက် ထာ"
+  },
+  {
+    "id": 600,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "教他怎么端盘子、点单。",
+    "burmese": "ပန်းကန်ဘယ်လိုချရလဲ၊ အော်ဒါဘယ်လိုမှတ်ရလဲ သင်ပေးလိုက်။",
+    "xieyin": "ကျောင်းထာ ဇန်မ တွမ်းဖန်ဇ၊ တျဲန်တန်း"
+  },
+  {
+    "id": 601,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "别洒了菜。",
+    "burmese": "ဟင်းတွေ ဖိတ်မကျစေနဲ့။",
+    "xieyin": "ပျဲ စာ လယ် ချိုက်"
+  },
+  {
+    "id": 602,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "电话响了赶紧接。",
+    "burmese": "ဖုန်းလာနေတယ် မြန်မြန်ကိုင်။",
+    "xieyin": "တျန့်ဟွား ရှန်လယ် ကန်ကျิ่น ကျဲ"
+  },
+  {
+    "id": 603,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "订位要问清人数、时间、联系方式。",
+    "burmese": "ဘိုကင်လက်ခံရင် လူဦးရေ၊ အချိန် နဲ့ ဖုန်းနံပါတ် သေချာမေး။",
+    "xieyin": "တင့်ဝေ့ ယောင့် ဝန့်ချင်း ရန်ရှူ့၊ ရှီကျန်း၊ လျန်ရှီး ဖောင့်ရှေ့"
+  },
+  {
+    "id": 604,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "大桌要收定金。",
+    "burmese": "ဝိုင်းကြီးရင် စပေါ်ငွေ (Deposit) ကောက်။",
+    "xieyin": "တာ့ကျွမ်း ယောင့်ရှိုး တင့်ကျင်း"
+  },
+  {
+    "id": 605,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "菜送到了吗？",
+    "burmese": "ဈေးဝယ်ထားတာတွေ ရောက်ပြီလား။",
+    "xieyin": "ချိုက် ဆောင့်တောက် လယ်မ"
+  },
+  {
+    "id": 606,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "催一下供应商。",
+    "burmese": "ကုန်သည်ကို လှမ်းလောလိုက်။",
+    "xieyin": "ချွီးယီရှာ့ ကုန်းယင့်ရှန်"
+  },
+  {
+    "id": 607,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "不新鲜的菜别收，",
+    "burmese": "မလတ်ဆတ်တဲ့ ဟင်းသီးဟင်းရွက်တွေ လက်မခံနဲ့၊",
+    "xieyin": "ပုရှင်းရှန်း သဲ့ ချိုက် ပျဲရှိုး"
+  },
+  {
+    "id": 608,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "直接退回去。",
+    "burmese": "တန်းပြီး ပြန်ပို့လိုက်။",
+    "xieyin": "ဂျီးကျဲ ထွေ့ဟွေးချွိ"
+  },
+  {
+    "id": 609,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "肉颜色不对、有异味，不能用。",
+    "burmese": "အသားအရောင် မလှဘူး၊ အနံ့နံနေတယ်၊ သုံးလို့မရဘူး။",
+    "xieyin": "ရို့ ယန်ဆဲ့ ပုတွေ့၊ ယို ယိဝေ့၊ ပုနိန်ယုံ့"
+  },
+  {
+    "id": 610,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "鱼死了，",
+    "burmese": "ငါး သေနေပြီ၊",
+    "xieyin": "ယွီ စီလယ်"
+  },
+  {
+    "id": 611,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "赶紧扔掉。",
+    "burmese": "မြန်မြန် လွှင့်ပစ်လိုက်။",
+    "xieyin": "ကန်ကျิ่น ရန်းတယောက်"
+  },
+  {
+    "id": 612,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "米快没了，买三袋回来。",
+    "burmese": "ဆန် ကုန်တော့မယ်၊ ၃ အိတ်လောက် ဝယ်ထား။",
+    "xieyin": "မီ ခွိုက်မေးလယ်၊ မိုင် စန်းတိုက် ကောလိုင်"
+  },
+  {
+    "id": 613,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "油快没了，买两桶回来。",
+    "burmese": "ဆီ ကုန်တော့မယ်၊ ၂ ပုံးလောက် ဝယ်ထား။",
+    "xieyin": "ယို ခွိုက်မေးလယ်၊ မိုင် လျǎngထုံ ကောလိုင်"
+  },
+  {
+    "id": 614,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "算好够用几天。",
+    "burmese": "ဘယ်နှရက်စာလောက်လဲ တွက်ကြည့်လိုက်ဦး။",
+    "xieyin": "ဆွန့်ဟောင် ကို့ယုံ့ ကျီထျန်း"
+  },
+  {
+    "id": 615,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "冷柜温度不够，",
+    "burmese": "ရေခဲသေတ္တာ အအေးမလာတော့ဘူး၊",
+    "xieyin": "လိန်ကွေ့ ဝန်းတု ပုကို့"
+  },
+  {
+    "id": 616,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "找师傅修。",
+    "burmese": "ပြင်တဲ့လူ ခေါ်လိုက်။",
+    "xieyin": "ကျောင် ရှီးဖု ရှူး"
+  },
+  {
+    "id": 617,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "酒水入库数清楚。",
+    "burmese": "အဖျော်ယမကာတွေ စာရင်းသွင်းရင် သေချာရေ။",
+    "xieyin": "ကျိုရွှေ ရုခူး ရှူ့ ချင်းချူ"
+  },
+  {
+    "id": 618,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "贵的红酒拿的时候小心点。",
+    "burmese": "ဈေးကြီးတဲ့ ဝိုင်တွေ သယ်ရင် သတိထား။",
+    "xieyin": "ကွေ့သဲ့ ဟုန်ကျို နာသဲ့ ရှီဟို့ ရှောင်ရှင်း တျဲန်"
+  },
+  {
+    "id": 619,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "面粉受潮结块了不能用。",
+    "burmese": "ဂျုံမှုန့်တွေ စိုပြီး ခဲကုန်ပြီ၊ သုံးလို့မရတော့ဘူး။",
+    "xieyin": "မျန့်ဖန် ရှို့ချောင် ကျဲခွိုက် လယ် ပုနိန်ယုံ့"
+  },
+  {
+    "id": 620,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "调料少了赶紧补。",
+    "burmese": "ဟင်းခတ်အမွှေးအကြိုင် လိုနေရင် မြန်မြန်ဖြည့်။",
+    "xieyin": "ထျောင်လျောင့် ရှောင်လယ် ကန်ကျิ่น ပူ"
+  },
+  {
+    "id": 621,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "记好账。",
+    "burmese": "စာရင်း သေချာမှတ်။",
+    "xieyin": "ကျိဟောင် ကျောင့်"
+  },
+  {
+    "id": 622,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "水费该交了。",
+    "burmese": "ရေဖိုးဆောင်ရတော့မယ်။",
+    "xieyin": "ရွှေဖေ့ ကိုင်ကျောင်း လယ်"
+  },
+  {
+    "id": 623,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "电费该交了。",
+    "burmese": "မီတာခဆောင်ရတော့မယ်။",
+    "xieyin": "တျန့်ဖေ့ ကိုင်ကျောင်း လယ်"
+  },
+  {
+    "id": 624,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "天然气费该交了。",
+    "burmese": "ဂက်စ်ဖိုးဆောင်ရတော့မယ်။",
+    "xieyin": "ထျန်းရန်ချိဖေ့ ကိုင်ကျောင်း လယ်"
+  },
+  {
+    "id": 625,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "别断了影响营业。",
+    "burmese": "မပြတ်စေနဲ့၊ ဆိုင်ဖွင့်တာ ထိခိုက်လိမ့်မယ်။",
+    "xieyin": "ပျဲ တွန့်လယ် ယင်းရှန် ယင်းယဲ့"
+  },
+  {
+    "id": 626,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "抽油烟机坏了，",
+    "burmese": "အညှော်စုပ်စက် ပျက်နေတယ်၊",
+    "xieyin": "ချိုးယိုယန်းဂျီး ဟွိုက်လယ်"
+  },
+  {
+    "id": 627,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "排风口坏了",
+    "burmese": "လေစုပ်ပန်ကာ (Exhaust fan) ပျက်နေတယ်။",
+    "xieyin": "ဖိုင်ဖုန်းခို ဟွိုက်လယ်"
+  },
+  {
+    "id": 628,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "招牌灯坏了，",
+    "burmese": "ဆိုင်းဘုတ်မီး ပျက်နေတယ်၊",
+    "xieyin": "ကျောင်းဖိုင်တိန်း ဟွိုက်လယ်"
+  },
+  {
+    "id": 629,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "找专业师傅来修。",
+    "burmese": "ကျွမ်းကျင်တဲ့ဆရာ ခေါ်ပြင်။",
+    "xieyin": "ကျောင် ကျွမ်ယဲ့ ရှီးဖု လိုင်ရှူး"
+  },
+  {
+    "id": 630,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "停止营业了。",
+    "burmese": "ဆိုင်ပိတ်ပါပြီ။",
+    "xieyin": "ထင်းကျီ ယင်းယဲ့ လယ်"
+  },
+  {
+    "id": 631,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "先等最后一桌客人吃完，别赶人。",
+    "burmese": "နောက်ဆုံးဝိုင်း စားပြီးတဲ့အထိစောင့်၊ မောင်းမထုတ်နဲ့။",
+    "xieyin": "ရှန်း เติန့် ဇွေ့ဟို့ ယီကျွမ်း ခဲ့ရန် ချီးဝမ်၊ ပျဲ ကန်ရန်"
+  },
+  {
+    "id": 632,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "关招牌灯。",
+    "burmese": "ဆိုင်းဘုတ်မီး ပိတ်လိုက်။",
+    "xieyin": "ကွမ်း ကျောင်းဖိုင်တိန်း"
+  },
+  {
+    "id": 633,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "清空垃圾。",
+    "burmese": "အမှိုက်တွေ ရှင်းလိုက်။",
+    "xieyin": "ချင်းခုံး လာဂျီး"
+  },
+  {
+    "id": 634,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "洗完餐具。",
+    "burmese": "ပန်းကန်တွေ ကုန်အောင်ဆေး။",
+    "xieyin": "ရှီဝမ် ချန်းကျွိ"
+  },
+  {
+    "id": 635,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "擦好桌子。",
+    "burmese": "စားပွဲတွေ သုတ်ထား။",
+    "xieyin": "ခြားဟောင် ကျွမ်းဇ"
+  },
+  {
+    "id": 636,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "把明天的菜泡好洗干净。",
+    "burmese": "မနက်ဖြန်အတွက် ဟင်းသီးဟင်းရွက်တွေ ရေဆေးထား။",
+    "xieyin": "ပါ မင်းထျန်း သဲ့ချိုက် ဖောင့်ဟောင် ရှီ ကန်းကျင့်"
+  },
+  {
+    "id": 637,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "锁好门窗。",
+    "burmese": "တံခါးတွေ ပြတင်းပေါက်တွေ သော့ခတ်ထား။",
+    "xieyin": "ဆော်ဟောင် မန်ချွမ်း"
+  },
+  {
+    "id": 638,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "检查煤气阀门。",
+    "burmese": "ဂက်စ်အိုး ဘား (Valve) တွေကို စစ်ဆေး။",
+    "xieyin": "ကျန်ခြား မေချိ ဖာမန်"
+  },
+  {
+    "id": 639,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "检查电源，及时断电。",
+    "burmese": "မီးခလုတ်တွေ စစ်ပြီး ပိတ်သင့်တာပိတ်။",
+    "xieyin": "ကျန်ခြား တျန့်ယွမ်၊ ဂျီရှီ တွန့်တျန့်"
+  },
+  {
+    "id": 640,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "空调关了再走。",
+    "burmese": "အဲကွန်းပိတ်ပြီးမှ ပြန်ကြ။",
+    "xieyin": "ခုံးထျောင် ကွမ်းလယ် ဇိုက် ဇǒu"
+  },
+  {
+    "id": 641,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "大家下班吧",
+    "burmese": "ကဲ... အားလုံးပဲ အလုပ်ဆင်းလို့ရပြီ။",
+    "xieyin": "တာ့ကျား ရှာ့ပန်း ပါ"
+  },
+  {
+    "id": 642,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "注意安全。",
+    "burmese": "ဂရုစိုက်ပြန်ကြနော်။",
+    "xieyin": "ကျူးယိ အန်ချွမ်း"
+  },
+  {
+    "id": 643,
+    "category": "餐饮服务",
+    "sub": "后勤管理",
+    "chinese": "今天营业额不错，辛苦了。",
+    "burmese": "ဒီနေ့ ရောင်းအား ကောင်းတယ်၊ ပင်ပန်းသွားကြပြီ။",
+    "xieyin": "ကျင်းထျန်း ယင်းယဲ့အယ် ပုချွ၊ ရှင်းခူ လယ်"
+  }
+  ]
