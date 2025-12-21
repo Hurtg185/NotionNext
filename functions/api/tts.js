@@ -1,40 +1,34 @@
 // functions/api/tts.js
 export async function onRequestGet(context) {
     const { searchParams } = new URL(context.request.url);
-    const text = searchParams.get('t'); // 对应你的 t 参数
-    const voice = searchParams.get('v') || 'zh-CN-XiaoyouNeural'; // 对应你的 v 参数
+    const text = searchParams.get('t'); 
+    const voice = searchParams.get('v');
+    const rate = searchParams.get('r');
 
-    if (!text) {
-        return new Response('Missing text', { status: 400 });
-    }
+    if (!text) return new Response('Missing text', { status: 400 });
 
-    // 你的原始接口地址
-    const targetUrl = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${voice}`;
+    // 默认值设置
+    // 如果是中文发音人且没传语速，默认设为 -20
+    let finalRate = rate || (voice && voice.startsWith('zh') ? '-20' : '0');
+    let finalVoice = voice || 'zh-CN-XiaoyouNeural';
 
-    // 使用 Cloudflare 的 fetch 抓取音频
+    // 拼凑目标 URL
+    const targetUrl = `https://libretts.is-an.org/api/tts?text=${encodeURIComponent(text)}&voice=${finalVoice}&rate=${finalRate}`;
+
     const response = await fetch(targetUrl, {
-        // 这里的 cf 配置确保 Cloudflare 尝试缓存此请求
         cf: {
             cacheEverything: true,
-            cacheTtl: 7776000, // 边缘缓存 90 天 (单位：秒)
+            cacheTtl: 7776000, // 缓存 90 天
         }
     });
 
-    // 如果接口报错，直接返回
-    if (!response.ok) {
-        return new Response('TTS Origin Error', { status: response.status });
-    }
+    if (!response.ok) return new Response('TTS Origin Error', { status: response.status });
 
-    // 创建新的响应，注入缓存控制头
     const newResponse = new Response(response.body, response);
     
-    // 设置缓存策略
-    // s-maxage=7776000: Cloudflare 节点缓存 90 天
-    // max-age=6592000: 用户浏览器缓存 30 天
-    newResponse.headers.set('Cache-Control', 'public, s-maxage=7776000, max-age=6592000');
-    
-    // 允许跨域（确保所有组件都能调用）
+    // 强缓存头
+    newResponse.headers.set('Cache-Control', 'public, s-maxage=7776000, max-age=2592000');
     newResponse.headers.set('Access-Control-Allow-Origin', '*');
-
+    
     return newResponse;
 }
