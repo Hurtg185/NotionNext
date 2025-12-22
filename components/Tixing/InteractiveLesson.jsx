@@ -228,17 +228,34 @@ export default function InteractiveLesson({ lesson }) {
   const [mistakeCount, setMistakeCount] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
   
+  // 使用 Ref 追踪课程ID，防止父组件重渲染时重置 dynamicBlocks 导致错题丢失
+  const initializedLessonId = useRef(null);
+  
   // 计时器状态
   const [timeSpent, setTimeSpent] = useState(0);
   const timerRef = useRef(null);
 
-  // 初始化
+  // 初始化：仅在课程 ID 变化时重置题目队列
   useEffect(() => {
     setHasMounted(true);
-    if (lesson?.blocks) {
+    
+    // 如果 lesson 数据存在，且是新课程（ID不同），则初始化
+    if (lesson?.blocks && lesson.id !== initializedLessonId.current) {
+      setDynamicBlocks(lesson.blocks);
+      initializedLessonId.current = lesson.id;
+      // 重置状态
+      setCurrentIndex(0);
+      setMistakeCount(0);
+      setTimeSpent(0);
+      setIsFinished(false);
+    } 
+    // 兜底：如果 dynamicBlocks 为空（首次加载无ID情况），强制初始化
+    else if (lesson?.blocks && dynamicBlocks.length === 0) {
       setDynamicBlocks(lesson.blocks);
     }
-  }, [lesson]);
+    // 注意：这里删除了 else { setDynamicBlocks(lesson.blocks) }，
+    // 这样当父组件重渲染时，已经加入队列的错题不会被覆盖消失。
+  }, [lesson, dynamicBlocks.length]);
 
   // 获取当前块
   const currentBlock = dynamicBlocks[currentIndex];
@@ -298,7 +315,7 @@ export default function InteractiveLesson({ lesson }) {
     setIsFinished(false);
   };
 
-  // --- 错题沉底逻辑 (关键修复) ---
+  // --- 错题沉底逻辑 (核心修复) ---
   const handleWrong = useCallback(() => {
     // 1. 记录错误次数
     setMistakeCount(prev => prev + 1);
@@ -306,19 +323,21 @@ export default function InteractiveLesson({ lesson }) {
     // 2. 复制当前题目并添加到队尾
     // 必须使用 functional update (prev => ...) 确保拿到最新的 blocks
     setDynamicBlocks(prev => {
+      // 防止在同一题重复添加：检查最后一个元素是否已经是当前题的副本
       const currentBlockData = prev[currentIndex];
-      // 生成一个重做副本 (添加 retry 标记防止 key 重复警告，或者依赖 index)
+      
+      // 生成一个重做副本 (添加 retry 标记)
       const retryBlock = { 
         ...currentBlockData, 
         _isRetry: true // 内部标记
       };
-      // 追加到末尾
+      
+      console.log("错题已加入重做队列:", retryBlock);
       return [...prev, retryBlock];
     });
 
-    // 注意：这里绝不要调用 goNext()。
-    // 逻辑是：用户答错 -> 界面显示错误反馈 -> 题目被静默加到队尾 -> 用户点击界面上的“继续”按钮 -> 子组件调用 onNext -> 进入下一题。
-  }, [currentIndex]); // 移除 dynamicBlocks 依赖，只依赖 currentIndex 即可，内部 prev 会是最新的
+    // 注意：这里不调用 goNext()。逻辑是 UI 显示错误 -> 用户点继续 -> 调用 onNext。
+  }, [currentIndex]);
 
 
   // --- 渲染逻辑 ---
@@ -385,7 +404,7 @@ export default function InteractiveLesson({ lesson }) {
   const hideTopProgressBar = ['cover', 'start_page', 'complete', 'end'].includes(type);
 
   return (
-    // 添加 pt-20 (padding-top: 5rem) 确保内容不贴顶，给进度条留空间
+    // 移除了 pt-24，恢复原始布局，取消顶部避让
     <div className="fixed inset-0 w-screen h-screen bg-slate-50 flex flex-col overflow-hidden font-sans" style={{ touchAction: 'none' }}>
       <style>{`
         ::-webkit-scrollbar { display: none; } 
@@ -414,8 +433,8 @@ export default function InteractiveLesson({ lesson }) {
         </div>
       )}
 
-      {/* 主内容区 - 添加 pt-24 (padding top 6rem) 防止贴顶 */}
-      <main className="relative w-full h-full z-10 pt-24">
+      {/* 主内容区 - 移除了 pt-24 */}
+      <main className="relative w-full h-full z-10">
         {renderContent()}
       </main>
     </div>
