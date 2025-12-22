@@ -298,7 +298,7 @@ export default function InteractiveLesson({ lesson }) {
           <button 
             onClick={goPrev}
             disabled={currentIndex === 0}
-            className={`w-14 h-14 rounded-full flex items-center justify-center bg-white border border-slate-200 text-slate-600 shadow-xl transition-all active:scale-90
+            className={`w-10 h-10 rounded-full flex items-center justify-center bg-white border border-slate-200 text-slate-600 shadow-xl transition-all active:scale-90
               ${currentIndex === 0 ? 'opacity-0 invisible' : 'opacity-100'}`}
           >
             <FaChevronLeft size={20} />
