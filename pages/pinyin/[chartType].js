@@ -152,7 +152,7 @@ export default function PinyinChartPage({ chartType: initialType }) {
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
       </Head>
 
-      {/* 顶部标题栏 */}
+     // {/* 顶部标题栏 */}
       <div className="fixed top-0 left-0 right-0 h-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md z-50 flex items-center justify-center px-4 border-b border-slate-200 dark:border-slate-800">
          <h1 className="text-[1.1rem] font-black text-slate-800 dark:text-slate-100 font-myanmar">
             {chartData.title}
@@ -160,7 +160,7 @@ export default function PinyinChartPage({ chartType: initialType }) {
       </div>
 
       {/* 网格内容 */}
-      <div className="pt-20 pb-16 max-w-2xl mx-auto px-4">
+      <div className="pt-4 pb-16 max-w-2xl mx-auto px-4">
          <PinyinChartClient initialData={chartData} />
       </div>
 
