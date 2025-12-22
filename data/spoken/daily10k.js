@@ -9493,5 +9493,4 @@ export default [
   { id: 1391, category: "各种问法", sub: "问人", chinese: "还有谁没交钱？", pinyin: "Hái yǒu shéi méi jiāo qián?", burmese: "ဘယ်သူ ပိုက်ဆံမပေးရသေးဘဲ ကျန်နေလဲ။", xieyin: "ဟိုင် ယို ရွှေ မေ ကျောင်း ချျဲန်" },
   { id: 1392, category: "各种问法", sub: "问人", chinese: "除了他还有谁？", pinyin: "Chúle tā hái yǒu shéi?", burmese: "သူကလွဲရင် ဘယ်သူရှိသေးလဲ။", xieyin: "ချူး လယ် ထာ ဟိုင် ယို ရွှေ" },
   { id: 1393, category: "各种问法", sub: "问人", chinese: "刚才轮到谁了？", pinyin: "Gāngcái lúndào shéi le?", burmese: "ခုနက ဘယ်သူ့အလှည့် ရောက်သွားပြီလဲ။", xieyin: "ကွန်း ဆိုင် လွန်း တောက် ရွှေ လယ်" }
-];
   ]
