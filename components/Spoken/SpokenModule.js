@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Mic, StopCircle, ArrowUp, Sparkles, X, Volume2, Star, Play, Square, 
   Menu, Zap, Crown, Lock, Settings2, Globe, ChevronLeft, ChevronRight, 
-  ChevronDown, ChevronUp, Home, CheckCircle2, BookOpen, Loader2
+  ChevronDown, ChevronUp, Home, CheckCircle2, BookOpen, Loader2, Heart
 } from 'lucide-react';
 import { motion, AnimatePresence, useScroll, useMotionValueEvent } from 'framer-motion';
 import { pinyin } from 'pinyin-pro';
@@ -138,7 +138,7 @@ const SettingsPanel = ({ settings, setSettings, onClose }) => {
       animate={{ opacity: 1, y: 0, scale: 1 }} 
       exit={{ opacity: 0, y: -20, scale: 0.95 }}
       className="fixed top-16 right-4 z-[2000] bg-white rounded-2xl shadow-2xl border border-slate-100 w-72 overflow-hidden"
-      onClick={(e) => e.stopPropagation()} // 防止点击面板内部触发外部关闭
+      onClick={(e) => e.stopPropagation()} 
     >
        <div className="bg-slate-50 px-4 py-3 flex justify-between items-center border-b border-slate-100">
           <span className="text-xs font-black text-slate-500 uppercase tracking-widest">播放设置 | Play Settings</span>
@@ -307,6 +307,10 @@ export default function SpokenModule() {
   const [view, setView] = useState('home'); 
   const [phrases] = useState(dailyData); 
 
+  // 收藏相关
+  const [favorites, setFavorites] = useState([]);
+  const [isFavMode, setIsFavMode] = useState(false); // 🔥 新增：是否处于收藏模式
+
   // 可见数量控制与无限滚动
   const [visibleCount, setVisibleCount] = useState(20); 
   const loaderRef = useRef(null); 
@@ -325,7 +329,6 @@ export default function SpokenModule() {
   const [spellingItem, setSpellingItem] = useState(null);
   const [recordingId, setRecordingId] = useState(null); 
   const [speechResult, setSpeechResult] = useState(null); 
-  const [favorites, setFavorites] = useState([]);
   
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [showVip, setShowVip] = useState(false);
@@ -334,40 +337,73 @@ export default function SpokenModule() {
   const itemRefs = useRef({});
 
   useEffect(() => {
+    // 1. 读取用户信息和设置
     const user = JSON.parse(localStorage.getItem('hsk_user') || '{}');
     setIsUnlocked((user.unlocked_levels || '').includes('SP')); 
     const savedSet = localStorage.getItem('spoken_settings');
     if (savedSet) setSettings(JSON.parse(savedSet));
+    
+    // 2. 读取收藏
     setFavorites(JSON.parse(localStorage.getItem('spoken_favs') || '[]'));
+
+    // 3. 🔥 核心逻辑：检查 URL 是否带有收藏过滤器
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('filter') === 'favorites') {
+          setView('list');
+          setIsFavMode(true);
+      }
+    }
   }, []);
 
+  // 返回时清除状态
   useEffect(() => {
-    const onPopState = () => { if (view === 'list') { AudioEngine.stop(); setView('home'); } };
+    const onPopState = () => { 
+        if (view === 'list') { 
+            AudioEngine.stop(); 
+            // 如果是收藏模式返回，重置模式
+            if (isFavMode) {
+               window.history.replaceState(null, '', '/spoken'); // 清除 URL 参数
+               setIsFavMode(false);
+            }
+            setView('home'); 
+        } 
+    };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, [view]);
+  }, [view, isFavMode]);
 
   useEffect(() => localStorage.setItem('spoken_settings', JSON.stringify(settings)), [settings]);
 
   useMotionValueEvent(scrollY, "change", (latest) => {
     const previous = scrollY.getPrevious();
     setIsHeaderVisible(!(latest > previous && latest > 50));
-    if (view === 'list') {
+    if (view === 'list' && !isFavMode) { // 仅在非收藏模式下保存位置
         localStorage.setItem('spoken_scroll_pos', latest.toString());
         localStorage.setItem('spoken_visible_count', visibleCount.toString()); 
     }
   });
 
+  // 🔥 核心逻辑：计算当前显示的列表
+  const displayPhrases = useMemo(() => {
+      if (isFavMode) {
+          // 如果是收藏模式，只返回在 favorites 数组中的 ID 对应的句子
+          // 注意：favorites 存的是 ID，所以需要 filter
+          return phrases.filter(p => favorites.includes(p.id));
+      }
+      return phrases;
+  }, [phrases, favorites, isFavMode]);
+
   useEffect(() => {
     if (view !== 'list') return;
     const observer = new IntersectionObserver((entries) => {
         if (entries[0].isIntersecting) {
-            setVisibleCount((prev) => Math.min(prev + 20, phrases.length));
+            setVisibleCount((prev) => Math.min(prev + 20, displayPhrases.length));
         }
     }, { root: null, rootMargin: '200px', threshold: 0.1 });
     if (loaderRef.current) observer.observe(loaderRef.current);
     return () => { if (loaderRef.current) observer.unobserve(loaderRef.current); };
-  }, [view, phrases.length]);
+  }, [view, displayPhrases.length]);
 
   const catalogTree = useMemo(() => {
     const map = new Map();
@@ -381,6 +417,10 @@ export default function SpokenModule() {
   const enterList = (targetSub = null) => {
     window.history.pushState({ page: 'list' }, '', '');
     let targetCount = 20;
+    
+    // 只要是从目录进入，就退出收藏模式
+    setIsFavMode(false);
+
     if (targetSub) {
         const idx = phrases.findIndex(p => p.sub === targetSub);
         if (idx !== -1) targetCount = idx + 20; 
@@ -402,7 +442,14 @@ export default function SpokenModule() {
     }, 100);
   };
 
-  const goHome = () => { AudioEngine.stop(); window.history.back(); };
+  const goHome = () => { 
+      AudioEngine.stop(); 
+      if (isFavMode) {
+          window.history.back(); // 收藏模式返回上一页
+      } else {
+          window.history.back(); // 普通模式返回主页
+      }
+  };
 
   const handleCatalogJump = (sub) => {
     setShowCatalog(false);
@@ -525,9 +572,21 @@ export default function SpokenModule() {
                className="fixed top-0 left-0 right-0 z-[100] bg-white/90 backdrop-blur-md border-b border-slate-100 h-14 max-w-md mx-auto px-4 flex justify-between items-center"
             >
                <button onClick={goHome} className="p-2 -ml-2 text-slate-500 hover:text-slate-900"><ChevronLeft size={24} /></button>
+               
+               {/* 🔥 标题栏变化：收藏模式显示标题 */}
+               {isFavMode && (
+                 <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
+                    <span className="text-sm font-black text-slate-800">我的收藏</span>
+                    <span className="text-[10px] text-slate-400 font-burmese">မှတ်ထားသော စကားပြော</span>
+                 </div>
+               )}
+
                <div className="flex items-center gap-1">
                    <button onClick={() => setShowSettings(!showSettings)} className="p-2 text-slate-400 hover:text-blue-600"><Settings2 size={20} /></button>
-                   <button onClick={() => setShowCatalog(true)} className="p-2 text-slate-600 hover:text-blue-600"><Menu size={20} /></button>
+                   {/* 收藏模式下隐藏目录按钮 */}
+                   {!isFavMode && (
+                      <button onClick={() => setShowCatalog(true)} className="p-2 text-slate-600 hover:text-blue-600"><Menu size={20} /></button>
+                   )}
                </div>
             </motion.div>
 
@@ -584,12 +643,28 @@ export default function SpokenModule() {
             </AnimatePresence>
 
             <div className="pt-20 px-3 space-y-4">
-               {phrases.slice(0, visibleCount).map((item, index) => {
-                  const isNewSub = index === 0 || phrases[index - 1].sub !== item.sub;
-                  const isLocked = !isUnlocked && index >= 50;
+               {/* 🔥 空状态处理 */}
+               {isFavMode && displayPhrases.length === 0 && (
+                   <div className="flex flex-col items-center justify-center pt-32 text-slate-400">
+                       <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                           <Heart size={32} className="text-slate-300" />
+                       </div>
+                       <p className="text-sm font-bold">还没有收藏的句子</p>
+                       <p className="text-xs font-burmese mt-1">မှတ်ထားသော စာကြောင်း မရှိသေးပါ</p>
+                       <button onClick={() => { setIsFavMode(false); setView('home'); }} className="mt-6 px-6 py-2 bg-blue-50 text-blue-600 rounded-full text-xs font-bold active:scale-95 transition-transform">
+                           去浏览课程 (Browse Lessons)
+                       </button>
+                   </div>
+               )}
+
+               {displayPhrases.slice(0, visibleCount).map((item, index) => {
+                  // 在收藏模式下，不显示分类标题
+                  const isNewSub = !isFavMode && (index === 0 || displayPhrases[index - 1].sub !== item.sub);
+                  // 收藏模式下，不锁定VIP
+                  const isLocked = !isFavMode && !isUnlocked && index >= 50;
 
                   return (
-                    <div key={item.id} ref={el => { if(isNewSub) itemRefs.current[item.sub] = el; }}>
+                    <div key={item.id} ref={el => { if(isNewSub && !isFavMode) itemRefs.current[item.sub] = el; }}>
                         {isNewSub && (
                             <div className="mt-8 mb-3 pl-2 border-l-4 border-blue-500 flex items-center justify-between">
                                 <h3 className="text-sm font-bold text-slate-800">{getBilingualText(item.sub, 'sub')}</h3>
@@ -653,18 +728,21 @@ export default function SpokenModule() {
                   );
                })}
                
-               <div ref={loaderRef} className="py-10 text-center text-slate-400">
-                   {visibleCount < phrases.length ? (
-                       <div className="flex items-center justify-center gap-2 text-xs font-bold animate-pulse">
-                           <Loader2 className="animate-spin" size={16}/> 正在加载更多...
-                       </div>
-                   ) : (
-                       <div className="flex flex-col items-center gap-2 opacity-50">
-                           <div className="w-12 h-1 bg-slate-200 rounded-full"/>
-                           <span className="text-[10px]">到底了 (Total: {phrases.length})</span>
-                       </div>
-                   )}
-               </div>
+               {/* 底部加载指示器 (仅在有内容且未显示完时显示) */}
+               {displayPhrases.length > 0 && (
+                 <div ref={loaderRef} className="py-10 text-center text-slate-400">
+                     {visibleCount < displayPhrases.length ? (
+                         <div className="flex items-center justify-center gap-2 text-xs font-bold animate-pulse">
+                             <Loader2 className="animate-spin" size={16}/> 正在加载更多...
+                         </div>
+                     ) : (
+                         <div className="flex flex-col items-center gap-2 opacity-50">
+                             <div className="w-12 h-1 bg-slate-200 rounded-full"/>
+                             <span className="text-[10px]">到底了 (Total: {displayPhrases.length})</span>
+                         </div>
+                     )}
+                 </div>
+               )}
             </div>
         </div>
       )}
