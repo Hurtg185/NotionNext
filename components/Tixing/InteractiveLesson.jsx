@@ -244,7 +244,8 @@ export default function InteractiveLesson({ lesson }) {
         return <GrammarPointPlayer grammarPoints={commonProps.data.grammarPoints} onComplete={goNext} onPrev={goPrev} />;
       case 'choice': return <XuanZeTi {...commonProps} />;
       case 'lianxian': return <LianXianTi {...commonProps} />;
-      case 'paixu': return <PaiXuTi {...commonProps} />;
+      case 'paixu': return <PaiXuTi {...commonProps} {...commonProps.data} />; 
+
       case 'panduan': return <PanDuanTi {...commonProps} />;
       case 'gaicuo': return <GaiCuoTi {...commonProps} />;
       case 'image_match_blanks': return <TianKongTi {...commonProps} />;
@@ -274,7 +275,7 @@ export default function InteractiveLesson({ lesson }) {
       {/* 顶部进度条 */}
       {!hideTopProgressBar && (
         <div className="absolute top-0 left-0 right-0 pt-[env(safe-area-inset-top)] px-6 py-4 z-50 pointer-events-none">
-          <div className="h-1.5 bg-slate-200/50 rounded-full overflow-hidden backdrop-blur-md">
+          <div className="h-0.5 bg-slate-200/50 rounded-full overflow-hidden backdrop-blur-md">
             <div 
                 className="h-full bg-blue-500 rounded-full transition-all duration-500 ease-out" 
                 style={{ width: `${((currentIndex + 1) / totalBlocks) * 100}%` }} 
@@ -306,7 +307,7 @@ export default function InteractiveLesson({ lesson }) {
           {/* 下一个按钮 - 风格统一为白底灰字，或浅色风格 */}
           <button 
             onClick={goNext}
-            className="w-14 h-14 bg-white border border-slate-200 text-slate-600 rounded-full flex items-center justify-center shadow-xl active:scale-90 transition-all"
+            className="w-10 h-10 bg-white border border-slate-200 text-slate-600 rounded-full flex items-center justify-center shadow-xl active:scale-90 transition-all"
           >
             <FaChevronRight size={20} />
           </button>
