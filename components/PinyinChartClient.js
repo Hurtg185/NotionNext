@@ -356,7 +356,7 @@ export default function PinyinChartClient({ initialData }) {
         // 强制手机一排4个
         const gridClass = "grid-cols-4";
         // 间距调整为 gap-3，让按钮看起来更大，布局更紧凑
-        const gapClass = "gap-3 sm:gap-4";
+        const gapClass = "gap-2 sm:gap-3";
 
         if (!initialData.categories) {
             return (
