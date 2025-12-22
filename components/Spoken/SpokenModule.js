@@ -93,7 +93,7 @@ const RecorderEngine = {
       this.mediaRecorder.ondataavailable = e => this.chunks.push(e.data);
       this.mediaRecorder.start();
       return true;
-    } catch (e) { alert("请开启麦克风权限"); return false; }
+    } catch (e) { alert("请开启麦克风权限 | မိုက်ခရိုဖုန်းဖွင့်ပါ"); return false; }
   },
   stop() {
     return new Promise((resolve) => {
@@ -115,7 +115,7 @@ const SpeechEngine = {
     AudioEngine.stop();
     if (typeof window === 'undefined') return;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { alert("浏览器不支持语音识别"); if(onError) onError(); return; }
+    if (!SR) { alert("浏览器不支持语音识别 | Browser doesn't support speech recognition"); if(onError) onError(); return; }
     this.recognition = new SR();
     this.recognition.lang = 'zh-CN';
     this.recognition.continuous = false;
@@ -138,16 +138,17 @@ const SettingsPanel = ({ settings, setSettings, onClose }) => {
       animate={{ opacity: 1, y: 0, scale: 1 }} 
       exit={{ opacity: 0, y: -20, scale: 0.95 }}
       className="fixed top-16 right-4 z-[2000] bg-white rounded-2xl shadow-2xl border border-slate-100 w-72 overflow-hidden"
+      onClick={(e) => e.stopPropagation()} // 防止点击面板内部触发外部关闭
     >
        <div className="bg-slate-50 px-4 py-3 flex justify-between items-center border-b border-slate-100">
-          <span className="text-xs font-black text-slate-500 uppercase tracking-widest">播放设置</span>
+          <span className="text-xs font-black text-slate-500 uppercase tracking-widest">播放设置 | Play Settings</span>
           <button onClick={onClose}><X size={16} className="text-slate-400 hover:text-red-500"/></button>
        </div>
        <div className="p-5 space-y-5">
           {/* 中文设置 */}
           <div className="space-y-2">
              <div className="flex justify-between items-center">
-                <span className="text-xs font-bold text-slate-700">中文朗读</span>
+                <span className="text-xs font-bold text-slate-700">中文朗读 | တရုတ်အသံ</span>
                 <div 
                    onClick={() => setSettings(s => ({...s, zhEnabled: !s.zhEnabled}))}
                    className={`w-8 h-4 rounded-full transition-colors relative cursor-pointer ${settings.zhEnabled ? 'bg-blue-500' : 'bg-slate-200'}`}
@@ -172,7 +173,7 @@ const SettingsPanel = ({ settings, setSettings, onClose }) => {
                 ))}
              </div>
              <div className="flex items-center gap-2 pt-1">
-                <span className="text-[10px] text-slate-400">语速</span>
+                <span className="text-[10px] text-slate-400">语速 | Speed</span>
                 <input type="range" min="-50" max="50" step="10" value={settings.zhRate} onChange={e => setSettings(s => ({...s, zhRate: Number(e.target.value)}))} className="flex-1 h-1 bg-slate-100 rounded-lg appearance-none accent-blue-500"/>
                 <span className="text-[10px] w-6 text-right font-mono text-slate-400">{settings.zhRate}</span>
              </div>
@@ -183,7 +184,7 @@ const SettingsPanel = ({ settings, setSettings, onClose }) => {
           {/* 缅文设置 */}
           <div className="space-y-2">
              <div className="flex justify-between items-center">
-                <span className="text-xs font-bold text-slate-700">缅文朗读</span>
+                <span className="text-xs font-bold text-slate-700">缅文朗读 | မြန်မာအသံ</span>
                 <div 
                    onClick={() => setSettings(s => ({...s, myEnabled: !s.myEnabled}))}
                    className={`w-8 h-4 rounded-full transition-colors relative cursor-pointer ${settings.myEnabled ? 'bg-green-500' : 'bg-slate-200'}`}
@@ -206,7 +207,7 @@ const SettingsPanel = ({ settings, setSettings, onClose }) => {
                 ))}
              </div>
              <div className="flex items-center gap-2 pt-1">
-                <span className="text-[10px] text-slate-400">语速</span>
+                <span className="text-[10px] text-slate-400">语速 | Speed</span>
                 <input type="range" min="-50" max="50" step="10" value={settings.myRate} onChange={e => setSettings(s => ({...s, myRate: Number(e.target.value)}))} className="flex-1 h-1 bg-slate-100 rounded-lg appearance-none accent-green-500"/>
                 <span className="text-[10px] w-6 text-right font-mono text-slate-400">{settings.myRate}</span>
              </div>
@@ -276,7 +277,7 @@ const SpellingModal = ({ item, settings, onClose }) => {
       <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} className="bg-white w-full max-w-md rounded-t-[2rem] sm:rounded-[2rem] p-6 shadow-2xl relative" onClick={e => e.stopPropagation()}>
         <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6 sm:hidden" />
         <div className="flex items-center justify-between mb-8">
-            <h3 className="text-slate-900 font-black text-lg">拼读练习</h3>
+            <h3 className="text-slate-900 font-black text-lg">拼读练习 | စာလုံးပေါင်း</h3>
             <span className="text-[10px] bg-blue-50 text-blue-500 px-2 py-1 rounded font-bold animate-pulse">自动演示中...</span>
         </div>
         <div className="flex flex-wrap justify-center gap-2 mb-10 px-2">
@@ -288,11 +289,11 @@ const SpellingModal = ({ item, settings, onClose }) => {
           ))}
         </div>
         <div className="flex justify-around items-center px-4 pb-4">
-            <div onClick={playWhole} className="flex flex-col items-center gap-2 cursor-pointer"><Volume2 size={24}/> <span className="text-[10px]">整句</span></div>
+            <div onClick={playWhole} className="flex flex-col items-center gap-2 cursor-pointer"><Volume2 size={24}/> <span className="text-[10px]">整句 | စာကြောင်း</span></div>
             <div onClick={toggleRecord} className={`w-16 h-16 rounded-full flex items-center justify-center shadow-xl border-4 ${recordState === 'recording' ? 'bg-red-500 border-red-100' : 'bg-slate-100'}`}>
                {recordState === 'recording' ? <Square size={24} className="text-white"/> : <Mic size={28}/>}
             </div>
-            <div onClick={() => userAudio && AudioEngine.play(userAudio)} className={`flex flex-col items-center gap-2 ${userAudio ? '' : 'opacity-30'}`}><Play size={24}/> <span className="text-[10px]">回放</span></div>
+            <div onClick={() => userAudio && AudioEngine.play(userAudio)} className={`flex flex-col items-center gap-2 ${userAudio ? '' : 'opacity-30'}`}><Play size={24}/> <span className="text-[10px]">回放 | ပြန်ဖွင့်ပါ</span></div>
         </div>
       </motion.div>
     </div>
@@ -458,8 +459,8 @@ export default function SpokenModule() {
                <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-transparent" />
                <div className="absolute bottom-6 left-6 right-6">
                   <div className="inline-block px-2 py-1 bg-blue-600 text-white text-[10px] font-bold rounded mb-2 shadow-sm">口语特训</div>
-                  <h1 className="text-3xl font-black text-slate-900 mb-1 leading-tight">日常高频 10000 句</h1>
-                  <p className="text-slate-600 text-xs font-medium line-clamp-2">全场景覆盖：生活、工作、情感表达。从入门到精通的口语语料库。</p>
+                  <h1 className="text-3xl font-black text-slate-900 mb-1 leading-tight">汉缅会话精选20000句</h1>
+                  <p className="text-slate-600 text-xs font-medium font-burmese leading-relaxed">တရုတ်-မြန်မာ စကားပြော ရွေးချယ်စုစည်းမှု ဝါကျ ၂၀၀၀၀</p>
                </div>
                
                <div onClick={() => window.location.href = 'https://886.best'} className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/20 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/10 z-20 cursor-pointer active:scale-95 transition-transform hover:bg-black/30">
@@ -468,8 +469,15 @@ export default function SpokenModule() {
             </div>
 
             <div className="px-6 mb-8">
-                <button onClick={() => enterList(null)} className="w-full py-3.5 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-xl shadow-slate-200 active:scale-95 transition-transform flex items-center justify-center gap-2">
-                  <BookOpen size={18}/> 继续上次阅读
+                <button 
+                  onClick={() => enterList(null)} 
+                  className="w-full py-4 bg-gradient-to-r from-sky-50 to-indigo-50 border border-blue-100 text-slate-800 rounded-xl font-bold text-sm shadow-sm active:scale-95 transition-transform flex flex-col items-center justify-center gap-1"
+                >
+                  <div className="flex items-center gap-2">
+                    <BookOpen size={18} className="text-blue-600"/> 
+                    <span>继续上次阅读</span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-burmese font-normal">ပြီးခဲ့သည့်စာဖတ်ခြင်းကို ဆက်ရန်</span>
                 </button>
             </div>
 
@@ -523,7 +531,15 @@ export default function SpokenModule() {
                </div>
             </motion.div>
 
-            <AnimatePresence>{showSettings && <SettingsPanel settings={settings} setSettings={setSettings} onClose={() => setShowSettings(false)} />}</AnimatePresence>
+            <AnimatePresence>
+              {showSettings && (
+                <>
+                  {/* 透明遮罩层，点击此处关闭设置 */}
+                  <div className="fixed inset-0 z-[1999]" onClick={() => setShowSettings(false)} />
+                  <SettingsPanel settings={settings} setSettings={setSettings} onClose={() => setShowSettings(false)} />
+                </>
+              )}
+            </AnimatePresence>
 
             <AnimatePresence>
                 {showCatalog && (
@@ -532,7 +548,10 @@ export default function SpokenModule() {
                     <motion.div initial={{x:'100%'}} animate={{x:0}} exit={{x:'100%'}} className="fixed inset-y-0 right-0 z-[160] w-[80%] max-w-[280px] bg-white shadow-2xl overflow-y-auto">
                        <div className="p-5">
                           <div className="flex justify-between items-center mb-6">
-                             <h2 className="text-lg font-black text-slate-800">快速跳转</h2>
+                             <div className="flex flex-col">
+                               <h2 className="text-lg font-black text-slate-800">快速跳转</h2>
+                               <span className="text-xs text-slate-400 font-burmese">အမြန်သွားရန်</span>
+                             </div>
                              <button onClick={() => setShowCatalog(false)}><X size={20} className="text-slate-400"/></button>
                           </div>
                           <div className="space-y-4">
@@ -615,7 +634,7 @@ export default function SpokenModule() {
                              {speechResult?.id === item.id && !isLocked && (
                                <motion.div initial={{opacity:0, height:0}} animate={{opacity:1, height:'auto'}} exit={{opacity:0, height:0}} className="bg-white mx-auto max-w-[360px] rounded-xl mt-2 p-3 shadow-sm border border-slate-100">
                                   <div className="flex justify-between items-center mb-2">
-                                     <span className="text-[10px] font-bold text-slate-400">评分</span>
+                                     <span className="text-[10px] font-bold text-slate-400">评分 | ရမှတ်</span>
                                      <span className={`text-xs font-black ${speechResult.data.accuracy > 0.8 ? 'text-green-500' : 'text-red-500'}`}>{Math.round(speechResult.data.accuracy * 100)}%</span>
                                   </div>
                                   <div className="flex flex-wrap gap-2 justify-center">
@@ -659,8 +678,9 @@ export default function SpokenModule() {
                      <Crown size={32} fill="currentColor" />
                  </div>
                  <h3 className="text-xl font-black text-slate-900 mb-2">解锁完整课程</h3>
+                 <p className="text-xs text-slate-500 mb-4 font-burmese">သင်ခန်းစာအပြည့်အစုံကို ဖွင့်ပါ</p>
                  <ul className="text-left text-xs text-slate-500 space-y-2 mb-8 bg-slate-50 p-4 rounded-xl">
-                     <li className="flex gap-2 items-center"><CheckCircle2 size={14} className="text-green-500"/> 解锁 10,000+ 完整句子</li>
+                     <li className="flex gap-2 items-center"><CheckCircle2 size={14} className="text-green-500"/> 解锁 20,000+ 完整句子</li>
                      <li className="flex gap-2 items-center"><CheckCircle2 size={14} className="text-green-500"/> 开启 AI 语音评测</li>
                      <li className="flex gap-2 items-center"><CheckCircle2 size={14} className="text-green-500"/> 永久有效，无限回放</li>
                  </ul>
