@@ -98,11 +98,13 @@ const SiriWaveform = ({ isActive }) => {
 };
 
 const LetterButton = React.memo(({ item, isActive, isSelected, onClick }) => {
+    // 字体自适应逻辑：根据字符长度决定字号
     const fontSizeClass = useMemo(() => {
         const len = item.letter.length;
-        if (len > 4) return 'text-xl sm:text-2xl';
-        if (len > 3) return 'text-2xl sm:text-3xl';
-        return 'text-3xl sm:text-4xl';
+        if (len >= 5) return 'text-lg sm:text-xl'; // 极长
+        if (len === 4) return 'text-xl sm:text-2xl'; // 很长
+        if (len === 3) return 'text-2xl sm:text-3xl'; // 中等
+        return 'text-3xl sm:text-4xl'; // 短 (1-2字符)
     }, [item.letter]);
 
     return (
@@ -110,32 +112,34 @@ const LetterButton = React.memo(({ item, isActive, isSelected, onClick }) => {
             onClick={() => onClick(item)}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.92 }}
-            className={`group relative w-full aspect-[4/3] sm:aspect-square flex flex-col items-center justify-center rounded-2xl sm:rounded-3xl transition-all duration-300 select-none overflow-hidden touch-manipulation
+            // aspect-[5/4] 让按钮比之前更高大，更像键盘按键
+            className={`group relative w-full aspect-[5/4] sm:aspect-square flex flex-col items-center justify-center rounded-xl sm:rounded-2xl transition-all duration-300 select-none overflow-hidden touch-manipulation
             ${isActive 
                 ? 'bg-gradient-to-br from-violet-600 to-fuchsia-600 shadow-xl shadow-fuchsia-500/40 ring-2 ring-white/50' 
                 : isSelected
                     ? 'bg-white border-2 border-violet-400 shadow-md ring-4 ring-violet-50' 
-                    : 'bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-slate-300'
+                    : 'bg-white border border-slate-200 shadow-[0_2px_0_0_rgba(203,213,225,1)] hover:shadow-md hover:border-slate-300 active:shadow-none active:translate-y-[2px]'
             }`}
         >
             {isActive && (
                 <div className="absolute top-0 right-0 w-12 h-12 bg-white/20 blur-xl rounded-full translate-x-1/2 -translate-y-1/2" />
             )}
 
-            <span className={`pinyin-letter font-black tracking-tight leading-normal pb-1 z-10 transition-colors duration-200
+            <span className={`pinyin-letter font-black tracking-tight leading-none z-10 transition-colors duration-200
                 ${fontSizeClass}
                 ${isActive ? 'text-white drop-shadow-md' : 'text-slate-800 group-hover:text-violet-600'}
             `}>
                 {item.letter}
             </span>
             
-            <div className="absolute bottom-1.5 sm:bottom-3 h-4 flex items-center justify-center z-10">
+            {/* 底部小图标或提示 */}
+            <div className="absolute bottom-1 sm:bottom-2 h-3 flex items-center justify-center z-10">
                 {item.audio ? (
-                    <motion.div animate={isActive ? { scale: [1, 1.2, 1], opacity: 1 } : { scale: 1, opacity: 0.4 }}>
-                        <Volume2 size={16} className={isActive ? 'text-white/90' : 'text-slate-300'} />
+                    <motion.div animate={isActive ? { scale: [1, 1.2, 1], opacity: 1 } : { scale: 1, opacity: 0.3 }}>
+                        <Volume2 size={12} className={isActive ? 'text-white/80' : 'text-slate-300'} />
                     </motion.div>
                 ) : (
-                    <span className="text-[10px] text-slate-300 font-bold">无音频</span>
+                    <span className="text-[8px] text-slate-300 font-bold scale-75">无音频</span>
                 )}
             </div>
         </motion.button>
@@ -351,10 +355,12 @@ export default function PinyinChartClient({ initialData }) {
     const renderContent = () => {
         // 强制手机一排4个
         const gridClass = "grid-cols-4";
+        // 间距调整为 gap-2，让按钮看起来更大
+        const gapClass = "gap-2 sm:gap-4";
 
         if (!initialData.categories) {
             return (
-                <div className={`grid ${gridClass} gap-3 sm:gap-5 p-1`}>
+                <div className={`grid ${gridClass} ${gapClass} p-1`}>
                     {initialData.items.map((item) => (
                         <LetterButton 
                             key={item.letter} 
@@ -369,18 +375,14 @@ export default function PinyinChartClient({ initialData }) {
         }
 
         return (
-            <div className="flex flex-col flex-grow w-full space-y-10">
+            <div className="flex flex-col flex-grow w-full space-y-6">
                 {initialData.categories.map((cat, catIdx) => (
-                    <div key={cat.name} className="flex flex-col gap-4">
-                        {/* 分类标题：简洁显示 */}
-                        <div className="flex items-center gap-3 px-1">
-                            <div className="h-4 w-1 bg-violet-500 rounded-full"></div>
-                            <h2 className="text-sm font-bold text-slate-400 tracking-wider uppercase">{cat.name}</h2>
-                        </div>
+                    <div key={cat.name} className="flex flex-col gap-2">
+                        {/* 已删除分类标题 */}
                         
-                        <div className="space-y-4">
+                        <div className="space-y-2">
                             {cat.rows.map((row, rowIndex) => (
-                                <div key={rowIndex} className={`grid ${gridClass} gap-3 sm:gap-5`}>
+                                <div key={rowIndex} className={`grid ${gridClass} ${gapClass}`}>
                                     {row.map((item) => (
                                         <LetterButton 
                                             key={item.letter} 
@@ -428,20 +430,9 @@ export default function PinyinChartClient({ initialData }) {
                     <audio ref={audioRef} onEnded={handleAudioEnd} preload="none" />
                     <audio ref={userAudioRef} />
                     
-                    <header className="flex items-center justify-between mb-8 pt-2">
-                        <h1 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight drop-shadow-sm">
-                            {initialData.title}
-                        </h1>
-                        <div className="w-12 h-12 flex items-center justify-center bg-white/80 backdrop-blur rounded-full border border-slate-200 shadow-sm">
-                            {isLoadingAudio ? (
-                                <div className="w-5 h-5 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                                <Sparkles size={22} className="text-violet-500" />
-                            )}
-                        </div>
-                    </header>
+                    {/* 已删除顶部 Header 导航栏 */}
 
-                    <main className="flex-grow flex flex-col pb-80">
+                    <main className="flex-grow flex flex-col pb-80 pt-4">
                         {renderContent()}
                     </main>
                     
