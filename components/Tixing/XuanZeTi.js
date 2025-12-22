@@ -6,7 +6,8 @@ import {
   FaTimes,
   FaArrowRight,
   FaLightbulb,
-  FaSpinner
+  FaSpinner,
+  FaRedo
 } from 'react-icons/fa';
 import { pinyin } from 'pinyin-pro';
 
@@ -137,80 +138,116 @@ const cssStyles = `
   display:flex;flex-direction:column;
   background:#f1f5f9;
 }
+.xzt-header {
+  flex-shrink: 0;
+  padding: 60px 20px 10px; /* 顶部间距增加 */
+  display: flex; justify-content: center;
+}
 .xzt-scroll-area {
   flex:1;overflow-y:auto;
-  padding-bottom:200px;
+  padding: 10px 16px 140px; /* 底部增加留白 */
   display:flex;flex-direction:column;align-items:center;
 }
 .scene-wrapper {
   width:100%;max-width:600px;
-  display:flex;align-items:flex-end;
-  justify-content:center;
-  margin-top:20px;padding:0 20px;gap:10px;
+  display:flex;align-items:flex-start; /* 顶部对齐 */
+  gap:10px;
 }
 .teacher-img {
-  height:160px;object-fit:contain;
-  mix-blend-mode:multiply;
+  height:120px;object-fit:contain;
+  mix-blend-mode:multiply; /* 去除白色背景色差 */
 }
 .bubble-container {
   flex:1;background:#fff;
-  border-radius:20px;padding:15px 20px;
+  border-radius:18px 18px 18px 0;
+  padding:15px 20px;
   border:1px solid #e2e8f0;
   position:relative;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+  margin-top: 10px; /* 对齐人头 */
 }
 .bubble-tail {
-  position:absolute;bottom:15px;left:-10px;
+  position:absolute; top: 20px; left:-9px;
   width:0;height:0;
   border-top:8px solid transparent;
   border-bottom:8px solid transparent;
-  border-right:12px solid #fff;
+  border-right:10px solid #fff;
 }
+.question-img {
+  width: 100%; max-height: 140px;
+  object-fit: cover; border-radius: 8px;
+  margin-bottom: 12px; display: block;
+}
+
 .zh-seg{display:inline-flex;flex-direction:column;align-items:center;margin:0 2px}
 .zh-py{font-size:.7rem;color:#94a3b8}
 .zh-char{font-size:1.2rem;font-weight:700;color:#1e293b}
-.my-seg{font-size:1.1rem;font-weight:600;color:#334155}
+.my-seg{font-size:1.1rem;font-weight:600;color:#334155; line-height: 1.6;}
 
 .options-grid{
-  width:90%;max-width:500px;
+  width:95%;max-width:500px;
   display:grid;gap:12px;margin-top:20px;
 }
 .option-card{
   background:#fff;border-radius:16px;
-  padding:15px;border:2px solid #e2e8f0;
+  padding:16px;border:2px solid #e2e8f0;
   text-align:center;cursor:pointer;
   transition: all 0.2s ease;
+  font-size: 1.1rem; font-weight: 600;
+  color: #334155;
 }
 .option-card:active { transform: scale(0.98); }
-.option-card.selected{border-color:#6366f1;background:#eef2ff}
-.option-card.correct{border-color:#10b981;background:#ecfdf5}
-.option-card.wrong{border-color:#ef4444;background:#fef2f2}
+.option-card.selected{border-color:#3b82f6;background:#eff6ff;color:#1d4ed8}
+.option-card.correct{border-color:#10b981;background:#ecfdf5;color:#047857}
+.option-card.wrong{border-color:#ef4444;background:#fef2f2;color:#b91c1c}
 
-/* 提交按钮位置调整：bottom 30px -> 80px */
+/* 提交按钮位置调整 */
 .submit-bar{
-  position:fixed;bottom:80px;width:100%;
+  position:absolute; bottom:0; left:0; right:0;
+  padding: 20px 20px 50px;
+  background: linear-gradient(to top, #ffffff 90%, rgba(255,255,255,0));
   display:flex;justify-content:center;
+  z-index: 50;
 }
 .submit-btn{
-  border:2px solid #6366f1;
-  color:#6366f1;
-  background: white;
-  padding:12px 60px;border-radius:100px;
-  font-size:1.1rem;font-weight:800;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  background: #1e293b; color: white;
+  padding:14px 60px; border-radius:100px;
+  font-size:1.1rem;font-weight:700;
+  border: none;
+  box-shadow: 0 4px 12px rgba(30, 41, 59, 0.25);
+  transition: all 0.2s;
 }
-.submit-btn:disabled{border-color:#cbd5e1;color:#cbd5e1;box-shadow:none;}
+.submit-btn:disabled{background:#cbd5e1;color:#94a3b8;box-shadow:none;}
+.submit-btn:active{transform: scale(0.95);}
 
 .result-sheet{
-  position:fixed;bottom:0;left:0;right:0;
-  background:#fff;padding:30px 25px 50px;
-  border-radius:30px 30px 0 0;
-  transform:translateY(100%);
-  transition:.4s;z-index:100;
+  position:absolute;bottom:0;left:0;right:0;
+  background:#fff;padding:24px;
+  border-radius:24px 24px 0 0;
+  transform:translateY(110%);
+  transition:transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index:100;
   box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+  max-height: 80vh; overflow-y: auto;
 }
 .result-sheet.show{transform:translateY(0)}
-.is-correct{background:#ecfdf5;border-top:5px solid #10b981}
-.is-wrong{background:#fef2f2;border-top:5px solid #ef4444}
+
+.sheet-header {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 1.25rem; font-weight: 800; margin-bottom: 12px;
+}
+.explanation-btn {
+  width: 100%; margin-bottom: 16px;
+  padding: 12px; border-radius: 12px;
+  background: #fffbeb; border: 1px solid #fcd34d;
+  color: #92400e; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.explanation-content {
+  background: #fff7ed; padding: 12px; border-radius: 12px;
+  margin-bottom: 16px; font-size: 0.95rem; line-height: 1.6; color: #7c2d12;
+  border: 1px dashed #fdba74;
+}
 .next-btn{
   width:100%;padding:16px;border-radius:16px;
   border:none;color:#fff;font-weight:800;
@@ -218,8 +255,8 @@ const cssStyles = `
   display:flex;align-items:center;justify-content:center;gap:8px;
   cursor: pointer;
 }
-.is-correct .next-btn{background:#10b981}
-.is-wrong .next-btn{background:#ef4444}
+.btn-correct{background:#10b981}
+.btn-wrong{background:#ef4444}
 `;
 
 // =================================================================================
@@ -228,8 +265,10 @@ const cssStyles = `
 const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) => {
   const data = rawData?.content || rawData || {};
   const question = data.question || {};
-  const questionText =
-    typeof question === 'string' ? question : question.text || '';
+  const questionText = typeof question === 'string' ? question : question.text || '';
+  const imageUrl = data.imageUrl || ''; // 图片支持
+  const explanation = data.explanation || ''; // 解析支持
+  
   const options = data.options || [];
 
   const correctAnswers = useMemo(() => {
@@ -241,47 +280,59 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isRight, setIsRight] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [showExplanation, setShowExplanation] = useState(false); // 控制解析显示
 
   /** 防跳题锁 */
   const nextLockRef = useRef(false);
 
   /** 
    * 选项随机化逻辑 
-   * 使用 useMemo 确保只在题目改变时随机一次，避免重渲染时乱序
    */
   const shuffledOptions = useMemo(() => {
-    // 浅拷贝选项数组以免修改原始数据
     const opts = [...options];
-    // Fisher-Yates 洗牌算法
     for (let i = opts.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [opts[i], opts[j]] = [opts[j], opts[i]];
     }
     return opts;
-  }, [data.id, options]); // 依赖项：当题目ID或原始选项集改变时重新洗牌
+  }, [data.id, options]); 
 
-  /** 题目切换时 reset（关键） */
+  /** 题目切换时 reset */
   useEffect(() => {
     nextLockRef.current = false;
     setSelectedIds([]);
     setIsSubmitted(false);
     setIsRight(false);
+    setShowExplanation(false); // 重置解析状态
 
     audioController.stop();
-    audioController.playMixed(
-      questionText,
-      {},
-      () => setIsPlaying(true),
-      () => setIsPlaying(false)
-    );
+    // 自动朗读题目
+    if(questionText) {
+        setTimeout(() => {
+            audioController.playMixed(
+              questionText,
+              {},
+              () => setIsPlaying(true),
+              () => setIsPlaying(false)
+            );
+        }, 500);
+    }
   }, [data?.id]);
 
   const toggleOption = (id) => {
     if (isSubmitted) return;
     const sid = String(id);
-    setSelectedIds(prev =>
-      prev.includes(sid) ? prev.filter(i => i !== sid) : [...prev, sid]
-    );
+    // 单选逻辑 (如果correctAnswers长度为1，则互斥选择)
+    if (correctAnswers.length === 1) {
+        setSelectedIds([sid]);
+    } else {
+        // 多选逻辑
+        setSelectedIds(prev =>
+          prev.includes(sid) ? prev.filter(i => i !== sid) : [...prev, sid]
+        );
+    }
+    
+    // 点击选项发音
     const opt = options.find(o => String(o.id) === sid);
     if (opt) audioController.playMixed(opt.text);
   };
@@ -301,13 +352,8 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
       onCorrect?.(); // 答对回调
     } else {
       navigator.vibrate?.(200);
-      onIncorrect?.(); // 答错回调（用于统计）
-      
-      // 核心修改：触发错题沉底逻辑
-      // 通知父组件将当前题目加入队列尾部
-      if (onWrong) {
-        onWrong();
-      }
+      onIncorrect?.(); 
+      if (onWrong) onWrong(); // 触发错题沉底
     }
   };
 
@@ -316,13 +362,12 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
     nextLockRef.current = true;
 
     audioController.stop();
-    // 无论对错，只要点击了"下一题"按钮，就执行 onNext 跳转
     onNext?.(); 
   };
 
   const renderRichText = (text) => {
-    const parts =
-      text.match(/([\u4e00-\u9fa5]+|[^\u4e00-\u9fa5]+)/g) || [];
+    if(!text) return null;
+    const parts = text.match(/([\u4e00-\u9fa5]+|[^\u4e00-\u9fa5]+)/g) || [];
     return parts.map((part, i) => {
       if (/[\u4e00-\u9fa5]/.test(part)) {
         const py = pinyin(part, { type: 'array', toneType: 'symbol' });
@@ -341,40 +386,52 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
     <div className="xzt-container">
       <style>{cssStyles}</style>
 
-      <div className="xzt-scroll-area">
+      {/* 头部区域 */}
+      <div className="xzt-header">
         <div className="scene-wrapper">
-          <img
+            <img
             src="https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/1765952194374.png"
             className="teacher-img"
             alt="Teacher"
-          />
-          <div className="bubble-container">
+            />
+            <div className="bubble-container">
             <div className="bubble-tail" />
-            <div className="flex flex-wrap items-end">
-              {renderRichText(questionText)}
+            
+            {/* 1. 支持图片显示 */}
+            {imageUrl && (
+                <img src={imageUrl} alt="Question Context" className="question-img" />
+            )}
+
+            {/* 2. 题目文本 */}
+            <div className="flex flex-wrap items-end gap-1">
+                {renderRichText(questionText)}
             </div>
+
+            {/* 3. 朗读按钮 */}
             <div
-              className={`mt-2 self-end p-2 rounded-full cursor-pointer transition-colors ${
+                className={`mt-2 self-end p-2 rounded-full cursor-pointer transition-colors inline-flex ${
                 isPlaying
-                  ? 'bg-indigo-500 text-white'
-                  : 'bg-indigo-50 text-indigo-500'
-              }`}
-              onClick={(e) => {
+                    ? 'bg-indigo-500 text-white'
+                    : 'bg-indigo-50 text-indigo-500'
+                }`}
+                onClick={(e) => {
                 e.stopPropagation();
                 audioController.playMixed(
-                  questionText,
-                  {},
-                  () => setIsPlaying(true),
-                  () => setIsPlaying(false)
+                    questionText,
+                    {},
+                    () => setIsPlaying(true),
+                    () => setIsPlaying(false)
                 );
-              }}
+                }}
             >
-              {isPlaying ? <FaSpinner className="animate-spin" /> : <FaVolumeUp />}
+                {isPlaying ? <FaSpinner className="animate-spin" /> : <FaVolumeUp />}
             </div>
-          </div>
+            </div>
         </div>
+      </div>
 
-        {/* 使用随机化后的选项列表进行渲染 */}
+      <div className="xzt-scroll-area">
+        {/* 选项列表 */}
         <div className="options-grid">
           {shuffledOptions.map(opt => {
             const sid = String(opt.id);
@@ -396,6 +453,7 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
         </div>
       </div>
 
+      {/* 提交按钮 (仅未提交时显示) */}
       {!isSubmitted && (
         <div className="submit-bar">
           <button
@@ -403,24 +461,44 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
             disabled={!selectedIds.length}
             onClick={handleSubmit}
           >
-            提交
+            စစ်ဆေးမည် {/* 检查答案 */}
           </button>
         </div>
       )}
 
+      {/* 结果面板 */}
       <div
-        className={`result-sheet ${isSubmitted ? 'show' : ''} ${
-          isRight ? 'is-correct' : 'is-wrong'
-        }`}
+        className={`result-sheet ${isSubmitted ? 'show' : ''}`}
       >
-        <div className="flex items-center gap-3 text-xl font-black mb-4">
+        <div className={`sheet-header ${isRight ? 'text-green-600' : 'text-red-500'}`}>
           {isRight ? <FaCheck /> : <FaTimes />}
-          {isRight ? '正确' : '错误'}
+          {isRight ? 'မှန်ပါသည်!' : 'မှားနေပါသည်'} {/* 正确 / 错误 */}
         </div>
 
-        <button className="next-btn" onClick={safeNext}>
-          {/* 文案调整，如果错了提示“稍后重试” */}
-          {!isRight ? '继续 (稍后重做)' : '下一题'} <FaArrowRight />
+        {/* 答错时显示解析按钮 */}
+        {!isRight && explanation && (
+            <>
+                {!showExplanation ? (
+                    <button className="explanation-btn" onClick={() => setShowExplanation(true)}>
+                        <FaLightbulb /> ရှင်းလင်းချက်ကြည့်ရန် {/* 查看解析 */}
+                    </button>
+                ) : (
+                    <div className="explanation-content animate-fade-in">
+                        <div className="font-bold mb-1 flex items-center gap-2">
+                             <FaLightbulb /> ရှင်းလင်းချက်: {/* 解析 */}
+                        </div>
+                        {explanation}
+                    </div>
+                )}
+            </>
+        )}
+
+        <button 
+           className={`next-btn ${isRight ? 'btn-correct' : 'btn-wrong'}`} 
+           onClick={safeNext}
+        >
+          {/* 答错显示“稍后重试”，答对显示“下一题” */}
+          {!isRight ? 'နောက်မှပြန်ဖြေမည် (Continue)' : 'ရှေ့ဆက်မည် (Next)'} <FaArrowRight />
         </button>
       </div>
     </div>
