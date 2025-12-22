@@ -178,7 +178,9 @@ const cssStyles = `
   background:#fff;border-radius:16px;
   padding:15px;border:2px solid #e2e8f0;
   text-align:center;cursor:pointer;
+  transition: all 0.2s ease;
 }
+.option-card:active { transform: scale(0.98); }
 .option-card.selected{border-color:#6366f1;background:#eef2ff}
 .option-card.correct{border-color:#10b981;background:#ecfdf5}
 .option-card.wrong{border-color:#ef4444;background:#fef2f2}
@@ -214,15 +216,16 @@ const cssStyles = `
   border:none;color:#fff;font-weight:800;
   font-size:1.1rem;
   display:flex;align-items:center;justify-content:center;gap:8px;
+  cursor: pointer;
 }
 .is-correct .next-btn{background:#10b981}
 .is-wrong .next-btn{background:#ef4444}
 `;
 
 // =================================================================================
-// 4. 组件主体（已修复跳题）
+// 4. 组件主体（包含随机化和错题沉底逻辑）
 // =================================================================================
-const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext }) => {
+const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) => {
   const data = rawData?.content || rawData || {};
   const question = data.question || {};
   const questionText =
@@ -241,6 +244,21 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext }) => {
 
   /** 防跳题锁 */
   const nextLockRef = useRef(false);
+
+  /** 
+   * 选项随机化逻辑 
+   * 使用 useMemo 确保只在题目改变时随机一次，避免重渲染时乱序
+   */
+  const shuffledOptions = useMemo(() => {
+    // 浅拷贝选项数组以免修改原始数据
+    const opts = [...options];
+    // Fisher-Yates 洗牌算法
+    for (let i = opts.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [opts[i], opts[j]] = [opts[j], opts[i]];
+    }
+    return opts;
+  }, [data.id, options]); // 依赖项：当题目ID或原始选项集改变时重新洗牌
 
   /** 题目切换时 reset（关键） */
   useEffect(() => {
@@ -280,10 +298,16 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext }) => {
 
     if (correct) {
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.8 } });
-      onCorrect?.(); // 答对回调（仅统计，不跳题）
+      onCorrect?.(); // 答对回调
     } else {
       navigator.vibrate?.(200);
-      onIncorrect?.(); // 答错回调（仅统计，不跳题）
+      onIncorrect?.(); // 答错回调（用于统计）
+      
+      // 核心修改：触发错题沉底逻辑
+      // 通知父组件将当前题目加入队列尾部
+      if (onWrong) {
+        onWrong();
+      }
     }
   };
 
@@ -350,8 +374,9 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext }) => {
           </div>
         </div>
 
+        {/* 使用随机化后的选项列表进行渲染 */}
         <div className="options-grid">
-          {options.map(opt => {
+          {shuffledOptions.map(opt => {
             const sid = String(opt.id);
             const isSel = selectedIds.includes(sid);
             const isCorrect = correctAnswers.includes(sid);
@@ -394,7 +419,8 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext }) => {
         </div>
 
         <button className="next-btn" onClick={safeNext}>
-          下一题 <FaArrowRight />
+          {/* 文案调整，如果错了提示“稍后重试” */}
+          {!isRight ? '继续 (稍后重做)' : '下一题'} <FaArrowRight />
         </button>
       </div>
     </div>
