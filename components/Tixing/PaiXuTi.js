@@ -189,17 +189,21 @@ const styles = `
 /* --- 顶部场景区 --- */
 .pxt-header {
   flex-shrink: 0;
-  padding: 20px 20px 10px;
+  padding: 60px 20px 10px; /* 调整顶部间距，防止太靠上 */
   display: flex; justify-content: center;
 }
 .scene-wrapper {
   width: 100%; max-width: 600px;
-  display: flex; align-items: flex-end; gap: 12px;
+  display: flex; 
+  align-items: flex-start; /* 改为顶部对齐，方便气泡对齐人头 */
+  gap: 12px;
 }
 .teacher-img {
   height: 120px; width: auto;
   object-fit: contain;
-  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));
+  /* 解决白色背景色差，让其融入背景 */
+  mix-blend-mode: multiply;
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.05));
 }
 .bubble-box {
   flex: 1; background: #fff;
@@ -208,9 +212,12 @@ const styles = `
   border: 1px solid #e2e8f0;
   box-shadow: 0 4px 15px rgba(0,0,0,0.03);
   position: relative;
+  margin-top: 10px; /* 稍微下移，与人头对齐 */
 }
 .bubble-tail {
-  position: absolute; bottom: 15px; left: -9px;
+  position: absolute; 
+  top: 20px; /* 尾巴移到上方 */
+  left: -9px;
   width: 0; height: 0;
   border-top: 8px solid transparent;
   border-bottom: 8px solid transparent;
@@ -225,7 +232,7 @@ const styles = `
 /* --- 核心交互区 (可滚动) --- */
 .pxt-scroll-body {
   flex: 1; overflow-y: auto;
-  padding: 10px 16px 120px; /* 底部留白给固定按钮 */
+  padding: 10px 16px 140px; /* 底部留白增加，避免被按钮遮挡 */
   display: flex; flex-direction: column; align-items: center;
 }
 
@@ -282,7 +289,7 @@ const styles = `
 /* --- 底部控制栏 --- */
 .footer-bar {
   position: absolute; bottom: 0; left: 0; right: 0;
-  padding: 20px;
+  padding: 20px 20px 50px; /* 底部间距加大，按钮上移 */
   background: linear-gradient(to top, #ffffff 90%, rgba(255,255,255,0));
   display: flex; justify-content: center;
   z-index: 50;
