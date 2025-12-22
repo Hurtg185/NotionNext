@@ -15,7 +15,7 @@ import TianKongTi from './TianKongTi';
 import PaiXuTi from './PaiXuTi'; 
 
 // ============================================================================
-// ===== Audio Manager (TTS 工具 - 保持不变) =====
+// ===== Audio Manager (TTS 工具) =====
 // ============================================================================
 const ttsVoices = { zh: 'zh-CN-XiaoyouNeural', my: 'my-MM-NilarNeural' };
 const audioManager = (() => {
@@ -62,18 +62,20 @@ const audioManager = (() => {
 })();
 
 // ============================================================================
-// ===== 辅助组件 =====
+// ===== 辅助组件 (已翻译为缅文) =====
 // ============================================================================
 
-// 1. 列表容器适配器 (用于 sentences / phrase_study)
+// 1. 列表容器适配器
 const CardListRenderer = ({ data, type, onComplete }) => {
   const isPhrase = type === 'phrase_study' || type === 'sentences';
   const list = data.words || data.sentences || data.vocabulary || []; 
+  // 缅文标题映射
+  const defaultTitle = isPhrase ? "အသုံးများသော စကားစုများ" : "အဓိက ဝေါဟာရများ";
 
   return (
     <div className="w-full h-full flex flex-col relative bg-slate-50">
       <div className="flex-none pt-12 pb-4 px-4 text-center z-10">
-        <h2 className="text-2xl font-black text-slate-800">{data.title || (isPhrase ? "常用短句" : "核心生词")}</h2>
+        <h2 className="text-2xl font-black text-slate-800">{data.title || defaultTitle}</h2>
       </div>
       <div className="flex-1 w-full overflow-y-auto px-4 pb-32">
         <div className={`grid gap-4 ${isPhrase ? 'grid-cols-1' : 'grid-cols-2'}`}>
@@ -87,62 +89,78 @@ const CardListRenderer = ({ data, type, onComplete }) => {
       </div>
       <div className="absolute bottom-6 left-0 right-0 p-6 z-20 flex justify-center">
         <button onClick={onComplete} className="w-full max-w-md py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-xl shadow-blue-200 active:scale-95 transition-all">
-          我学会了
+          မှတ်မိပါပြီ {/* 我学会了 */}
         </button>
       </div>
     </div>
   );
 };
 
-// 2. 封面页
+// 2. 封面页 (图片优化 + 缅文)
 const CoverBlock = ({ data, onNext }) => {
   return (
     <div className="w-full h-full flex flex-col items-center justify-center relative bg-slate-900 overflow-hidden">
       {data.imageUrl && (
         <div className="absolute inset-0 z-0">
-           <img src={data.imageUrl} alt="Cover" className="w-full h-full object-cover opacity-60 scale-105" />
+           {/* 图片加载优化: eager + high priority */}
+           <img 
+             src={data.imageUrl} 
+             alt="Cover" 
+             loading="eager"
+             fetchPriority="high"
+             className="w-full h-full object-cover opacity-60 scale-105" 
+           />
            <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/40 to-black/80" />
         </div>
       )}
       <div className="relative z-10 w-full px-8 text-center flex flex-col items-center">
         <h1 className="text-4xl md:text-5xl font-black text-white mb-6 leading-tight drop-shadow-lg">
-          {data.title || "开始学习"}
+          {data.title || "စတင်လေ့လာမည်"} {/* 开始学习 */}
         </h1>
         <p className="text-white/80 text-lg max-w-xs mb-16 font-medium drop-shadow-md">
-          {data.description || "准备好了吗？让我们开始今天的课程吧！"}
+          {data.description || "အဆင်သင့်ဖြစ်ပြီလား။ သင်ခန်းစာစလိုက်ကြရအောင်။"} {/* 准备好了吗... */}
         </p>
         <button 
           onClick={onNext}
           className="flex items-center gap-3 px-10 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-full font-bold text-lg shadow-xl shadow-blue-900/50 active:scale-95 transition-all"
         >
           <FaPlay size={18} />
-          <span>开始挑战</span>
+          <span>စိန်ခေါ်မှု စတင်မည်</span> {/* 开始挑战 */}
         </button>
       </div>
     </div>
   );
 };
 
-// 3. 结果结算页面 (重设计)
+// 3. 结果结算页面 (5星制 + 缅文)
 const SummaryBlock = ({ duration, mistakes, router, onRestart }) => { 
-  // 评分逻辑
+  // 5星评分逻辑
   let stars = 0;
   let title = "";
   let color = "";
 
   if (mistakes === 0) {
-    stars = 3; title = "传说级表现！"; color = "text-yellow-500";
-  } else if (mistakes <= 2) {
-    stars = 2; title = "非常出色！"; color = "text-blue-500";
+    stars = 5; title = "ထူးချွန်ပါတယ်!"; // 完美
+    color = "text-yellow-500";
+  } else if (mistakes === 1) {
+    stars = 4; title = "အလွန်ကောင်းမွန်သည်!"; // 很好
+    color = "text-blue-500";
+  } else if (mistakes === 2) {
+    stars = 3; title = "ကောင်းမွန်သည်!"; // 不错
+    color = "text-blue-400";
+  } else if (mistakes === 3) {
+    stars = 2; title = "ကြိုးစားပါ!"; // 加油
+    color = "text-slate-600";
   } else {
-    stars = 1; title = "继续加油！"; color = "text-slate-500";
+    stars = 1; title = "ထပ်မံလေ့ကျင့်ပါ"; // 再练练
+    color = "text-slate-500";
   }
 
   // 格式化时间
   const formatTime = (seconds) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
-    return `${m}分 ${s}秒`;
+    return `${m} မိနစ် ${s} စက္ကန့်`; // 分 秒
   };
 
   return (
@@ -150,29 +168,31 @@ const SummaryBlock = ({ duration, mistakes, router, onRestart }) => {
       {/* 奖牌/动画区 */}
       <div className="mb-8 relative">
          <div className="text-9xl filter drop-shadow-2xl animate-bounce">
-            {stars === 3 ? "🏆" : stars === 2 ? "🥈" : "🥉"}
+            {stars >= 4 ? "🏆" : stars >= 3 ? "🥈" : "🥉"}
          </div>
-         {stars === 3 && <div className="absolute -top-4 -right-4 text-6xl animate-pulse">✨</div>}
+         {stars === 5 && <div className="absolute -top-4 -right-4 text-6xl animate-pulse">✨</div>}
       </div>
 
       <h2 className={`text-3xl font-black mb-2 ${color}`}>{title}</h2>
-      <p className="text-slate-400 mb-8 font-medium">课程完成</p>
+      <p className="text-slate-400 mb-8 font-medium">သင်ခန်းစာ ပြီးမြောက်ပါပြီ</p> {/* 课程完成 */}
 
       {/* 统计卡片 */}
       <div className="flex gap-4 w-full max-w-sm mb-10">
         <div className="flex-1 bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center">
-            <div className="text-yellow-400 text-2xl mb-1 flex gap-1">
-              {[...Array(3)].map((_, i) => (
+            {/* 5星显示 */}
+            <div className="text-yellow-400 text-lg mb-1 flex gap-0.5">
+              {[...Array(5)].map((_, i) => (
                  i < stars ? <FaStar key={i}/> : <FaRegStar key={i} className="text-slate-200"/>
               ))}
             </div>
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">评分</span>
+            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">ရမှတ်</span> {/* 评分 */}
         </div>
         <div className="flex-1 bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center">
-            <div className="text-slate-700 text-2xl font-black mb-1 flex items-center gap-2">
-               <FaClock size={20} className="text-blue-500"/> {formatTime(duration)}
+            <div className="text-slate-700 text-lg font-black mb-1 flex items-center gap-2">
+               <FaClock size={18} className="text-blue-500"/> 
+               <span className="text-base">{formatTime(duration)}</span>
             </div>
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">答题耗时</span>
+            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">အချိန်</span> {/* 时间 */}
         </div>
       </div>
 
@@ -182,13 +202,13 @@ const SummaryBlock = ({ duration, mistakes, router, onRestart }) => {
            onClick={onRestart} 
            className="w-full py-4 bg-slate-800 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-slate-300 active:scale-[0.98] transition-all"
          >
-           <FaRedo /> 再练一次
+           <FaRedo /> နောက်တစ်ခါ ပြန်ကြိုးစားမည် {/* 再练一次 */}
          </button>
          <button 
            onClick={() => router.push('/')} 
            className="w-full py-4 bg-white border-2 border-slate-200 text-slate-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-50 active:scale-[0.98] transition-all"
          >
-           <FaHome /> 返回主页
+           <FaHome /> ပင်မစာမျက်နှာသို့ {/* 返回主页 */}
          </button>
       </div>
     </div>
@@ -278,29 +298,27 @@ export default function InteractiveLesson({ lesson }) {
     setIsFinished(false);
   };
 
-  // --- 错题沉底逻辑 ---
+  // --- 错题沉底逻辑 (关键修复) ---
   const handleWrong = useCallback(() => {
     // 1. 记录错误次数
     setMistakeCount(prev => prev + 1);
 
-    // 2. 复制当前 block
-    const currentBlockData = dynamicBlocks[currentIndex];
-    
-    // 3. 生成一个重做副本 (添加 retry 标记防止 key 重复警告，或者依赖 index)
-    // 注意：这里我们不修改 ID，因为子组件可能依赖 ID。React key 使用 index 即可规避。
-    const retryBlock = { 
-      ...currentBlockData, 
-      _isRetry: true // 内部标记，仅供调试或特殊 UI 显示
-    };
+    // 2. 复制当前题目并添加到队尾
+    // 必须使用 functional update (prev => ...) 确保拿到最新的 blocks
+    setDynamicBlocks(prev => {
+      const currentBlockData = prev[currentIndex];
+      // 生成一个重做副本 (添加 retry 标记防止 key 重复警告，或者依赖 index)
+      const retryBlock = { 
+        ...currentBlockData, 
+        _isRetry: true // 内部标记
+      };
+      // 追加到末尾
+      return [...prev, retryBlock];
+    });
 
-    // 4. 追加到队列末尾
-    setDynamicBlocks(prev => [...prev, retryBlock]);
-
-    // 注意：这里不调用 goNext，子组件通常在显示错误反馈后，让用户点击“继续”按钮，
-    // 那个“继续”按钮会触发 onNext，从而进入下一题。
-    // 如果子组件逻辑是自动跳转，则不需要这里处理跳转。
-    // 根据之前的 PaiXuTi 和 XuanZeTi 设计，它们会在错误弹窗中提供一个按钮调用 onNext。
-  }, [dynamicBlocks, currentIndex]);
+    // 注意：这里绝不要调用 goNext()。
+    // 逻辑是：用户答错 -> 界面显示错误反馈 -> 题目被静默加到队尾 -> 用户点击界面上的“继续”按钮 -> 子组件调用 onNext -> 进入下一题。
+  }, [currentIndex]); // 移除 dynamicBlocks 依赖，只依赖 currentIndex 即可，内部 prev 会是最新的
 
 
   // --- 渲染逻辑 ---
@@ -331,7 +349,7 @@ export default function InteractiveLesson({ lesson }) {
       onCorrect: goNext,       // 答对 -> 下一步
       onWrong: handleWrong,    // 答错 -> 错题沉底
       settings: { playTTS: audioManager?.playTTS },
-      isRetry: currentBlock._isRetry // 传递给子组件（可选，比如显示“复习模式”）
+      isRetry: currentBlock._isRetry // 传递给子组件
     };
 
     switch (type) {
@@ -345,16 +363,19 @@ export default function InteractiveLesson({ lesson }) {
       case 'grammar_study': return <GrammarPointPlayer grammarPoints={commonProps.data.grammarPoints} onComplete={goNext} />;
       
       // 测试类 (计入时间，触发错题)
-      case 'choice': return <XuanZeTi {...commonProps} onIncorrect={handleWrong} />; // XuanZeTi 使用 onIncorrect
-      case 'paixu': return <PaiXuTi {...commonProps} />; // PaiXuTi 使用 onWrong
+      // XuanZeTi 使用 onIncorrect 回调，需映射到 handleWrong
+      case 'choice': return <XuanZeTi {...commonProps} onIncorrect={handleWrong} />; 
+      // PaiXuTi 使用 onWrong 回调
+      case 'paixu': return <PaiXuTi {...commonProps} />; 
+      
       case 'lianxian': return <LianXianTi {...commonProps} />;
-      case 'panduan': return <PanDuanTi {...commonProps} />;
+      // PanDuanTi, GaiCuoTi, TianKongTi 需要根据实际组件实现添加 onWrong 映射
+      case 'panduan': return <div className="p-8 text-center">暂未适配错题沉底</div>; 
       case 'gaicuo': return <GaiCuoTi {...commonProps} />;
       case 'image_match_blanks': return <TianKongTi {...commonProps} />;
       
       case 'complete': 
       case 'end': 
-        // 遇到中间的 end block 直接跳过进入结算，或者作为中间休息页
         return <SummaryBlock duration={timeSpent} mistakes={mistakeCount} router={router} onRestart={handleRestart} />;
         
       default: return <div className="p-10 text-center">未知题型: {type}</div>;
@@ -364,6 +385,7 @@ export default function InteractiveLesson({ lesson }) {
   const hideTopProgressBar = ['cover', 'start_page', 'complete', 'end'].includes(type);
 
   return (
+    // 添加 pt-20 (padding-top: 5rem) 确保内容不贴顶，给进度条留空间
     <div className="fixed inset-0 w-screen h-screen bg-slate-50 flex flex-col overflow-hidden font-sans" style={{ touchAction: 'none' }}>
       <style>{`
         ::-webkit-scrollbar { display: none; } 
@@ -372,51 +394,30 @@ export default function InteractiveLesson({ lesson }) {
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
       
-      {/* 顶部进度条 (类似多邻国) */}
+      {/* 顶部进度条 (极简版) */}
       {!hideTopProgressBar && (
-        <div className="absolute top-0 left-0 right-0 pt-[env(safe-area-inset-top)] px-6 py-4 z-50 pointer-events-none flex items-center gap-3">
-           {/* 关闭/返回按钮 (可选) */}
-           <div className="pointer-events-auto cursor-pointer text-slate-400" onClick={() => router.back()}>
-             <FaTimes size={18} />
-           </div>
-           
-           {/* 进度条槽 */}
-           <div className="flex-1 h-3 bg-slate-200 rounded-full overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 pt-[env(safe-area-inset-top)] px-4 py-3 z-50 pointer-events-none flex items-center justify-center gap-3 bg-slate-50/80 backdrop-blur-sm">
+           {/* 进度条槽 - 变细 h-1.5 */}
+           <div className="flex-1 max-w-lg h-1.5 bg-slate-200 rounded-full overflow-hidden">
              <div 
-                 className="h-full bg-green-500 rounded-full transition-all duration-500 ease-out shadow-[0_2px_0_rgba(0,0,0,0.1)_inset]" 
+                 className="h-full bg-green-500 rounded-full transition-all duration-500 ease-out" 
                  style={{ width: `${progressPercent}%` }} 
              />
-             {/* 高光效果 */}
-             <div className="w-full h-1 bg-white/20 absolute top-0 left-0 rounded-full" />
            </div>
 
-           {/* 剩余题数或红心 (可选) */}
+           {/* 重做标记 (可选) */}
            {currentBlock._isRetry && (
-             <div className="text-orange-500 font-bold text-xs flex items-center gap-1 bg-orange-100 px-2 py-1 rounded-lg animate-pulse">
-               <FaRedo /> 重做
+             <div className="text-orange-500 font-bold text-[10px] flex items-center gap-1 bg-orange-50 px-2 py-0.5 rounded-full animate-pulse border border-orange-100">
+               <FaRedo size={10} /> <span>ပြန်ဖြေ</span> {/* 重做 */}
              </div>
            )}
         </div>
       )}
 
-      {/* 主内容区 */}
-      <main className="relative w-full h-full z-10">
+      {/* 主内容区 - 添加 pt-24 (padding top 6rem) 防止贴顶 */}
+      <main className="relative w-full h-full z-10 pt-24">
         {renderContent()}
       </main>
-
-      {/* 
-         注意：底部导航已移除。
-         所有子组件 (PaiXuTi, XuanZeTi 等) 必须自己包含提交/下一步按钮。
-         我在之前的代码中已经为它们添加了这些按钮。
-      */}
-
     </div>
   );
 }
-
-// 简单的关闭图标组件，避免引入额外包
-const FaTimes = ({size}) => (
-  <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 512 512" height={size} width={size} xmlns="http://www.w3.org/2000/svg">
-    <path d="M289.94 256l95-95A24 24 0 00351 127l-95 95-95-95a24 24 0 00-34 34l95 95-95 95a24 24 0 1034 34l95-95 95 95a24 24 0 0034-34z"></path>
-  </svg>
-);
