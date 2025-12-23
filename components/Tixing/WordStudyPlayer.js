@@ -1,21 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { FaVolumeUp, FaChevronLeft, FaChevronRight, FaTimes, FaMagic } from "react-icons/fa";
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  FaVolumeUp, FaChevronLeft, FaChevronRight, FaTimes, 
+  FaMagic, FaMicrophone, FaStop, FaPlay, FaRedo 
+} from "react-icons/fa";
 import { pinyin } from 'pinyin-pro';
-// ✅ 修复点1：引入 Howler 全局对象
 import { Howl, Howler } from 'howler';
 
 // --- 1. 音频控制工具 ---
 
 // 停止所有正在播放的声音
 const stopAllAudio = () => {
-  // ✅ 修复点2：使用 Howler.unload() 而不是 Howl.unload()
   try {
     Howler.unload(); 
   } catch (e) {
     console.warn("Howler unload failed:", e);
   }
 
-  // 停止所有原生 Audio 元素
   const audioElements = document.getElementsByTagName('audio');
   for (let i = 0; i < audioElements.length; i++) {
     try {
@@ -29,26 +29,22 @@ const stopAllAudio = () => {
 const playR2Audio = (wordObj) => {
   stopAllAudio();
   
-  // 1. 检查数据，如果没有 HSK 等级或 ID，回退到 TTS
   if (!wordObj || !wordObj.id || !wordObj.hsk_level) {
     const text = wordObj?.word || wordObj?.chinese;
     if (text) playTTS(text);
     return;
   }
 
-  // 2. 构建 R2 URL
   const formattedId = String(wordObj.id).padStart(4, '0');
   const level = wordObj.hsk_level;
   const audioUrl = `https://audio.886.best/chinese-vocab-audio/hsk${level}/${formattedId}.mp3`;
 
-  // 3. 播放
   const sound = new Howl({
     src: [audioUrl],
     html5: true, 
     volume: 1.0,
     onloaderror: (id, err) => {
       console.warn("R2 Audio missing, fallback to TTS:", err);
-      // 如果加载失败，播放 TTS
       playTTS(wordObj.word || wordObj.chinese);
     },
     onplayerror: (id, err) => {
@@ -84,8 +80,6 @@ const playSpellingAudio = (pyWithTone) => {
 // 播放 TTS (微软语音库)
 const playTTS = (text) => {
   if (!text) return;
-  // 不要在 TTS 前强制 stopAllAudio，因为原生 Audio 和 Howler 有时会冲突
-  // 让 stopAllAudio 在 playR2Audio 里处理即可，或者只停止 Howler
   try {
     Howler.unload(); 
   } catch(e){}
@@ -95,10 +89,16 @@ const playTTS = (text) => {
   audio.play().catch(e => console.error("TTS play failed", e));
 };
 
-// --- 2. 拼读弹窗组件 ---
+// --- 2. 拼读弹窗组件 (含录音功能) ---
 const SpellingModal = ({ wordObj, onClose }) => {
   const [activeCharIndex, setActiveCharIndex] = useState(-1);
   const rawText = wordObj.word || wordObj.chinese || "";
+  
+  // 录音相关状态
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioBlob, setAudioBlob] = useState(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -119,10 +119,8 @@ const SpellingModal = ({ wordObj, onClose }) => {
 
       setActiveCharIndex('all');
       playR2Audio(wordObj);
-
-      setTimeout(() => {
-        if (!isCancelled) onClose();
-      }, 1500);
+      
+      // 注意：这里移除了自动关闭，因为用户可能需要录音
     };
 
     runSpellingSequence();
@@ -131,41 +129,259 @@ const SpellingModal = ({ wordObj, onClose }) => {
       isCancelled = true;
       stopAllAudio();
     };
-  }, [rawText, wordObj, onClose]);
+  }, [rawText, wordObj]);
+
+  // 开始录音
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        setAudioBlob(blob);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Error accessing microphone:", err);
+      alert("无法访问麦克风，请检查权限。");
+    }
+  };
+
+  // 停止录音
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      // 停止所有流轨道
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+    }
+  };
+
+  // 播放用户录音
+  const playUserAudio = () => {
+    if (audioBlob) {
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      audio.play();
+    }
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/95 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="w-full max-w-sm flex flex-col items-center relative">
-        <button onClick={onClose} className="absolute -top-16 right-0 text-slate-400 p-2 hover:text-slate-600">
-            <FaTimes size={28}/>
+    // 背景遮罩：点击关闭
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 p-4"
+      onClick={onClose}
+    >
+      {/* 弹窗主体：阻止冒泡防止关闭 */}
+      <div 
+        className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col relative"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 顶部关闭按钮 */}
+        <button 
+          onClick={onClose} 
+          className="absolute top-4 right-4 text-slate-300 hover:text-slate-500 transition-colors z-10"
+        >
+          <FaTimes size={24}/>
         </button>
-        <h3 className="text-sm font-bold text-slate-400 mb-10 tracking-[0.3em] uppercase">Spelling Mode</h3>
-        
-        <div className="flex flex-wrap justify-center gap-6">
-          {rawText.split('').map((char, idx) => {
-             const py = pinyin(char, { toneType: 'symbol' });
-             const isActive = idx === activeCharIndex || activeCharIndex === 'all';
-             return (
-               <div key={idx} className="flex flex-col items-center transition-all duration-200">
-                 <span className={`text-2xl font-mono mb-3 transition-colors ${isActive ? 'text-orange-500 font-bold' : 'text-slate-300'}`}>
-                   {py}
-                 </span>
-                 <span className={`text-7xl font-black transition-all transform ${isActive ? 'text-blue-600 scale-110' : 'text-slate-800 scale-100'}`}>
-                   {char}
-                 </span>
-               </div>
-             )
-          })}
-        </div>
-        <div className="mt-12 text-slate-400 text-sm animate-pulse font-medium">
-            {activeCharIndex === 'all' ? '完整朗读' : '拼读中...'}
+
+        <div className="pt-10 pb-6 px-6 flex flex-col items-center">
+          <h3 className="text-xs font-bold text-slate-400 mb-8 tracking-[0.2em] uppercase">Spelling & Record</h3>
+          
+          {/* 拼读展示区 */}
+          <div className="flex flex-wrap justify-center gap-4 mb-8">
+            {rawText.split('').map((char, idx) => {
+               const py = pinyin(char, { toneType: 'symbol' });
+               const isActive = idx === activeCharIndex || activeCharIndex === 'all';
+               return (
+                 <div key={idx} className="flex flex-col items-center transition-all duration-200">
+                   <span className={`text-xl font-mono mb-2 transition-colors ${isActive ? 'text-orange-500 font-bold' : 'text-slate-300'}`}>
+                     {py}
+                   </span>
+                   <span className={`text-5xl font-black transition-all transform ${isActive ? 'text-blue-600 scale-110' : 'text-slate-800 scale-100'}`}>
+                     {char}
+                   </span>
+                 </div>
+               )
+            })}
+          </div>
+
+          <div className="text-slate-400 text-sm font-medium mb-8 h-6">
+              {activeCharIndex === 'all' ? (
+                <button onClick={() => playR2Audio(wordObj)} className="flex items-center gap-2 text-blue-500 hover:text-blue-600">
+                  <FaVolumeUp /> 再次示范
+                </button>
+              ) : '拼读中...'}
+          </div>
+
+          {/* 录音功能区 */}
+          <div className="w-full bg-slate-50 rounded-xl p-4 border border-slate-100 flex flex-col items-center">
+             <div className="text-xs text-slate-400 mb-3 font-bold uppercase">跟读录音对比</div>
+             
+             <div className="flex items-center gap-6">
+                {/* 录音按钮 */}
+                {!isRecording ? (
+                  <button 
+                    onClick={startRecording}
+                    className="w-14 h-14 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg shadow-red-200 hover:bg-red-600 hover:scale-105 transition-all"
+                  >
+                    <FaMicrophone size={20} />
+                  </button>
+                ) : (
+                  <button 
+                    onClick={stopRecording}
+                    className="w-14 h-14 rounded-full bg-slate-800 text-white flex items-center justify-center animate-pulse"
+                  >
+                    <FaStop size={20} />
+                  </button>
+                )}
+
+                {/* 播放录音按钮 (只有录音后显示) */}
+                {audioBlob && !isRecording && (
+                  <div className="flex items-center gap-4 animate-in slide-in-from-left duration-300">
+                    <button 
+                      onClick={playUserAudio}
+                      className="w-14 h-14 rounded-full bg-green-500 text-white flex items-center justify-center shadow-lg shadow-green-200 hover:bg-green-600 transition-all"
+                    >
+                      <FaPlay size={18} className="ml-1" />
+                    </button>
+                    
+                    <button 
+                      onClick={() => setAudioBlob(null)}
+                      className="text-slate-400 text-xs flex flex-col items-center hover:text-slate-600"
+                    >
+                       <FaRedo size={12} className="mb-1"/> 重录
+                    </button>
+                  </div>
+                )}
+             </div>
+             
+             <div className="mt-3 text-xs text-slate-400">
+                {isRecording ? "正在录音..." : (audioBlob ? "点击绿色按钮播放您的发音" : "点击麦克风开始跟读")}
+             </div>
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-// --- 3. 主组件 ---
+// --- 3. 辅助组件：支持主语替换的例句行 ---
+const InteractiveExampleRow = ({ text, translation }) => {
+  // 定义常见的起始主语（按长度排序，优先匹配长的）
+  const SUBJECTS = ['我们', '你们', '他们', '她们', '它们', '大家', '我', '你', '他', '她', '它'];
+  
+  // 状态：当前显示的文本
+  const [currentText, setCurrentText] = useState(text);
+  
+  // 当传入的 text prop 变化时，重置
+  useEffect(() => {
+    setCurrentText(text);
+  }, [text]);
+
+  // 尝试替换主语的逻辑
+  const switchSubject = (newSubject) => {
+    if (!text) return;
+    
+    let updatedText = currentText;
+    let replaced = false;
+
+    // 1. 检查当前文本是否以已知主语开头
+    for (const subj of SUBJECTS) {
+      if (currentText.startsWith(subj)) {
+        updatedText = newSubject + currentText.substring(subj.length);
+        replaced = true;
+        break;
+      }
+    }
+
+    // 2. 如果没有匹配到已知主语，为了演示效果，我们在前面加一个逗号拼接（或者直接强制替换前两个字，但这不准确）
+    // 这里的策略是：如果没匹配到，我们假定用户想把这个主语加在最前面练习
+    if (!replaced) {
+      // 简单判断：如果已经包含了我们要切换的主语在开头，就不动了
+      if (!currentText.startsWith(newSubject)) {
+         // 强制替换逻辑比较危险，这里选择不做操作，或者可以在前面加上 "比如：[主语]..."
+         // 为了用户体验，我们做个简单的回退：如果无法智能替换，就仅仅播放该主语+原句的音频？
+         // 决定：不做强行替换，只替换已匹配的。
+         // 如果原句是 "下雨了" (无主语)，变 "我下雨了" 奇怪。
+         // 所以：如果没匹配到，不做任何改变，或者提示无法替换。
+         console.log("No matching subject found to replace.");
+         return; 
+      }
+    }
+
+    setCurrentText(updatedText);
+    playTTS(updatedText);
+  };
+
+  const py = pinyin(currentText, { toneType: 'symbol' });
+
+  // 判断是否显示替换工具栏：只有当原句以常用代词开头时才显示
+  const canReplace = SUBJECTS.some(s => text.startsWith(s));
+
+  return (
+    <div className="flex flex-col items-center py-4 relative group">
+      {/* 主语切换工具栏 (仅在 Hover 或 激活时显示，这里为了方便直接显示一个小条) */}
+      {canReplace && (
+        <div className="flex gap-2 mb-2 opacity-60 hover:opacity-100 transition-opacity">
+          {['我', '你', '他'].map(subj => (
+            <button
+              key={subj}
+              onClick={(e) => { e.stopPropagation(); switchSubject(subj); }}
+              className={`px-2 py-0.5 text-xs rounded border ${
+                currentText.startsWith(subj) 
+                  ? 'bg-orange-100 text-orange-600 border-orange-200' 
+                  : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              {subj}
+            </button>
+          ))}
+          <button 
+             onClick={(e) => { e.stopPropagation(); setCurrentText(text); }} // 重置
+             className="px-2 py-0.5 text-xs text-slate-300 hover:text-slate-500"
+          >
+            还原
+          </button>
+        </div>
+      )}
+
+      <div 
+        className="text-center cursor-pointer active:scale-[0.99] transition-transform w-full"
+        onClick={() => playTTS(currentText)}
+      >
+        <div className="text-sm text-orange-400 mb-1 font-mono leading-none opacity-80">
+          {py}
+        </div>
+        <div className="text-xl text-slate-700 font-medium leading-relaxed px-4">
+          {currentText}
+        </div>
+        {translation && (
+          <div className="text-base text-slate-400 mt-1 font-['Padauk']">
+            {translation}
+          </div>
+        )}
+      </div>
+      
+      <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity text-blue-400 text-xs flex items-center gap-1">
+        <FaVolumeUp /> 点击朗读
+      </div>
+    </div>
+  );
+};
+
+// --- 4. 主组件 ---
 export default function WordStudyPlayer({ data, onNext, onPrev, isFirstBlock }) {
   if (!data) return <div className="p-10 text-center text-red-500">Error: No Data</div>;
 
@@ -199,7 +415,6 @@ export default function WordStudyPlayer({ data, onNext, onPrev, isFirstBlock }) 
 
   if (!currentWord) return <div className="p-10 text-center text-slate-400">Loading...</div>;
 
-  // 属性名兼容
   const rawText = currentWord.word || currentWord.chinese || currentWord.hanzi;
   if (!rawText) return <div className="p-10 text-center text-red-400">Word data missing field</div>;
 
@@ -266,15 +481,16 @@ export default function WordStudyPlayer({ data, onNext, onPrev, isFirstBlock }) 
 
         <div className="w-24 h-px bg-slate-100 mb-8 flex-none"></div>
 
+        {/* 例句区域：使用新的支持主语替换的组件 */}
         <div className="w-full max-w-lg space-y-6 text-center">
             {currentWord.example && (
-              <ExampleRow 
+              <InteractiveExampleRow 
                 text={currentWord.example} 
                 translation={currentWord.example_burmese} 
               />
             )}
             {currentWord.example2 && (
-              <ExampleRow 
+              <InteractiveExampleRow 
                 text={currentWord.example2} 
                 translation={currentWord.example2_burmese} 
               />
@@ -282,14 +498,12 @@ export default function WordStudyPlayer({ data, onNext, onPrev, isFirstBlock }) 
         </div>
       </div>
 
-      {/* 底部导航 - 已修改：移除上一个，改为浅色系“继续” */}
+      {/* 底部导航 */}
       <div 
         className="fixed bottom-0 left-0 right-0 z-20 bg-white/90 backdrop-blur-md border-t border-slate-50 px-6 pt-4"
         style={{ paddingBottom: 'max(24px, env(safe-area-inset-bottom))' }}
       >
         <div className="flex items-center gap-6 max-w-md mx-auto">
-            {/* 上一个按钮已移除 */}
-
             <button 
               onClick={handleNext}
               className="flex-1 h-14 bg-white text-slate-700 border-2 border-slate-100 rounded-full font-bold text-lg hover:border-slate-300 hover:bg-slate-50 hover:shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-3"
@@ -299,36 +513,10 @@ export default function WordStudyPlayer({ data, onNext, onPrev, isFirstBlock }) 
         </div>
       </div>
 
+      {/* 拼读弹窗 */}
       {showSpelling && (
         <SpellingModal wordObj={currentWord} onClose={() => setShowSpelling(false)} />
       )}
     </div>
   );
 }
-
-// 辅助组件：例句行
-const ExampleRow = ({ text, translation }) => {
-  const py = pinyin(text, { toneType: 'symbol' });
-  
-  return (
-    <div 
-      className="flex flex-col items-center py-2 cursor-pointer group active:scale-[0.99] transition-transform"
-      onClick={() => playTTS(text)}
-    >
-      <div className="text-sm text-orange-400 mb-1 font-mono leading-none opacity-80 group-hover:opacity-100">
-        {py}
-      </div>
-      <div className="text-xl text-slate-700 font-medium leading-relaxed">
-        {text}
-      </div>
-      {translation && (
-        <div className="text-base text-slate-400 mt-1 font-['Padauk']">
-          {translation}
-        </div>
-      )}
-      <div className="mt-1 opacity-0 group-hover:opacity-100 transition-opacity text-blue-400 text-xs flex items-center gap-1">
-        <FaVolumeUp /> 点击朗读
-      </div>
-    </div>
-  );
-};
