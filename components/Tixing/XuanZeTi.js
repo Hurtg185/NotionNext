@@ -140,12 +140,12 @@ const cssStyles = `
 }
 .xzt-header {
   flex-shrink: 0;
-  padding: 60px 20px 10px; /* 顶部间距增加 */
+  padding: 100px 20px 10px; /* 顶部间距增加 */
   display: flex; justify-content: center;
 }
 .xzt-scroll-area {
   flex:1;overflow-y:auto;
-  padding: 10px 16px 140px; /* 底部增加留白 */
+  padding: 10px 16px 180px; /* 底部增加留白 */
   display:flex;flex-direction:column;align-items:center;
 }
 .scene-wrapper {
@@ -204,7 +204,7 @@ const cssStyles = `
 /* 提交按钮位置调整 */
 .submit-bar{
   position:absolute; bottom:0; left:0; right:0;
-  padding: 20px 20px 50px;
+  padding: 20px 20px 80px;
   background: linear-gradient(to top, #ffffff 90%, rgba(255,255,255,0));
   display:flex;justify-content:center;
   z-index: 50;
