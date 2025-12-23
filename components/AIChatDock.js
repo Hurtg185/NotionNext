@@ -6,8 +6,8 @@ import {
 
 // 默认配置
 const DEFAULT_CONFIG = {
-  apiKey: '', // 等待用户输入
-  baseUrl: 'https://integrate.api.nvidia.com/v1', // 这里的 baseUrl 实际上只在显示时有用，请求走本地转发
+  apiKey: '', 
+  baseUrl: 'https://integrate.api.nvidia.com/v1',
   modelId: 'deepseek-ai/deepseek-r1',
   systemPrompt: '你是一位精通汉语和缅甸语的资深翻译老师。请用通俗易懂、口语化的中文为缅甸学生讲解汉语语法。如果遇到复杂的概念，请对比缅甸语的思维方式进行解释。态度要亲切、耐心。',
   ttsSpeed: 1.0,
@@ -22,21 +22,16 @@ const VOICES = [
 ];
 
 export default function AIChatDock({ contextData, ttsPlay }) {
-  // 状态管理
   const [expanded, setExpanded] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
-  
-  // TTS 状态 (如果需要内部播放，备用)
-  const [audioUrl, setAudioUrl] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef(null);
   const historyRef = useRef(null);
 
-  // 加载配置
   useEffect(() => {
     const savedConfig = localStorage.getItem('ai_dock_config');
     if (savedConfig) {
@@ -48,42 +43,33 @@ export default function AIChatDock({ contextData, ttsPlay }) {
     }
   }, []);
 
-  // 自动滚动
   useEffect(() => {
     if (historyRef.current && expanded) {
       historyRef.current.scrollTop = historyRef.current.scrollHeight;
     }
   }, [messages, expanded, loading]);
 
-  // 保存配置
   const saveConfig = (newConfig) => {
     setConfig(newConfig);
     localStorage.setItem('ai_dock_config', JSON.stringify(newConfig));
   };
 
-  // 内部 TTS 播放逻辑 (如果父组件没传 ttsPlay)
   const playInternalTTS = async (text) => {
     if (!text) return;
     if (audioRef.current) {
       audioRef.current.pause();
       setIsPlaying(false);
     }
-
     const cleanText = text.replace(/\*\*|###|```/g, '');
-    // 语速转换：1.0 -> 0%, 1.5 -> +50%, 0.8 -> -20%
     let ratePercent = Math.round((config.ttsSpeed - 1) * 100);
     let rateStr = ratePercent >= 0 ? `+${ratePercent}%` : `${ratePercent}%`;
-    
     const url = `/api/tts?t=${encodeURIComponent(cleanText)}&v=${config.ttsVoice}&r=${rateStr}`;
-
     try {
       const res = await fetch(url);
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
-      
       const audio = new Audio(blobUrl);
       audioRef.current = audio;
-      
       audio.onended = () => setIsPlaying(false);
       audio.play();
       setIsPlaying(true);
@@ -99,11 +85,10 @@ export default function AIChatDock({ contextData, ttsPlay }) {
     }
   };
 
-  // 发送消息 (核心修改部分)
+  // === 核心修改部分 ===
   const handleSend = async () => {
     if (!input.trim() || loading) return;
     
-    // 校验用户是否填了 Key
     if (!config.apiKey) {
       alert('请先点击聊天框右上角的齿轮 ⚙️，在设置中填入你的 API Key');
       setShowSettings(true);
@@ -115,51 +100,22 @@ export default function AIChatDock({ contextData, ttsPlay }) {
     setLoading(true);
     if (!expanded) setExpanded(true);
 
-    // 1. 构建带有上下文的提示词 (Hidden Context)
-    let finalUserMessage = userText;
-    if (contextData) {
-      // 在这里把上下文悄悄塞给 AI，但用户界面上只显示用户的问题
-      // 系统提示词已经设定了身份，这里补充即时资料
-      const contextInfo = `
-[当前教材内容]
-标题：${contextData.title || ''}
-句型：${contextData.pattern || ''}
-详解：${(contextData.explanationRaw || '').substring(0, 500)}
----
-请基于以上内容回答学生的问题：${userText}`;
-      
-      // 我们只把 contextInfo 发给 AI，但在 UI 上只展示 userText
-      // 为了逻辑简单，这里我们还是把 contextInfo 存入 messages 状态用于发送，
-      // 但渲染时你可以选择只渲染 userText (如果需要极简)。
-      // 本代码暂且将完整 prompt 存入，如果想隐藏上下文，需维护两个 message 列表。
-      // 为简单起见，这里直接发，但在 UI 渲染时用户会看到很长的字吗？
-      // 不会，因为我们下面 setMessages 用的是 userText，发送时构建临时数组。
-    }
-
-    // UI 显示的消息列表 (不含巨大的 Context，保持界面整洁)
     const newUiMessages = [...messages, { role: 'user', content: userText }];
     setMessages(newUiMessages);
 
-    // 构造实际发送给 API 的消息列表 (包含 Context)
     const apiMessages = [
         { role: 'system', content: config.systemPrompt },
-        ...messages.slice(-6), // 历史记录
+        ...messages.slice(-6), 
         { role: 'user', content: contextData ? `[背景知识: ${contextData.title} ${contextData.pattern}]\n${userText}` : userText } 
     ];
 
     try {
-      // ==========================================================
-      // 关键修改：请求本地 /api/chat，而不是直接请求 nvidia
-      // ==========================================================
+      console.log("正在发送请求到后端...");
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          // 传给后端：消息历史
           messages: apiMessages,
-          // 传给后端：用户的配置 (Key, Model)
           config: {
             apiKey: config.apiKey,
             modelId: config.modelId
@@ -167,28 +123,33 @@ export default function AIChatDock({ contextData, ttsPlay }) {
         })
       });
 
-      const data = await response.json();
-      
+      // === 调试修改：先获取文本，再解析 JSON ===
+      const rawText = await response.text(); 
+      console.log("后端返回原始数据:", rawText);
+
       if (!response.ok) {
-        throw new Error(data.error || '请求失败');
+        // 如果后端返回错误状态码
+        throw new Error(`服务器错误 (${response.status}): ${rawText.slice(0, 100)}`);
       }
 
-      const reply = data?.choices?.[0]?.message?.content || 'AI 没有返回内容';
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch (e) {
+        // 如果解析失败，说明返回的不是 JSON（可能是超时导致的空数据，或者是 HTML 报错页）
+        if (!rawText) throw new Error("AI 响应超时或为空 (可能模型思考时间过长)");
+        throw new Error("返回数据格式错误，非 JSON");
+      }
+
+      const reply = data?.choices?.[0]?.message?.content;
+      if (!reply) throw new Error("AI 返回了空内容，请检查 API Key 或 模型 ID");
       
       setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
       
-      // 播放语音 (优先用父组件传进来的 ttsPlay，否则用内部的)
-      if (ttsPlay) {
-         // 使用父组件的播放器时，可能不支持动态切换发音人，
-         // 这里简单处理：直接调用朗读。如果需要个性化发音人，
-         // 建议使用内部 playInternalTTS。
-         // 为了响应设置里的发音人，我们优先尝试内部播放器
-         playInternalTTS(reply);
-      } else {
-         playInternalTTS(reply);
-      }
+      if (ttsPlay) playInternalTTS(reply); // 使用内部播放器以支持发音人设置
 
     } catch (err) {
+      console.error("Chat Error:", err);
       setMessages(prev => [...prev, { role: 'assistant', content: `❌ 发送失败: ${err.message}` }]);
     } finally {
       setLoading(false);
@@ -197,7 +158,6 @@ export default function AIChatDock({ contextData, ttsPlay }) {
 
   return (
     <>
-      {/* 遮罩层 */}
       {expanded && (
         <div 
           onClick={() => setExpanded(false)}
@@ -209,7 +169,6 @@ export default function AIChatDock({ contextData, ttsPlay }) {
         />
       )}
 
-      {/* 主容器 */}
       <div style={{
         position: 'absolute', bottom: 0, left: 0, width: '100%',
         height: expanded ? '75vh' : '60px',
@@ -221,7 +180,6 @@ export default function AIChatDock({ contextData, ttsPlay }) {
         display: 'flex', flexDirection: 'column', overflow: 'hidden'
       }}>
         
-        {/* 头部 (仅展开显示) */}
         {expanded && (
           <div style={{
             height: '50px', padding: '0 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -245,7 +203,6 @@ export default function AIChatDock({ contextData, ttsPlay }) {
           </div>
         )}
 
-        {/* 聊天记录 */}
         {expanded && (
           <div ref={historyRef} style={{
             flex: 1, overflowY: 'auto', padding: '16px', background: '#f8fafc',
@@ -277,18 +234,16 @@ export default function AIChatDock({ contextData, ttsPlay }) {
              ))}
              {loading && (
                <div style={{alignSelf:'flex-start', background:'#fff', padding:'10px', borderRadius:'12px', color:'#94a3b8', fontSize:'0.9rem'}}>
-                 AI 正在思考...
+                 AI 正在思考... (DeepSeek 模型较慢，请耐心等待)
                </div>
              )}
           </div>
         )}
 
-        {/* 底部输入区 */}
         <div style={{
           height: '60px', padding: '0 12px', display: 'flex', alignItems: 'center', gap: '10px',
           background: '#fff', borderTop: expanded ? '1px solid #f1f5f9' : 'none'
         }}>
-           {/* 停止播放按钮 */}
            {expanded && isPlaying && (
              <button onClick={stopTTS} style={{
                width:36, height:36, borderRadius:'50%', background:'#fee2e2', color:'#ef4444',
@@ -323,7 +278,6 @@ export default function AIChatDock({ contextData, ttsPlay }) {
         </div>
       </div>
 
-      {/* 设置面板 Modal */}
       {showSettings && (
         <div style={{
           position: 'absolute', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.5)',
@@ -358,6 +312,7 @@ export default function AIChatDock({ contextData, ttsPlay }) {
                   placeholder="deepseek-ai/deepseek-r1"
                   style={styles.input}
                 />
+                <div style={{fontSize:'0.75rem', color:'#ef4444', marginTop:4}}>提示：NVIDIA 上 R1 模型较慢，建议测试时用 meta/llama-3.1-70b-instruct</div>
               </label>
 
               <label>
