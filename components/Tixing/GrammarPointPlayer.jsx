@@ -4,11 +4,12 @@ import { useTransition, animated } from '@react-spring/web';
 import { pinyin } from 'pinyin-pro';
 import { 
   FaPause, FaPlay, FaChevronRight, FaTachometerAlt, 
-  FaUserAlt, FaUserTie, FaExclamationTriangle, FaBookReader, FaVolumeUp
+  FaUserAlt, FaUserTie, FaExclamationTriangle, FaBookReader, FaVolumeUp,
+  FaChevronDown, FaPaperPlane, FaRobot, FaGlobeAsia
 } from 'react-icons/fa';
 
 // =================================================================================
-// ===== 0. 音效工具 (新增) =====
+// ===== 0. 音效工具 =====
 // =================================================================================
 const playSFX = (type) => {
   const audio = new Audio(
@@ -19,7 +20,7 @@ const playSFX = (type) => {
 };
 
 // =================================================================================
-// ===== 1. 健壮的 TTS Hook (优化语速与生命周期) =====
+// ===== 1. 健壮的 TTS Hook (核心音频引擎) =====
 // =================================================================================
 
 function useRobustTTS() {
@@ -30,7 +31,7 @@ function useRobustTTS() {
     activeId: null, 
     duration: 0,
     currentTime: 0,
-    playbackRate: 0.9, // 修改：默认语速 -10% (0.9)
+    playbackRate: 0.9, // 默认语速 -10%
   });
 
   const audioRef = useRef(null);      
@@ -119,7 +120,6 @@ function useRobustTTS() {
   }, []);
 
   const play = useCallback(async (text, uniqueId, voiceOverride = null) => {
-    // 播放点击音效
     playSFX('click');
 
     if (playerState.activeId === uniqueId && audioRef.current) {
@@ -138,10 +138,10 @@ function useRobustTTS() {
       isPlaying: false 
     }));
 
-    // 清理 Markdown 符号和 HTML 标签，只留纯文本给 TTS
+    // 清理文本
     let cleanText = String(text)
-      .replace(/\*\*|###/g, '') // 去除 Markdown 符号
-      .replace(/<[^>]+>/g, '')  // 去除 HTML 标签
+      .replace(/\*\*|###/g, '') 
+      .replace(/<[^>]+>/g, '')  
       .trim();
 
     if (!cleanText) {
@@ -205,13 +205,11 @@ function useRobustTTS() {
 }
 
 // =================================================================================
-// ===== 2. 文本渲染组件 (含拼音 + 可点击) =====
+// ===== 2. 文本渲染组件 (PinyinText & RichText) =====
 // =================================================================================
 
-// 纯文本带拼音渲染组件
 const PinyinText = ({ text, onClick, color = 'inherit', bold = false }) => {
   if (!text) return null;
-  // 过滤掉 markdown 符号显示
   const displayable = text.replace(/\*\*|###/g, '').replace(/\{\{|\}\}/g, '');
   const regex = /([\u4e00-\u9fa5]+)/g;
   const parts = displayable.split(regex);
@@ -253,7 +251,6 @@ const PinyinText = ({ text, onClick, color = 'inherit', bold = false }) => {
   );
 };
 
-// 专门用于解析 "语法详解" Markdown 的组件
 const RichTextRenderer = ({ content, onPlayText }) => {
     if (!content) return null;
     const lines = content.split('\n');
@@ -264,7 +261,6 @@ const RichTextRenderer = ({ content, onPlayText }) => {
                 const trimmed = line.trim();
                 if (!trimmed) return null;
 
-                // 标题 ###
                 if (trimmed.startsWith('###')) {
                     const title = trimmed.replace(/###\s?/, '');
                     return (
@@ -277,7 +273,6 @@ const RichTextRenderer = ({ content, onPlayText }) => {
                     );
                 }
 
-                // 分割粗体 **...**
                 const parts = trimmed.split(/(\*\*.*?\*\*)/g);
                 return (
                     <div key={idx} style={{ marginBottom: '4px', lineHeight: '1.8' }}>
@@ -302,15 +297,16 @@ const RichTextRenderer = ({ content, onPlayText }) => {
 };
 
 // =================================================================================
-// ===== 3. 底部悬浮播放器 (修改为常驻) =====
+// ===== 3. 顶部播放器 (TopPlayer) - 从底部移到顶部 =====
 // =================================================================================
-const BottomPlayer = ({ 
+const TopPlayer = ({ 
   isPlaying, isPaused, duration, currentTime, 
-  onToggle, onSeek, onRateChange, playbackRate, label 
+  onToggle, onSeek, onRateChange, playbackRate, label, visible 
 }) => {
   
+  if (!visible) return null;
+
   const cycleRate = () => {
-    // 语速循环: 0.9 -> 1.0 -> 0.7 -> 0.9
     if (playbackRate === 0.9) onRateChange(1.0);
     else if (playbackRate === 1.0) onRateChange(0.7);
     else onRateChange(0.9);
@@ -324,8 +320,8 @@ const BottomPlayer = ({
   };
 
   return (
-    <div style={styles.bottomPlayerWrapper}>
-      <div style={styles.bottomPlayerCapsule}>
+    <div style={styles.topPlayerWrapper}>
+      <div style={styles.topPlayerCapsule}>
         
         {/* 播放/暂停 */}
         <button onClick={(e) => { playSFX('click'); onToggle(); }} style={styles.mainPlayBtn}>
@@ -361,7 +357,161 @@ const BottomPlayer = ({
 };
 
 // =================================================================================
-// ===== 4. 主组件 GrammarPointPlayer =====
+// ===== 4. AI 聊天组件 (AIChatDock) =====
+// =================================================================================
+
+function AIChatDock({ ttsPlay }) {
+  const [expanded, setExpanded] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const historyRef = useRef(null);
+
+  // 自动滚动到底部
+  useEffect(() => {
+    if (historyRef.current) {
+      historyRef.current.scrollTop = historyRef.current.scrollHeight;
+    }
+  }, [messages, loading, expanded]);
+
+  async function askAI(allMessages) {
+    // 注入系统前缀
+    const systemPrompt = '你是一位汉缅翻译老师，正在辅导学生学习刚才这段汉语语法，请用通俗、口语化的中文解释，必要时对比缅甸语思维方式。';
+
+    try {
+        const res = await fetch(
+          'https://integrate.api.nvidia.com/v1/chat/completions',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer YOUR_API_KEY' // 请替换为真实 Key
+            },
+            body: JSON.stringify({
+              model: 'deepseek-ai/deepseek-v3.2', // 或者其他可用模型
+              messages: [
+                { role: 'system', content: systemPrompt },
+                ...allMessages
+              ]
+            })
+          }
+        );
+
+        const data = await res.json();
+        return data?.choices?.[0]?.message?.content || '抱歉，我现在无法连接到网络，请稍后再试。';
+    } catch (e) {
+        console.error(e);
+        return '网络请求错误，请检查连接。';
+    }
+  }
+
+  async function send() {
+    if (!input.trim() || loading) return;
+
+    playSFX('click');
+    const userMsg = { role: 'user', content: input };
+    setMessages(m => [...m, userMsg]);
+    setInput('');
+    setLoading(true);
+    // 发送后自动展开（如果是未展开状态）
+    if (!expanded) setExpanded(true);
+
+    try {
+      const reply = await askAI([...messages, userMsg]);
+      setMessages(m => [...m, { role: 'assistant', content: reply }]);
+      // 调用父组件传入的 TTS 播放回答，ID 设为随机防止冲突
+      if(ttsPlay) ttsPlay(reply, `ai_reply_${Date.now()}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <>
+      {/* 遮罩层 (仅在展开时显示) */}
+      {expanded && (
+        <div 
+            style={styles.chatOverlay} 
+            onClick={() => setExpanded(false)} 
+        />
+      )}
+
+      <div style={{
+          ...styles.chatBox,
+          height: expanded ? '75vh' : '60px',
+      }}>
+        {/* 展开时的头部 */}
+        {expanded && (
+          <div style={styles.chatHeader}>
+            <div style={{display:'flex', alignItems:'center', gap: 6}}>
+                <FaRobot style={{color: '#3b82f6'}} />
+                <span style={{fontWeight:'bold', color: '#334155'}}>AI 汉语老师</span>
+                <span style={styles.modelTag}>Gemini 1.5 Flash</span>
+            </div>
+            <button onClick={() => setExpanded(false)} style={styles.chatCloseBtn}>
+                <FaChevronDown />
+            </button>
+          </div>
+        )}
+
+        {/* 聊天记录 (仅展开时显示) */}
+        {expanded && (
+          <div style={styles.chatHistory} ref={historyRef}>
+            {messages.length === 0 && (
+                <div style={{textAlign:'center', color:'#94a3b8', marginTop: 40, fontSize: '0.9rem'}}>
+                    <FaGlobeAsia size={32} style={{marginBottom:10, opacity:0.3}}/>
+                    <p>你好！我是你的 AI 助教。</p>
+                    <p>关于刚才的语法，有什么不懂的可以问我哦。</p>
+                </div>
+            )}
+            {messages.map((m, i) => (
+              <div key={i} style={{
+                  ...styles.chatMsg,
+                  alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+                  background: m.role === 'user' ? '#3b82f6' : '#f1f5f9',
+                  color: m.role === 'user' ? 'white' : '#334155',
+                  borderBottomRightRadius: m.role === 'user' ? 2 : 16,
+                  borderBottomLeftRadius: m.role === 'user' ? 16 : 2,
+              }}>
+                {m.content}
+              </div>
+            ))}
+            {loading && (
+                <div style={{...styles.chatMsg, alignSelf: 'flex-start', background: '#f1f5f9', color:'#64748b'}}>
+                    <div className="spin" style={{width:14, height:14, border:'2px solid #cbd5e1', borderTopColor:'#3b82f6', borderRadius:'50%'}}></div>
+                </div>
+            )}
+          </div>
+        )}
+
+        {/* 输入区域 (常驻底部) */}
+        <div style={styles.chatInputArea}>
+          <input
+            value={input}
+            onFocus={() => setExpanded(true)}
+            onChange={e => setInput(e.target.value)}
+            placeholder="问一句刚才的语法..."
+            onKeyDown={e => e.key === 'Enter' && send()}
+            style={styles.chatInput}
+          />
+          <button 
+             onClick={send} 
+             style={{
+                 ...styles.chatSendBtn,
+                 opacity: (!input.trim() || loading) ? 0.5 : 1
+             }}
+             disabled={!input.trim() || loading}
+          >
+            <FaPaperPlane size={14} />
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// =================================================================================
+// ===== 5. 主组件 GrammarPointPlayer =====
 // =================================================================================
 const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
   // 数据格式化
@@ -371,14 +521,11 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
       id: item.id || idx,
       title: item['语法标题'] || item.grammarPoint || '',
       pattern: item['句型结构'] || item.pattern || '',
-      // 优先使用 '讲解脚本' 用于全文朗读，若无则使用 '语法详解' 纯文本
       explanationScript: item['讲解脚本'] || (item['语法详解'] || '').replace(/\*\*|###/g, ''),
-      // '语法详解' 用于富文本渲染
       explanationRaw: item['语法详解'] || item.visibleExplanation || '',
       attention: item['注意事项'] || item.attention || '', 
       
       dialogues: (item['例句列表'] || item.examples || []).map((ex, i) => {
-        // 判断性别：B/Boy/奇数为男，G/Girl/偶数为女
         const isBoy = ex.speaker === 'B' || ex.speaker === 'Boy' || (ex.speaker && ex.speaker.includes('男'));
         return {
           id: ex.id || i,
@@ -425,23 +572,36 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
   if (!normalizedPoints.length) return <div style={styles.center}>Data Loading...</div>;
 
   const currentPoint = normalizedPoints[currentIndex];
-  // 当前页面的讲解ID
   const narrationId = `narration_${currentPoint.id}`;
-  // 底部播放器是否正在控制“讲解” (activeId 匹配)
   const isControllingNarration = activeId === narrationId;
   
-  // 底部播放器始终显示，如果未播放讲解，点击播放按钮触发 play(narrationId)
-  const handleBottomPlayClick = () => {
+  const handleTopPlayClick = () => {
       if (isControllingNarration) {
           toggle();
       } else {
-          // 如果当前在播别的（如例句），先切回讲解
           play(currentPoint.explanationScript, narrationId);
       }
   };
 
   return (
     <div style={styles.container}>
+      {/* 顶部悬浮播放器 (原 BottomPlayer 移至顶部) */}
+      <TopPlayer 
+        label={
+             loadingId === narrationId ? '加载中...' : 
+             (isControllingNarration ? '正在播放讲解' : '点击播放全文讲解')
+        }
+        isPlaying={isControllingNarration && isPlaying}
+        isPaused={isControllingNarration && isPaused}
+        currentTime={isControllingNarration ? currentTime : 0}
+        duration={isControllingNarration ? duration : 0}
+        playbackRate={playbackRate}
+        onToggle={handleTopPlayClick}
+        onSeek={seek}
+        onRateChange={setRate}
+        visible={true} 
+      />
+
       {/* 页面切换动画容器 */}
       {transitions((style, i) => {
         const gp = normalizedPoints[i];
@@ -455,7 +615,7 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
                 {/* 标题 */}
                 <h2 style={styles.title}>{gp.title}</h2>
 
-                {/* 1. 核心句型 (Core Pattern) */}
+                {/* 1. 核心句型 */}
                 {gp.pattern && (
                   <div style={styles.card}>
                     <div style={styles.cardLabel}>
@@ -474,11 +634,10 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
                   </div>
                 )}
 
-                {/* 2. 语法详解 (Markdown + Pinyin + TTS) */}
+                {/* 2. 语法详解 */}
                 <div style={styles.section}>
                   <div style={styles.sectionHeader}>
                     <span style={styles.sectionTitle}>📝 语法详解</span>
-                    {/* 小播放按钮，功能同底部大按钮 */}
                     <button 
                        onClick={() => play(gp.explanationScript, narrationId)}
                        style={styles.playBtnCircle}
@@ -488,16 +647,15 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
                     </button>
                   </div>
                   
-                  {/* 使用 RichTextRenderer 替代 dangerouslySetInnerHTML */}
                   <div style={styles.richTextBlock}>
                       <RichTextRenderer 
                           content={gp.explanationRaw} 
-                          onPlayText={(text) => play(text, `text_${Date.now()}`)} // 点击单句播放
+                          onPlayText={(text) => play(text, `text_${Date.now()}`)} 
                       />
                   </div>
                 </div>
 
-                {/* 3. 易错点 (Attention) */}
+                {/* 3. 易错点 */}
                 {gp.attention && (
                   <div style={styles.section}>
                     <div style={styles.sectionHeader}>
@@ -507,14 +665,13 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
                     </div>
                     <div style={styles.attentionBox}>
                       <div style={styles.attentionText}>
-                          {/* 简单渲染注意事项，也加上拼音点读 */}
                           <PinyinText text={gp.attention} onClick={(t) => play(t, `attn_${gp.id}`)} />
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* 4. 场景对话 (Dialogues) */}
+                {/* 4. 场景对话 */}
                 <div style={styles.section}>
                   <div style={styles.sectionHeader}>
                     <span style={styles.sectionTitle}>💬 场景对话</span>
@@ -523,8 +680,6 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
                     {gp.dialogues.map((ex, idx) => {
                       const exId = `ex_${gp.id}_${idx}`;
                       const isBoy = ex.gender === 'male';
-                      
-                      // 女声 Xiaoyou, 男声 Yunxia
                       const voiceId = isBoy ? 'zh-CN-YunxiaNeural' : 'zh-CN-XiaoyouNeural';
 
                       return (
@@ -536,7 +691,6 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
                              }}
                              className="active-scale"
                         >
-                          {/* 头像 - 使用指定URL */}
                           <div style={styles.avatarWrapper}>
                              <img 
                                 src={isBoy 
@@ -546,17 +700,13 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
                                 style={styles.avatarImg}
                              />
                           </div>
-                          
-                          {/* 气泡 */}
                           <div style={styles.bubbleCol}>
-                             {/* 名字移出气泡，放在上方 */}
                              <div style={{
                                ...styles.speakerName,
                                alignSelf: isBoy ? 'flex-end' : 'flex-start'
                              }}>
                                {isBoy ? '男孩' : '女孩'}
                              </div>
-                             
                              <div style={{
                                 ...styles.bubble,
                                 background: isBoy ? '#eff6ff' : '#fff1f2',
@@ -564,7 +714,6 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
                                 color: activeId === exId ? (isBoy ? '#1e40af' : '#be185d') : '#334155'
                              }}>
                                 <div style={isBoy ? styles.tailRight : styles.tailLeft} />
-                                {/* 对话内容带拼音 */}
                                 <div style={styles.bubbleText}>
                                   <PinyinText text={ex.sentence} />
                                 </div>
@@ -584,32 +733,17 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
                    </button>
                 </div>
                 
-                {/* 垫高底部 */}
-                <div style={{ height: '140px' }} />
+                {/* 垫高底部，为 AI 聊天框留出空间 (60px + margin) */}
+                <div style={{ height: '100px' }} />
               </div>
             </div>
           </animated.div>
         );
       })}
 
-      {/* 底部悬浮播放器 - 常驻 */}
-      <BottomPlayer 
-        // 始终显示播放器
-        label={
-             loadingId === narrationId ? '加载中...' : 
-             (isControllingNarration ? '正在播放讲解' : '点击播放全文讲解')
-        }
-        // 如果正在控制讲解，则传写真实状态；否则显示为暂停状态
-        isPlaying={isControllingNarration && isPlaying}
-        isPaused={isControllingNarration && isPaused}
-        currentTime={isControllingNarration ? currentTime : 0}
-        duration={isControllingNarration ? duration : 0}
-        
-        playbackRate={playbackRate}
-        onToggle={handleBottomPlayClick}
-        onSeek={seek}
-        onRateChange={setRate}
-      />
+      {/* AI 聊天框 (底部吸附) */}
+      <AIChatDock ttsPlay={play} />
+      
     </div>
   );
 };
@@ -620,54 +754,146 @@ GrammarPointPlayer.propTypes = {
 };
 
 // =================================================================================
-// ===== 5. 样式定义 (CSS-in-JS) =====
+// ===== 6. 样式定义 (CSS-in-JS) =====
 // =================================================================================
 const styles = {
   container: { position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#f8fafc', fontFamily: '"Padauk", "Myanmar3", sans-serif' },
   center: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#94a3b8' },
   page: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'white' },
-  scrollContainer: { flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 16px' },
+  scrollContainer: { flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 16px', paddingTop: '70px' }, // 给顶部播放器留位
   contentWrapper: { maxWidth: '600px', margin: '0 auto', paddingTop: '20px' }, 
   
-  // === Bottom Player Style ===
-  bottomPlayerWrapper: {
+  // === Top Player Style (Moved from Bottom) ===
+  topPlayerWrapper: {
     position: 'absolute', 
-    bottom: '40px', 
+    top: '15px', 
     left: 0, right: 0,
     display: 'flex', justifyContent: 'center', alignItems: 'center',
     zIndex: 1000, pointerEvents: 'none'
   },
-  bottomPlayerCapsule: {
+  topPlayerCapsule: {
     pointerEvents: 'auto',
-    width: '92%', maxWidth: '400px', height: '64px',
+    width: '94%', maxWidth: '500px', height: '56px',
     background: 'rgba(255, 255, 255, 0.95)',
-    backdropFilter: 'blur(12px)',
-    borderRadius: '32px',
+    backdropFilter: 'blur(10px)',
+    borderRadius: '28px',
     border: '1px solid rgba(0,0,0,0.08)',
-    boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
-    display: 'flex', alignItems: 'center', padding: '0 16px', gap: '12px'
+    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+    display: 'flex', alignItems: 'center', padding: '0 12px', gap: '12px'
   },
   mainPlayBtn: {
-    width: 42, height: 42, borderRadius: '50%', background: '#3b82f6', color: 'white',
+    width: 38, height: 38, borderRadius: '50%', background: '#3b82f6', color: 'white',
     border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
     flexShrink: 0, boxShadow: '0 4px 10px rgba(59, 130, 246, 0.3)'
   },
-  bpInfo: { flex: 1, display: 'flex', flexDirection: 'column', gap: '3px', overflow: 'hidden' },
-  bpLabel: { fontSize: '0.8rem', fontWeight: 'bold', color: '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  bpInfo: { flex: 1, display: 'flex', flexDirection: 'column', gap: '2px', overflow: 'hidden' },
+  bpLabel: { fontSize: '0.75rem', fontWeight: 'bold', color: '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   bpTimeRow: { display: 'flex', alignItems: 'center', gap: '8px' },
-  bpTime: { fontSize: '0.7rem', color: '#94a3b8', fontFamily: 'monospace', width: '28px' },
-  bpProgressBg: { flex: 1, height: '5px', background: '#e2e8f0', borderRadius: '3px', position: 'relative' },
-  bpProgressFill: { height: '100%', background: '#3b82f6', borderRadius: '3px' },
+  bpTime: { fontSize: '0.65rem', color: '#94a3b8', fontFamily: 'monospace', width: '28px' },
+  bpProgressBg: { flex: 1, height: '4px', background: '#e2e8f0', borderRadius: '2px', position: 'relative' },
+  bpProgressFill: { height: '100%', background: '#3b82f6', borderRadius: '2px' },
   hiddenRangeInput: { position: 'absolute', top: -6, left: 0, width: '100%', height: '16px', opacity: 0, cursor: 'pointer', margin: 0 },
   bpSpeedBtn: {
     background: '#f1f5f9', border: 'none', borderRadius: '12px',
-    padding: '6px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', 
-    cursor: 'pointer', gap: '1px', fontSize: '0.65rem', color: '#64748b', fontWeight: 'bold'
+    padding: '4px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', 
+    cursor: 'pointer', gap: '1px', fontSize: '0.6rem', color: '#64748b', fontWeight: 'bold'
+  },
+
+  // === Chat Dock Styles ===
+  chatBox: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    width: '100%',
+    background: '#fff',
+    borderTop: '1px solid #e2e8f0',
+    transition: 'height 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+    zIndex: 2000,
+    display: 'flex',
+    flexDirection: 'column',
+    boxShadow: '0 -4px 20px rgba(0,0,0,0.05)'
+  },
+  chatOverlay: {
+    position: 'absolute',
+    inset: 0,
+    background: 'rgba(0,0,0,0.3)',
+    zIndex: 1999,
+    backdropFilter: 'blur(2px)'
+  },
+  chatHeader: {
+    height: '48px',
+    padding: '0 16px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottom: '1px solid #f1f5f9',
+    background: '#fff',
+    fontSize: '0.9rem'
+  },
+  modelTag: {
+    fontSize: '0.65rem',
+    background: '#eff6ff',
+    color: '#3b82f6',
+    padding: '2px 6px',
+    borderRadius: '4px',
+    border: '1px solid #bfdbfe',
+    marginLeft: '6px'
+  },
+  chatCloseBtn: {
+    background: 'none', border: 'none', color: '#94a3b8', 
+    padding: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center'
+  },
+  chatHistory: {
+    flex: 1,
+    overflowY: 'auto',
+    padding: '16px',
+    background: '#f8fafc',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px'
+  },
+  chatMsg: {
+    padding: '10px 14px',
+    borderRadius: '16px',
+    maxWidth: '85%',
+    lineHeight: '1.5',
+    fontSize: '0.95rem',
+    wordBreak: 'break-word',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+  },
+  chatInputArea: {
+    height: '60px',
+    display: 'flex',
+    alignItems: 'center',
+    padding: '0 12px',
+    background: '#fff',
+    borderTop: '1px solid #f1f5f9'
+  },
+  chatInput: {
+    flex: 1,
+    height: '40px',
+    borderRadius: '20px',
+    border: '1px solid #e2e8f0',
+    padding: '0 16px',
+    fontSize: '0.95rem',
+    outline: 'none',
+    background: '#f8fafc',
+    transition: 'border 0.2s',
+  },
+  chatSendBtn: {
+    width: '40px', height: '40px',
+    marginLeft: '10px',
+    borderRadius: '50%',
+    background: '#3b82f6',
+    color: 'white',
+    border: 'none',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    cursor: 'pointer',
+    transition: 'opacity 0.2s'
   },
 
   // === Content Styles ===
   title: { fontSize: '1.5rem', fontWeight: '800', textAlign: 'center', color: '#1e293b', marginBottom: '24px', marginTop: '10px' },
-  
   card: { background: 'white', borderRadius: '16px', padding: '24px', marginBottom: '30px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9' },
   cardLabel: { fontSize: '0.85rem', color: '#64748b', fontWeight: 'bold', marginBottom: '12px', display:'flex', gap: '6px', alignItems:'center' },
   patternText: { fontSize: '1.3rem', fontWeight: '600', color: '#0f172a', lineHeight: 1.6, textAlign: 'center' },
@@ -679,21 +905,8 @@ const styles = {
   miniSpin: { width: 14, height: 14, border: '2px solid #3b82f6', borderTopColor: 'transparent', borderRadius: '50%' },
 
   richTextBlock: { fontSize: '1.05rem', lineHeight: '1.8', color: '#475569' },
-  
-  // 易错点样式优化
-  attentionBox: { 
-    background: '#fef2f2', 
-    borderRadius: '16px', 
-    border: '1px solid #fee2e2', 
-    padding: '20px',
-    boxShadow: '0 2px 8px rgba(220, 38, 38, 0.05)'
-  },
-  attentionText: { 
-    lineHeight: 1.8, 
-    color: '#991b1b', 
-    fontSize: '1rem',
-    whiteSpace: 'pre-wrap'
-  },
+  attentionBox: { background: '#fef2f2', borderRadius: '16px', border: '1px solid #fee2e2', padding: '20px', boxShadow: '0 2px 8px rgba(220, 38, 38, 0.05)' },
+  attentionText: { lineHeight: 1.8, color: '#991b1b', fontSize: '1rem', whiteSpace: 'pre-wrap' },
 
   ruby: { rubyPosition: 'over', margin: '0 1px' },
   rt: { fontSize: '0.6em', userSelect: 'none' },
@@ -715,20 +928,8 @@ const styles = {
     minWidth: '60px'
   },
   
-  tailLeft: {
-    position: 'absolute', top: '14px', left: '-8px',
-    width: 0, height: 0,
-    borderTop: '8px solid transparent',
-    borderBottom: '8px solid transparent',
-    borderRight: '8px solid #fff1f2', 
-  },
-  tailRight: {
-    position: 'absolute', top: '14px', right: '-8px',
-    width: 0, height: 0,
-    borderTop: '8px solid transparent',
-    borderBottom: '8px solid transparent',
-    borderLeft: '8px solid #eff6ff', 
-  },
+  tailLeft: { position: 'absolute', top: '14px', left: '-8px', width: 0, height: 0, borderTop: '8px solid transparent', borderBottom: '8px solid transparent', borderRight: '8px solid #fff1f2' },
+  tailRight: { position: 'absolute', top: '14px', right: '-8px', width: 0, height: 0, borderTop: '8px solid transparent', borderBottom: '8px solid transparent', borderLeft: '8px solid #eff6ff' },
 
   bubbleText: { fontSize: '1.1rem', marginBottom: '6px' },
   bubbleTrans: { fontSize: '0.9rem', opacity: 0.85, fontFamily: '"Padauk", sans-serif' },
