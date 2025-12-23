@@ -4,11 +4,22 @@ import { useTransition, animated } from '@react-spring/web';
 import { pinyin } from 'pinyin-pro';
 import { 
   FaPause, FaPlay, FaChevronRight, FaTachometerAlt, 
-  FaUserAlt, FaUserTie, FaExclamationTriangle, FaBookReader
+  FaUserAlt, FaUserTie, FaExclamationTriangle, FaBookReader, FaVolumeUp
 } from 'react-icons/fa';
 
 // =================================================================================
-// ===== 1. 健壮的 TTS Hook (生命周期管理 & 内存泄漏修复) =====
+// ===== 0. 音效工具 (新增) =====
+// =================================================================================
+const playSFX = (type) => {
+  const audio = new Audio(
+    type === 'switch' ? '/sounds/switch-card.mp3' : '/sounds/click.mp3'
+  );
+  audio.volume = 0.6;
+  audio.play().catch(() => {});
+};
+
+// =================================================================================
+// ===== 1. 健壮的 TTS Hook (优化语速与生命周期) =====
 // =================================================================================
 
 function useRobustTTS() {
@@ -16,18 +27,17 @@ function useRobustTTS() {
     isPlaying: false,
     isPaused: false,
     loadingId: null,
-    activeId: null, // 当前激活的音频ID
+    activeId: null, 
     duration: 0,
     currentTime: 0,
-    playbackRate: 0.85, // 默认语速 -15%
+    playbackRate: 0.9, // 修改：默认语速 -10% (0.9)
   });
 
-  const audioRef = useRef(null);      // Audio 对象引用
-  const audioUrlRef = useRef(null);   // Blob URL 引用 (用于清理内存)
-  const requestRef = useRef(null);    // 动画帧引用
-  const mountedRef = useRef(true);    // 组件挂载状态
+  const audioRef = useRef(null);      
+  const audioUrlRef = useRef(null);   
+  const requestRef = useRef(null);    
+  const mountedRef = useRef(true);    
 
-  // 组件卸载时强制清理
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -36,19 +46,16 @@ function useRobustTTS() {
     };
   }, []);
 
-  // 深度清理函数
   const cleanupAudio = useCallback(() => {
     if (requestRef.current) cancelAnimationFrame(requestRef.current);
     
     if (audioRef.current) {
       const audio = audioRef.current;
       audio.pause();
-      // 移除核心监听器
-      audio.removeAttribute('src'); // 断开连接
+      audio.removeAttribute('src'); 
       audio.load();
     }
     
-    // 释放 Blob 内存
     if (audioUrlRef.current) {
       URL.revokeObjectURL(audioUrlRef.current);
       audioUrlRef.current = null;
@@ -57,7 +64,6 @@ function useRobustTTS() {
     audioRef.current = null;
   }, []);
 
-  // 停止并重置状态
   const stop = useCallback(() => {
     cleanupAudio();
     setPlayerState(prev => ({
@@ -71,7 +77,6 @@ function useRobustTTS() {
     }));
   }, [cleanupAudio]);
 
-  // 进度更新循环
   const updateProgress = useCallback(() => {
     if (audioRef.current && !audioRef.current.paused) {
       setPlayerState(prev => ({
@@ -83,14 +88,11 @@ function useRobustTTS() {
     }
   }, []);
 
-  // 切换 播放/暂停
   const toggle = useCallback(() => {
     const audio = audioRef.current;
     if (audio) {
       if (audio.paused) {
-        // 如果已经结束了，重置时间
         if (audio.ended) audio.currentTime = 0;
-        
         audio.play().catch(err => console.warn("Play interrupted", err));
         setPlayerState(prev => ({ ...prev, isPaused: false, isPlaying: true }));
         requestRef.current = requestAnimationFrame(updateProgress);
@@ -102,7 +104,6 @@ function useRobustTTS() {
     }
   }, [updateProgress]);
 
-  // 调整进度
   const seek = useCallback((time) => {
     if (audioRef.current) {
       audioRef.current.currentTime = time;
@@ -110,7 +111,6 @@ function useRobustTTS() {
     }
   }, []);
 
-  // 调整语速
   const setRate = useCallback((rate) => {
     setPlayerState(prev => ({ ...prev, playbackRate: rate }));
     if (audioRef.current) {
@@ -118,22 +118,19 @@ function useRobustTTS() {
     }
   }, []);
 
-  // === 核心播放函数 ===
   const play = useCallback(async (text, uniqueId, voiceOverride = null) => {
-    // 逻辑修复：如果是同一个ID
+    // 播放点击音效
+    playSFX('click');
+
     if (playerState.activeId === uniqueId && audioRef.current) {
-      // 检查是否已结束，如果结束了，视为“重播”，否则视为“暂停/继续”
       if (!audioRef.current.ended) {
         toggle();
         return;
       }
-      // 如果 ended 为 true，代码继续往下执行，重新加载播放（或者直接重置 currentTime 播放也可以，这里选择重新加载确保状态一致）
     }
 
-    // 1. 彻底清理上一个音频
     cleanupAudio();
 
-    // 2. 设置加载状态
     setPlayerState(prev => ({ 
       ...prev, 
       loadingId: uniqueId, 
@@ -141,34 +138,34 @@ function useRobustTTS() {
       isPlaying: false 
     }));
 
-    // 3. 处理文本和发音人
-    let cleanText = String(text).replace(/<[^>]+>/g, '').trim();
+    // 清理 Markdown 符号和 HTML 标签，只留纯文本给 TTS
+    let cleanText = String(text)
+      .replace(/\*\*|###/g, '') // 去除 Markdown 符号
+      .replace(/<[^>]+>/g, '')  // 去除 HTML 标签
+      .trim();
+
     if (!cleanText) {
       setPlayerState(prev => ({ ...prev, loadingId: null }));
       return;
     }
 
-    // 默认女声: Xiaoyou, 男孩专用: Yunxia (根据要求)
     let targetVoice = 'zh-CN-XiaoyouNeural'; 
     if (voiceOverride) targetVoice = voiceOverride;
-    else if (/[\u1000-\u109F]/.test(text)) targetVoice = 'my-MM-NilarNeural'; // 缅语自动识别
+    else if (/[\u1000-\u109F]/.test(text)) targetVoice = 'my-MM-NilarNeural'; 
 
     try {
-      // 4. 请求音频
       const url = `/api/tts?t=${encodeURIComponent(cleanText)}&v=${targetVoice}`;
       const response = await fetch(url);
       if (!response.ok) throw new Error('TTS API Error');
       
       const blob = await response.blob();
-      if (!mountedRef.current) return; // 防止组件卸载后回调
+      if (!mountedRef.current) return;
 
-      // 5. 创建 Audio 对象
       const blobUrl = URL.createObjectURL(blob);
       audioUrlRef.current = blobUrl;
       const audio = new Audio(blobUrl);
       audioRef.current = audio;
 
-      // 6. 设置属性和监听
       audio.playbackRate = playerState.playbackRate;
 
       audio.onloadedmetadata = () => {
@@ -176,20 +173,17 @@ function useRobustTTS() {
          setPlayerState(prev => ({ ...prev, duration: audio.duration, currentTime: 0 }));
       };
 
-      // 播放结束处理
       audio.onended = () => {
          if (!mountedRef.current) return;
          setPlayerState(prev => ({ ...prev, isPlaying: false, isPaused: false, currentTime: 0 }));
          cancelAnimationFrame(requestRef.current);
       };
 
-      // 播放错误处理
       audio.onerror = (e) => {
          console.error("Audio playback error", e);
          setPlayerState(prev => ({ ...prev, loadingId: null, isPlaying: false }));
       };
 
-      // 7. 开始播放
       await audio.play();
       
       setPlayerState(prev => ({ 
@@ -211,26 +205,36 @@ function useRobustTTS() {
 }
 
 // =================================================================================
-// ===== 2. 文本渲染 (带拼音) =====
+// ===== 2. 文本渲染组件 (含拼音 + 可点击) =====
 // =================================================================================
 
-const renderTextWithPinyin = (text, colorStyle = 'inherit', isBold = false) => {
+// 纯文本带拼音渲染组件
+const PinyinText = ({ text, onClick, color = 'inherit', bold = false }) => {
   if (!text) return null;
-  // 去除一些特殊标记，只留文本
-  const displayable = text.replace(/^[❌✅XV×√]\s*/i, '').replace(/\{\{|\}\}/g, '');
-  // 分割汉字和非汉字
-  const parts = displayable.match(/([\u4e00-\u9fff]+)|([^\u4e00-\u9fff]+)/g) || [];
+  // 过滤掉 markdown 符号显示
+  const displayable = text.replace(/\*\*|###/g, '').replace(/\{\{|\}\}/g, '');
+  const regex = /([\u4e00-\u9fa5]+)/g;
+  const parts = displayable.split(regex);
 
   return (
-    <span style={{ 
-      lineHeight: '2.4', 
-      wordBreak: 'break-word', 
-      color: colorStyle, 
-      fontWeight: isBold ? '700' : '400',
-      fontSize: '1.1rem' 
-    }}>
+    <span 
+      onClick={(e) => {
+        if(onClick) {
+            e.stopPropagation();
+            onClick(text);
+        }
+      }}
+      style={{ 
+        lineHeight: '2.2', 
+        wordBreak: 'break-word', 
+        color: color, 
+        fontWeight: bold ? '700' : '400',
+        fontSize: '1.1rem',
+        cursor: onClick ? 'pointer' : 'default'
+      }}
+    >
       {parts.map((part, idx) => {
-        if (/[\u4e00-\u9fff]/.test(part)) {
+        if (/[\u4e00-\u9fa5]/.test(part)) {
           const pyArray = pinyin(part, { type: 'array', toneType: 'symbol' });
           const charArray = part.split('');
           return charArray.map((char, cIdx) => (
@@ -249,21 +253,67 @@ const renderTextWithPinyin = (text, colorStyle = 'inherit', isBold = false) => {
   );
 };
 
+// 专门用于解析 "语法详解" Markdown 的组件
+const RichTextRenderer = ({ content, onPlayText }) => {
+    if (!content) return null;
+    const lines = content.split('\n');
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {lines.map((line, idx) => {
+                const trimmed = line.trim();
+                if (!trimmed) return null;
+
+                // 标题 ###
+                if (trimmed.startsWith('###')) {
+                    const title = trimmed.replace(/###\s?/, '');
+                    return (
+                        <h3 key={idx} style={{ 
+                            fontSize: '1.1rem', fontWeight: 'bold', color: '#4338ca', 
+                            marginTop: '10px', marginBottom: '4px', borderLeft: '4px solid #818cf8', paddingLeft: '8px' 
+                        }}>
+                            {title}
+                        </h3>
+                    );
+                }
+
+                // 分割粗体 **...**
+                const parts = trimmed.split(/(\*\*.*?\*\*)/g);
+                return (
+                    <div key={idx} style={{ marginBottom: '4px', lineHeight: '1.8' }}>
+                        {parts.map((part, pIdx) => {
+                            if (part.startsWith('**') && part.endsWith('**')) {
+                                const clean = part.slice(2, -2);
+                                return (
+                                    <span key={pIdx} style={{ background: '#fff7ed', padding: '0 4px', borderRadius: '4px', borderBottom: '1px solid #fed7aa' }}>
+                                        <PinyinText text={clean} onClick={onPlayText} color="#9a3412" bold />
+                                    </span>
+                                );
+                            } else if (part.trim()) {
+                                return <PinyinText key={pIdx} text={part} onClick={onPlayText} color="#334155" />;
+                            }
+                            return null;
+                        })}
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
+
 // =================================================================================
-// ===== 3. 底部悬浮播放器 (仅用于长音频) =====
+// ===== 3. 底部悬浮播放器 (修改为常驻) =====
 // =================================================================================
 const BottomPlayer = ({ 
   isPlaying, isPaused, duration, currentTime, 
-  onToggle, onSeek, onRateChange, playbackRate, label, visible 
+  onToggle, onSeek, onRateChange, playbackRate, label 
 }) => {
   
-  if (!visible) return null;
-
   const cycleRate = () => {
-    // 语速循环：0.85 -> 1.0 -> 0.6 -> 0.85
-    if (playbackRate === 0.85) onRateChange(1.0);
-    else if (playbackRate === 1.0) onRateChange(0.6);
-    else onRateChange(0.85);
+    // 语速循环: 0.9 -> 1.0 -> 0.7 -> 0.9
+    if (playbackRate === 0.9) onRateChange(1.0);
+    else if (playbackRate === 1.0) onRateChange(0.7);
+    else onRateChange(0.9);
   };
 
   const formatTime = (t) => {
@@ -278,7 +328,7 @@ const BottomPlayer = ({
       <div style={styles.bottomPlayerCapsule}>
         
         {/* 播放/暂停 */}
-        <button onClick={onToggle} style={styles.mainPlayBtn}>
+        <button onClick={(e) => { playSFX('click'); onToggle(); }} style={styles.mainPlayBtn}>
            {(isPlaying || isPaused) && !isPaused ? <FaPause size={14} /> : <FaPlay size={14} style={{marginLeft:2}} />}
         </button>
 
@@ -300,7 +350,7 @@ const BottomPlayer = ({
         </div>
 
         {/* 语速 */}
-        <button onClick={cycleRate} style={styles.bpSpeedBtn}>
+        <button onClick={(e) => { playSFX('click'); cycleRate(); }} style={styles.bpSpeedBtn}>
           <FaTachometerAlt size={12} />
           <span>{playbackRate}x</span>
         </button>
@@ -321,14 +371,15 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
       id: item.id || idx,
       title: item['语法标题'] || item.grammarPoint || '',
       pattern: item['句型结构'] || item.pattern || '',
-      explanation: item['语法详解'] || item.visibleExplanation || '',
-      // 如果没有讲解脚本，使用纯文本的详解
-      explanationScript: item['讲解脚本'] || (item['语法详解'] || '').replace(/<[^>]+>/g, ''),
+      // 优先使用 '讲解脚本' 用于全文朗读，若无则使用 '语法详解' 纯文本
+      explanationScript: item['讲解脚本'] || (item['语法详解'] || '').replace(/\*\*|###/g, ''),
+      // '语法详解' 用于富文本渲染
+      explanationRaw: item['语法详解'] || item.visibleExplanation || '',
       attention: item['注意事项'] || item.attention || '', 
       
       dialogues: (item['例句列表'] || item.examples || []).map((ex, i) => {
-        // 判断性别
-        const isBoy = ex.speaker === 'B' || ex.speaker === 'Boy' || i % 2 !== 0;
+        // 判断性别：B/Boy/奇数为男，G/Girl/偶数为女
+        const isBoy = ex.speaker === 'B' || ex.speaker === 'Boy' || (ex.speaker && ex.speaker.includes('男'));
         return {
           id: ex.id || i,
           gender: isBoy ? 'male' : 'female',
@@ -356,6 +407,7 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
   }, [currentIndex, stop]);
 
   const handleNext = () => {
+    playSFX('switch');
     if (currentIndex < normalizedPoints.length - 1) {
       setCurrentIndex(p => p + 1);
     } else {
@@ -372,8 +424,21 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
 
   if (!normalizedPoints.length) return <div style={styles.center}>Data Loading...</div>;
 
-  // 判断底部播放器是否可见：只有在播放讲解 (activeId 包含 narration) 时显示
-  const isNarrationActive = activeId && activeId.includes('narration');
+  const currentPoint = normalizedPoints[currentIndex];
+  // 当前页面的讲解ID
+  const narrationId = `narration_${currentPoint.id}`;
+  // 底部播放器是否正在控制“讲解” (activeId 匹配)
+  const isControllingNarration = activeId === narrationId;
+  
+  // 底部播放器始终显示，如果未播放讲解，点击播放按钮触发 play(narrationId)
+  const handleBottomPlayClick = () => {
+      if (isControllingNarration) {
+          toggle();
+      } else {
+          // 如果当前在播别的（如例句），先切回讲解
+          play(currentPoint.explanationScript, narrationId);
+      }
+  };
 
   return (
     <div style={styles.container}>
@@ -382,8 +447,6 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
         const gp = normalizedPoints[i];
         if (!gp) return null;
         
-        const narrationId = `narration_${gp.id}`;
-
         return (
           <animated.div style={{ ...styles.page, ...style }}>
             <div style={styles.scrollContainer} ref={contentRef}>
@@ -392,11 +455,11 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
                 {/* 标题 */}
                 <h2 style={styles.title}>{gp.title}</h2>
 
-                {/* 1. 核心句型 (Core Pattern - အဓိက ဝါကျပုံစံ) */}
+                {/* 1. 核心句型 (Core Pattern) */}
                 {gp.pattern && (
                   <div style={styles.card}>
                     <div style={styles.cardLabel}>
-                      <FaBookReader /> အဓိက ဝါကျပုံစံ
+                      <FaBookReader /> 核心句型
                     </div>
                     <div 
                       onClick={() => play(gp.pattern, `pattern_${gp.id}`)}
@@ -406,54 +469,62 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
                       }}
                       className="active-scale"
                     >
-                      {renderTextWithPinyin(gp.pattern)}
+                      <PinyinText text={gp.pattern} />
                     </div>
                   </div>
                 )}
 
-                {/* 2. 语法详解 (Grammar Explanation - သဒ္ဒါရှင်းလင်းချက်) */}
+                {/* 2. 语法详解 (Markdown + Pinyin + TTS) */}
                 <div style={styles.section}>
                   <div style={styles.sectionHeader}>
-                    <span style={styles.sectionTitle}>📝 သဒ္ဒါရှင်းလင်းချက်</span>
+                    <span style={styles.sectionTitle}>📝 语法详解</span>
+                    {/* 小播放按钮，功能同底部大按钮 */}
                     <button 
                        onClick={() => play(gp.explanationScript, narrationId)}
                        style={styles.playBtnCircle}
-                       disabled={loadingId === narrationId}
                     >
                       {loadingId === narrationId ? <div className="spin" style={styles.miniSpin}/> : 
                         (activeId === narrationId && (isPlaying || isPaused) ? <FaPause size={10}/> : <FaPlay size={10} style={{marginLeft:2}}/>)}
                     </button>
                   </div>
-                  {/* 富文本内容 */}
-                  <div style={styles.richTextBlock} dangerouslySetInnerHTML={{__html: gp.explanation.replace(/\n/g, '<br/>')}} />
+                  
+                  {/* 使用 RichTextRenderer 替代 dangerouslySetInnerHTML */}
+                  <div style={styles.richTextBlock}>
+                      <RichTextRenderer 
+                          content={gp.explanationRaw} 
+                          onPlayText={(text) => play(text, `text_${Date.now()}`)} // 点击单句播放
+                      />
+                  </div>
                 </div>
 
-                {/* 3. 易错点 (Common Mistakes - သတိပြုရန်အချက်များ) */}
+                {/* 3. 易错点 (Attention) */}
                 {gp.attention && (
                   <div style={styles.section}>
                     <div style={styles.sectionHeader}>
                       <span style={{...styles.sectionTitle, color: '#b91c1c', display:'flex', alignItems:'center', gap:6}}>
-                        <FaExclamationTriangle /> သတိပြုရန်အချက်များ
+                        <FaExclamationTriangle /> 注意事项
                       </span>
                     </div>
-                    {/* 修复样式挤压和数字看不清的问题 */}
                     <div style={styles.attentionBox}>
-                      <div style={styles.attentionText}>{gp.attention}</div>
+                      <div style={styles.attentionText}>
+                          {/* 简单渲染注意事项，也加上拼音点读 */}
+                          <PinyinText text={gp.attention} onClick={(t) => play(t, `attn_${gp.id}`)} />
+                      </div>
                     </div>
                   </div>
                 )}
 
-                {/* 4. 场景对话 (Dialogues - ဥပမာ စကားပြော) */}
+                {/* 4. 场景对话 (Dialogues) */}
                 <div style={styles.section}>
                   <div style={styles.sectionHeader}>
-                    <span style={styles.sectionTitle}>💬 ဥပမာ စကားပြော</span>
+                    <span style={styles.sectionTitle}>💬 场景对话</span>
                   </div>
                   <div style={styles.dialogueContainer}>
                     {gp.dialogues.map((ex, idx) => {
                       const exId = `ex_${gp.id}_${idx}`;
                       const isBoy = ex.gender === 'male';
                       
-                      // 小男孩使用 Yunxia, 女孩使用 Xiaoyou
+                      // 女声 Xiaoyou, 男声 Yunxia
                       const voiceId = isBoy ? 'zh-CN-YunxiaNeural' : 'zh-CN-XiaoyouNeural';
 
                       return (
@@ -465,35 +536,37 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
                              }}
                              className="active-scale"
                         >
-                          {/* 头像 */}
+                          {/* 头像 - 使用指定URL */}
                           <div style={styles.avatarWrapper}>
-                             <div style={{
-                               ...styles.avatar, 
-                               background: isBoy ? '#60a5fa' : '#f472b6'
-                             }}>
-                               {isBoy ? <FaUserTie size={16}/> : <FaUserAlt size={14}/>}
-                             </div>
+                             <img 
+                                src={isBoy 
+                                  ? "https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/10111437211381.jpg" 
+                                  : "https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/images.jpeg"}
+                                alt={isBoy ? "Boy" : "Girl"}
+                                style={styles.avatarImg}
+                             />
                           </div>
                           
                           {/* 气泡 */}
                           <div style={styles.bubbleCol}>
+                             {/* 名字移出气泡，放在上方 */}
                              <div style={{
                                ...styles.speakerName,
                                alignSelf: isBoy ? 'flex-end' : 'flex-start'
                              }}>
-                               {isBoy ? 'ကောင်လေး' : 'ကောင်မလေး'}
+                               {isBoy ? '男孩' : '女孩'}
                              </div>
                              
                              <div style={{
                                 ...styles.bubble,
                                 background: isBoy ? '#eff6ff' : '#fff1f2',
                                 border: isBoy ? '1px solid #bfdbfe' : '1px solid #fbcfe8',
-                                // 选中时文字变色高亮
                                 color: activeId === exId ? (isBoy ? '#1e40af' : '#be185d') : '#334155'
                              }}>
                                 <div style={isBoy ? styles.tailRight : styles.tailLeft} />
+                                {/* 对话内容带拼音 */}
                                 <div style={styles.bubbleText}>
-                                  {renderTextWithPinyin(ex.sentence)}
+                                  <PinyinText text={ex.sentence} />
                                 </div>
                                 <div style={styles.bubbleTrans}>{ex.translation}</div>
                              </div>
@@ -504,33 +577,38 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
                   </div>
                 </div>
                 
-                {/* 底部按钮 (缅语) */}
+                {/* 底部按钮 */}
                 <div style={styles.nextButtonContainer}>
                    <button style={styles.nextBtn} onClick={handleNext}>
-                     {i === normalizedPoints.length -1 ? 'လေ့ကျင့်ခန်းစမယ်' : 'ရှေ့ဆက်'} <FaChevronRight size={14} />
+                     {i === normalizedPoints.length -1 ? '完成学习' : '下一页'} <FaChevronRight size={14} />
                    </button>
                 </div>
                 
-                {/* 垫高底部，防止被悬浮播放器遮挡 (虽然播放器可能会隐藏) */}
-                <div style={{ height: '120px' }} />
+                {/* 垫高底部 */}
+                <div style={{ height: '140px' }} />
               </div>
             </div>
           </animated.div>
         );
       })}
 
-      {/* 底部悬浮播放器 - 仅在讲解时显示 */}
+      {/* 底部悬浮播放器 - 常驻 */}
       <BottomPlayer 
-        visible={isNarrationActive}
-        isPlaying={isPlaying}
-        isPaused={isPaused}
-        currentTime={currentTime}
-        duration={duration}
+        // 始终显示播放器
+        label={
+             loadingId === narrationId ? '加载中...' : 
+             (isControllingNarration ? '正在播放讲解' : '点击播放全文讲解')
+        }
+        // 如果正在控制讲解，则传写真实状态；否则显示为暂停状态
+        isPlaying={isControllingNarration && isPlaying}
+        isPaused={isControllingNarration && isPaused}
+        currentTime={isControllingNarration ? currentTime : 0}
+        duration={isControllingNarration ? duration : 0}
+        
         playbackRate={playbackRate}
-        onToggle={toggle}
+        onToggle={handleBottomPlayClick}
         onSeek={seek}
         onRateChange={setRate}
-        label={loadingId ? 'လုပ်ဆောင်နေသည်...' : 'ရှင်းလင်းချက် နားထောင်နေသည်'}
       />
     </div>
   );
@@ -554,7 +632,7 @@ const styles = {
   // === Bottom Player Style ===
   bottomPlayerWrapper: {
     position: 'absolute', 
-    bottom: '80px', // 上调位置，避免太低
+    bottom: '40px', 
     left: 0, right: 0,
     display: 'flex', justifyContent: 'center', alignItems: 'center',
     zIndex: 1000, pointerEvents: 'none'
@@ -562,7 +640,7 @@ const styles = {
   bottomPlayerCapsule: {
     pointerEvents: 'auto',
     width: '92%', maxWidth: '400px', height: '64px',
-    background: 'rgba(255, 255, 255, 0.98)',
+    background: 'rgba(255, 255, 255, 0.95)',
     backdropFilter: 'blur(12px)',
     borderRadius: '32px',
     border: '1px solid rgba(0,0,0,0.08)',
@@ -612,9 +690,9 @@ const styles = {
   },
   attentionText: { 
     lineHeight: 1.8, 
-    color: '#991b1b', // 深红色字体，解决看不清的问题
+    color: '#991b1b', 
     fontSize: '1rem',
-    whiteSpace: 'pre-wrap' // 保持换行
+    whiteSpace: 'pre-wrap'
   },
 
   ruby: { rubyPosition: 'over', margin: '0 1px' },
@@ -623,13 +701,13 @@ const styles = {
   // === Dialogue Styles ===
   dialogueContainer: { display: 'flex', flexDirection: 'column', gap: '24px' },
   dialogueRow: { display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer' },
-  avatarWrapper: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', paddingTop: '10px' },
-  avatar: { width: 36, height: 36, borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 5px rgba(0,0,0,0.1)' },
+  avatarWrapper: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', paddingTop: '4px' },
+  avatarImg: { width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', border: '2px solid white', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' },
   
-  bubbleCol: { display: 'flex', flexDirection: 'column', maxWidth: '85%' },
-  speakerName: { fontSize: '0.75rem', color: '#94a3b8', marginBottom: '4px', fontWeight: '600' },
+  bubbleCol: { display: 'flex', flexDirection: 'column', maxWidth: '80%' },
+  speakerName: { fontSize: '0.75rem', color: '#94a3b8', marginBottom: '4px', fontWeight: '600', padding: '0 4px' },
   bubble: { 
-    padding: '14px 18px', 
+    padding: '12px 16px', 
     position: 'relative', 
     borderRadius: '16px',
     boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
@@ -676,7 +754,6 @@ if (typeof document !== 'undefined' && !document.getElementById('gp-player-style
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     ruby { ruby-align: center; }
     .active-scale:active { transform: scale(0.98); opacity: 0.9; }
-    /* 强制覆盖可能的外部字体设置，解决数字颜色问题 */
     .attention-box * { color: #991b1b !important; }
   `;
   document.head.appendChild(style);
