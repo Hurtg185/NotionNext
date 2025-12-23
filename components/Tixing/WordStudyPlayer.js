@@ -1,334 +1,419 @@
-import React, { useState, useEffect } from 'react';
-import { FaVolumeUp, FaChevronLeft, FaChevronRight, FaTimes, FaMagic } from "react-icons/fa";
-import { pinyin } from 'pinyin-pro';
-// ✅ 修复点1：引入 Howler 全局对象
-import { Howl, Howler } from 'howler';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  FaVolumeUp, 
+  FaMicrophone, 
+  FaStop, 
+  FaPlay, 
+  FaTimes, 
+  FaCheckCircle,
+  FaArrowRight 
+} from 'react-icons/fa';
 
-// --- 1. 音频控制工具 ---
+// =================================================================================
+// 1. 复用之前的 Audio Controller (老师发音)
+// =================================================================================
+const DB_NAME = 'LessonCacheDB';
+const STORE_NAME = 'tts_audio';
 
-// 停止所有正在播放的声音
-const stopAllAudio = () => {
-  // ✅ 修复点2：使用 Howler.unload() 而不是 Howl.unload()
-  try {
-    Howler.unload(); 
-  } catch (e) {
-    console.warn("Howler unload failed:", e);
-  }
-
-  // 停止所有原生 Audio 元素
-  const audioElements = document.getElementsByTagName('audio');
-  for (let i = 0; i < audioElements.length; i++) {
-    try {
-      audioElements[i].pause();
-      audioElements[i].currentTime = 0;
-    } catch (e) {}
-  }
-};
-
-// 播放单词 R2 音频
-const playR2Audio = (wordObj) => {
-  stopAllAudio();
-  
-  // 1. 检查数据，如果没有 HSK 等级或 ID，回退到 TTS
-  if (!wordObj || !wordObj.id || !wordObj.hsk_level) {
-    const text = wordObj?.word || wordObj?.chinese;
-    if (text) playTTS(text);
-    return;
-  }
-
-  // 2. 构建 R2 URL
-  const formattedId = String(wordObj.id).padStart(4, '0');
-  const level = wordObj.hsk_level;
-  const audioUrl = `https://audio.886.best/chinese-vocab-audio/hsk${level}/${formattedId}.mp3`;
-
-  // 3. 播放
-  const sound = new Howl({
-    src: [audioUrl],
-    html5: true, 
-    volume: 1.0,
-    onloaderror: (id, err) => {
-      console.warn("R2 Audio missing, fallback to TTS:", err);
-      // 如果加载失败，播放 TTS
-      playTTS(wordObj.word || wordObj.chinese);
-    },
-    onplayerror: (id, err) => {
-      console.warn("R2 Audio play error:", err);
-      playTTS(wordObj.word || wordObj.chinese);
-    }
-  });
-  
-  sound.play();
-};
-
-// 播放拼读单字音频
-const playSpellingAudio = (pyWithTone) => {
-  return new Promise((resolve) => {
-    const filename = encodeURIComponent(pyWithTone); 
-    const url = `https://audio.886.best/chinese-vocab-audio/%E6%8B%BC%E8%AF%BB%E9%9F%B3%E9%A2%91/${filename}.mp3`;
-    
-    const sound = new Howl({
-      src: [url],
-      html5: true,
-      onend: resolve,
-      onloaderror: () => {
-        resolve(); 
-      },
-      onplayerror: () => {
-        resolve();
-      }
+const idb = {
+  db: null,
+  async init() {
+    if (typeof window === 'undefined' || this.db) return;
+    return new Promise((resolve) => {
+      const request = indexedDB.open(DB_NAME, 1);
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
+      };
+      request.onsuccess = (e) => { this.db = e.target.result; resolve(); };
     });
-    sound.play();
-  });
+  },
+  async get(key) {
+    await this.init();
+    if (!this.db) return null;
+    return new Promise((resolve) => {
+      const tx = this.db.transaction(STORE_NAME, 'readonly');
+      const req = tx.objectStore(STORE_NAME).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    });
+  },
+  async set(key, blob) {
+    await this.init();
+    if (!this.db) return;
+    const tx = this.db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put(blob, key);
+  }
 };
 
-// 播放 TTS (微软语音库)
-const playTTS = (text) => {
-  if (!text) return;
-  // 不要在 TTS 前强制 stopAllAudio，因为原生 Audio 和 Howler 有时会冲突
-  // 让 stopAllAudio 在 playR2Audio 里处理即可，或者只停止 Howler
-  try {
-    Howler.unload(); 
-  } catch(e){}
-
-  const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=zh-CN-XiaoyouNeural`;
-  const audio = new Audio(url);
-  audio.play().catch(e => console.error("TTS play failed", e));
-};
-
-// --- 2. 拼读弹窗组件 ---
-const SpellingModal = ({ wordObj, onClose }) => {
-  const [activeCharIndex, setActiveCharIndex] = useState(-1);
-  const rawText = wordObj.word || wordObj.chinese || "";
-
-  useEffect(() => {
-    let isCancelled = false;
-
-    const runSpellingSequence = async () => {
-      const chars = rawText.split('');
-      
-      for (let i = 0; i < chars.length; i++) {
-        if (isCancelled) return;
-        setActiveCharIndex(i);
-        
-        const charPinyin = pinyin(chars[i], { toneType: 'symbol' });
-        await playSpellingAudio(charPinyin);
-        await new Promise(r => setTimeout(r, 150));
+const audioController = {
+  async play(text, isMy = false) {
+    if (!text) return;
+    const voice = isMy ? 'my-MM-ThihaNeural' : 'zh-CN-XiaoyouNeural';
+    const cacheKey = `${voice}-${text}`;
+    
+    try {
+      let blob = await idb.get(cacheKey);
+      if (!blob) {
+        const res = await fetch(`/api/tts?t=${encodeURIComponent(text)}&v=${voice}`);
+        blob = await res.blob();
+        await idb.set(cacheKey, blob);
       }
-
-      if (isCancelled) return;
-
-      setActiveCharIndex('all');
-      playR2Audio(wordObj);
-
-      setTimeout(() => {
-        if (!isCancelled) onClose();
-      }, 1500);
-    };
-
-    runSpellingSequence();
-
-    return () => {
-      isCancelled = true;
-      stopAllAudio();
-    };
-  }, [rawText, wordObj, onClose]);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/95 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="w-full max-w-sm flex flex-col items-center relative">
-        <button onClick={onClose} className="absolute -top-16 right-0 text-slate-400 p-2 hover:text-slate-600">
-            <FaTimes size={28}/>
-        </button>
-        <h3 className="text-sm font-bold text-slate-400 mb-10 tracking-[0.3em] uppercase">Spelling Mode</h3>
-        
-        <div className="flex flex-wrap justify-center gap-6">
-          {rawText.split('').map((char, idx) => {
-             const py = pinyin(char, { toneType: 'symbol' });
-             const isActive = idx === activeCharIndex || activeCharIndex === 'all';
-             return (
-               <div key={idx} className="flex flex-col items-center transition-all duration-200">
-                 <span className={`text-2xl font-mono mb-3 transition-colors ${isActive ? 'text-orange-500 font-bold' : 'text-slate-300'}`}>
-                   {py}
-                 </span>
-                 <span className={`text-7xl font-black transition-all transform ${isActive ? 'text-blue-600 scale-110' : 'text-slate-800 scale-100'}`}>
-                   {char}
-                 </span>
-               </div>
-             )
-          })}
-        </div>
-        <div className="mt-12 text-slate-400 text-sm animate-pulse font-medium">
-            {activeCharIndex === 'all' ? '完整朗读' : '拼读中...'}
-        </div>
-      </div>
-    </div>
-  );
+      const audio = new Audio(URL.createObjectURL(blob));
+      audio.play();
+    } catch (e) {
+      console.error("TTS Error:", e);
+    }
+  }
 };
 
-// --- 3. 主组件 ---
-export default function WordStudyPlayer({ data, onNext, onPrev, isFirstBlock }) {
-  if (!data) return <div className="p-10 text-center text-red-500">Error: No Data</div>;
-
-  const words = data.words || [];
-  if (words.length === 0) return <div className="p-10 text-center text-slate-400">No words found.</div>;
-
-  const [index, setIndex] = useState(0);
-  const [showSpelling, setShowSpelling] = useState(false);
-
-  const currentWord = words[index];
-  const total = words.length;
-
-  useEffect(() => {
-    if (currentWord) {
-      const timer = setTimeout(() => {
-        playR2Audio(currentWord);
-      }, 500); 
-      return () => clearTimeout(timer);
-    }
-  }, [index, currentWord]);
-
-  const handleNext = () => {
-    if (index < total - 1) setIndex(index + 1);
-    else onNext && onNext();
-  };
-
-  const handlePrev = () => {
-    if (index > 0) setIndex(index - 1);
-    else onPrev && onPrev();
-  };
-
-  if (!currentWord) return <div className="p-10 text-center text-slate-400">Loading...</div>;
-
-  // 属性名兼容
-  const rawText = currentWord.word || currentWord.chinese || currentWord.hanzi;
-  if (!rawText) return <div className="p-10 text-center text-red-400">Word data missing field</div>;
-
-  const displayPinyin = currentWord.pinyin || pinyin(rawText, { toneType: 'symbol' });
-  const displayWord = rawText;
-
-  return (
-    <div className="w-full h-[100dvh] flex flex-col bg-white text-slate-800 relative overflow-hidden">
-      
-      {/* 顶部 */}
-      <div className="flex-none h-14 px-6 flex items-center justify-end z-10">
-        <div className="text-slate-300 text-xs font-bold font-mono bg-slate-50 px-2 py-1 rounded">
-          {index + 1} / {total}
-        </div>
-      </div>
-
-      {/* 主内容 */}
-      <div className="flex-1 flex flex-col items-center w-full px-6 overflow-y-auto pb-32 no-scrollbar">
-        <div className="w-full flex flex-col items-center pt-4 pb-8">
-          
-          <div className="text-xl text-orange-500 font-medium font-mono mb-2">{displayPinyin}</div>
-          
-          <h1 
-            className="text-7xl font-black text-slate-900 tracking-tight leading-none mb-4 cursor-pointer active:scale-95 transition-transform" 
-            onClick={() => playR2Audio(currentWord)}
-          >
-            {displayWord}
-          </h1>
-
-          {currentWord.similar_sound && (
-            <div className="mb-6 px-3 py-1 bg-yellow-50 text-yellow-600 text-sm font-bold rounded-full border border-yellow-100">
-              谐音: {currentWord.similar_sound}
-            </div>
-          )}
-
-          <div className="text-center w-full max-w-md mb-8">
-             {currentWord.burmese && (
-               <div className="text-2xl font-bold text-slate-800 mb-2 font-['Padauk'] leading-snug">
-                 {currentWord.burmese}
-               </div>
-             )}
-             <div className="text-slate-500 text-base leading-relaxed space-y-1">
-               {currentWord.explanation && <p>{currentWord.explanation}</p>}
-               {currentWord.definition && <p className="text-slate-400 text-sm">{currentWord.definition}</p>}
-             </div>
-          </div>
-
-          <div className="flex items-center gap-4 mb-8">
-             <button 
-                onClick={(e) => { e.stopPropagation(); setShowSpelling(true); }}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-full shadow-lg shadow-blue-200 hover:shadow-blue-300 hover:scale-105 active:scale-95 transition-all font-bold"
-             >
-               <FaMagic className="animate-pulse" /> 拼读演示
-             </button>
-
-             <button 
-                onClick={() => playR2Audio(currentWord)} 
-                className="w-12 h-12 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center hover:bg-slate-200 transition-colors"
-             >
-               <FaVolumeUp size={20} />
-             </button>
-          </div>
-        </div>
-
-        <div className="w-24 h-px bg-slate-100 mb-8 flex-none"></div>
-
-        <div className="w-full max-w-lg space-y-6 text-center">
-            {currentWord.example && (
-              <ExampleRow 
-                text={currentWord.example} 
-                translation={currentWord.example_burmese} 
-              />
-            )}
-            {currentWord.example2 && (
-              <ExampleRow 
-                text={currentWord.example2} 
-                translation={currentWord.example2_burmese} 
-              />
-            )}
-        </div>
-      </div>
-
-      {/* 底部导航 - 已修改：移除上一个，改为浅色系“继续” */}
-      <div 
-        className="fixed bottom-0 left-0 right-0 z-20 bg-white/90 backdrop-blur-md border-t border-slate-50 px-6 pt-4"
-        style={{ paddingBottom: 'max(24px, env(safe-area-inset-bottom))' }}
-      >
-        <div className="flex items-center gap-6 max-w-md mx-auto">
-            {/* 上一个按钮已移除 */}
-
-            <button 
-              onClick={handleNext}
-              className="flex-1 h-14 bg-white text-slate-700 border-2 border-slate-100 rounded-full font-bold text-lg hover:border-slate-300 hover:bg-slate-50 hover:shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-3"
-            >
-              {index === total - 1 ? "完成" : "继续"} <FaChevronRight size={14} className="text-slate-400" />
-            </button>
-        </div>
-      </div>
-
-      {showSpelling && (
-        <SpellingModal wordObj={currentWord} onClose={() => setShowSpelling(false)} />
-      )}
-    </div>
-  );
+// =================================================================================
+// 2. 样式表 (包含弹窗、录音动画、布局)
+// =================================================================================
+const styles = `
+.ws-container {
+  font-family: "Padauk", "Noto Sans SC", sans-serif;
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  background: #f8fafc;
+  overflow: hidden;
 }
 
-// 辅助组件：例句行
-const ExampleRow = ({ text, translation }) => {
-  const py = pinyin(text, { toneType: 'symbol' });
+/* 顶部区域 */
+.ws-header {
+  flex-shrink: 0;
+  padding: 80px 20px 10px;
+  display: flex; justify-content: center;
+}
+.scene-wrapper {
+  width: 100%; max-width: 600px;
+  display: flex; align-items: flex-start; gap: 12px;
+}
+.teacher-img {
+  height: 100px; width: auto; object-fit: contain;
+  mix-blend-mode: multiply;
+  margin-top: 5px;
+}
+.bubble-box {
+  flex: 1; background: #fff;
+  border-radius: 16px 16px 16px 0;
+  padding: 16px; border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+  position: relative;
+}
+.bubble-tail {
+  position: absolute; top: 15px; left: -9px;
+  width: 0; height: 0;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-right: 10px solid #fff;
+}
+
+/* 单词列表区域 */
+.ws-scroll-area {
+  flex: 1; overflow-y: auto;
+  padding: 10px 16px 160px; /* 底部留白 */
+  display: grid; 
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); /* 自适应网格 */
+  gap: 12px;
+  align-content: start;
+  justify-items: center;
+}
+
+/* 单词卡片 (小尺寸) */
+.mini-card {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-bottom-width: 3px;
+  border-radius: 12px;
+  width: 100%; aspect-ratio: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.mini-card:active { transform: scale(0.95); border-bottom-width: 1px; margin-top: 2px; }
+.mini-char { font-size: 1.8rem; font-weight: 700; color: #1e293b; line-height: 1; }
+.mini-pinyin { font-size: 0.8rem; color: #64748b; margin-top: 4px; }
+
+/* 弹窗遮罩 */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.2s ease-out;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* 弹窗主体 */
+.modal-content {
+  background: #fff; width: 100%; max-width: 360px;
+  border-radius: 24px; padding: 24px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+  display: flex; flex-direction: column; align-items: center;
+  position: relative;
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+.close-btn {
+  position: absolute; top: 16px; right: 16px;
+  color: #94a3b8; padding: 8px; font-size: 1.2rem;
+}
+
+/* 弹窗内：单词展示 */
+.big-char { font-size: 4rem; font-weight: 800; color: #0f172a; margin-bottom: 4px; }
+.big-pinyin { font-size: 1.2rem; color: #475569; font-weight: 600; }
+.definition-row { 
+  margin-top: 12px; font-size: 1.1rem; 
+  color: #334155; text-align: center;
+}
+.burmese-sub { font-size: 0.95rem; color: #64748b; margin-top: 2px; }
+
+/* 弹窗内：例句 */
+.example-box {
+  background: #f1f5f9; padding: 12px; border-radius: 12px;
+  margin-top: 20px; width: 100%;
+}
+.ex-zh { font-size: 1.1rem; font-weight: 600; color: #334155; margin-bottom: 4px; }
+.ex-my { font-size: 0.95rem; color: #64748b; }
+
+/* 弹窗内：录音对比区 */
+.record-section {
+  margin-top: 24px; width: 100%;
+  border-top: 1px dashed #cbd5e1; padding-top: 20px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+
+.compare-row {
+  display: flex; align-items: center; justify-content: space-between;
+  background: #fff; border: 1px solid #e2e8f0;
+  padding: 10px 16px; border-radius: 50px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+}
+.compare-label { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.9rem; color: #475569; }
+.action-btn {
+  width: 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  border: none; cursor: pointer; color: white;
+  transition: transform 0.1s;
+}
+.action-btn:active { transform: scale(0.9); }
+.btn-play-teacher { background: #3b82f6; }
+.btn-play-student { background: #10b981; }
+.btn-play-student:disabled { background: #cbd5e1; }
+
+/* 录音按钮 */
+.record-btn-wrapper { display: flex; justify-content: center; margin-top: 10px; }
+.record-btn {
+  width: 70px; height: 70px; border-radius: 50%;
+  background: #ef4444; color: white; font-size: 1.8rem;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+  transition: all 0.2s; border: none;
+}
+.record-btn.recording { 
+  background: #fff; border: 4px solid #ef4444; color: #ef4444;
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+
+/* 底部完成按钮 */
+.finish-bar {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 20px 20px 40px; /* 提高位置 */
+  background: linear-gradient(to top, #f8fafc 80%, rgba(248, 250, 252, 0));
+  display: flex; justify-content: center; pointer-events: none;
+}
+.finish-btn {
+  pointer-events: auto;
+  background: #1e293b; color: white;
+  padding: 16px 80px; border-radius: 100px;
+  font-size: 1.15rem; font-weight: 700;
+  box-shadow: 0 6px 20px rgba(30, 41, 59, 0.3);
+  border: none; display: flex; align-items: center; gap: 8px;
+}
+`;
+
+// =================================================================================
+// 3. 组件逻辑
+// =================================================================================
+const WordStudy = ({ data, onNext }) => {
+  const { title, words } = data.content || {};
+  const [activeWordId, setActiveWordId] = useState(null);
   
+  // 录音状态
+  const [isRecording, setIsRecording] = useState(false);
+  const [studentAudioUrl, setStudentAudioUrl] = useState(null);
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
+
+  const activeWord = words?.find(w => w.id === activeWordId);
+
+  // 打开弹窗时，自动播放老师读音，并重置录音
+  useEffect(() => {
+    if (activeWord) {
+      audioController.play(activeWord.word);
+      setStudentAudioUrl(null);
+      setIsRecording(false);
+    }
+  }, [activeWord]);
+
+  // 开始/停止录音逻辑
+  const toggleRecording = async () => {
+    if (isRecording) {
+      // 停止录音
+      mediaRecorderRef.current?.stop();
+      setIsRecording(false);
+    } else {
+      // 开始录音
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorderRef.current = new MediaRecorder(stream);
+        chunksRef.current = [];
+
+        mediaRecorderRef.current.ondataavailable = (e) => {
+          chunksRef.current.push(e.data);
+        };
+
+        mediaRecorderRef.current.onstop = () => {
+          const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+          const url = URL.createObjectURL(blob);
+          setStudentAudioUrl(url);
+        };
+
+        mediaRecorderRef.current.start();
+        setIsRecording(true);
+      } catch (err) {
+        alert("无法访问麦克风，请检查权限。");
+        console.error(err);
+      }
+    }
+  };
+
+  const playStudentAudio = () => {
+    if (studentAudioUrl) {
+      new Audio(studentAudioUrl).play();
+    }
+  };
+
   return (
-    <div 
-      className="flex flex-col items-center py-2 cursor-pointer group active:scale-[0.99] transition-transform"
-      onClick={() => playTTS(text)}
-    >
-      <div className="text-sm text-orange-400 mb-1 font-mono leading-none opacity-80 group-hover:opacity-100">
-        {py}
+    <div className="ws-container">
+      <style>{styles}</style>
+
+      {/* 头部：老师引导 */}
+      <div className="ws-header">
+        <div className="scene-wrapper">
+          <img 
+            src="https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/1765952194374.png" 
+            className="teacher-img" 
+            alt="Teacher" 
+          />
+          <div className="bubble-box">
+            <div className="bubble-tail" />
+            <div className="font-bold text-slate-700 text-lg mb-1">{title}</div>
+            <div className="text-slate-500 text-sm">点击卡片学习，对比你的发音。</div>
+          </div>
+        </div>
       </div>
-      <div className="text-xl text-slate-700 font-medium leading-relaxed">
-        {text}
+
+      {/* 单词网格列表 */}
+      <div className="ws-scroll-area">
+        {words?.map((item) => (
+          <div key={item.id} className="mini-card" onClick={() => setActiveWordId(item.id)}>
+            <div className="mini-char">{item.word}</div>
+            <div className="mini-pinyin">{item.pinyin}</div>
+          </div>
+        ))}
       </div>
-      {translation && (
-        <div className="text-base text-slate-400 mt-1 font-['Padauk']">
-          {translation}
+
+      {/* 底部完成按钮 */}
+      <div className="finish-bar">
+        <button className="finish-btn" onClick={onNext}>
+          我学会了 <FaArrowRight />
+        </button>
+      </div>
+
+      {/* === 核心功能：中间弹窗 + 录音对比 === */}
+      {activeWord && (
+        <div className="modal-overlay" onClick={() => setActiveWordId(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <button className="close-btn" onClick={() => setActiveWordId(null)}>
+              <FaTimes />
+            </button>
+
+            {/* 大字展示 */}
+            <div className="big-char">{activeWord.word}</div>
+            <div className="big-pinyin">{activeWord.pinyin}</div>
+            
+            {/* 释义 */}
+            <div className="definition-row">
+              <div>{activeWord.definition}</div>
+              <div className="burmese-sub">{activeWord.burmese}</div>
+            </div>
+
+            {/* 例句 */}
+            <div className="example-box">
+              <div className="flex items-start justify-between">
+                <div className="ex-zh">{activeWord.example}</div>
+                <button 
+                  className="text-blue-500 p-1"
+                  onClick={() => audioController.play(activeWord.example)}
+                >
+                  <FaVolumeUp />
+                </button>
+              </div>
+              <div className="ex-my">{activeWord.example_burmese}</div>
+            </div>
+
+            {/* 录音对比区 (核心优化) */}
+            <div className="record-section">
+              {/* 老师行 */}
+              <div className="compare-row">
+                <div className="compare-label text-blue-600">
+                   <FaCheckCircle /> 老师示范 (Teacher)
+                </div>
+                <button className="action-btn btn-play-teacher" onClick={() => audioController.play(activeWord.word)}>
+                  <FaVolumeUp />
+                </button>
+              </div>
+
+              {/* 录音按钮 (居中大按钮) */}
+              <div className="record-btn-wrapper">
+                <button 
+                  className={`record-btn ${isRecording ? 'recording' : ''}`} 
+                  onClick={toggleRecording}
+                >
+                  {isRecording ? <FaStop /> : <FaMicrophone />}
+                </button>
+              </div>
+              <div className="text-center text-xs text-slate-400 font-bold mb-2">
+                {isRecording ? "正在录音... (Recording)" : "点击录音 (Tap to Record)"}
+              </div>
+
+              {/* 学生行 */}
+              <div className="compare-row">
+                <div className="compare-label text-emerald-600">
+                   <FaMicrophone /> 我的发音 (My Voice)
+                </div>
+                <button 
+                  className="action-btn btn-play-student" 
+                  disabled={!studentAudioUrl}
+                  onClick={playStudentAudio}
+                >
+                  <FaPlay />
+                </button>
+              </div>
+            </div>
+
+          </div>
         </div>
       )}
-      <div className="mt-1 opacity-0 group-hover:opacity-100 transition-opacity text-blue-400 text-xs flex items-center gap-1">
-        <FaVolumeUp /> 点击朗读
-      </div>
+
     </div>
   );
 };
+
+export default WordStudy;
