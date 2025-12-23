@@ -36,7 +36,7 @@ export default {
     },
 
     // ==========================================
-    // 3. 语法讲解 (已完整补全总结和所有对话)
+    // 3. 语法讲解
     // ==========================================
     {
       type: "grammar_study",
@@ -82,16 +82,13 @@ export default {
 `,
             "讲解脚本": "记住总结：问东西和事情用什么，永远放在动词后面。问人要用谁，问价格用多少钱。",
             "例句列表": [
-              // 对话1：在教室
               { "句子": "这是什么？", "翻译": "(在教室) ဒါ ဘာလဲ?" },
               { "句子": "这是书。", "翻译": "ဒါ စာအုပ်ပါ။" },
               { "句子": "这是什么书？", "翻译": "ဒါ ဘာစာအုပ်လဲ?" },
               { "句子": "这是汉语书。", "翻译": "ဒါ တရုတ်စာအုပ်ပါ။" },
-              // 对话2：在餐厅
               { "句子": "你想吃什么？", "翻译": "(在餐厅) မင်း ဘာစားချင်လဲ?" },
               { "句子": "我想吃面条。你想喝什么？", "翻译": "ငါ ခေါက်ဆွဲစားချင်တယ်။ မင်း ဘာသောက်ချင်လဲ?" },
               { "句子": "我想喝茶。", "翻译": "ငါ လက်ဖက်ရည် သောက်ချင်တယ်။" },
-              // 对话3：认识新朋友
               { "句子": "你叫什么名字？", "翻译": "(新朋友) မင်းနာမည် ဘယ်လိုခေါ်လဲ?" },
               { "句子": "我叫李明。你做什么工作？", "翻译": "ငါ့နာမည် လီမင်းပါ။ မင်း ဘာအလုပ်လုပ်လဲ?" },
               { "句子": "我是学生。", "翻译": "ငါက ကျောင်းသားပါ။" }
@@ -129,24 +126,20 @@ export default {
 `,
             "讲解脚本": "“是”字句最重要的是：不要把它当成万能词。我说“我吃饭”，不要说“我是吃饭”。",
             "例句列表": [
-              // 场景一：初次见面
               { "句子": "你好！你是学生吗？", "翻译": "(初次见面) မင်္ဂလာပါ! မင်းက ကျောင်းသားလား?" },
               { "句子": "是，我是学生。你是学生吗？", "翻译": "ဟုတ်ကဲ့၊ ကျွန်တော်က ကျောင်းသားပါ။ မင်းရော?" },
               { "句子": "我不是学生，我是老师。", "翻译": "ကျွန်တော် ကျောင်းသား မဟုတ်ပါဘူး၊ ဆရာပါ။" },
               { "句子": "哦，您是老师！我叫小明。", "翻译": "အော်၊ ခင်ဗျားက ဆရာကိုး! ကျွန်တော်က ရှောင်မင်ပါ။" },
               { "句子": "我叫李华。", "翻译": "ကျွန်တော့်နာမည် လီဟွာပါ။" },
-              // 场景二：辨认物品
               { "句子": "这是什么？", "翻译": "(辨认物品) ဒါ ဘာလဲ?" },
               { "句子": "这是书。", "翻译": "ဒါ စာအုပ်ပါ။" },
               { "句子": "那是什么？", "翻译": "ဟိုဟာ ဘာလဲ?" },
               { "句子": "那是笔。", "翻译": "ဟိုဟာ ဘောပင်ပါ။" },
               { "句子": "这是你的书吗？", "翻译": "ဒါ မင်းရဲ့စာအုပ်လား?" },
               { "句子": "是，这是我的书。", "翻译": "ဟုတ်တယ်၊ ဒါ ကျွန်တော့်စာအုပ်ပါ။" },
-              // 场景三：询问国籍
               { "句子": "你好！你是哪国人？", "翻译": "(询问国籍) မင်းက ဘယ်နိုင်ငံသားလဲ?" },
               { "句子": "我是中国人。你呢？", "翻译": "ငါက တရုတ်လူမျိုးပါ။ မင်းရော?" },
               { "句子": "我是缅甸人。", "翻译": "ငါက မြန်မာလူမျိုးပါ။" },
-              // 场景四：介绍他人
               { "句子": "她是谁？", "翻译": "(介绍他人) သူမ ဘယ်သူလဲ?" },
               { "句子": "她是我的同学，叫小红。", "翻译": "သူမက ငါ့အတန်းဖော် ရှောင်ဟုန်ပါ။" },
               { "句子": "她是中国人吗？", "翻译": "သူမက တရုတ်လူမျိုးလား?" },
@@ -187,22 +180,18 @@ export default {
 `,
             "讲解脚本": "记住，“吗”字只能放在句尾，而且不能和“什么、谁”一起用。你不能说“你吃什么吗”，只能说“你吃什么”。",
             "例句列表": [
-              // 场景一：课堂互动
               { "句子": "你是中国人吗？", "翻译": "(课堂互动) မင်းက တရုတ်လူမျိုးလား?" },
               { "句子": "是，我是中国人。", "翻译": "ဟုတ်ကဲ့၊ ကျွန်တော်က တရုတ်လူမျိုးပါ။" },
               { "句子": "他是你的同桌吗？", "翻译": "သူက မင်းရဲ့ တွဲဖက်ခုံလား?" },
               { "句子": "不是，他是我的朋友。", "翻译": "မဟုတ်ဘူး၊ သူက ငါ့သူငယ်ချင်းပါ။" },
-              // 场景二：校园问路
               { "句子": "你是一年级的学生吗？", "翻译": "(校园问路) မင်းက ပထမနှစ်ကျောင်းသားလား?" },
               { "句子": "不是，我是二年级的。", "翻译": "မဟုတ်ပါဘူး၊ ကျွန်တော်က ဒုတိယနှစ်ပါ။" },
               { "句子": "图书馆在那边吗？", "翻译": "စာကြည့်တိုက်က ဟိုဘက်မှာလား?" },
               { "句子": "是，图书馆就在那个楼里。", "翻译": "ဟုတ်တယ်၊ စာကြည့်တိုက်က ဟိုတိုက်ထဲမှာ။" },
-              // 场景三：课后交流
               { "句子": "你喜欢吃米饭吗？", "翻译": "(课后交流) မင်း ထမင်းကြိုက်လား?" },
               { "句子": "是，我很喜欢吃米饭。", "翻译": "ဟုတ်တယ်၊ ငါ ထမင်း အရမ်းကြိုက်တယ်။" },
               { "句子": "你有铅笔吗？", "翻译": "မင်းမှာ ခဲတံရှိလား?" },
               { "句子": "有，我有两支铅笔。", "翻译": "ရှိတယ်၊ ငါ့မှာ ခဲတံနှစ်ချောင်းရှိတယ်။" },
-              // 场景四：家庭对话
               { "句子": "妈妈，这是苹果吗？", "翻译": "(家庭对话) မေမေ၊ ဒါ ပန်းသီးလား?" },
               { "句子": "是，这是红苹果，很甜的。", "翻译": "ဟုတ်တယ်၊ ဒါ ပန်းသီးနီနီလေး၊ အရမ်းချိုတယ်။" },
               { "句子": "爸爸是医生吗？", "翻译": "ဖေဖေက ဆရာဝန်လား?" },
@@ -247,22 +236,18 @@ export default {
 `,
             "讲解脚本": "问人的时候一定要用“谁”。如果你要从几个东西里选一个，就用“哪”，比如“哪本书”，记得加量词。",
             "例句列表": [
-              // 场景一：认识新朋友
               { "句子": "那边的人是谁？", "翻译": "(认识新朋友) ဟိုဘက်ကလူက ဘယ်သူလဲ?" },
               { "句子": "他是我的弟弟。", "翻译": "သူက ငါ့မောင်လေးပါ။" },
               { "句子": "他叫什么名字？", "翻译": "သူ့နာမည် ဘယ်လိုခေါ်လဲ?" },
               { "句子": "他叫小刚。", "翻译": "သူ့နာမည် ရှောင်ကန်းပါ။" },
-              // 场景二：询问物品归属
               { "句子": "这是谁的书包？", "翻译": "(询问物品归属) ဒါ ဘယ်သူ့ လွယ်အိတ်လဲ?" },
               { "句子": "是我的书包。", "翻译": "ကျွန်တော့် လွယ်အိတ်ပါ။" },
               { "句子": "书包里的书是谁的？", "翻译": "လွယ်အိတ်ထဲကစာအုပ်က ဘယ်သူ့ဟာလဲ?" },
               { "句子": "是我同桌的。", "翻译": "ငါ့အတန်းဖော်ဟာပါ။" },
-              // 场景三：询问地点
               { "句子": "你是哪国人？", "翻译": "(询问地点) မင်းက ဘယ်နိုင်ငံသားလဲ?" },
               { "句子": "我是韩国人。", "翻译": "ငါက ကိုရီးယားလူမျိုးပါ။" },
               { "句子": "你要去哪个地方？", "翻译": "မင်း ဘယ်နေရာကို သွားချင်တာလဲ?" },
               { "句子": "我要去旁边的超市买水。", "翻译": "ငါ ဘေးနားက စူပါမားကတ်ကို သွားမလို့။" },
-              // 场景四：选择物品
               { "句子": "你想买哪支笔？", "翻译": "(选择物品) မင်း ဘယ်ဘောပင်ကို ဝယ်ချင်တာလဲ?" },
               { "句子": "我想买那支蓝色的笔。", "翻译": "ငါ ဟို အပြာရောင်ဘောပင်ကို ဝယ်ချင်တယ်။" },
               { "句子": "这支黑色的笔是谁的？", "翻译": "ဒီ အမည်းရောင်ဘောပင်က ဘယ်သူ့ဟာလဲ?" },
@@ -274,25 +259,26 @@ export default {
     },
 
     // ==========================================
-    // 4. 选择题练习
+    // 4. 选择题练习 (扩充至 20 题)
     // ==========================================
     {
       type: "choice",
       content: {
-        question: "How do you ask 'What is this?' in Chinese?",
+        question: "1. 汉语中 “What” 怎么说？",
         options: [
-          { id: "1", text: "这是什么？" },
-          { id: "2", text: "这是谁？" },
-          { id: "3", text: "这是哪？" },
-          { id: "4", text: "你好吗？" }
+          { id: "1", text: "什么 (shénme)" },
+          { id: "2", text: "谁 (shéi)" },
+          { id: "3", text: "哪 (nǎ)" },
+          { id: "4", text: "吗 (ma)" }
         ],
-        correctAnswer: "1"
+        correctAnswer: "1",
+        explanation: "“什么”意思是 What；“谁”是 Who；“哪”是 Which。"
       }
     },
     {
       type: "choice",
       content: {
-        question: "Select the correct sentence: (Who is he?)",
+        question: "2. 如果你想问那个人的身份，你应该问：",
         options: [
           { id: "1", text: "他是什么？" },
           { id: "2", text: "他是谁？" },
@@ -300,14 +286,14 @@ export default {
           { id: "4", text: "他是吗？" }
         ],
         correctAnswer: "2",
-        explanation: "Ask about a person use '谁' (who)."
+        explanation: "提问“人”的身份时，必须用“谁”(Who)。"
       }
     },
     {
       type: "choice",
       content: {
         question: {
-          text: "Look at the flag. Which country is this?",
+          text: "3. 看图辨义：这张图片代表哪个国家？",
           imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Flag_of_Myanmar.svg/200px-Flag_of_Myanmar.svg.png"
         },
         options: [
@@ -317,16 +303,267 @@ export default {
           { id: "4", text: "英国 (Yīngguó)" }
         ],
         correctAnswer: "3",
+        explanation: "这是缅甸的国旗。缅甸在中文里是 'Miǎndiàn'。"
+      }
+    },
+    {
+      type: "choice",
+      content: {
+        question: "4. “你____哪国人？” 空格处应填什么？",
+        options: [
+          { id: "1", text: "是 (shì)" },
+          { id: "2", text: "叫 (jiào)" },
+          { id: "3", text: "什么 (shénme)" },
+          { id: "4", text: "谁 (shéi)" }
+        ],
+        correctAnswer: "1",
+        explanation: "句型：你是哪国人？(你是 + 名词)。'叫'后面通常跟名字。"
+      }
+    },
+    {
+      type: "choice",
+      content: {
+        question: "5. 当你想问“Is this a book?”，你应该说：",
+        options: [
+          { id: "1", text: "这是书什么？" },
+          { id: "2", text: "这是书谁？" },
+          { id: "3", text: "这是书吗？" },
+          { id: "4", text: "这是哪书？" }
+        ],
+        correctAnswer: "3",
+        explanation: "是非疑问句 (Yes/No Question) 使用 '吗' 放在句尾。结构：陈述句 + 吗？"
+      }
+    },
+    {
+      type: "choice",
+      content: {
+        question: {
+          text: "6. 图中的人在做什么职业？",
+          imageUrl: "https://images.pexels.com/photos/5212345/pexels-photo-5212345.jpeg?auto=compress&cs=tinysrgb&w=300"
+        },
+        options: [
+          { id: "1", text: "学生 (xuésheng)" },
+          { id: "2", text: "老师 (lǎoshī)" },
+          { id: "3", text: "医生 (yīshēng)" },
+          { id: "4", text: "人 (rén)" }
+        ],
+        correctAnswer: "2",
+        explanation: "图片显示一个人在教书，中文是 '老师' (Teacher)。"
+      }
+    },
+    {
+      type: "choice",
+      content: {
+        question: "7. 下列哪个句子的语序是正确的？",
+        options: [
+          { id: "1", text: "你名字叫什么？" },
+          { id: "2", text: "你叫什么名字？" },
+          { id: "3", text: "什么名字你叫？" },
+          { id: "4", text: "名字叫什么你？" }
+        ],
+        correctAnswer: "2",
+        explanation: "正确语序：主语 (你) + 动词 (叫) + 疑问词 (什么) + 宾语 (名字)。"
+      }
+    },
+    {
+      type: "choice",
+      content: {
+        question: "8. A: 你是中国人吗？ B: ______, 我是缅甸人。",
+        options: [
+          { id: "1", text: "是" },
+          { id: "2", text: "不是" },
+          { id: "3", text: "好" },
+          { id: "4", text: "吗" }
+        ],
+        correctAnswer: "2",
+        explanation: "因为B回答他是缅甸人，所以前面是否定的回答，用 '不是' (No, I am not)。"
+      }
+    },
+    {
+      type: "choice",
+      content: {
+        question: "9. “Which book?” 用中文怎么说？",
+        options: [
+          { id: "1", text: "什么书？" },
+          { id: "2", text: "谁书？" },
+          { id: "3", text: "哪本书？" },
+          { id: "4", text: "书吗？" }
+        ],
+        correctAnswer: "3",
+        explanation: "询问“哪一个”用 '哪' (Which)，并且必须加上量词 '本'，所以是 '哪本书'。"
+      }
+    },
+    {
+      type: "choice",
+      content: {
+        question: {
+          text: "10. 找出图中的国旗：",
+          imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Flag_of_the_People%27s_Republic_of_China.svg/200px-Flag_of_the_People%27s_Republic_of_China.svg.png"
+        },
+        options: [
+          { id: "1", text: "中国" },
+          { id: "2", text: "美国" },
+          { id: "3", text: "日本" },
+          { id: "4", text: "缅甸" }
+        ],
+        correctAnswer: "1",
+        explanation: "这是中国的国旗 (The Five-star Red Flag)。"
+      }
+    },
+    {
+      type: "choice",
+      content: {
+        question: "11. 句子 “你是老师吗？” 中的 “吗” 的作用是？",
+        options: [
+          { id: "1", text: "表示感叹" },
+          { id: "2", text: "表示提问 (Question)" },
+          { id: "3", text: "表示否定" },
+          { id: "4", text: "表示过去" }
+        ],
+        correctAnswer: "2",
+        explanation: "“吗” 是句末助词，用于将陈述句转化为疑问句 (Question particle)。"
+      }
+    },
+    {
+      type: "choice",
+      content: {
+        question: "12. 选出不同类的一个词 (Select the odd one out):",
+        options: [
+          { id: "1", text: "你" },
+          { id: "2", text: "我" },
+          { id: "3", text: "他" },
+          { id: "4", text: "是" }
+        ],
+        correctAnswer: "4",
+        explanation: "你、我、他 都是代词 (Pronouns)，而 '是' 是动词 (Verb)。"
+      }
+    },
+    {
+      type: "choice",
+      content: {
+        question: "13. A: 他是谁？ B: _________。",
+        options: [
+          { id: "1", text: "他是我学生。" },
+          { id: "2", text: "他是书。" },
+          { id: "3", text: "他是中国人。" },
+          { id: "4", text: "他是哪国人？" }
+        ],
+        correctAnswer: "1",
+        explanation: "问“谁” (Who) 是在问身份。选项1直接回答了身份关系。选项3虽然也是指人，但通常用于回答“哪国人”。选项1最贴切。"
+      }
+    },
+    {
+      type: "choice",
+      content: {
+        question: "14. “我不是老师” 的意思是：",
+        options: [
+          { id: "1", text: "I am a teacher." },
+          { id: "2", text: "I am not a teacher." },
+          { id: "3", text: "Is he a teacher?" },
+          { id: "4", text: "Who is the teacher?" }
+        ],
+        correctAnswer: "2",
+        explanation: "“不” (bù) 表示否定 (Not)。“不是” = am not / is not."
+      }
+    },
+    {
+      type: "choice",
+      content: {
+        question: {
+          text: "15. 这是一群 _________ (Students)。",
+          imageUrl: "https://images.pexels.com/photos/1462630/pexels-photo-1462630.jpeg?auto=compress&cs=tinysrgb&w=300"
+        },
+        options: [
+          { id: "1", text: "老师" },
+          { id: "2", text: "学生" },
+          { id: "3", text: "医生" },
+          { id: "4", text: "什么" }
+        ],
+        correctAnswer: "2",
+        explanation: "图片中背着书包的人是 '学生' (Students)。"
+      }
+    },
+    {
+      type: "choice",
+      content: {
+        question: "16. 下列哪句话是错误的？",
+        options: [
+          { id: "1", text: "你是美国人吗？" },
+          { id: "2", text: "你是不是老师？" },
+          { id: "3", text: "你是哪国人吗？" },
+          { id: "4", text: "你叫李华吗？" }
+        ],
+        correctAnswer: "3",
+        explanation: "错误原因：'哪国人' 已经是疑问词了，不能再加 '吗'。疑问代词和 '吗' 不能混用。"
+      }
+    },
+    {
+      type: "choice",
+      content: {
+        question: "17. “She” 在中文里是：",
+        options: [
+          { id: "1", text: "他" },
+          { id: "2", text: "她" },
+          { id: "3", text: "它" },
+          { id: "4", text: "你" }
+        ],
+        correctAnswer: "2",
+        explanation: "女字旁的 '她' 代表女性的 She；单人旁的 '他' 代表男性的 He。"
+      }
+    },
+    {
+      type: "choice",
+      content: {
+        question: "18. “My name is David” 用中文怎么说？",
+        options: [
+          { id: "1", text: "我是大卫。" },
+          { id: "2", text: "我叫大卫。" },
+          { id: "3", text: "我名字大卫。" },
+          { id: "4", text: "1 和 2 都可以。" }
+        ],
+        correctAnswer: "4",
+        explanation: "“我是大卫” (I am David) 和 “我叫大卫” (I am called David) 都是正确的自我介绍方式。"
+      }
+    },
+    {
+      type: "choice",
+      content: {
+        question: "19. A: 这是什么？ B: _________。",
+        options: [
+          { id: "1", text: "这是李老师。" },
+          { id: "2", text: "这是汉语书。" },
+          { id: "3", text: "这是哪国人。" },
+          { id: "4", text: "这是我朋友。" }
+        ],
+        correctAnswer: "2",
+        explanation: "“什么”问的是物体/事物。只有“汉语书”是物体。其他选项都是人，应该用“谁”提问。"
+      }
+    },
+    {
+      type: "choice",
+      content: {
+        question: {
+          text: "20. 看图：这是哪个国家的国旗？",
+          imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Flag_of_the_United_States.svg/200px-Flag_of_the_United_States.svg.png"
+        },
+        options: [
+          { id: "1", text: "中国" },
+          { id: "2", text: "美国" },
+          { id: "3", text: "英国" },
+          { id: "4", text: "法国" }
+        ],
+        correctAnswer: "2",
+        explanation: "这是美国的国旗 (Flag of USA)。"
       }
     },
 
     // ==========================================
-    // 5. 排序题练习
+    // 5. 排序题练习 (扩充至 20 题)
     // ==========================================
     {
       type: "paixu",
       content: {
-        title: "连词成句：你是哪国人？",
+        title: "1. 连词成句：你是哪国人？",
         items: [
           { id: "1", text: "你" },
           { id: "2", text: "是" },
@@ -335,13 +572,14 @@ export default {
           { id: "5", text: "人" },
           { id: "6", text: "？" }
         ],
-        correctOrder: ["1", "2", "3", "4", "5", "6"]
+        correctOrder: ["1", "2", "3", "4", "5", "6"],
+        explanation: "句型：主语(你) + 是 + 哪 + 国 + 人？"
       }
     },
     {
       type: "paixu",
       content: {
-        title: "连词成句：你想吃什么？",
+        title: "2. 连词成句：你想吃什么？",
         items: [
           { id: "1", text: "什么" },
           { id: "2", text: "想" },
@@ -349,13 +587,14 @@ export default {
           { id: "4", text: "吃" },
           { id: "5", text: "？" }
         ],
-        correctOrder: ["3", "2", "4", "1", "5"]
+        correctOrder: ["3", "2", "4", "1", "5"],
+        explanation: "句型：主语(你) + 动词(想吃) + 宾语/疑问词(什么)？"
       }
     },
     {
       type: "paixu",
       content: {
-        title: "连词成句：他不是老师。",
+        title: "3. 连词成句：他不是老师。",
         items: [
           { id: "1", text: "是" },
           { id: "2", text: "不" },
@@ -363,7 +602,265 @@ export default {
           { id: "4", text: "老师" },
           { id: "5", text: "。" }
         ],
-        correctOrder: ["3", "2", "1", "4", "5"]
+        correctOrder: ["3", "2", "1", "4", "5"],
+        explanation: "否定句型：主语(他) + 不 + 是 + 名词(老师)。"
+      }
+    },
+    {
+      type: "paixu",
+      content: {
+        title: "4. 连词成句：我是学生。",
+        items: [
+          { id: "1", text: "学生" },
+          { id: "2", text: "我" },
+          { id: "3", text: "是" },
+          { id: "4", text: "。" }
+        ],
+        correctOrder: ["2", "3", "1", "4"],
+        explanation: "基本句型：A(我) 是 B(学生)。"
+      }
+    },
+    {
+      type: "paixu",
+      content: {
+        title: "5. 连词成句：你叫什么名字？",
+        items: [
+          { id: "1", text: "名字" },
+          { id: "2", text: "你" },
+          { id: "3", text: "什么" },
+          { id: "4", text: "叫" },
+          { id: "5", text: "？" }
+        ],
+        correctOrder: ["2", "4", "3", "1", "5"],
+        explanation: "询问名字：你 + 叫 + 什么 + 名字？"
+      }
+    },
+    {
+      type: "paixu",
+      content: {
+        title: "6. 连词成句：他是谁？",
+        items: [
+          { id: "1", text: "谁" },
+          { id: "2", text: "他" },
+          { id: "3", text: "是" },
+          { id: "4", text: "？" }
+        ],
+        correctOrder: ["2", "3", "1", "4"],
+        explanation: "询问身份：主语(他) + 是 + 谁(Who)？"
+      }
+    },
+    {
+      type: "paixu",
+      content: {
+        title: "7. 连词成句：你是中国人吗？",
+        items: [
+          { id: "1", text: "中国人" },
+          { id: "2", text: "吗" },
+          { id: "3", text: "你" },
+          { id: "4", text: "是" },
+          { id: "5", text: "？" }
+        ],
+        correctOrder: ["3", "4", "1", "2", "5"],
+        explanation: "是非问句：陈述句(你是中国人) + 吗？"
+      }
+    },
+    {
+      type: "paixu",
+      content: {
+        title: "8. 连词成句：这是什么？",
+        items: [
+          { id: "1", text: "什么" },
+          { id: "2", text: "是" },
+          { id: "3", text: "这" },
+          { id: "4", text: "？" }
+        ],
+        correctOrder: ["3", "2", "1", "4"],
+        explanation: "辨认物体：这 + 是 + 什么？"
+      }
+    },
+    {
+      type: "paixu",
+      content: {
+        title: "9. 连词成句：我叫李华。",
+        items: [
+          { id: "1", text: "李华" },
+          { id: "2", text: "我" },
+          { id: "3", text: "叫" },
+          { id: "4", text: "。" }
+        ],
+        correctOrder: ["2", "3", "1", "4"],
+        explanation: "自我介绍：主语(我) + 叫 + 名字(李华)。"
+      }
+    },
+    {
+      type: "paixu",
+      content: {
+        title: "10. 连词成句：她是我的老师。",
+        items: [
+          { id: "1", text: "老师" },
+          { id: "2", text: "她" },
+          { id: "3", text: "是" },
+          { id: "4", text: "我" },
+          { id: "5", text: "的" },
+          { id: "6", text: "。" }
+        ],
+        correctOrder: ["2", "3", "4", "5", "1", "6"],
+        explanation: "领属关系：她 + 是 + 我 + 的 + 老师。"
+      }
+    },
+    {
+      type: "paixu",
+      content: {
+        title: "11. 连词成句：哪本书是你的？",
+        items: [
+          { id: "1", text: "书" },
+          { id: "2", text: "你" },
+          { id: "3", text: "哪" },
+          { id: "4", text: "的" },
+          { id: "5", text: "是" },
+          { id: "6", text: "本" },
+          { id: "7", text: "？" }
+        ],
+        correctOrder: ["3", "6", "1", "5", "2", "4", "7"],
+        explanation: "选择问句：哪(Which) + 本(量词) + 书 + 是 + 你的？"
+      }
+    },
+    {
+      type: "paixu",
+      content: {
+        title: "12. 连词成句：他不是美国人。",
+        items: [
+          { id: "1", text: "人" },
+          { id: "2", text: "不是" },
+          { id: "3", text: "美国" },
+          { id: "4", text: "他" },
+          { id: "5", text: "。" }
+        ],
+        correctOrder: ["4", "2", "3", "1", "5"],
+        explanation: "否定句：他 + 不是 + 美国人。"
+      }
+    },
+    {
+      type: "paixu",
+      content: {
+        title: "13. 连词成句：我也不是学生。",
+        items: [
+          { id: "1", text: "学生" },
+          { id: "2", text: "也" },
+          { id: "3", text: "我" },
+          { id: "4", text: "不是" },
+          { id: "5", text: "。" }
+        ],
+        correctOrder: ["3", "2", "4", "1", "5"],
+        explanation: "“也”(Also) 放在主语后，否定词前。我 + 也 + 不是 + 学生。"
+      }
+    },
+    {
+      type: "paixu",
+      content: {
+        title: "14. 连词成句：那个人是谁？",
+        items: [
+          { id: "1", text: "是" },
+          { id: "2", text: "那个" },
+          { id: "3", text: "人" },
+          { id: "4", text: "谁" },
+          { id: "5", text: "？" }
+        ],
+        correctOrder: ["2", "3", "1", "4", "5"],
+        explanation: "那个 + 人(主语) + 是 + 谁？"
+      }
+    },
+    {
+      type: "paixu",
+      content: {
+        title: "15. 连词成句：你们是同学吗？",
+        items: [
+          { id: "1", text: "是" },
+          { id: "2", text: "吗" },
+          { id: "3", text: "同学" },
+          { id: "4", text: "你们" },
+          { id: "5", text: "？" }
+        ],
+        correctOrder: ["4", "1", "3", "2", "5"],
+        explanation: "你们 + 是 + 同学 + 吗(Yes/No)？"
+      }
+    },
+    {
+      type: "paixu",
+      content: {
+        title: "16. 连词成句：这是汉语书吗？",
+        items: [
+          { id: "1", text: "汉语" },
+          { id: "2", text: "吗" },
+          { id: "3", text: "是" },
+          { id: "4", text: "这" },
+          { id: "5", text: "书" },
+          { id: "6", text: "？" }
+        ],
+        correctOrder: ["4", "3", "1", "5", "2", "6"],
+        explanation: "这 + 是 + 汉语书 + 吗？"
+      }
+    },
+    {
+      type: "paixu",
+      content: {
+        title: "17. 连词成句：大卫也是美国人。",
+        items: [
+          { id: "1", text: "是" },
+          { id: "2", text: "也" },
+          { id: "3", text: "美国人" },
+          { id: "4", text: "大卫" },
+          { id: "5", text: "。" }
+        ],
+        correctOrder: ["4", "2", "1", "3", "5"],
+        explanation: "大卫 + 也 + 是 + 美国人。"
+      }
+    },
+    {
+      type: "paixu",
+      content: {
+        title: "18. 连词成句：你想喝什么？",
+        items: [
+          { id: "1", text: "喝" },
+          { id: "2", text: "什么" },
+          { id: "3", text: "你" },
+          { id: "4", text: "想" },
+          { id: "5", text: "？" }
+        ],
+        correctOrder: ["3", "4", "1", "2", "5"],
+        explanation: "你 + 想 + 喝 + 什么？"
+      }
+    },
+    {
+      type: "paixu",
+      content: {
+        title: "19. 连词成句：我的朋友是缅甸人。",
+        items: [
+          { id: "1", text: "的" },
+          { id: "2", text: "是" },
+          { id: "3", text: "我" },
+          { id: "4", text: "缅甸人" },
+          { id: "5", text: "朋友" },
+          { id: "6", text: "。" }
+        ],
+        correctOrder: ["3", "1", "5", "2", "4", "6"],
+        explanation: "我的朋友 + 是 + 缅甸人。"
+      }
+    },
+    {
+      type: "paixu",
+      content: {
+        title: "20. 连词成句：李老师不是中国人。",
+        items: [
+          { id: "1", text: "李" },
+          { id: "2", text: "是" },
+          { id: "3", text: "老师" },
+          { id: "4", text: "不" },
+          { id: "5", text: "中国人" },
+          { id: "6", text: "。" }
+        ],
+        correctOrder: ["1", "3", "4", "2", "5", "6"],
+        explanation: "李老师(主语) + 不 + 是 + 中国人。"
       }
     },
 
