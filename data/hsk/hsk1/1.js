@@ -1,878 +1,391 @@
-// components/Data/1.js
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  FaVolumeUp, FaChevronRight, FaTimes, 
+  FaMagic, FaMicrophone, FaStop, FaPlay, FaRedo, FaBookOpen 
+} from "react-icons/fa";
+import { pinyin } from 'pinyin-pro';
+import { Howl, Howler } from 'howler';
 
-export default {
-  id: "hsk1_01",
-  level: 1,
-  title: "第1课：你是哪国人？",
-  blocks: [
-    // ==========================================
-    // 1. 课程封面
-    // ==========================================
-    {
-      type: "cover",
-      content: {
-        title: "HSK 1 - 第1课",
-        subtitle: "你是哪国人？",
-        description: "学习中文最核心的疑问词：什么、谁、哪，以及如何用“是”和“吗”造句。",
-        imageUrl: "https://images.pexels.com/photos/35267296/pexels-photo-35267296.jpeg"
-      }
-    },
+// ==========================================
+// 1. 工具函数与音频控制
+// ==========================================
 
-    // ==========================================
-    // 2. 单词学习
-    // ==========================================
-    {
-      type: "word_study",
-      content: {
-        title: "核心生词",
-        words: [
-          { id: 1, word: "什么", pinyin: "shénme", burmese: "ဘာ / ဘာလဲ", definition: "What", example: "这是什么？", example_burmese: "ဒါဘာလဲ?" },
-          { id: 2, word: "是", pinyin: "shì", burmese: "ဖြစ်သည် / ဟုတ်သည်", definition: "To be", example: "我是学生。", example_burmese: "ကျွန်တော် ကျောင်းသား ဖြစ်ပါတယ်။" },
-          { id: 3, word: "谁", pinyin: "shéi", burmese: "ဘယ်သူ", definition: "Who", example: "他是谁？", example_burmese: "သူ ဘယ်သူလဲ?" },
-          { id: 4, word: "哪", pinyin: "nǎ", burmese: "ဘယ်...", definition: "Which", example: "哪本书？", example_burmese: "ဘယ်စာအုပ်လဲ?" },
-          { id: 5, word: "吗", pinyin: "ma", burmese: "လား (မေးခွန်း)", definition: "Question particle", example: "你好吗？", example_burmese: "နေကောင်းလား?" }
-        ]
-      }
-    },
-
-    // ==========================================
-    // 3. 语法讲解
-    // ==========================================
-    {
-      type: "grammar_study",
-      content: {
-        grammarPoints: [
-          // ------------------------------------------------------------------
-          // 语法点 1：什么
-          // ------------------------------------------------------------------
-          {
-            id: "gp_01",
-            "语法标题": "疑问代词「什么」 (ဘာ / ဘာလဲ)",
-            "句型结构": "动词 + {{什么}}？",
-            "语法详解": `
-### 1. 三个核心句型 (အဓိက ဝါကျပုံစံ ၃ မျိုး)
-**1. 指东西提问 (အရာဝတ္ထုကို မေးခြင်း)**
-· 句型：这 / 那是 + 什么？
-· 这是什么？ (ဒါဘာလဲ?)
-
-**2. 问动作内容 (လုပ်ဆောင်ချက်ကို မေးခြင်း)**
-· 句型：主语 + 动词 + 什么？
-· 你叫什么名字？ (မင်းနာမည် ဘယ်လိုခေါ်လဲ?)
-
-**3. 问种类或类型 (အမျိုးအစားကို မေးခြင်း)**
-· 句型：什么 + 名词？
-· 你喜欢什么颜色？ (မင်းဘယ်လိုအရောင်ကြိုက်လဲ?)
-
-### 2. 两种其他用法
-**4. 表示“一些东西”**：我想买点什么。(ငါ တစ်ခုခု ဝယ်ချင်တယ်။)
-**5. 反问 (别...)**：急什么？(ဘာလောစရာလိုလို့လဲ?)
-
-### 3. 总结 (အနှစ်ချုပ်)
-**「什么」用来问东西和事情，不问人、不问价格、不问时间，永远放在动词前面。**
-`,
-            "注意事项": `
-❌ 错误：你吃是什么？
-✅ 正确：你吃什么？ (动词直接加“什么”，中间不加“是”)
-
-❌ 错误：你的老师是什么？
-✅ 正确：你的老师是谁？ (问人用“谁”，问东西用“什么”)
-
-❌ 错误：什么价钱？ / 什么时间？
-✅ 正确：多少钱？ / 几点？
-`,
-            "讲解脚本": "记住总结：问东西和事情用什么，永远放在动词后面。问人要用谁，问价格用多少钱。",
-            "例句列表": [
-              { "句子": "这是什么？", "翻译": "(在教室) ဒါ ဘာလဲ?" },
-              { "句子": "这是书。", "翻译": "ဒါ စာအုပ်ပါ။" },
-              { "句子": "这是什么书？", "翻译": "ဒါ ဘာစာအုပ်လဲ?" },
-              { "句子": "这是汉语书。", "翻译": "ဒါ တရုတ်စာအုပ်ပါ။" },
-              { "句子": "你想吃什么？", "翻译": "(在餐厅) မင်း ဘာစားချင်လဲ?" },
-              { "句子": "我想吃面条。你想喝什么？", "翻译": "ငါ ခေါက်ဆွဲစားချင်တယ်။ မင်း ဘာသောက်ချင်လဲ?" },
-              { "句子": "我想喝茶。", "翻译": "ငါ လက်ဖက်ရည် သောက်ချင်တယ်။" },
-              { "句子": "你叫什么名字？", "翻译": "(新朋友) မင်းနာမည် ဘယ်လိုခေါ်လဲ?" },
-              { "句子": "我叫李明。你做什么工作？", "翻译": "ငါ့နာမည် လီမင်းပါ။ မင်း ဘာအလုပ်လုပ်လဲ?" },
-              { "句子": "我是学生。", "翻译": "ငါက ကျောင်းသားပါ။" }
-            ]
-          },
-
-          // ------------------------------------------------------------------
-          // 语法点 2：是
-          // ------------------------------------------------------------------
-          {
-            id: "gp_02",
-            "语法标题": "「是」字句 (ဟုတ်သည် / ဖြစ်သည်)",
-            "句型结构": "A {{是}} B",
-            "语法详解": `
-**一句话记住：** 表示“身份、判断、等于”，用「是」。
-
-### 1. 核心句型
-**1. 判断身份**：我是学生。(ကျွန်တော် ကျောင်းသား ဖြစ်ပါတယ်။)
-**2. 指认事物**：这是书。(ဒါ စာအုပ်ပါ။)
-**3. 判断对错**：是今天吗？(ဒီနေ့လား?)
-**4. 表示强调**：这本书是我的。(ဒီစာအုပ်က ကျွန်တော့်ဟာပါ)
-
-### 2. 总结 (အနှစ်ချုပ်)
-**「是」用来判断和说明，不用在一般动词(如去、吃、喝)前。**
-`,
-            "注意事项": `
-❌ 错误：我是吃饭。
-✅ 正确：我吃饭。 (在一般动词前不用“是”)
-
-❌ 错误：你是吃什么？
-✅ 正确：你吃什么？ (疑问代词前不用“是”)
-
-❌ 错误：我是去学校。
-✅ 正确：我去学校。
-`,
-            "讲解脚本": "“是”字句最重要的是：不要把它当成万能词。我说“我吃饭”，不要说“我是吃饭”。",
-            "例句列表": [
-              { "句子": "你好！你是学生吗？", "翻译": "(初次见面) မင်္ဂလာပါ! မင်းက ကျောင်းသားလား?" },
-              { "句子": "是，我是学生。你是学生吗？", "翻译": "ဟုတ်ကဲ့၊ ကျွန်တော်က ကျောင်းသားပါ။ မင်းရော?" },
-              { "句子": "我不是学生，我是老师。", "翻译": "ကျွန်တော် ကျောင်းသား မဟုတ်ပါဘူး၊ ဆရာပါ။" },
-              { "句子": "哦，您是老师！我叫小明。", "翻译": "အော်၊ ခင်ဗျားက ဆရာကိုး! ကျွန်တော်က ရှောင်မင်ပါ။" },
-              { "句子": "我叫李华。", "翻译": "ကျွန်တော့်နာမည် လီဟွာပါ။" },
-              { "句子": "这是什么？", "翻译": "(辨认物品) ဒါ ဘာလဲ?" },
-              { "句子": "这是书。", "翻译": "ဒါ စာအုပ်ပါ။" },
-              { "句子": "那是什么？", "翻译": "ဟိုဟာ ဘာလဲ?" },
-              { "句子": "那是笔。", "翻译": "ဟိုဟာ ဘောပင်ပါ။" },
-              { "句子": "这是你的书吗？", "翻译": "ဒါ မင်းရဲ့စာအုပ်လား?" },
-              { "句子": "是，这是我的书。", "翻译": "ဟုတ်တယ်၊ ဒါ ကျွန်တော့်စာအုပ်ပါ။" },
-              { "句子": "你好！你是哪国人？", "翻译": "(询问国籍) မင်းက ဘယ်နိုင်ငံသားလဲ?" },
-              { "句子": "我是中国人。你呢？", "翻译": "ငါက တရုတ်လူမျိုးပါ။ မင်းရော?" },
-              { "句子": "我是缅甸人。", "翻译": "ငါက မြန်မာလူမျိုးပါ။" },
-              { "句子": "她是谁？", "翻译": "(介绍他人) သူမ ဘယ်သူလဲ?" },
-              { "句子": "她是我的同学，叫小红。", "翻译": "သူမက ငါ့အတန်းဖော် ရှောင်ဟုန်ပါ။" },
-              { "句子": "她是中国人吗？", "翻译": "သူမက တရုတ်လူမျိုးလား?" },
-              { "句子": "是，她是中国人。", "翻译": "ဟုတ်တယ်၊ သူမက တရုတ်လူမျိုးပါ။" }
-            ]
-          },
-
-          // ------------------------------------------------------------------
-          // 语法点 3：吗
-          // ------------------------------------------------------------------
-          {
-            id: "gp_03",
-            "语法标题": "「吗」疑问句 (Yes/No Question)",
-            "句型结构": "陈述句 + {{吗}}？",
-            "语法详解": `
-**一句话记住：** 陈述句 + 吗 = 是非疑问句（问“是不是”、“对不对”）
-
-### 1. 基本句型
-· 句型：陈述句 + 吗？
-· 你是学生吗？ (မင်းက ကျောင်းသားလား?)
-
-### 2. 回答规则
-· 肯定：是 / 对 / 吃了
-· 否定：不是 / 不 / 没有
-
-### 3. 总结 (အနှစ်ချုပ်)
-**「吗」是是非疑问句的专用标记，只负责询问“是否如此”。它与“什么、谁”等疑问词不能混合使用。**
-`,
-            "注意事项": `
-❌ 错误：你吗是学生？
-✅ 正确：你是学生吗？ (「吗」永远放在句子最后)
-
-❌ 错误：你吃什么吗？
-✅ 正确：你吃什么？ (有疑问代词，就不用「吗」)
-
-❌ 错误：他是谁吗？
-✅ 正确：他是谁？
-`,
-            "讲解脚本": "记住，“吗”字只能放在句尾，而且不能和“什么、谁”一起用。你不能说“你吃什么吗”，只能说“你吃什么”。",
-            "例句列表": [
-              { "句子": "你是中国人吗？", "翻译": "(课堂互动) မင်းက တရုတ်လူမျိုးလား?" },
-              { "句子": "是，我是中国人。", "翻译": "ဟုတ်ကဲ့၊ ကျွန်တော်က တရုတ်လူမျိုးပါ။" },
-              { "句子": "他是你的同桌吗？", "翻译": "သူက မင်းရဲ့ တွဲဖက်ခုံလား?" },
-              { "句子": "不是，他是我的朋友。", "翻译": "မဟုတ်ဘူး၊ သူက ငါ့သူငယ်ချင်းပါ။" },
-              { "句子": "你是一年级的学生吗？", "翻译": "(校园问路) မင်းက ပထမနှစ်ကျောင်းသားလား?" },
-              { "句子": "不是，我是二年级的。", "翻译": "မဟုတ်ပါဘူး၊ ကျွန်တော်က ဒုတိယနှစ်ပါ။" },
-              { "句子": "图书馆在那边吗？", "翻译": "စာကြည့်တိုက်က ဟိုဘက်မှာလား?" },
-              { "句子": "是，图书馆就在那个楼里。", "翻译": "ဟုတ်တယ်၊ စာကြည့်တိုက်က ဟိုတိုက်ထဲမှာ။" },
-              { "句子": "你喜欢吃米饭吗？", "翻译": "(课后交流) မင်း ထမင်းကြိုက်လား?" },
-              { "句子": "是，我很喜欢吃米饭。", "翻译": "ဟုတ်တယ်၊ ငါ ထမင်း အရမ်းကြိုက်တယ်။" },
-              { "句子": "你有铅笔吗？", "翻译": "မင်းမှာ ခဲတံရှိလား?" },
-              { "句子": "有，我有两支铅笔。", "翻译": "ရှိတယ်၊ ငါ့မှာ ခဲတံနှစ်ချောင်းရှိတယ်။" },
-              { "句子": "妈妈，这是苹果吗？", "翻译": "(家庭对话) မေမေ၊ ဒါ ပန်းသီးလား?" },
-              { "句子": "是，这是红苹果，很甜的。", "翻译": "ဟုတ်တယ်၊ ဒါ ပန်းသီးနီနီလေး၊ အရမ်းချိုတယ်။" },
-              { "句子": "爸爸是医生吗？", "翻译": "ဖေဖေက ဆရာဝန်လား?" },
-              { "句子": "不是，爸爸是老师。", "翻译": "မဟုတ်ဘူး၊ ဖေဖေက ကျောင်းဆရာ။" }
-            ]
-          },
-
-          // ------------------------------------------------------------------
-          // 语法点 4：谁 / 哪
-          // ------------------------------------------------------------------
-          {
-            id: "gp_04",
-            "语法标题": "疑问代词「谁」与「哪」",
-            "句型结构": "{{谁}}... / {{哪}} + 量词...",
-            "语法详解": `
-**一句话记住：** 问人用「谁」，问选择用「哪」。
-
-### 1. 「谁」 (只问人)
-· 句型：主语 + 是 + 谁？ / 谁 + 动词？
-· 他是谁？ (သူ ဘယ်သူလဲ?)
-
-### 2. 「哪」 (询问特定选择)
-· 句型：哪 + 量词 + 名词？
-· 你要哪个？ (မင်း ဘယ်တစ်ခု ယူမလဲ?)
-
-### 3. 「哪」和「哪儿」不要混
-· 哪 = 哪一个 (Which)
-· 哪儿 = 什么地方 (Where)
-
-### 4. 总结 (အနှစ်ချုပ်)
-**问人用“谁”，问选择用“哪” (后面常加量词)，问地点用“哪儿”。**
-`,
-            "注意事项": `
-❌ 错误：这个人是什么？
-✅ 正确：这个人是谁？ (问人用“谁”)
-
-❌ 错误：你要哪书？
-✅ 正确：你要哪本书？ (「哪」后面别漏了量词)
-
-❌ 错误：你在哪桌子？
-✅ 正确：你坐哪张桌子？
-`,
-            "讲解脚本": "问人的时候一定要用“谁”。如果你要从几个东西里选一个，就用“哪”，比如“哪本书”，记得加量词。",
-            "例句列表": [
-              { "句子": "那边的人是谁？", "翻译": "(认识新朋友) ဟိုဘက်ကလူက ဘယ်သူလဲ?" },
-              { "句子": "他是我的弟弟。", "翻译": "သူက ငါ့မောင်လေးပါ။" },
-              { "句子": "他叫什么名字？", "翻译": "သူ့နာမည် ဘယ်လိုခေါ်လဲ?" },
-              { "句子": "他叫小刚。", "翻译": "သူ့နာမည် ရှောင်ကန်းပါ။" },
-              { "句子": "这是谁的书包？", "翻译": "(询问物品归属) ဒါ ဘယ်သူ့ လွယ်အိတ်လဲ?" },
-              { "句子": "是我的书包。", "翻译": "ကျွန်တော့် လွယ်အိတ်ပါ။" },
-              { "句子": "书包里的书是谁的？", "翻译": "လွယ်အိတ်ထဲကစာအုပ်က ဘယ်သူ့ဟာလဲ?" },
-              { "句子": "是我同桌的。", "翻译": "ငါ့အတန်းဖော်ဟာပါ။" },
-              { "句子": "你是哪国人？", "翻译": "(询问地点) မင်းက ဘယ်နိုင်ငံသားလဲ?" },
-              { "句子": "我是韩国人。", "翻译": "ငါက ကိုရီးယားလူမျိုးပါ။" },
-              { "句子": "你要去哪个地方？", "翻译": "မင်း ဘယ်နေရာကို သွားချင်တာလဲ?" },
-              { "句子": "我要去旁边的超市买水。", "翻译": "ငါ ဘေးနားက စူပါမားကတ်ကို သွားမလို့။" },
-              { "句子": "你想买哪支笔？", "翻译": "(选择物品) မင်း ဘယ်ဘောပင်ကို ဝယ်ချင်တာလဲ?" },
-              { "句子": "我想买那支蓝色的笔。", "翻译": "ငါ ဟို အပြာရောင်ဘောပင်ကို ဝယ်ချင်တယ်။" },
-              { "句子": "这支黑色的笔是谁的？", "翻译": "ဒီ အမည်းရောင်ဘောပင်က ဘယ်သူ့ဟာလဲ?" },
-              { "句子": "是售货员的，不是卖的。", "翻译": "အရောင်းဝန်ထမ်းဟာပါ၊ ရောင်းတာမဟုတ်ပါဘူး။" }
-            ]
-          }
-        ]
-      }
-    },
-
-    // ==========================================
-    // 4. 选择题练习 (扩充至 20 题)
-    // ==========================================
-    {
-      type: "choice",
-      content: {
-        question: "1. 汉语中 “What” 怎么说？",
-        options: [
-          { id: "1", text: "什么 (shénme)" },
-          { id: "2", text: "谁 (shéi)" },
-          { id: "3", text: "哪 (nǎ)" },
-          { id: "4", text: "吗 (ma)" }
-        ],
-        correctAnswer: "1",
-        explanation: "“什么”意思是 What；“谁”是 Who；“哪”是 Which。"
-      }
-    },
-    {
-      type: "choice",
-      content: {
-        question: "2. 如果你想问那个人的身份，你应该问：",
-        options: [
-          { id: "1", text: "他是什么？" },
-          { id: "2", text: "他是谁？" },
-          { id: "3", text: "他是哪？" },
-          { id: "4", text: "他是吗？" }
-        ],
-        correctAnswer: "2",
-        explanation: "提问“人”的身份时，必须用“谁”(Who)。"
-      }
-    },
-    {
-      type: "choice",
-      content: {
-        question: {
-          text: "3. 看图辨义：这张图片代表哪个国家？",
-          imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Flag_of_Myanmar.svg/200px-Flag_of_Myanmar.svg.png"
-        },
-        options: [
-          { id: "1", text: "中国 (Zhōngguó)" },
-          { id: "2", text: "美国 (Měiguó)" },
-          { id: "3", text: "缅甸 (Miǎndiàn)" },
-          { id: "4", text: "英国 (Yīngguó)" }
-        ],
-        correctAnswer: "3",
-        explanation: "这是缅甸的国旗。缅甸在中文里是 'Miǎndiàn'。"
-      }
-    },
-    {
-      type: "choice",
-      content: {
-        question: "4. “你____哪国人？” 空格处应填什么？",
-        options: [
-          { id: "1", text: "是 (shì)" },
-          { id: "2", text: "叫 (jiào)" },
-          { id: "3", text: "什么 (shénme)" },
-          { id: "4", text: "谁 (shéi)" }
-        ],
-        correctAnswer: "1",
-        explanation: "句型：你是哪国人？(你是 + 名词)。'叫'后面通常跟名字。"
-      }
-    },
-    {
-      type: "choice",
-      content: {
-        question: "5. 当你想问“Is this a book?”，你应该说：",
-        options: [
-          { id: "1", text: "这是书什么？" },
-          { id: "2", text: "这是书谁？" },
-          { id: "3", text: "这是书吗？" },
-          { id: "4", text: "这是哪书？" }
-        ],
-        correctAnswer: "3",
-        explanation: "是非疑问句 (Yes/No Question) 使用 '吗' 放在句尾。结构：陈述句 + 吗？"
-      }
-    },
-    {
-      type: "choice",
-      content: {
-        question: {
-          text: "6. 图中的人在做什么职业？",
-          imageUrl: "https://images.pexels.com/photos/5212345/pexels-photo-5212345.jpeg?auto=compress&cs=tinysrgb&w=300"
-        },
-        options: [
-          { id: "1", text: "学生 (xuésheng)" },
-          { id: "2", text: "老师 (lǎoshī)" },
-          { id: "3", text: "医生 (yīshēng)" },
-          { id: "4", text: "人 (rén)" }
-        ],
-        correctAnswer: "2",
-        explanation: "图片显示一个人在教书，中文是 '老师' (Teacher)。"
-      }
-    },
-    {
-      type: "choice",
-      content: {
-        question: "7. 下列哪个句子的语序是正确的？",
-        options: [
-          { id: "1", text: "你名字叫什么？" },
-          { id: "2", text: "你叫什么名字？" },
-          { id: "3", text: "什么名字你叫？" },
-          { id: "4", text: "名字叫什么你？" }
-        ],
-        correctAnswer: "2",
-        explanation: "正确语序：主语 (你) + 动词 (叫) + 疑问词 (什么) + 宾语 (名字)。"
-      }
-    },
-    {
-      type: "choice",
-      content: {
-        question: "8. A: 你是中国人吗？ B: ______, 我是缅甸人。",
-        options: [
-          { id: "1", text: "是" },
-          { id: "2", text: "不是" },
-          { id: "3", text: "好" },
-          { id: "4", text: "吗" }
-        ],
-        correctAnswer: "2",
-        explanation: "因为B回答他是缅甸人，所以前面是否定的回答，用 '不是' (No, I am not)。"
-      }
-    },
-    {
-      type: "choice",
-      content: {
-        question: "9. “Which book?” 用中文怎么说？",
-        options: [
-          { id: "1", text: "什么书？" },
-          { id: "2", text: "谁书？" },
-          { id: "3", text: "哪本书？" },
-          { id: "4", text: "书吗？" }
-        ],
-        correctAnswer: "3",
-        explanation: "询问“哪一个”用 '哪' (Which)，并且必须加上量词 '本'，所以是 '哪本书'。"
-      }
-    },
-    {
-      type: "choice",
-      content: {
-        question: {
-          text: "10. 找出图中的国旗：",
-          imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Flag_of_the_People%27s_Republic_of_China.svg/200px-Flag_of_the_People%27s_Republic_of_China.svg.png"
-        },
-        options: [
-          { id: "1", text: "中国" },
-          { id: "2", text: "美国" },
-          { id: "3", text: "日本" },
-          { id: "4", text: "缅甸" }
-        ],
-        correctAnswer: "1",
-        explanation: "这是中国的国旗 (The Five-star Red Flag)。"
-      }
-    },
-    {
-      type: "choice",
-      content: {
-        question: "11. 句子 “你是老师吗？” 中的 “吗” 的作用是？",
-        options: [
-          { id: "1", text: "表示感叹" },
-          { id: "2", text: "表示提问 (Question)" },
-          { id: "3", text: "表示否定" },
-          { id: "4", text: "表示过去" }
-        ],
-        correctAnswer: "2",
-        explanation: "“吗” 是句末助词，用于将陈述句转化为疑问句 (Question particle)。"
-      }
-    },
-    {
-      type: "choice",
-      content: {
-        question: "12. 选出不同类的一个词 (Select the odd one out):",
-        options: [
-          { id: "1", text: "你" },
-          { id: "2", text: "我" },
-          { id: "3", text: "他" },
-          { id: "4", text: "是" }
-        ],
-        correctAnswer: "4",
-        explanation: "你、我、他 都是代词 (Pronouns)，而 '是' 是动词 (Verb)。"
-      }
-    },
-    {
-      type: "choice",
-      content: {
-        question: "13. A: 他是谁？ B: _________。",
-        options: [
-          { id: "1", text: "他是我学生。" },
-          { id: "2", text: "他是书。" },
-          { id: "3", text: "他是中国人。" },
-          { id: "4", text: "他是哪国人？" }
-        ],
-        correctAnswer: "1",
-        explanation: "问“谁” (Who) 是在问身份。选项1直接回答了身份关系。选项3虽然也是指人，但通常用于回答“哪国人”。选项1最贴切。"
-      }
-    },
-    {
-      type: "choice",
-      content: {
-        question: "14. “我不是老师” 的意思是：",
-        options: [
-          { id: "1", text: "I am a teacher." },
-          { id: "2", text: "I am not a teacher." },
-          { id: "3", text: "Is he a teacher?" },
-          { id: "4", text: "Who is the teacher?" }
-        ],
-        correctAnswer: "2",
-        explanation: "“不” (bù) 表示否定 (Not)。“不是” = am not / is not."
-      }
-    },
-    {
-      type: "choice",
-      content: {
-        question: {
-          text: "15. 这是一群 _________ (Students)。",
-          imageUrl: "https://images.pexels.com/photos/1462630/pexels-photo-1462630.jpeg?auto=compress&cs=tinysrgb&w=300"
-        },
-        options: [
-          { id: "1", text: "老师" },
-          { id: "2", text: "学生" },
-          { id: "3", text: "医生" },
-          { id: "4", text: "什么" }
-        ],
-        correctAnswer: "2",
-        explanation: "图片中背着书包的人是 '学生' (Students)。"
-      }
-    },
-    {
-      type: "choice",
-      content: {
-        question: "16. 下列哪句话是错误的？",
-        options: [
-          { id: "1", text: "你是美国人吗？" },
-          { id: "2", text: "你是不是老师？" },
-          { id: "3", text: "你是哪国人吗？" },
-          { id: "4", text: "你叫李华吗？" }
-        ],
-        correctAnswer: "3",
-        explanation: "错误原因：'哪国人' 已经是疑问词了，不能再加 '吗'。疑问代词和 '吗' 不能混用。"
-      }
-    },
-    {
-      type: "choice",
-      content: {
-        question: "17. “She” 在中文里是：",
-        options: [
-          { id: "1", text: "他" },
-          { id: "2", text: "她" },
-          { id: "3", text: "它" },
-          { id: "4", text: "你" }
-        ],
-        correctAnswer: "2",
-        explanation: "女字旁的 '她' 代表女性的 She；单人旁的 '他' 代表男性的 He。"
-      }
-    },
-    {
-      type: "choice",
-      content: {
-        question: "18. “My name is David” 用中文怎么说？",
-        options: [
-          { id: "1", text: "我是大卫。" },
-          { id: "2", text: "我叫大卫。" },
-          { id: "3", text: "我名字大卫。" },
-          { id: "4", text: "1 和 2 都可以。" }
-        ],
-        correctAnswer: "4",
-        explanation: "“我是大卫” (I am David) 和 “我叫大卫” (I am called David) 都是正确的自我介绍方式。"
-      }
-    },
-    {
-      type: "choice",
-      content: {
-        question: "19. A: 这是什么？ B: _________。",
-        options: [
-          { id: "1", text: "这是李老师。" },
-          { id: "2", text: "这是汉语书。" },
-          { id: "3", text: "这是哪国人。" },
-          { id: "4", text: "这是我朋友。" }
-        ],
-        correctAnswer: "2",
-        explanation: "“什么”问的是物体/事物。只有“汉语书”是物体。其他选项都是人，应该用“谁”提问。"
-      }
-    },
-    {
-      type: "choice",
-      content: {
-        question: {
-          text: "20. 看图：这是哪个国家的国旗？",
-          imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Flag_of_the_United_States.svg/200px-Flag_of_the_United_States.svg.png"
-        },
-        options: [
-          { id: "1", text: "中国" },
-          { id: "2", text: "美国" },
-          { id: "3", text: "英国" },
-          { id: "4", text: "法国" }
-        ],
-        correctAnswer: "2",
-        explanation: "这是美国的国旗 (Flag of USA)。"
-      }
-    },
-
-    // ==========================================
-    // 5. 排序题练习 (扩充至 20 题)
-    // ==========================================
-    {
-      type: "paixu",
-      content: {
-        title: "1. 连词成句：你是哪国人？",
-        items: [
-          { id: "1", text: "你" },
-          { id: "2", text: "是" },
-          { id: "3", text: "哪" },
-          { id: "4", text: "国" },
-          { id: "5", text: "人" },
-          { id: "6", text: "？" }
-        ],
-        correctOrder: ["1", "2", "3", "4", "5", "6"],
-        explanation: "句型：主语(你) + 是 + 哪 + 国 + 人？"
-      }
-    },
-    {
-      type: "paixu",
-      content: {
-        title: "2. 连词成句：你想吃什么？",
-        items: [
-          { id: "1", text: "什么" },
-          { id: "2", text: "想" },
-          { id: "3", text: "你" },
-          { id: "4", text: "吃" },
-          { id: "5", text: "？" }
-        ],
-        correctOrder: ["3", "2", "4", "1", "5"],
-        explanation: "句型：主语(你) + 动词(想吃) + 宾语/疑问词(什么)？"
-      }
-    },
-    {
-      type: "paixu",
-      content: {
-        title: "3. 连词成句：他不是老师。",
-        items: [
-          { id: "1", text: "是" },
-          { id: "2", text: "不" },
-          { id: "3", text: "他" },
-          { id: "4", text: "老师" },
-          { id: "5", text: "。" }
-        ],
-        correctOrder: ["3", "2", "1", "4", "5"],
-        explanation: "否定句型：主语(他) + 不 + 是 + 名词(老师)。"
-      }
-    },
-    {
-      type: "paixu",
-      content: {
-        title: "4. 连词成句：我是学生。",
-        items: [
-          { id: "1", text: "学生" },
-          { id: "2", text: "我" },
-          { id: "3", text: "是" },
-          { id: "4", text: "。" }
-        ],
-        correctOrder: ["2", "3", "1", "4"],
-        explanation: "基本句型：A(我) 是 B(学生)。"
-      }
-    },
-    {
-      type: "paixu",
-      content: {
-        title: "5. 连词成句：你叫什么名字？",
-        items: [
-          { id: "1", text: "名字" },
-          { id: "2", text: "你" },
-          { id: "3", text: "什么" },
-          { id: "4", text: "叫" },
-          { id: "5", text: "？" }
-        ],
-        correctOrder: ["2", "4", "3", "1", "5"],
-        explanation: "询问名字：你 + 叫 + 什么 + 名字？"
-      }
-    },
-    {
-      type: "paixu",
-      content: {
-        title: "6. 连词成句：他是谁？",
-        items: [
-          { id: "1", text: "谁" },
-          { id: "2", text: "他" },
-          { id: "3", text: "是" },
-          { id: "4", text: "？" }
-        ],
-        correctOrder: ["2", "3", "1", "4"],
-        explanation: "询问身份：主语(他) + 是 + 谁(Who)？"
-      }
-    },
-    {
-      type: "paixu",
-      content: {
-        title: "7. 连词成句：你是中国人吗？",
-        items: [
-          { id: "1", text: "中国人" },
-          { id: "2", text: "吗" },
-          { id: "3", text: "你" },
-          { id: "4", text: "是" },
-          { id: "5", text: "？" }
-        ],
-        correctOrder: ["3", "4", "1", "2", "5"],
-        explanation: "是非问句：陈述句(你是中国人) + 吗？"
-      }
-    },
-    {
-      type: "paixu",
-      content: {
-        title: "8. 连词成句：这是什么？",
-        items: [
-          { id: "1", text: "什么" },
-          { id: "2", text: "是" },
-          { id: "3", text: "这" },
-          { id: "4", text: "？" }
-        ],
-        correctOrder: ["3", "2", "1", "4"],
-        explanation: "辨认物体：这 + 是 + 什么？"
-      }
-    },
-    {
-      type: "paixu",
-      content: {
-        title: "9. 连词成句：我叫李华。",
-        items: [
-          { id: "1", text: "李华" },
-          { id: "2", text: "我" },
-          { id: "3", text: "叫" },
-          { id: "4", text: "。" }
-        ],
-        correctOrder: ["2", "3", "1", "4"],
-        explanation: "自我介绍：主语(我) + 叫 + 名字(李华)。"
-      }
-    },
-    {
-      type: "paixu",
-      content: {
-        title: "10. 连词成句：她是我的老师。",
-        items: [
-          { id: "1", text: "老师" },
-          { id: "2", text: "她" },
-          { id: "3", text: "是" },
-          { id: "4", text: "我" },
-          { id: "5", text: "的" },
-          { id: "6", text: "。" }
-        ],
-        correctOrder: ["2", "3", "4", "5", "1", "6"],
-        explanation: "领属关系：她 + 是 + 我 + 的 + 老师。"
-      }
-    },
-    {
-      type: "paixu",
-      content: {
-        title: "11. 连词成句：哪本书是你的？",
-        items: [
-          { id: "1", text: "书" },
-          { id: "2", text: "你" },
-          { id: "3", text: "哪" },
-          { id: "4", text: "的" },
-          { id: "5", text: "是" },
-          { id: "6", text: "本" },
-          { id: "7", text: "？" }
-        ],
-        correctOrder: ["3", "6", "1", "5", "2", "4", "7"],
-        explanation: "选择问句：哪(Which) + 本(量词) + 书 + 是 + 你的？"
-      }
-    },
-    {
-      type: "paixu",
-      content: {
-        title: "12. 连词成句：他不是美国人。",
-        items: [
-          { id: "1", text: "人" },
-          { id: "2", text: "不是" },
-          { id: "3", text: "美国" },
-          { id: "4", text: "他" },
-          { id: "5", text: "。" }
-        ],
-        correctOrder: ["4", "2", "3", "1", "5"],
-        explanation: "否定句：他 + 不是 + 美国人。"
-      }
-    },
-    {
-      type: "paixu",
-      content: {
-        title: "13. 连词成句：我也不是学生。",
-        items: [
-          { id: "1", text: "学生" },
-          { id: "2", text: "也" },
-          { id: "3", text: "我" },
-          { id: "4", text: "不是" },
-          { id: "5", text: "。" }
-        ],
-        correctOrder: ["3", "2", "4", "1", "5"],
-        explanation: "“也”(Also) 放在主语后，否定词前。我 + 也 + 不是 + 学生。"
-      }
-    },
-    {
-      type: "paixu",
-      content: {
-        title: "14. 连词成句：那个人是谁？",
-        items: [
-          { id: "1", text: "是" },
-          { id: "2", text: "那个" },
-          { id: "3", text: "人" },
-          { id: "4", text: "谁" },
-          { id: "5", text: "？" }
-        ],
-        correctOrder: ["2", "3", "1", "4", "5"],
-        explanation: "那个 + 人(主语) + 是 + 谁？"
-      }
-    },
-    {
-      type: "paixu",
-      content: {
-        title: "15. 连词成句：你们是同学吗？",
-        items: [
-          { id: "1", text: "是" },
-          { id: "2", text: "吗" },
-          { id: "3", text: "同学" },
-          { id: "4", text: "你们" },
-          { id: "5", text: "？" }
-        ],
-        correctOrder: ["4", "1", "3", "2", "5"],
-        explanation: "你们 + 是 + 同学 + 吗(Yes/No)？"
-      }
-    },
-    {
-      type: "paixu",
-      content: {
-        title: "16. 连词成句：这是汉语书吗？",
-        items: [
-          { id: "1", text: "汉语" },
-          { id: "2", text: "吗" },
-          { id: "3", text: "是" },
-          { id: "4", text: "这" },
-          { id: "5", text: "书" },
-          { id: "6", text: "？" }
-        ],
-        correctOrder: ["4", "3", "1", "5", "2", "6"],
-        explanation: "这 + 是 + 汉语书 + 吗？"
-      }
-    },
-    {
-      type: "paixu",
-      content: {
-        title: "17. 连词成句：大卫也是美国人。",
-        items: [
-          { id: "1", text: "是" },
-          { id: "2", text: "也" },
-          { id: "3", text: "美国人" },
-          { id: "4", text: "大卫" },
-          { id: "5", text: "。" }
-        ],
-        correctOrder: ["4", "2", "1", "3", "5"],
-        explanation: "大卫 + 也 + 是 + 美国人。"
-      }
-    },
-    {
-      type: "paixu",
-      content: {
-        title: "18. 连词成句：你想喝什么？",
-        items: [
-          { id: "1", text: "喝" },
-          { id: "2", text: "什么" },
-          { id: "3", text: "你" },
-          { id: "4", text: "想" },
-          { id: "5", text: "？" }
-        ],
-        correctOrder: ["3", "4", "1", "2", "5"],
-        explanation: "你 + 想 + 喝 + 什么？"
-      }
-    },
-    {
-      type: "paixu",
-      content: {
-        title: "19. 连词成句：我的朋友是缅甸人。",
-        items: [
-          { id: "1", text: "的" },
-          { id: "2", text: "是" },
-          { id: "3", text: "我" },
-          { id: "4", text: "缅甸人" },
-          { id: "5", text: "朋友" },
-          { id: "6", text: "。" }
-        ],
-        correctOrder: ["3", "1", "5", "2", "4", "6"],
-        explanation: "我的朋友 + 是 + 缅甸人。"
-      }
-    },
-    {
-      type: "paixu",
-      content: {
-        title: "20. 连词成句：李老师不是中国人。",
-        items: [
-          { id: "1", text: "李" },
-          { id: "2", text: "是" },
-          { id: "3", text: "老师" },
-          { id: "4", text: "不" },
-          { id: "5", text: "中国人" },
-          { id: "6", text: "。" }
-        ],
-        correctOrder: ["1", "3", "4", "2", "5", "6"],
-        explanation: "李老师(主语) + 不 + 是 + 中国人。"
-      }
-    },
-
-    // ==========================================
-    // 6. 结束页面
-    // ==========================================
-    {
-      type: "end",
-      content: {
-        title: "第一课完成！",
-        description: "你太棒了！你已经掌握了中文最常用的提问方式。"
-      }
-    }
-  ]
+const stopAllAudio = () => {
+  try { Howler.unload(); } catch (e) {}
+  const audioElements = document.getElementsByTagName('audio');
+  for (let i = 0; i < audioElements.length; i++) {
+    try {
+      audioElements[i].pause();
+      audioElements[i].currentTime = 0;
+    } catch (e) {}
+  }
 };
+
+const playR2Audio = (wordObj) => {
+  stopAllAudio();
+  
+  // 核心逻辑：如果有 ID 和等级，尝试播放真实音频
+  if (wordObj && wordObj.id && wordObj.hsk_level) {
+    const formattedId = String(wordObj.id).padStart(4, '0'); // 例如 1 -> 0001
+    const level = wordObj.hsk_level;
+    const audioUrl = `https://audio.886.best/chinese-vocab-audio/hsk${level}/${formattedId}.mp3`;
+
+    const sound = new Howl({
+      src: [audioUrl],
+      html5: true, 
+      volume: 1.0,
+      onloaderror: () => {
+        console.warn("R2 Audio missing, fallback to TTS");
+        playTTS(wordObj.word);
+      },
+      onplayerror: () => {
+        playTTS(wordObj.word);
+      }
+    });
+    sound.play();
+  } else {
+    // 数据不完整时，直接 TTS
+    playTTS(wordObj?.word || "Error");
+  }
+};
+
+const playSpellingAudio = (pyWithTone) => {
+  return new Promise((resolve) => {
+    const filename = encodeURIComponent(pyWithTone); 
+    const url = `https://audio.886.best/chinese-vocab-audio/%E6%8B%BC%E8%AF%BB%E9%9F%B3%E9%A2%91/${filename}.mp3`;
+    
+    const sound = new Howl({
+      src: [url],
+      html5: true,
+      onend: resolve,
+      onloaderror: resolve,
+      onplayerror: resolve
+    });
+    sound.play();
+  });
+};
+
+const playTTS = (text) => {
+  if (!text) return;
+  try { Howler.unload(); } catch(e){}
+  // 使用微软中文语音
+  const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=zh-CN-XiaoyouNeural`;
+  const audio = new Audio(url);
+  audio.play().catch(e => console.error("TTS error", e));
+};
+
+// ==========================================
+// 2. 拼读弹窗组件 (带录音)
+// ==========================================
+
+const SpellingModal = ({ wordObj, onClose }) => {
+  const [activeCharIndex, setActiveCharIndex] = useState(-1);
+  const rawText = wordObj.word || "";
+  
+  // 录音状态
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioBlob, setAudioBlob] = useState(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+
+  useEffect(() => {
+    let isCancelled = false;
+    const runSequence = async () => {
+      const chars = rawText.split('');
+      for (let i = 0; i < chars.length; i++) {
+        if (isCancelled) return;
+        setActiveCharIndex(i);
+        const charPinyin = pinyin(chars[i], { toneType: 'symbol' });
+        await playSpellingAudio(charPinyin);
+        await new Promise(r => setTimeout(r, 150));
+      }
+      if (isCancelled) return;
+      setActiveCharIndex('all');
+      playR2Audio(wordObj);
+    };
+    runSequence();
+    return () => {
+      isCancelled = true;
+      stopAllAudio();
+    };
+  }, [rawText, wordObj]);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mediaRecorder.onstop = () => { setAudioBlob(new Blob(audioChunksRef.current, { type: 'audio/webm' })); };
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) { alert("麦克风访问失败"); }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+    }
+  };
+
+  const playUserAudio = () => {
+    if (audioBlob) {
+      const audio = new Audio(URL.createObjectURL(audioBlob));
+      audio.play();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-6" onClick={onClose}>
+      <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden flex flex-col relative animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-4 right-4 text-slate-300 hover:text-slate-500 p-2"><FaTimes size={20}/></button>
+        
+        <div className="pt-10 pb-8 px-6 flex flex-col items-center">
+          <h3 className="text-xs font-bold text-slate-400 mb-6 tracking-widest uppercase">SPELLING PRACTICE</h3>
+          
+          <div className="flex flex-wrap justify-center gap-3 mb-6">
+            {rawText.split('').map((char, idx) => {
+               const py = pinyin(char, { toneType: 'symbol' });
+               const isActive = idx === activeCharIndex || activeCharIndex === 'all';
+               return (
+                 <div key={idx} className="flex flex-col items-center">
+                   <span className={`text-lg font-mono mb-1 ${isActive ? 'text-orange-500 font-bold' : 'text-slate-300'}`}>{py}</span>
+                   <span className={`text-5xl font-black transition-transform duration-300 ${isActive ? 'text-blue-600 scale-110' : 'text-slate-700 scale-100'}`}>{char}</span>
+                 </div>
+               )
+            })}
+          </div>
+
+          <div className="w-full bg-slate-50 rounded-2xl p-5 border border-slate-100 flex flex-col items-center gap-4">
+             <div className="flex items-center gap-6">
+                {!isRecording ? (
+                  <button onClick={startRecording} className="w-14 h-14 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all">
+                    <FaMicrophone size={20} />
+                  </button>
+                ) : (
+                  <button onClick={stopRecording} className="w-14 h-14 rounded-full bg-slate-800 text-white flex items-center justify-center animate-pulse">
+                    <FaStop size={20} />
+                  </button>
+                )}
+                {audioBlob && !isRecording && (
+                  <>
+                    <button onClick={playUserAudio} className="w-14 h-14 rounded-full bg-green-500 text-white flex items-center justify-center shadow-lg hover:scale-105 transition-all">
+                      <FaPlay size={18} className="ml-1" />
+                    </button>
+                    <button onClick={() => setAudioBlob(null)} className="flex flex-col items-center text-slate-400 text-xs">
+                       <FaRedo size={14} className="mb-1"/> 重录
+                    </button>
+                  </>
+                )}
+             </div>
+             <div className="text-xs text-slate-400 font-medium">
+                {isRecording ? "正在录音..." : (audioBlob ? "点击播放对比" : "点击麦克风跟读")}
+             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==========================================
+// 3. 简单的例句组件
+// ==========================================
+
+const SimpleExampleRow = ({ text, translation }) => {
+  const py = pinyin(text, { toneType: 'symbol' });
+  return (
+    <div 
+      className="flex flex-col items-start p-4 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md hover:border-blue-100 transition-all cursor-pointer group active:scale-[0.99]"
+      onClick={() => playTTS(text)}
+    >
+      <div className="flex items-start gap-3 w-full">
+        <div className="mt-1 w-1 h-8 bg-orange-200 rounded-full flex-none group-hover:bg-orange-400 transition-colors"></div>
+        <div className="flex-1">
+            <div className="text-xs text-slate-400 mb-1 font-mono">{py}</div>
+            <div className="text-lg text-slate-800 font-medium leading-relaxed mb-1">{text}</div>
+            {translation && (
+              <div className="text-sm text-slate-500 font-['Padauk'] leading-relaxed opacity-90">
+                {translation}
+              </div>
+            )}
+        </div>
+        <div className="opacity-0 group-hover:opacity-100 text-blue-400 self-center transition-opacity">
+           <FaVolumeUp />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==========================================
+// 4. 数据 (HSK1 生词表)
+// ==========================================
+
+const HSK1_VOCAB_DATA = [
+  { id: 1, hsk_level: 1, word: "你", pinyin: "nǐ", pos: "代 (Pron.)", definition: "သင် / မင်း", sound_burmese: "နီ", example: "你好。", example_burmese: "မင်္ဂလာပါ။", example2: "你是学生吗？", example2_burmese: "မင်းက ကျောင်းသားလား။" },
+  { id: 2, hsk_level: 1, word: "好", pinyin: "hǎo", pos: "形 (Adj.)", definition: "ကောင်းသော", sound_burmese: "ဟောင်", example: "很好。", example_burmese: "သိပ်ကောင်းတယ်။", example2: "你好吗？", example2_burmese: "နေကောင်းလား။" },
+  { id: 6, hsk_level: 1, word: "您", pinyin: "nín", pos: "代 (Pron.)", definition: "ခင်ဗျား / ရှင် (ယဉ်ကျေးသော)", sound_burmese: "နင်", example: "您好。", example_burmese: "မင်္ဂလာပါ (ယဉ်ကျေးသော)။", example2: "谢谢您。", example2_burmese: "ကျေးဇူးတင်ပါတယ်။" },
+  { id: 4, hsk_level: 1, word: "你们", pinyin: "nǐ men", pos: "代 (Pron.)", definition: "သင်တို့ / မင်းတို့", sound_burmese: "နီမန်", example: "你们好。", example_burmese: "မင်းတို့အားလုံး မင်္ဂလာပါ။", example2: "你们是老师吗？", example2_burmese: "မင်းတို့က ဆရာတွေလား။" },
+  { id: 5, hsk_level: 1, word: "对不起", pinyin: "duì bu qǐ", pos: "动 (Verb)", definition: "တောင်းပန်ပါတယ်", sound_burmese: "တွေ့ဘုချီ", example: "对不起，我来晚了。", example_burmese: "တောင်းပန်ပါတယ်၊ ကျွန်တော် နောက်ကျသွားတယ်။", example2: "对不起。", example2_burmese: "ဆောရီးပါ။" },
+  { id: 6, hsk_level: 1, word: "没关系", pinyin: "méi guān xi", pos: "短语 (Phrase)", definition: "ကိစ္စမရှိပါဘူး / ရပါတယ်", sound_burmese: "မေကွမ်းရှီ", example: "A: 对不起。 B: 没关系。", example_burmese: "A: တောင်းပန်ပါတယ်။ B: ရပါတယ်။", example2: "真的没关系。", example2_burmese: "တကယ် ကိစ္စမရှိပါဘူး။" },
+  { id: 7, hsk_level: 1, word: "谢谢", pinyin: "xiè xie", pos: "动 (Verb)", definition: "ကျေးဇူးတင်ပါတယ်", sound_burmese: "ရှဲ့ရှဲ့", example: "谢谢你。", example_burmese: "မင်းကို ကျေးဇူးတင်ပါတယ်။", example2: "不，谢谢。", example2_burmese: "ဟင့်အင်း၊ ကျေးဇူးပါ။" },
+  { id: 8, hsk_level: 1, word: "不", pinyin: "bù", pos: "副 (Adv.)", definition: "မ (ငြင်းပယ်ခြင်း)", sound_burmese: "ပု", example: "不是。", example_burmese: "မဟုတ်ဘူး။", example2: "不好。", example2_burmese: "မကောင်းဘူး။" },
+  { id: 9, hsk_level: 1, word: "不客气", pinyin: "bú kè qi", pos: "短语 (Phrase)", definition: "အားမနာပါနဲ့ / ရပါတယ်", sound_burmese: "ပုခေါ်ချိ", example: "A: 谢谢。 B: 不客气。", example_burmese: "A: ကျေးဇူးပါ။ B: ရပါတယ်။", example2: "您太客气了。", example2_burmese: "ခင်ဗျားက အရမ်း အားနာတတ်တာပဲ။" },
+  { id: 10, hsk_level: 1, word: "再见", pinyin: "zài jiàn", pos: "动 (Verb)", definition: "နှုတ်ဆက်ပါတယ် / နောက်မှတွေ့မယ်", sound_burmese: "စိုက်ကျန်", example: "再见，明天见。", example_burmese: "တာတာ၊ မနက်ဖြန်မှ တွေ့မယ်။", example2: "老师再见。", example2_burmese: "ဆရာ တာတာ။" },
+  { id: 24, hsk_level: 1, word: "叫", pinyin: "jiào", pos: "动 (Verb)", definition: "ခေါ်သည် / အမည်တွင်သည်", sound_burmese: "ကျောက်", example: "你叫什么名字？", example_burmese: "မင်းနာမည် ဘယ်လိုခေါ်လဲ။", example2: "我叫大卫。", example2_burmese: "ကျွန်တော့်နာမည် ဒေးဗစ်ပါ။" },
+  { id: 25, hsk_level: 1, word: "什么", pinyin: "shén me", pos: "代 (Pron.)", definition: "ဘာလဲ", sound_burmese: "ရှင်မ", example: "这是什么？", example_burmese: "ဒါဘာလဲ။", example2: "你说什么？", example2_burmese: "မင်းဘာပြောလိုက်တာလဲ။" },
+  { id: 26, hsk_level: 1, word: "名字", pinyin: "míng zi", pos: "名 (Noun)", definition: "နာမည်", sound_burmese: "မင်းဇ", example: "你的名字很好听。", example_burmese: "မင်းနာမည်က သိပ်ကောင်းတာပဲ။", example2: "写下你的名字。", example2_burmese: "မင်းနာမည်ကို ရေးပါ။" },
+  { id: 14, hsk_level: 1, word: "我", pinyin: "wǒ", pos: "代 (Pron.)", definition: "ကျွန်တော် / ကျွန်မ", sound_burmese: "ဝေါ", example: "我是学生。", example_burmese: "ကျွန်တော်က ကျောင်းသားပါ။", example2: "我不去。", example2_burmese: "ကျွန်တော် မသွားဘူး။" },
+  { id: 15, hsk_level: 1, word: "是", pinyin: "shì", pos: "动 (Verb)", definition: "ဖြစ်သည် / ဟုတ်သည်", sound_burmese: "ရှီ", example: "他是老师。", example_burmese: "သူက ဆရာတစ်ယောက် ဖြစ်တယ်။", example2: "是吗？", example2_burmese: "ဟုတ်လား။" },
+  { id: 16, hsk_level: 1, word: "老师", pinyin: "lǎo shī", pos: "名 (Noun)", definition: "ဆရာ / ဆရာမ", sound_burmese: "လောင်ရှီ", example: "王老师。", example_burmese: "ဆရာဝမ်။", example2: "老师好。", example_burmese: "မင်္ဂလာပါ ဆရာ။" },
+  { id: 17, hsk_level: 1, word: "吗", pinyin: "ma", pos: "助 (Part.)", definition: "လား (မေးခွန်း)", sound_burmese: "မာ", example: "你好吗？", example_burmese: "နေကောင်းလား။", example2: "是中国人吗？", example2_burmese: "တရုတ်လူမျိုးလား။" },
+  { id: 18, hsk_level: 1, word: "学生", pinyin: "xué sheng", pos: "名 (Noun)", definition: "ကျောင်းသား", sound_burmese: "ရွှယ်ရှန်", example: "我们是学生。", example_burmese: "ကျွန်တော်တို့က ကျောင်းသားတွေပါ။", example2: "小学生。", example2_burmese: "မူလတန်းကျောင်းသား။" },
+  { id: 19, hsk_level: 1, word: "人", pinyin: "rén", pos: "名 (Noun)", definition: "လူ", sound_burmese: "ရန်", example: "中国人。", example_burmese: "တရုတ်လူမျိုး။", example2: "好人。", example2_burmese: "လူကောင်း။" },
+  { id: 20, hsk_level: 1, word: "中国", pinyin: "zhōng guó", pos: "名 (Noun)", definition: "တရုတ်ပြည်", sound_burmese: "ကျုံးကွော်", example: "我在中国。", example_burmese: "ကျွန်တော် တရုတ်ပြည်မှာ ရှိတယ်။", example2: "中国菜。", example2_burmese: "တရုတ်ဟင်း။" },
+  { id: 21, hsk_level: 1, word: "美国", pinyin: "měi guó", pos: "名 (Noun)", definition: "အမေရိကန်", sound_burmese: "မေကွော်", example: "他是美国人。", example_burmese: "သူက အမေရိကန်လူမျိုး။", example2: "去美国。", example2_burmese: "အမေရိကန်ကို သွားမယ်။" },
+  { id: 36, hsk_level: 1, word: "她", pinyin: "tā", pos: "代 (Pron.)", definition: "သူမ", sound_burmese: "ထာ", example: "她是我的朋友。", example_burmese: "သူမက ကျွန်တော့် သူငယ်ချင်းပါ။", example2: "她来了。", example2_burmese: "သူမ လာပြီ။" },
+  { id: 28, hsk_level: 1, word: "谁", pinyin: "shéi", pos: "代 (Pron.)", definition: "ဘယ်သူလဲ", sound_burmese: "ရှေ", example: "他是谁？", example_burmese: "သူဘယ်သူလဲ။", example2: "谁的书？", example2_burmese: "ဘယ်သူ့စာအုပ်လဲ။" },
+  { id: 29, hsk_level: 1, word: "的", pinyin: "de", pos: "助 (Part.)", definition: "၏ / သော", sound_burmese: "တ", example: "我的书。", example_burmese: "ကျွန်တော့်ရဲ့ စာအုပ်။", example2: "红色的。", example2_burmese: "အနီရောင်။" },
+  { id: 30, hsk_level: 1, word: "汉语", pinyin: "hàn yǔ", pos: "名 (Noun)", definition: "တရုတ်စာ / တရုတ်စကား", sound_burmese: "ဟန်ယွီ", example: "说汉语。", example_burmese: "တရုတ်စကား ပြောတယ်။", example2: "汉语很难。", example_burmese: "တရုတ်စာ ခက်တယ်။" },
+  { id: 32, hsk_level: 1, word: "哪", pinyin: "nǎ", pos: "代 (Pron.)", definition: "ဘယ်", sound_burmese: "နာ", example: "哪个人？", example_burmese: "ဘယ်လူလဲ။", example2: "哪怕。", example2_burmese: "ဘယ်လိုပဲဖြစ်ဖြစ်။" },
+  { id: 33, hsk_level: 1, word: "国", pinyin: "guó", pos: "名 (Noun)", definition: "နိုင်ငံ", sound_burmese: "ကွော်", example: "哪国人？", example_burmese: "ဘယ်နိုင်ငံသားလဲ။", example2: "国家。", example2_burmese: "နိုင်ငံ။" },
+  { id: 34, hsk_level: 1, word: "呢", pinyin: "ne", pos: "助 (Part.)", definition: "ရော / လဲ", sound_burmese: "န", example: "你呢？", example_burmese: "မင်းရော။", example2: "他在哪儿呢？", example2_burmese: "သူဘယ်မှာလဲ။" },
+  { id: 35, hsk_level: 1, word: "他", pinyin: "tā", pos: "代 (Pron.)", definition: "သူ (ယောက်ျား)", sound_burmese: "ထာ", example: "他是谁？", example_burmese: "သူဘယ်သူလဲ။", example2: "问他。", example2_burmese: "သူ့ကို မေးလိုက်။" },
+  { id: 37, hsk_level: 1, word: "同学", pinyin: "tóng xué", pos: "名 (Noun)", definition: "အတန်းဖော်", sound_burmese: "ထုံးရွှယ်", example: "老同学。", example_burmese: "အတန်းဖော်ဟောင်း။", example2: "同学们好。", example_burmese: "အတန်းဖော်တို့ မင်္ဂလာပါ။" },
+  { id: 38, hsk_level: 1, word: "朋友", pinyin: "péng you", pos: "名 (Noun)", definition: "သူငယ်ချင်း", sound_burmese: "ဖုန်ယို", example: "好朋友。", example_burmese: "သူငယ်ချင်းကောင်း။", example2: "朋友们。", example2_burmese: "သူငယ်ချင်းများ။" }
+];
+
+// ==========================================
+// 5. 主组件
+// ==========================================
+
+export default function WordStudyPlayer({ data = { words: HSK1_VOCAB_DATA }, onNext, onPrev }) {
+  const words = data.words;
+  const [index, setIndex] = useState(0);
+  const [showSpelling, setShowSpelling] = useState(false);
+  const currentWord = words[index];
+  const total = words.length;
+
+  useEffect(() => {
+    // 切换单词时自动播放
+    if (currentWord) {
+      const timer = setTimeout(() => {
+        playR2Audio(currentWord);
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [index, currentWord]);
+
+  const handleNext = () => {
+    if (index < total - 1) setIndex(index + 1);
+    else if (onNext) onNext();
+  };
+
+  if (!currentWord) return <div>Loading...</div>;
+
+  return (
+    <div className="w-full h-[100dvh] flex flex-col bg-slate-50 text-slate-800 relative overflow-hidden font-sans">
+      
+      {/* 顶部进度条 */}
+      <div className="flex-none h-16 px-6 flex items-center justify-between z-10 bg-white shadow-sm">
+        <div className="flex items-center gap-2 text-slate-500 font-bold">
+           <FaBookOpen className="text-blue-500"/>
+           <span>HSK 1</span>
+        </div>
+        <div className="text-slate-400 text-sm font-mono bg-slate-100 px-3 py-1 rounded-full">
+          {index + 1} <span className="text-slate-300">/</span> {total}
+        </div>
+      </div>
+
+      {/* 主滚动区域 */}
+      <div className="flex-1 overflow-y-auto pb-40 px-6 no-scrollbar">
+        <div className="max-w-md mx-auto w-full pt-8 flex flex-col items-center">
+          
+          {/* 单词卡片 */}
+          <div className="w-full bg-white rounded-3xl shadow-xl shadow-slate-200/50 p-6 mb-8 flex flex-col items-center relative overflow-hidden border border-white">
+            {/* 背景装饰 */}
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-400 to-indigo-500"></div>
+
+            {/* 拼音 */}
+            <div className="text-xl text-slate-400 font-mono font-medium mb-1 mt-4">{currentWord.pinyin}</div>
+            
+            {/* 汉字 */}
+            <h1 
+              className="text-5xl font-black text-slate-800 mb-3 cursor-pointer active:scale-95 transition-transform"
+              onClick={() => playR2Audio(currentWord)}
+            >
+              {currentWord.word}
+            </h1>
+
+            {/* 词性标记 */}
+            <div className="mb-4 px-3 py-0.5 bg-slate-100 text-slate-400 text-xs rounded-md font-bold tracking-wide">
+              {currentWord.pos}
+            </div>
+
+            {/* 缅文释义 */}
+            <div className="text-center w-full mb-4">
+               <div className="text-2xl font-bold text-blue-900 mb-1 font-['Padauk'] leading-normal">
+                 {currentWord.definition}
+               </div>
+            </div>
+
+            {/* 缅文谐音 (模拟发音) */}
+            <div className="flex items-center gap-2 bg-yellow-50 px-4 py-2 rounded-full border border-yellow-100 mb-6">
+               <span className="text-xs font-bold text-yellow-600 uppercase">Sound</span>
+               <span className="text-lg font-bold text-slate-700 font-['Padauk']">{currentWord.sound_burmese}</span>
+            </div>
+
+            {/* 操作按钮 */}
+            <div className="flex items-center gap-4 w-full justify-center">
+               <button 
+                  onClick={() => setShowSpelling(true)}
+                  className="flex-1 bg-blue-50 text-blue-600 py-3 rounded-xl font-bold text-sm hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
+               >
+                 <FaMagic /> 拼读
+               </button>
+               <button 
+                  onClick={() => playR2Audio(currentWord)}
+                  className="w-12 h-12 bg-indigo-600 text-white rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200 hover:bg-indigo-700 active:scale-95 transition-all"
+               >
+                 <FaVolumeUp size={20}/>
+               </button>
+            </div>
+          </div>
+
+          {/* 例句区域 */}
+          <div className="w-full space-y-4 mb-8">
+             <div className="text-xs font-bold text-slate-400 ml-2 uppercase tracking-wider">Examples</div>
+             {currentWord.example && (
+                <SimpleExampleRow text={currentWord.example} translation={currentWord.example_burmese} />
+             )}
+             {currentWord.example2 && (
+                <SimpleExampleRow text={currentWord.example2} translation={currentWord.example2_burmese} />
+             )}
+          </div>
+
+        </div>
+      </div>
+
+      {/* 底部按钮区域 - 稍微上移 */}
+      <div 
+        className="fixed bottom-0 left-0 right-0 z-30 bg-white/80 backdrop-blur-md border-t border-slate-100 px-6 pt-4 pb-10" // pb-10 增加底部留白
+      >
+        <div className="max-w-md mx-auto">
+          <button 
+            onClick={handleNext}
+            className="w-full h-14 bg-slate-900 text-white rounded-2xl font-bold text-lg shadow-xl shadow-slate-300 hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-3"
+          >
+            {index === total - 1 ? "完成学习" : "继续"} <FaChevronRight size={14} className="text-slate-400" />
+          </button>
+        </div>
+      </div>
+
+      {/* 弹窗 */}
+      {showSpelling && <SpellingModal wordObj={currentWord} onClose={() => setShowSpelling(false)} />}
+    </div>
+  );
+}
