@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/router';
-import { FaPlay, FaHome, FaRedo, FaStar, FaRegStar, FaClock, FaMedal } from "react-icons/fa";
+// --- 修改点 1: 导入全屏控制图标 ---
+import { FaPlay, FaHome, FaRedo, FaStar, FaRegStar, FaClock, FaMedal, FaExpand, FaCompress } from "react-icons/fa";
 import confetti from 'canvas-confetti';
 
 // --- 核心全屏播放器组件 ---
@@ -223,72 +224,103 @@ export default function InteractiveLesson({ lesson }) {
   const [hasMounted, setHasMounted] = useState(false);
   
   // 核心状态
-  const [dynamicBlocks, setDynamicBlocks] = useState([]); // 动态题目队列（含错题重做）
+  const [dynamicBlocks, setDynamicBlocks] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [mistakeCount, setMistakeCount] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
   
-  // 使用 Ref 追踪课程ID，防止父组件重渲染时重置 dynamicBlocks 导致错题丢失
   const initializedLessonId = useRef(null);
   
   // 计时器状态
   const [timeSpent, setTimeSpent] = useState(0);
   const timerRef = useRef(null);
 
-  // 初始化：仅在课程 ID 变化时重置题目队列
+  // --- 修改点 2: 添加全屏状态和 Ref ---
+  const lessonContainerRef = useRef(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // --- 修改点 3: 实现进入和退出全屏的函数 ---
+  const enterFullscreen = useCallback(() => {
+    const elem = lessonContainerRef.current;
+    if (elem) {
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen().catch(err => console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`));
+      } else if (elem.webkitRequestFullscreen) { // Safari
+        elem.webkitRequestFullscreen();
+      } else if (elem.msRequestFullscreen) { // IE11
+        elem.msRequestFullscreen();
+      }
+    }
+  }, []);
+
+  const exitFullscreen = useCallback(() => {
+    if (document.exitFullscreen) {
+      document.exitFullscreen();
+    } else if (document.webkitExitFullscreen) { // Safari
+      document.webkitExitFullscreen();
+    } else if (document.msExitFullscreen) { // IE11
+      document.msExitFullscreen();
+    }
+  }, []);
+  
+  // --- 修改点 4: 添加 Effect 来监听全屏状态变化 ---
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      // document.fullscreenElement will be null if not in fullscreen
+      setIsFullscreen(!!document.fullscreenElement || !!document.webkitFullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange); // For Safari
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
+
+  // 初始化
   useEffect(() => {
     setHasMounted(true);
-    
-    // 如果 lesson 数据存在，且是新课程（ID不同），则初始化
     if (lesson?.blocks && lesson.id !== initializedLessonId.current) {
       setDynamicBlocks(lesson.blocks);
       initializedLessonId.current = lesson.id;
-      // 重置状态
       setCurrentIndex(0);
       setMistakeCount(0);
       setTimeSpent(0);
       setIsFinished(false);
     } 
-    // 兜底：如果 dynamicBlocks 为空（首次加载无ID情况），强制初始化
     else if (lesson?.blocks && dynamicBlocks.length === 0) {
       setDynamicBlocks(lesson.blocks);
     }
-    // 注意：这里删除了 else { setDynamicBlocks(lesson.blocks) }，
-    // 这样当父组件重渲染时，已经加入队列的错题不会被覆盖消失。
   }, [lesson, dynamicBlocks.length]);
 
-  // 获取当前块
   const currentBlock = dynamicBlocks[currentIndex];
   const type = currentBlock?.type?.toLowerCase() || '';
 
-  // --- 智能计时器逻辑 ---
+  // 智能计时器逻辑
   useEffect(() => {
     if (!hasMounted || isFinished) return;
-
-    // 定义哪些页面不需要计时（学习类）
     const isLearningPhase = ['cover', 'start_page', 'word_study', 'grammar_study', 'phrase_study', 'end'].includes(type);
-
     if (!isLearningPhase) {
-      // 如果是做题页面，开启计时
       timerRef.current = setInterval(() => {
         setTimeSpent(prev => prev + 1);
       }, 1000);
     }
-
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [hasMounted, isFinished, type]); // 依赖 type，切换页面时重新判断
+  }, [hasMounted, isFinished, type]);
 
   // 进度条计算
   const progressPercent = useMemo(() => {
     if (!dynamicBlocks.length) return 0;
-    // 使用 currentIndex / 动态长度。如果错题增加，分母变大，进度条会“倒退”，符合逻辑
     return ((currentIndex + 1) / dynamicBlocks.length) * 100;
   }, [currentIndex, dynamicBlocks.length]);
 
-  // --- 核心动作 ---
 
+  // --- 核心动作 ---
   const goNext = useCallback(() => {
     audioManager.stop();
     if (currentIndex < dynamicBlocks.length - 1) {
@@ -298,16 +330,25 @@ export default function InteractiveLesson({ lesson }) {
     }
   }, [currentIndex, dynamicBlocks.length]);
 
+  // --- 修改点 5: 创建一个新的开始函数，用于触发全屏 ---
+  const handleStartLesson = useCallback(() => {
+    enterFullscreen();
+    goNext();
+  }, [enterFullscreen, goNext]);
+
   const handleFinish = () => {
     setIsFinished(true);
-    // 撒花庆祝
+    // 如果在全屏，则退出
+    if (isFullscreen) {
+      exitFullscreen();
+    }
     confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
     audioManager.playTTS("恭喜你完成课程", 'zh');
   };
 
   const handleRestart = () => {
     if (lesson?.blocks) {
-      setDynamicBlocks(lesson.blocks); // 重置为原始题目
+      setDynamicBlocks(lesson.blocks);
     }
     setCurrentIndex(0);
     setMistakeCount(0);
@@ -315,36 +356,20 @@ export default function InteractiveLesson({ lesson }) {
     setIsFinished(false);
   };
 
-  // --- 错题沉底逻辑 (核心修复) ---
   const handleWrong = useCallback(() => {
-    // 1. 记录错误次数
     setMistakeCount(prev => prev + 1);
-
-    // 2. 复制当前题目并添加到队尾
-    // 必须使用 functional update (prev => ...) 确保拿到最新的 blocks
     setDynamicBlocks(prev => {
-      // 防止在同一题重复添加：检查最后一个元素是否已经是当前题的副本
       const currentBlockData = prev[currentIndex];
-      
-      // 生成一个重做副本 (添加 retry 标记)
-      const retryBlock = { 
-        ...currentBlockData, 
-        _isRetry: true // 内部标记
-      };
-      
+      const retryBlock = { ...currentBlockData, _isRetry: true };
       console.log("错题已加入重做队列:", retryBlock);
       return [...prev, retryBlock];
     });
-
-    // 注意：这里不调用 goNext()。逻辑是 UI 显示错误 -> 用户点继续 -> 调用 onNext。
   }, [currentIndex]);
 
 
   // --- 渲染逻辑 ---
-  
   if (!hasMounted) return null;
 
-  // 渲染完成页
   if (isFinished) {
     return (
       <SummaryBlock 
@@ -356,39 +381,35 @@ export default function InteractiveLesson({ lesson }) {
     );
   }
 
-  // 渲染题目块
   const renderContent = () => {
     if (!currentBlock) return <div className="p-10 text-center text-slate-400">Loading Lesson...</div>;
 
     const commonProps = {
-      key: `${currentIndex}-${currentBlock.id || 'idx'}`, // 确保 Key 唯一，触发重渲染
+      key: `${currentIndex}-${currentBlock.id || 'idx'}`,
       data: currentBlock.content,
-      onNext: goNext,          // 通用下一步
-      onComplete: goNext,      // 学习类页面完成
-      onCorrect: goNext,       // 答对 -> 下一步
-      onWrong: handleWrong,    // 答错 -> 错题沉底
+      onNext: goNext,
+      onComplete: goNext,
+      onCorrect: goNext,
+      onWrong: handleWrong,
       settings: { playTTS: audioManager?.playTTS },
-      isRetry: currentBlock._isRetry // 传递给子组件
+      isRetry: currentBlock._isRetry
     };
 
     switch (type) {
       case 'cover':
-      case 'start_page': return <CoverBlock {...commonProps} />;
+      case 'start_page': 
+        // --- 修改点 6: 将 onNext 指向新的 handleStartLesson 函数 ---
+        return <CoverBlock {...commonProps} onNext={handleStartLesson} />;
       
-      // 学习类 (不计入时间，不触发错题)
       case 'word_study': return <WordStudyPlayer {...commonProps} />;
       case 'phrase_study': 
       case 'sentences': return <CardListRenderer {...commonProps} type={type} />;
       case 'grammar_study': return <GrammarPointPlayer grammarPoints={commonProps.data.grammarPoints} onComplete={goNext} />;
       
-      // 测试类 (计入时间，触发错题)
-      // XuanZeTi 使用 onIncorrect 回调，需映射到 handleWrong
       case 'choice': return <XuanZeTi {...commonProps} onIncorrect={handleWrong} />; 
-      // PaiXuTi 使用 onWrong 回调
       case 'paixu': return <PaiXuTi {...commonProps} />; 
       
       case 'lianxian': return <LianXianTi {...commonProps} />;
-      // PanDuanTi, GaiCuoTi, TianKongTi 需要根据实际组件实现添加 onWrong 映射
       case 'panduan': return <div className="p-8 text-center">暂未适配错题沉底</div>; 
       case 'gaicuo': return <GaiCuoTi {...commonProps} />;
       case 'image_match_blanks': return <TianKongTi {...commonProps} />;
@@ -404,8 +425,8 @@ export default function InteractiveLesson({ lesson }) {
   const hideTopProgressBar = ['cover', 'start_page', 'complete', 'end'].includes(type);
 
   return (
-    // 移除了 pt-24，恢复原始布局，取消顶部避让
-    <div className="fixed inset-0 w-screen h-screen bg-slate-50 flex flex-col overflow-hidden font-sans" style={{ touchAction: 'none' }}>
+    // --- 修改点 7: 附加 ref 到主容器 ---
+    <div ref={lessonContainerRef} className="fixed inset-0 w-screen h-screen bg-slate-50 flex flex-col overflow-hidden font-sans" style={{ touchAction: 'none' }}>
       <style>{`
         ::-webkit-scrollbar { display: none; } 
         * { -webkit-tap-highlight-color: transparent; }
@@ -413,10 +434,9 @@ export default function InteractiveLesson({ lesson }) {
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
       
-      {/* 顶部进度条 (极简版) */}
       {!hideTopProgressBar && (
+        // --- 修改点 8: 在顶部栏添加全屏切换按钮 ---
         <div className="absolute top-0 left-0 right-0 pt-[env(safe-area-inset-top)] px-4 py-3 z-50 pointer-events-none flex items-center justify-center gap-3 bg-slate-50/80 backdrop-blur-sm">
-           {/* 进度条槽 - 变细 h-1.5 */}
            <div className="flex-1 max-w-lg h-1.5 bg-slate-200 rounded-full overflow-hidden">
              <div 
                  className="h-full bg-green-500 rounded-full transition-all duration-500 ease-out" 
@@ -424,16 +444,23 @@ export default function InteractiveLesson({ lesson }) {
              />
            </div>
 
-           {/* 重做标记 (可选) */}
            {currentBlock._isRetry && (
              <div className="text-orange-500 font-bold text-[10px] flex items-center gap-1 bg-orange-50 px-2 py-0.5 rounded-full animate-pulse border border-orange-100">
-               <FaRedo size={10} /> <span>ပြန်ဖြေ</span> {/* 重做 */}
+               <FaRedo size={10} /> <span>ပြန်ဖြေ</span>
              </div>
            )}
+
+           {/* 全屏按钮 */}
+           <button 
+             onClick={isFullscreen ? exitFullscreen : enterFullscreen}
+             className="absolute right-4 top-1/2 -translate-y-1/2 -mt-px text-slate-400 p-2 rounded-full hover:bg-slate-200 pointer-events-auto transition-colors"
+             aria-label={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+           >
+             {isFullscreen ? <FaCompress size={14} /> : <FaExpand size={14} />}
+           </button>
         </div>
       )}
 
-      {/* 主内容区 - 移除了 pt-24 */}
       <main className="relative w-full h-full z-10">
         {renderContent()}
       </main>
