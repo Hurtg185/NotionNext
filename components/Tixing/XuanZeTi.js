@@ -129,49 +129,55 @@ const audioController = {
 };
 
 // =================================================================================
-// 3. 样式表
+// 3. 样式表 (优化布局、防遮挡、背景融合)
 // =================================================================================
 const cssStyles = `
 .xzt-container {
   font-family: "Padauk","Noto Sans SC",sans-serif;
-  position:absolute;inset:0;
-  display:flex;flex-direction:column;
-  background:#f1f5f9;
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  background: #f1f5f9; /* 浅灰背景 */
 }
+
+/* --- 头部区域优化 --- */
 .xzt-header {
   flex-shrink: 0;
-  padding: 100px 20px 10px; /* 顶部间距增加 */
+  /* 增加顶部内边距，防止内容贴顶 */
+  padding: 80px 20px 20px; 
   display: flex; justify-content: center;
 }
-.xzt-scroll-area {
-  flex:1;overflow-y:auto;
-  padding: 10px 16px 180px; /* 底部增加留白 */
-  display:flex;flex-direction:column;align-items:center;
-}
+
 .scene-wrapper {
-  width:100%;max-width:600px;
-  display:flex;align-items:flex-start; /* 顶部对齐 */
-  gap:10px;
+  width: 100%; max-width: 600px;
+  display: flex; align-items: flex-start;
+  gap: 12px;
 }
+
+/* --- 人物图像优化 --- */
 .teacher-img {
-  height:120px;object-fit:contain;
-  mix-blend-mode:multiply; /* 去除白色背景色差 */
+  height: 120px; 
+  object-fit: contain;
+  /* 关键：正片叠底模式，让白色背景变透明，完美融入浅灰背景 */
+  mix-blend-mode: multiply; 
+  margin-top: 4px;
 }
+
+/* --- 气泡容器 --- */
 .bubble-container {
-  flex:1;background:#fff;
-  border-radius:18px 18px 18px 0;
-  padding:15px 20px;
-  border:1px solid #e2e8f0;
-  position:relative;
+  flex: 1; background: #fff;
+  border-radius: 18px 18px 18px 0;
+  padding: 18px 22px;
+  border: 1px solid #e2e8f0;
+  position: relative;
   box-shadow: 0 4px 15px rgba(0,0,0,0.03);
-  margin-top: 10px; /* 对齐人头 */
+  margin-top: 10px;
 }
 .bubble-tail {
-  position:absolute; top: 20px; left:-9px;
-  width:0;height:0;
-  border-top:8px solid transparent;
-  border-bottom:8px solid transparent;
-  border-right:10px solid #fff;
+  position: absolute; top: 20px; left: -9px;
+  width: 0; height: 0;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-right: 10px solid #fff;
 }
 .question-img {
   width: 100%; max-height: 140px;
@@ -179,84 +185,99 @@ const cssStyles = `
   margin-bottom: 12px; display: block;
 }
 
-.zh-seg{display:inline-flex;flex-direction:column;align-items:center;margin:0 2px}
-.zh-py{font-size:.7rem;color:#94a3b8}
-.zh-char{font-size:1.2rem;font-weight:700;color:#1e293b}
-.my-seg{font-size:1.1rem;font-weight:600;color:#334155; line-height: 1.6;}
+/* --- 文本样式 --- */
+.zh-seg { display: inline-flex; flex-direction: column; align-items: center; margin: 0 2px; }
+.zh-py { font-size: .75rem; color: #94a3b8; }
+.zh-char { font-size: 1.3rem; font-weight: 700; color: #1e293b; }
+.my-seg { font-size: 1.15rem; font-weight: 600; color: #334155; line-height: 1.6; }
 
-.options-grid{
-  width:95%;max-width:500px;
-  display:grid;gap:12px;margin-top:20px;
+/* --- 滚动区域 --- */
+.xzt-scroll-area {
+  flex: 1; overflow-y: auto;
+  padding: 10px 16px 200px; /* 底部预留极大空间，防止被面板遮挡 */
+  display: flex; flex-direction: column; align-items: center;
 }
-.option-card{
-  background:#fff;border-radius:16px;
-  padding:16px;border:2px solid #e2e8f0;
-  text-align:center;cursor:pointer;
+
+.options-grid {
+  width: 98%; max-width: 500px;
+  display: grid; gap: 14px; margin-top: 20px;
+}
+.option-card {
+  background: #fff; border-radius: 16px;
+  padding: 18px; border: 2px solid #e2e8f0;
+  text-align: center; cursor: pointer;
   transition: all 0.2s ease;
-  font-size: 1.1rem; font-weight: 600;
+  font-size: 1.15rem; font-weight: 600;
   color: #334155;
 }
 .option-card:active { transform: scale(0.98); }
-.option-card.selected{border-color:#3b82f6;background:#eff6ff;color:#1d4ed8}
-.option-card.correct{border-color:#10b981;background:#ecfdf5;color:#047857}
-.option-card.wrong{border-color:#ef4444;background:#fef2f2;color:#b91c1c}
+.option-card.selected { border-color: #3b82f6; background: #eff6ff; color: #1d4ed8; }
+.option-card.correct { border-color: #10b981; background: #ecfdf5; color: #047857; }
+.option-card.wrong { border-color: #ef4444; background: #fef2f2; color: #b91c1c; }
 
-/* 提交按钮位置调整 */
-.submit-bar{
-  position:absolute; bottom:0; left:0; right:0;
-  padding: 20px 20px 80px;
-  background: linear-gradient(to top, #ffffff 90%, rgba(255,255,255,0));
-  display:flex;justify-content:center;
+/* --- 提交按钮 (防遮挡优化) --- */
+.submit-bar {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  /* 增加底部 padding，把按钮顶上来，避开手机底部横条和地址栏 */
+  padding: 20px 20px calc(40px + env(safe-area-inset-bottom)); 
+  background: linear-gradient(to top, #f1f5f9 80%, rgba(241, 245, 249, 0));
+  display: flex; justify-content: center;
   z-index: 50;
+  pointer-events: none; /* 让渐变层不阻挡点击，只有按钮可点 */
 }
-.submit-btn{
+.submit-btn {
+  pointer-events: auto;
   background: #1e293b; color: white;
-  padding:14px 60px; border-radius:100px;
-  font-size:1.1rem;font-weight:700;
+  padding: 16px 70px; border-radius: 100px;
+  font-size: 1.1rem; font-weight: 700;
   border: none;
-  box-shadow: 0 4px 12px rgba(30, 41, 59, 0.25);
+  box-shadow: 0 6px 20px rgba(30, 41, 59, 0.3);
   transition: all 0.2s;
 }
-.submit-btn:disabled{background:#cbd5e1;color:#94a3b8;box-shadow:none;}
-.submit-btn:active{transform: scale(0.95);}
+.submit-btn:disabled { background: #cbd5e1; color: #94a3b8; box-shadow: none; }
+.submit-btn:active { transform: scale(0.95); }
 
-.result-sheet{
-  position:absolute;bottom:0;left:0;right:0;
-  background:#fff;padding:24px;
-  border-radius:24px 24px 0 0;
-  transform:translateY(110%);
-  transition:transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  z-index:100;
-  box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
-  max-height: 80vh; overflow-y: auto;
+/* --- 结果面板 (防遮挡优化) --- */
+.result-sheet {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: #fff;
+  /* 增加底部 padding，适配浏览器底部栏 */
+  padding: 24px 24px calc(50px + env(safe-area-inset-bottom));
+  border-radius: 24px 24px 0 0;
+  transform: translateY(110%);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 100;
+  box-shadow: 0 -8px 30px rgba(0,0,0,0.12);
+  max-height: 85vh; overflow-y: auto;
 }
-.result-sheet.show{transform:translateY(0)}
+.result-sheet.show { transform: translateY(0); }
 
 .sheet-header {
   display: flex; align-items: center; gap: 10px;
-  font-size: 1.25rem; font-weight: 800; margin-bottom: 12px;
+  font-size: 1.35rem; font-weight: 800; margin-bottom: 16px;
 }
 .explanation-btn {
-  width: 100%; margin-bottom: 16px;
-  padding: 12px; border-radius: 12px;
+  width: 100%; margin-bottom: 20px;
+  padding: 14px; border-radius: 14px;
   background: #fffbeb; border: 1px solid #fcd34d;
-  color: #92400e; font-weight: 600;
+  color: #92400e; font-weight: 600; font-size: 1rem;
   display: flex; align-items: center; justify-content: center; gap: 8px;
 }
 .explanation-content {
-  background: #fff7ed; padding: 12px; border-radius: 12px;
-  margin-bottom: 16px; font-size: 0.95rem; line-height: 1.6; color: #7c2d12;
+  background: #fff7ed; padding: 16px; border-radius: 14px;
+  margin-bottom: 20px; font-size: 1rem; line-height: 1.7; color: #7c2d12;
   border: 1px dashed #fdba74;
 }
-.next-btn{
-  width:100%;padding:16px;border-radius:16px;
-  border:none;color:#fff;font-weight:800;
-  font-size:1.1rem;
-  display:flex;align-items:center;justify-content:center;gap:8px;
+.next-btn {
+  width: 100%; padding: 18px; border-radius: 16px;
+  border: none; color: #fff; font-weight: 800;
+  font-size: 1.15rem;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
   cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
-.btn-correct{background:#10b981}
-.btn-wrong{background:#ef4444}
+.btn-correct { background: #10b981; }
+.btn-wrong { background: #ef4444; }
 `;
 
 // =================================================================================
@@ -280,7 +301,7 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isRight, setIsRight] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [showExplanation, setShowExplanation] = useState(false); // 控制解析显示
+  const [showExplanation, setShowExplanation] = useState(false);
 
   /** 防跳题锁 */
   const nextLockRef = useRef(false);
@@ -303,26 +324,36 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
     setSelectedIds([]);
     setIsSubmitted(false);
     setIsRight(false);
-    setShowExplanation(false); // 重置解析状态
-
+    setShowExplanation(false);
+    
+    // 立即停止上一题的声音
     audioController.stop();
-    // 自动朗读题目
+
+    // 延时自动朗读，避免切题瞬间卡顿，并等待UI稳定
+    // 改为 1000ms 延时
+    let timer;
     if(questionText) {
-        setTimeout(() => {
+        timer = setTimeout(() => {
             audioController.playMixed(
               questionText,
               {},
               () => setIsPlaying(true),
               () => setIsPlaying(false)
             );
-        }, 500);
+        }, 1000); // 延迟 1 秒
     }
+
+    return () => {
+        if(timer) clearTimeout(timer);
+        audioController.stop();
+    };
   }, [data?.id]);
 
   const toggleOption = (id) => {
     if (isSubmitted) return;
     const sid = String(id);
-    // 单选逻辑 (如果correctAnswers长度为1，则互斥选择)
+    
+    // 单选逻辑
     if (correctAnswers.length === 1) {
         setSelectedIds([sid]);
     } else {
@@ -397,17 +428,14 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
             <div className="bubble-container">
             <div className="bubble-tail" />
             
-            {/* 1. 支持图片显示 */}
             {imageUrl && (
                 <img src={imageUrl} alt="Question Context" className="question-img" />
             )}
 
-            {/* 2. 题目文本 */}
             <div className="flex flex-wrap items-end gap-1">
                 {renderRichText(questionText)}
             </div>
 
-            {/* 3. 朗读按钮 */}
             <div
                 className={`mt-2 self-end p-2 rounded-full cursor-pointer transition-colors inline-flex ${
                 isPlaying
@@ -472,7 +500,7 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
       >
         <div className={`sheet-header ${isRight ? 'text-green-600' : 'text-red-500'}`}>
           {isRight ? <FaCheck /> : <FaTimes />}
-          {isRight ? 'မှန်ပါသည်!' : 'မှားနေပါသည်'} {/* 正确 / 错误 */}
+          {isRight ? 'မှန်ပါသည်!' : 'မှားနေပါသည်'}
         </div>
 
         {/* 答错时显示解析按钮 */}
@@ -485,7 +513,7 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
                 ) : (
                     <div className="explanation-content animate-fade-in">
                         <div className="font-bold mb-1 flex items-center gap-2">
-                             <FaLightbulb /> ရှင်းလင်းချက်: {/* 解析 */}
+                             <FaLightbulb /> ရှင်းလင်းချက်:
                         </div>
                         {explanation}
                     </div>
@@ -497,7 +525,6 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
            className={`next-btn ${isRight ? 'btn-correct' : 'btn-wrong'}`} 
            onClick={safeNext}
         >
-          {/* 答错显示“稍后重试”，答对显示“下一题” */}
           {!isRight ? 'နောက်မှပြန်ဖြေမည် (Continue)' : 'ရှေ့ဆက်မည် (Next)'} <FaArrowRight />
         </button>
       </div>
