@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   DndContext, 
   DragOverlay, 
@@ -25,12 +25,13 @@ import {
   FaArrowRight, 
   FaLightbulb, 
   FaSpinner, 
-  FaRedo 
+  FaRedo,
+  FaTachometerAlt 
 } from 'react-icons/fa';
 import { pinyin } from 'pinyin-pro';
 
 // =================================================================================
-// 1. IndexedDB 缓存 (复用高性能缓存逻辑)
+// 1. IndexedDB 缓存
 // =================================================================================
 const DB_NAME = 'LessonCacheDB';
 const STORE_NAME = 'tts_audio';
@@ -72,15 +73,16 @@ const idb = {
 };
 
 // =================================================================================
-// 2. 音频与震动控制器
+// 2. 音效与TTS控制器
 // =================================================================================
 
-// 播放音效 (SFX)
+// 播放音效
 const playSfx = (type) => {
   const paths = {
     click: '/sounds/click.mp3',
     correct: '/sounds/correct.mp3',
-    wrong: '/sounds/incorrect.mp3'
+    wrong: '/sounds/incorrect.mp3',
+    switch: '/sounds/switch-card.mp3'
   };
   const path = paths[type];
   if (!path) return;
@@ -90,14 +92,14 @@ const playSfx = (type) => {
   audio.play().catch(() => {});
 };
 
-// 触发震动
+// 震动反馈
 const vibrate = (pattern) => {
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
     navigator.vibrate(pattern);
   }
 };
 
-// TTS 语音控制器
+// 语音控制器
 const audioController = {
   currentAudio: null,
   latestRequestId: 0,
@@ -113,7 +115,8 @@ const audioController = {
     this.activeUrls = [];
   },
 
-  async playSingle(text, lang = 'zh') {
+  // 播放单条 (带语速)
+  async playSingle(text, lang = 'zh', speed = 1.0) {
     this.stop(); 
     if (!text) return;
 
@@ -131,6 +134,9 @@ const audioController = {
       this.activeUrls.push(url);
       
       const audio = new Audio(url);
+      // 缅语通常不支持语速调节(取决于引擎)，中文支持
+      if (lang !== 'my') audio.playbackRate = speed;
+      
       this.currentAudio = audio;
       audio.play().catch(() => {});
     } catch (e) {
@@ -138,7 +144,8 @@ const audioController = {
     }
   },
 
-  async playMixed(text, settings = {}, onStart, onEnd) {
+  // 播放混合文本 (带语速)
+  async playMixed(text, speed = 1.0, onStart, onEnd) {
     this.stop();
     if (!text) return;
     
@@ -165,7 +172,9 @@ const audioController = {
           }
           const url = URL.createObjectURL(blob);
           this.activeUrls.push(url);
-          return new Audio(url);
+          const audio = new Audio(url);
+          if (!isMy) audio.playbackRate = speed;
+          return audio;
         });
       }
 
@@ -194,7 +203,7 @@ const audioController = {
 };
 
 // =================================================================================
-// 3. 样式表 (CSS-in-JS) - 适配大图与防遮挡
+// 3. 样式表 (CSS-in-JS)
 // =================================================================================
 const styles = `
 .pxt-container {
@@ -208,128 +217,131 @@ const styles = `
 /* --- 顶部场景区 --- */
 .pxt-header {
   flex-shrink: 0;
-  padding: 60px 20px 10px; 
+  /* 增加顶部空间，适应更大的人物 */
+  padding: 40px 20px 0px; 
   display: flex; justify-content: center;
+  margin-bottom: 10px;
 }
 .scene-wrapper {
   width: 100%; max-width: 600px;
   display: flex; 
-  align-items: center; /* 垂直居中 */
-  gap: 12px;
+  align-items: flex-end; /* 底部对齐 */
+  gap: 10px;
 }
 .teacher-img {
-  height: 180px; /* 放大人物 */
+  height: 240px; /* 大尺寸 */
   width: auto;
   object-fit: contain;
   mix-blend-mode: multiply;
   flex-shrink: 0;
+  margin-left: -10px;
 }
 .bubble-box {
   flex: 1; background: #fff;
-  border-radius: 18px;
-  padding: 14px 18px;
-  border: 2px solid #e5e7eb;
+  border-radius: 20px 20px 20px 4px;
+  padding: 16px;
+  border: 2px solid #e2e8f0;
   position: relative;
   box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+  margin-bottom: 40px; /* 把气泡顶上去一点 */
 }
 .bubble-tail {
   position: absolute; 
-  top: 50%; left: -10px;
-  transform: translateY(-50%);
+  bottom: 15px; left: -11px;
   width: 0; height: 0;
-  border-top: 8px solid transparent;
-  border-bottom: 8px solid transparent;
-  border-right: 10px solid #e5e7eb;
+  border-top: 10px solid transparent;
+  border-bottom: 10px solid transparent;
+  border-right: 12px solid #e2e8f0;
 }
 .bubble-tail::after {
   content: ''; position: absolute;
-  top: -6px; left: 2px;
-  border-top: 6px solid transparent;
-  border-bottom: 6px solid transparent;
-  border-right: 8px solid #fff;
+  top: -7px; left: 3px;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-right: 9px solid #fff;
 }
 .question-img-small {
-  max-width: 80px; max-height: 80px;
-  object-fit: cover; border-radius: 6px;
-  margin-right: 8px; float: left;
+  width: 60px; height: 60px;
+  object-fit: cover; border-radius: 8px;
+  margin-right: 10px; float: left;
+  border: 1px solid #f1f5f9;
 }
 
-/* --- 核心交互区 (可滚动) --- */
+/* --- 核心交互区 --- */
 .pxt-scroll-body {
   flex: 1; overflow-y: auto;
-  /* 底部留出极大空间，适配不同机型底部栏 */
-  padding: 10px 16px 220px; 
+  padding: 0 16px 220px; 
   display: flex; flex-direction: column; align-items: center;
 }
 
-/* --- 答题排序框 (上方) --- */
+/* --- 答题排序框 --- */
 .sort-area {
   width: 100%; max-width: 600px;
   min-height: 120px;
   background: #fff;
-  border: 2px solid #e2e8f0;
-  border-top: 4px solid #e2e8f0; /* 顶部加粗模拟凹陷感 */
+  border: 2px dashed #cbd5e1;
   border-radius: 16px;
-  padding: 14px;
-  display: flex; flex-wrap: wrap; gap: 10px;
+  padding: 12px;
+  display: flex; flex-wrap: wrap; gap: 8px;
   align-content: flex-start;
-  margin-bottom: 30px;
+  margin-bottom: 24px;
   transition: all 0.3s ease;
 }
-.sort-area.active { border-color: #3b82f6; background: #eff6ff; }
-.sort-area.error { border-color: #fca5a5; background: #fef2f2; }
-.sort-area.success { border-color: #86efac; background: #f0fdf4; }
+.sort-area.active { border-color: #3b82f6; background: #eff6ff; border-style: solid; }
+.sort-area.error { border-color: #fca5a5; background: #fef2f2; border-style: solid; }
+.sort-area.success { border-color: #86efac; background: #f0fdf4; border-style: solid; }
 
-/* --- 待选池 (下方 - 包含干扰项) --- */
+/* --- 待选池 --- */
 .pool-area {
   width: 100%; max-width: 600px;
   display: flex; flex-wrap: wrap; 
   justify-content: center; 
-  gap: 12px;
+  gap: 10px;
 }
 
 /* --- 卡片样式 --- */
 .word-card {
   touch-action: none;
   background: #fff;
-  border: 1px solid #cbd5e1;
-  border-bottom: 4px solid #cbd5e1; /* 立体感 */
-  border-radius: 14px;
-  padding: 10px 18px;
-  font-size: 1.2rem;
+  border: 1px solid #e2e8f0;
+  border-bottom: 3px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 6px 14px;
+  font-size: 1.15rem;
   font-weight: 700;
   color: #334155;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   user-select: none;
   cursor: grab;
   transition: all 0.1s;
-  min-width: 60px;
+  min-width: 50px;
 }
-.word-card:active { transform: translateY(2px); border-bottom-width: 2px; margin-top: 2px; }
-.word-card.in-pool { background: #fff; }
+.word-card:active { transform: translateY(2px); border-bottom-width: 1px; margin-top: 2px; }
+.word-card.in-pool { background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
 .word-card.dragging { opacity: 0.3; }
 .word-card.overlay { 
-  transform: scale(1.05) rotate(2deg); 
-  box-shadow: 0 10px 25px rgba(0,0,0,0.2); 
+  transform: scale(1.1) rotate(2deg); 
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15); 
   z-index: 999; border-color: #3b82f6; background: #fff;
 }
-.pinyin-sub { font-size: 0.8rem; color: #94a3b8; font-weight: 500; margin-bottom: 2px; }
+.pinyin-sub { font-size: 0.75rem; color: #94a3b8; font-weight: 500; margin-bottom: 0px; line-height: 1.2; }
 
 /* --- 底部控制栏 --- */
 .footer-bar {
   position: absolute; bottom: 0; left: 0; right: 0;
-  padding: 20px 20px calc(40px + env(safe-area-inset-bottom));
+  padding: 20px 20px calc(30px + env(safe-area-inset-bottom));
   background: #fff;
-  border-top: 2px solid #f1f5f9;
+  border-top: 1px solid #f1f5f9;
   display: flex; justify-content: center;
   z-index: 50;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.02);
 }
 .check-btn {
   width: 100%; max-width: 600px;
   background: #58cc02; color: white;
-  padding: 16px; border-radius: 16px;
-  font-size: 1.2rem; font-weight: 800; text-transform: uppercase;
-  box-shadow: 0 4px 0 #46a302; /* Duolingo 风格按钮阴影 */
+  padding: 15px; border-radius: 16px;
+  font-size: 1.1rem; font-weight: 800; text-transform: uppercase;
+  box-shadow: 0 4px 0 #46a302;
   border: none;
   display: flex; align-items: center; justify-content: center; gap: 8px;
   transition: all 0.1s;
@@ -355,22 +367,22 @@ const styles = `
 
 .sheet-header {
   display: flex; align-items: center; gap: 10px;
-  font-size: 1.5rem; font-weight: 800; margin-bottom: 16px;
+  font-size: 1.4rem; font-weight: 800; margin-bottom: 16px;
 }
 .correct-answer-box {
-  background: #fff; padding: 16px; border-radius: 14px;
-  margin-bottom: 20px; color: #475569; font-size: 1.15rem; font-weight: 600;
-  border: 2px solid rgba(0,0,0,0.05);
+  background: #fff; padding: 14px; border-radius: 12px;
+  margin-bottom: 20px; color: #475569; font-size: 1.1rem; font-weight: 600;
+  border: 1px solid rgba(0,0,0,0.05);
 }
 .explanation-box {
   background: #fffbeb; border: 1px solid #fcd34d;
   padding: 14px; border-radius: 12px;
-  margin-bottom: 20px; font-size: 1rem; color: #92400e;
+  margin-bottom: 20px; font-size: 0.95rem; color: #92400e;
   line-height: 1.6;
 }
 .next-action-btn {
-  width: 100%; padding: 16px; border-radius: 16px; border: none;
-  font-size: 1.2rem; font-weight: 800; text-transform: uppercase;
+  width: 100%; padding: 15px; border-radius: 16px; border: none;
+  font-size: 1.1rem; font-weight: 800; text-transform: uppercase;
   color: white; cursor: pointer;
   border-bottom: 4px solid rgba(0,0,0,0.2);
 }
@@ -380,7 +392,23 @@ const styles = `
 `;
 
 // =================================================================================
-// 4. 单个卡片组件
+// 4. 组件：卡片内容 (统一处理拼音)
+// =================================================================================
+const CardContent = ({ text }) => {
+  // 简单判断是否标点，是则不注音
+  const isPunc = /^[。，、？！；：“”‘’（）《》〈〉【】 .,!?;:"'()\[\]{}]+$/.test(text);
+  const py = !isPunc ? pinyin(text, { toneType: 'mark' }) : '';
+
+  return (
+    <>
+      {py && <div className="pinyin-sub">{py}</div>}
+      <div>{text}</div>
+    </>
+  );
+};
+
+// =================================================================================
+// 5. 组件：排序项 (Draggable)
 // =================================================================================
 const SortableItem = ({ id, content, isPool, onClick, isOverlay }) => {
   const {
@@ -397,15 +425,10 @@ const SortableItem = ({ id, content, isPool, onClick, isOverlay }) => {
     transition,
   };
 
-  // 拼音处理：标点符号不显示拼音
-  const isPunc = /^[。，、？！；：“”‘’（）《》〈〉【】 .,!?;:"'()\[\]{}]+$/.test(content);
-  const py = !isPunc ? pinyin(content, { toneType: 'mark' }) : '';
-
   if (isOverlay) {
     return (
       <div className="word-card overlay">
-         {py && <div className="pinyin-sub">{py}</div>}
-         <div>{content}</div>
+         <CardContent text={content} />
       </div>
     );
   }
@@ -417,17 +440,15 @@ const SortableItem = ({ id, content, isPool, onClick, isOverlay }) => {
       className={`word-card ${isDragging ? 'dragging' : ''} ${isPool ? 'in-pool' : ''}`}
       {...attributes}
       {...listeners}
-      // 这里的 onClick 用于处理“点击移动”逻辑
       onClick={onClick} 
     >
-      {py && <div className="pinyin-sub">{py}</div>}
-      <div>{content}</div>
+      <CardContent text={content} />
     </div>
   );
 };
 
 // =================================================================================
-// 5. 主组件 Logic
+// 6. 主逻辑组件
 // =================================================================================
 const PaiXuTi = ({ 
   data, 
@@ -435,8 +456,6 @@ const PaiXuTi = ({
   onNext, 
   onWrong 
 }) => {
-  // 数据解析
-  // 题目数据应包含 items (所有卡片，含干扰项) 和 correctOrder (正确顺序的ID数组)
   const { 
     title,       
     items,       
@@ -452,12 +471,13 @@ const PaiXuTi = ({
   // 状态: 'idle' | 'success' | 'error'
   const [gameStatus, setGameStatus] = useState('idle');
   const [isPlaying, setIsPlaying] = useState(false);
+  const [speed, setSpeed] = useState(1.0); // 语速状态
 
   // 初始化
   useEffect(() => {
     if (!items) return;
     
-    // 将 items 里的所有 ID 取出并随机打乱 (包含了正确项和干扰项)
+    // 随机打乱 ID (包含干扰项)
     const ids = items.map(i => i.id);
     for (let i = ids.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -467,12 +487,12 @@ const PaiXuTi = ({
     setAnswerIds([]);
     setGameStatus('idle');
     
-    // 音频重置
+    // 自动朗读题目
     audioController.stop(); 
     let timer;
     if (title) {
         timer = setTimeout(() => {
-            audioController.playMixed(title, {}, () => setIsPlaying(true), () => setIsPlaying(false));
+            audioController.playMixed(title, speed, () => setIsPlaying(true), () => setIsPlaying(false));
         }, 800);
     }
 
@@ -480,9 +500,9 @@ const PaiXuTi = ({
         if(timer) clearTimeout(timer);
         audioController.stop();
     };
-  }, [data]); 
+  }, [data]); // 注意：这里没有将 speed 放入依赖，因为切换语速不应重置题目
 
-  // 传感器设置 (Pointer 距离 5px 激活，避免误触)
+  // 传感器
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -490,25 +510,31 @@ const PaiXuTi = ({
 
   const findItem = (id) => items.find(i => i.id === id);
 
-  // 点击卡片移动逻辑
+  // 切换语速
+  const toggleSpeed = (e) => {
+      e.stopPropagation();
+      const newSpeed = speed === 1.0 ? 0.75 : 1.0;
+      setSpeed(newSpeed);
+      // 可选：切换时给个提示音或重读
+      // audioController.playMixed(title, newSpeed); 
+  };
+
+  // 点击卡片
   const handleCardClick = (id) => {
     if (gameStatus === 'success') return;
 
-    // 播放点击音效和轻微震动
     playSfx('click');
     vibrate(15);
     
     const item = findItem(id);
-    if (item) audioController.playSingle(item.text);
+    if (item) audioController.playSingle(item.text, 'zh', speed);
 
-    // 逻辑：如果在答案区，移回池子；如果在池子，移入答案区
     if (answerIds.includes(id)) {
       setAnswerIds(prev => prev.filter(i => i !== id));
       setPoolIds(prev => [...prev, id]);
     } else {
       setPoolIds(prev => prev.filter(i => i !== id));
       setAnswerIds(prev => [...prev, id]);
-      // 如果之前是错误状态，用户修改答案后重置为 idle
       if (gameStatus === 'error') setGameStatus('idle');
     }
   };
@@ -524,37 +550,41 @@ const PaiXuTi = ({
       });
     }
     setActiveId(null);
-    vibrate(15); // 拖拽放下时震动
+    vibrate(15);
   };
 
   // 提交检查
   const handleCheck = () => {
+    // 先播放点击音效
+    playSfx('click'); 
+
     const currentStr = answerIds.join(',');
     const correctStr = (correctOrder || []).join(',');
 
-    // 验证逻辑：
-    // 1. 顺序必须完全一致
-    // 2. 干扰项(不在 correctOrder 里)不能出现在 answerIds 里
-    // 3. 必须包含所有 correctOrder 里的项
-    if (currentStr === correctStr) {
-      setGameStatus('success');
-      playSfx('correct');
-      confetti({ particleCount: 150, spread: 100, origin: { y: 0.65 } });
-      
-      // 播放完整句子
-      const fullSentence = correctOrder.map(id => findItem(id).text).join('');
-      audioController.playSingle(fullSentence); 
-      
-      if (onCorrect) onCorrect();
-    } else {
-      setGameStatus('error');
-      playSfx('wrong');
-      vibrate([50, 50, 50]); // 强烈震动反馈
-      if (onWrong) onWrong();
-    }
+    const isCorrect = currentStr === correctStr;
+
+    // 延迟一点点出结果，让点击感更自然
+    setTimeout(() => {
+        if (isCorrect) {
+          setGameStatus('success');
+          playSfx('correct');
+          confetti({ particleCount: 150, spread: 100, origin: { y: 0.65 } });
+          
+          const fullSentence = correctOrder.map(id => findItem(id).text).join('');
+          audioController.playSingle(fullSentence, 'zh', speed); 
+          
+          if (onCorrect) onCorrect();
+        } else {
+          setGameStatus('error');
+          playSfx('wrong');
+          vibrate([50, 50, 50]);
+          if (onWrong) onWrong();
+        }
+    }, 150);
   };
 
   const handleNext = () => {
+    playSfx('switch'); // 翻页音效
     audioController.stop();
     if (onNext) onNext();
   };
@@ -582,20 +612,27 @@ const PaiXuTi = ({
                className="teacher-img" 
                alt="Teacher" 
              />
-             <div className="bubble-box" onClick={() => audioController.playMixed(title)}>
+             <div className="bubble-box" onClick={() => audioController.playMixed(title, speed)}>
                <div className="bubble-tail" />
                
-               <div className="flex items-center gap-2">
-                 {/* 如果有题目图，显示小缩略图，不占太多空间 */}
+               <div className="flex items-start gap-2">
                  {imageUrl && <img src={imageUrl} className="question-img-small" alt="Context" />}
                  
-                 <span className="text-lg font-semibold text-slate-700 leading-snug flex-1">
+                 <span className="text-lg font-semibold text-slate-700 leading-snug flex-1 pt-1">
                    {title || "Put the words in the correct order."}
                  </span>
                  
-                 <button className={`p-2 rounded-full ${isPlaying ? 'text-blue-600' : 'text-slate-400'}`}>
-                   {isPlaying ? <FaSpinner className="animate-spin" /> : <FaVolumeUp />}
-                 </button>
+                 <div className="flex flex-col gap-2 shrink-0">
+                    <button className={`p-2 rounded-full ${isPlaying ? 'text-blue-600' : 'text-slate-400'} bg-slate-50`}>
+                        {isPlaying ? <FaSpinner className="animate-spin" /> : <FaVolumeUp />}
+                    </button>
+                    <button 
+                        onClick={toggleSpeed}
+                        className="p-2 rounded-full text-slate-400 bg-slate-50 text-xs font-bold flex items-center justify-center border border-slate-200"
+                    >
+                        {speed}x
+                    </button>
+                 </div>
                </div>
              </div>
           </div>
@@ -603,7 +640,7 @@ const PaiXuTi = ({
 
         {/* --- 答题区与选词区 --- */ }
         <div className="pxt-scroll-body">
-          {/* 1. 答案排序区 (Sortable) */}
+          {/* 1. 答案排序区 */}
           <div className={`sort-area ${gameStatus}`}>
              <SortableContext items={answerIds} strategy={rectSortingStrategy}>
                {answerIds.map(id => (
@@ -616,27 +653,26 @@ const PaiXuTi = ({
                ))}
              </SortableContext>
              
-             {/* 占位提示 */}
              {answerIds.length === 0 && !activeId && (
                <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm italic">
-                 Tap words below to build the sentence
+                 Tap words below
                </div>
              )}
           </div>
 
-          {/* 2. 待选池 (包含干扰项) */}
+          {/* 2. 待选池 (自动拼音) */}
           <div className="pool-area">
              {poolIds.map(id => (
                <div key={id} onClick={() => handleCardClick(id)}>
                   <div className="word-card in-pool">
-                    <div className="text-lg">{findItem(id)?.text}</div>
+                    <CardContent text={findItem(id)?.text} />
                   </div>
                </div>
              ))}
           </div>
         </div>
 
-        {/* --- 拖拽浮层 (Overlay) --- */}
+        {/* --- 拖拽浮层 --- */}
         <DragOverlay dropAnimation={{ sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0.5' } } }) }}>
           {activeItem ? <SortableItem id={activeId} content={activeItem.text} isOverlay /> : null}
         </DragOverlay>
@@ -654,9 +690,8 @@ const PaiXuTi = ({
            )}
         </div>
 
-        {/* --- 结果弹层 (Bottom Sheet) --- */}
+        {/* --- 结果弹层 --- */}
         <div className={`result-sheet ${isOrderedResult(gameStatus) ? 'open' : ''} ${gameStatus === 'success' ? 'correct' : 'wrong'}`}>
-           {/* 成功 */}
            {gameStatus === 'success' && (
              <>
                <div className="sheet-header">
@@ -668,7 +703,6 @@ const PaiXuTi = ({
              </>
            )}
 
-           {/* 失败 */}
            {gameStatus === 'error' && (
              <>
                <div className="sheet-header">
@@ -680,7 +714,6 @@ const PaiXuTi = ({
                   {correctOrder?.map(id => findItem(id)?.text).join('')}
                </div>
 
-               {/* 解析 */}
                {explanation && (
                  <div className="explanation-box animate-fade-in">
                    <div className="flex items-center gap-2 mb-2 font-bold">
@@ -702,7 +735,7 @@ const PaiXuTi = ({
   );
 };
 
-// 辅助函数：判断是否出结果了
+// 辅助函数
 function isOrderedResult(status) {
   return status === 'success' || status === 'error';
 }
