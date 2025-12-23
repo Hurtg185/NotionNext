@@ -72,24 +72,28 @@ const idb = {
 };
 
 // =================================================================================
-// 2. 音频控制器 (支持混合语言与队列播放)
+// 2. 音频控制器 (支持混合语言与队列播放，严格互斥)
 // =================================================================================
 const audioController = {
   currentAudio: null,
   latestRequestId: 0,
   activeUrls: [],
 
+  // 停止所有音频，清理资源
   stop() {
-    this.latestRequestId++;
+    this.latestRequestId++; // 增加 ID，使后续的异步播放回调失效
     if (this.currentAudio) {
       this.currentAudio.pause();
       this.currentAudio = null;
     }
+    // 清理 URL 对象，释放内存
+    this.activeUrls.forEach(url => URL.revokeObjectURL(url));
+    this.activeUrls = [];
   },
 
   // 播放单条音频 (主要用于点击单词卡片)
   async playSingle(text, lang = 'zh') {
-    this.stop();
+    this.stop(); // 立即停止其他声音
     if (!text) return;
 
     // 震动反馈
@@ -118,10 +122,11 @@ const audioController = {
     }
   },
 
-  // 播放混合文本 (用于题目朗读：可能包含缅文和中文)
+  // 播放混合文本 (用于题目朗读)
   async playMixed(text, settings = {}, onStart, onEnd) {
-    this.stop();
+    this.stop(); // 播放前强制停止旧音频
     if (!text) return;
+    
     const reqId = this.latestRequestId;
     onStart?.();
 
@@ -152,13 +157,17 @@ const audioController = {
 
       // 递归播放队列
       const playNext = async (index) => {
+        // 关键：如果 request ID 变了（说明调用了 stop），则终止
         if (reqId !== this.latestRequestId) return;
+        
         if (index >= queue.length) {
           onEnd?.();
           return;
         }
         
         const audio = await queue[index]();
+        
+        // 再次检查 ID (因为 await 期间可能发生了 stop)
         if (reqId !== this.latestRequestId) return;
         
         this.currentAudio = audio;
@@ -175,7 +184,7 @@ const audioController = {
 };
 
 // =================================================================================
-// 3. 样式表 (CSS-in-JS)
+// 3. 样式表 (CSS-in-JS) - 修复布局问题
 // =================================================================================
 const styles = `
 .pxt-container {
@@ -189,34 +198,35 @@ const styles = `
 /* --- 顶部场景区 --- */
 .pxt-header {
   flex-shrink: 0;
-  padding: 60px 20px 10px; /* 调整顶部间距，防止太靠上 */
+  /* 增加 padding-top 到 90px，避免太靠顶 */
+  padding: 90px 20px 10px; 
   display: flex; justify-content: center;
 }
 .scene-wrapper {
   width: 100%; max-width: 600px;
   display: flex; 
-  align-items: flex-start; /* 改为顶部对齐，方便气泡对齐人头 */
+  align-items: flex-start;
   gap: 12px;
 }
 .teacher-img {
   height: 120px; width: auto;
   object-fit: contain;
-  /* 解决白色背景色差，让其融入背景 */
+  /* 关键：正片叠底，去除白色背景色差 */
   mix-blend-mode: multiply;
-  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.05));
+  margin-top: 4px;
 }
 .bubble-box {
   flex: 1; background: #fff;
-  border-radius: 18px; 18px 18px 0;
-  padding: 14px;
+  border-radius: 18px 18px 18px 0;
+  padding: 16px;
   border: 1px solid #e2e8f0;
   box-shadow: 0 4px 15px rgba(0,0,0,0.03);
   position: relative;
-  margin-top: 10px; /* 稍微下移，与人头对齐 */
+  margin-top: 8px;
 }
 .bubble-tail {
   position: absolute; 
-  top: 20px; /* 尾巴移到上方 */
+  top: 20px; 
   left: -9px;
   width: 0; height: 0;
   border-top: 8px solid transparent;
@@ -232,19 +242,20 @@ const styles = `
 /* --- 核心交互区 (可滚动) --- */
 .pxt-scroll-body {
   flex: 1; overflow-y: auto;
-  padding: 10px 16px 140px; /* 底部留白增加，避免被按钮遮挡 */
+  /* 底部留白大幅增加到 200px，确保内容能滚上来不被按钮遮挡 */
+  padding: 10px 16px 200px; 
   display: flex; flex-direction: column; align-items: center;
 }
 
 /* --- 答题排序框 (紧凑型) --- */
 .sort-area {
   width: 100%; max-width: 600px;
-  min-height: 80px;
+  min-height: 100px;
   background: #eff6ff;
   border: 2px dashed #bfdbfe;
   border-radius: 16px;
-  padding: 12px;
-  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 14px;
+  display: flex; flex-wrap: wrap; gap: 10px;
   align-content: flex-start;
   margin-bottom: 24px;
   transition: all 0.3s ease;
@@ -265,9 +276,9 @@ const styles = `
   background: #fff;
   border: 1px solid #e2e8f0;
   border-bottom-width: 3px;
-  border-radius: 10px;
-  padding: 6px 14px;
-  font-size: 1.1rem;
+  border-radius: 12px;
+  padding: 8px 16px;
+  font-size: 1.15rem;
   font-weight: 700;
   color: #334155;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -284,21 +295,24 @@ const styles = `
   box-shadow: 0 10px 20px rgba(0,0,0,0.15); 
   z-index: 999; border-color: #3b82f6; 
 }
-.pinyin-sub { font-size: 0.75rem; color: #94a3b8; font-weight: 500; margin-bottom: 2px; }
+.pinyin-sub { font-size: 0.8rem; color: #94a3b8; font-weight: 500; margin-bottom: 2px; }
 
-/* --- 底部控制栏 --- */
+/* --- 底部控制栏 (按钮上移) --- */
 .footer-bar {
   position: absolute; bottom: 0; left: 0; right: 0;
-  padding: 20px 20px 50px; /* 底部间距加大，按钮上移 */
-  background: linear-gradient(to top, #ffffff 90%, rgba(255,255,255,0));
+  /* padding-bottom 增加到 100px + 安全区域，让按钮上移 */
+  padding: 20px 20px calc(100px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, #f8fafc 80%, rgba(248, 250, 252, 0));
   display: flex; justify-content: center;
   z-index: 50;
+  pointer-events: none; /* 让渐变层不挡点击，只有按钮可点 */
 }
 .check-btn {
+  pointer-events: auto;
   background: #1e293b; color: white;
-  padding: 14px 40px; border-radius: 100px;
-  font-size: 1.1rem; font-weight: 700;
-  box-shadow: 0 4px 12px rgba(30, 41, 59, 0.25);
+  padding: 16px 60px; border-radius: 100px;
+  font-size: 1.15rem; font-weight: 700;
+  box-shadow: 0 6px 16px rgba(30, 41, 59, 0.3);
   transition: all 0.2s; border: none;
   display: flex; align-items: center; gap: 8px;
 }
@@ -310,32 +324,36 @@ const styles = `
   position: absolute; bottom: 0; left: 0; right: 0;
   background: white;
   border-radius: 24px 24px 0 0;
-  padding: 24px;
-  box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+  /* 底部增加 padding 适配浏览器栏 */
+  padding: 24px 24px calc(50px + env(safe-area-inset-bottom));
+  box-shadow: 0 -8px 30px rgba(0,0,0,0.15);
   transform: translateY(110%);
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   z-index: 100;
-  max-height: 80vh; overflow-y: auto;
+  max-height: 85vh; overflow-y: auto;
 }
 .result-sheet.open { transform: translateY(0); }
 .sheet-header {
   display: flex; align-items: center; gap: 10px;
-  font-size: 1.25rem; font-weight: 800; margin-bottom: 12px;
+  font-size: 1.35rem; font-weight: 800; margin-bottom: 16px;
 }
 .correct-answer-box {
-  background: #f1f5f9; padding: 12px; border-radius: 12px;
-  margin-bottom: 16px; color: #475569; font-size: 1rem;
+  background: #f1f5f9; padding: 14px; border-radius: 12px;
+  margin-bottom: 20px; color: #475569; font-size: 1.1rem;
+  border: 1px solid #e2e8f0;
 }
+/* 解析样式 */
 .explanation-box {
   background: #fffbeb; border: 1px solid #fcd34d;
-  padding: 12px; border-radius: 12px;
-  margin-bottom: 20px; font-size: 0.95rem; color: #92400e;
-  line-height: 1.6;
+  padding: 14px; border-radius: 12px;
+  margin-bottom: 20px; font-size: 1rem; color: #92400e;
+  line-height: 1.7;
 }
 .next-action-btn {
-  width: 100%; padding: 16px; border-radius: 16px; border: none;
-  font-size: 1.1rem; font-weight: 700; color: white;
+  width: 100%; padding: 18px; border-radius: 16px; border: none;
+  font-size: 1.15rem; font-weight: 800; color: white;
   display: flex; justify-content: center; align-items: center; gap: 8px;
+  cursor: pointer;
 }
 `;
 
@@ -392,13 +410,13 @@ const PaiXuTi = ({
   data, 
   onCorrect, 
   onNext, 
-  onWrong // 关键：父组件传入此回调，处理错题
+  onWrong 
 }) => {
   // 数据解析
   const { 
     title,       // 缅文题目
-    items,       // 待排序项 [{id: '1', text: '我'}, ...]
-    correctOrder,// 正确ID顺序 ['1', '2', ...]
+    items,       // 待排序项
+    correctOrder,// 正确ID顺序
     explanation, // 语法解析
     imageUrl     // 题目附图
   } = data || {};
@@ -412,11 +430,11 @@ const PaiXuTi = ({
   const [gameStatus, setGameStatus] = useState('idle');
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // 初始化：洗牌
+  // 初始化：洗牌与音频控制
   useEffect(() => {
+    // 1. 重置数据
     if (!items) return;
     const ids = items.map(i => i.id);
-    // Fisher-Yates Shuffle
     for (let i = ids.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [ids[i], ids[j]] = [ids[j], ids[i]];
@@ -425,15 +443,24 @@ const PaiXuTi = ({
     setAnswerIds([]);
     setGameStatus('idle');
     
-    // 自动朗读题目
+    // 2. 音频控制：进入新题时立即停止旧音频，延时1秒播放新音频
+    audioController.stop(); 
+    
+    let timer;
     if (title) {
-        setTimeout(() => {
+        timer = setTimeout(() => {
             audioController.playMixed(title, {}, () => setIsPlaying(true), () => setIsPlaying(false));
-        }, 500);
+        }, 1000); // 延时 1000ms 确保页面转场完成
     }
-  }, [data]); // data 变化时重置
 
-  // 传感器设置 (优化移动端体验)
+    // 3. 卸载时清理
+    return () => {
+        if(timer) clearTimeout(timer);
+        audioController.stop();
+    };
+  }, [data]); 
+
+  // 传感器设置
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -442,14 +469,12 @@ const PaiXuTi = ({
   // 查找 Item 对象
   const findItem = (id) => items.find(i => i.id === id);
 
-  // 点击事件：移动卡片 (池 <-> 答案)
+  // 点击事件
   const handleCardClick = (id) => {
     if (gameStatus === 'success') return;
 
-    // 震动
     if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(10);
     
-    // 朗读
     const item = findItem(id);
     if (item) audioController.playSingle(item.text);
 
@@ -483,19 +508,18 @@ const PaiXuTi = ({
     const correctStr = (correctOrder || []).join(',');
 
     if (currentStr === correctStr) {
-      // 答对
       setGameStatus('success');
       confetti({ particleCount: 120, spread: 80, origin: { y: 0.7 } });
       
       const fullSentence = correctOrder.map(id => findItem(id).text).join('');
-      audioController.playSingle(fullSentence); // 读一遍完整句子
+      // 答对时播放完整句子
+      audioController.playSingle(fullSentence); 
       
       if (onCorrect) onCorrect();
     } else {
-      // 答错
       setGameStatus('error');
       if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate([50, 50, 50]);
-      if (onWrong) onWrong(); // 触发父组件错题逻辑 (沉底)
+      if (onWrong) onWrong();
     }
   };
 
@@ -530,10 +554,9 @@ const PaiXuTi = ({
              />
              <div className="bubble-box" onClick={() => audioController.playMixed(title)}>
                <div className="bubble-tail" />
-               {/* 题目图片支持 */}
+               
                {imageUrl && <img src={imageUrl} className="question-img" alt="Context" />}
                
-               {/* 题目文本 (缅文) */}
                <div className="flex items-center gap-2">
                  <span className="text-lg font-semibold text-slate-700 leading-snug">
                    {title || "请将下方的词块排成正确的句子。"}
@@ -548,7 +571,7 @@ const PaiXuTi = ({
 
         {/* --- 滚动区域：答案框 + 选词池 --- */ }
         <div className="pxt-scroll-body">
-          {/* 1. 答案排序区 (Sortable) */}
+          {/* 1. 答案排序区 */}
           <div className={`sort-area ${gameStatus}`}>
              <SortableContext items={answerIds} strategy={rectSortingStrategy}>
                {answerIds.map(id => (
@@ -567,12 +590,11 @@ const PaiXuTi = ({
              )}
           </div>
 
-          {/* 2. 待选池 (非拖拽，仅点击) */}
+          {/* 2. 待选池 */}
           <div className="pool-area">
              {poolIds.map(id => (
                <div key={id} onClick={() => handleCardClick(id)}>
                   <div className="word-card in-pool">
-                    {/* 待选区也可以显示拼音，或者只显示文字 */}
                     <div className="text-base">{findItem(id)?.text}</div>
                   </div>
                </div>
@@ -585,7 +607,7 @@ const PaiXuTi = ({
           {activeItem ? <SortableItem id={activeId} content={activeItem.text} isOverlay /> : null}
         </DragOverlay>
 
-        {/* --- 底部固定按钮 --- */}
+        {/* --- 底部固定按钮 (上移) --- */}
         <div className="footer-bar">
            {gameStatus !== 'error' && gameStatus !== 'success' && (
              <button 
@@ -598,16 +620,16 @@ const PaiXuTi = ({
            )}
         </div>
 
-        {/* --- 结果弹层 (Bottom Sheet) --- */}
+        {/* --- 结果弹层 (包含解析) --- */}
         <div className={`result-sheet ${gameStatus === 'success' || gameStatus === 'error' ? 'open' : ''}`}>
            {/* 成功状态 */}
            {gameStatus === 'success' && (
              <div>
                <div className="sheet-header text-green-600">
-                 <FaCheck /> 回答正确!
+                 <FaCheck /> မှန်ပါသည်! (回答正确)
                </div>
                <button className="next-action-btn bg-green-500" onClick={handleNext}>
-                 下一题 <FaArrowRight />
+                 ရှေ့ဆက်မည် (Next) <FaArrowRight />
                </button>
              </div>
            )}
@@ -616,25 +638,26 @@ const PaiXuTi = ({
            {gameStatus === 'error' && (
              <div>
                <div className="sheet-header text-red-500">
-                 <FaTimes /> 顺序不对哦
+                 <FaTimes /> မှားနေပါသည် (顺序不对哦)
                </div>
                
-               <div className="mb-2 text-sm text-slate-500 font-bold">正确答案：</div>
+               <div className="mb-2 text-sm text-slate-500 font-bold">အဖြေမှန် (正确答案)：</div>
                <div className="correct-answer-box">
                   {correctOrder?.map(id => findItem(id)?.text).join('')}
                </div>
 
+               {/* 显示解析 */}
                {explanation && (
-                 <div className="explanation-box">
-                   <div className="flex items-center gap-2 mb-1 font-bold">
-                     <FaLightbulb /> 老师解析:
+                 <div className="explanation-box animate-fade-in">
+                   <div className="flex items-center gap-2 mb-2 font-bold">
+                     <FaLightbulb /> ရှင်းလင်းချက် (解析):
                    </div>
                    {explanation}
                  </div>
                )}
 
                <button className="next-action-btn bg-slate-800" onClick={handleNext}>
-                 继续 (稍后重做) <FaRedo className="text-sm" />
+                 နောက်မှပြန်ဖြေမည် (Continue) <FaRedo className="text-sm" />
                </button>
              </div>
            )}
