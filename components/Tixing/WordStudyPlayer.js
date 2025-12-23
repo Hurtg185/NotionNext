@@ -8,6 +8,7 @@ import {
   FaCheckCircle,
   FaArrowRight 
 } from 'react-icons/fa';
+import { pinyin } from 'pinyin-pro'; // 引入 pinyin-pro 自动生成拼音
 
 // =================================================================================
 // 1. 复用之前的 Audio Controller (老师发音)
@@ -154,6 +155,7 @@ const styles = `
   box-shadow: 0 20px 40px rgba(0,0,0,0.2);
   display: flex; flex-direction: column; align-items: center;
   position: relative;
+  max-height: 85vh; overflow-y: auto; /* 防止内容过长溢出 */
   animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 @keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -161,41 +163,54 @@ const styles = `
 .close-btn {
   position: absolute; top: 16px; right: 16px;
   color: #94a3b8; padding: 8px; font-size: 1.2rem;
+  z-index: 10;
 }
 
 /* 弹窗内：单词展示 */
-.big-char { font-size: 4rem; font-weight: 800; color: #0f172a; margin-bottom: 4px; }
-.big-pinyin { font-size: 1.2rem; color: #475569; font-weight: 600; }
+.big-char { font-size: 3rem; font-weight: 800; color: #0f172a; margin-bottom: 4px; line-height: 1.1; } /* 字体调小 */
+.big-pinyin { font-size: 1.3rem; color: #475569; font-weight: 600; margin-bottom: 8px;}
 .definition-row { 
-  margin-top: 12px; font-size: 1.1rem; 
+  margin-top: 8px; font-size: 1.1rem; 
   color: #334155; text-align: center;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 12px; width: 100%;
 }
-.burmese-sub { font-size: 0.95rem; color: #64748b; margin-top: 2px; }
+.burmese-sub { font-size: 0.95rem; color: #64748b; margin-top: 4px; }
 
-/* 弹窗内：例句 */
-.example-box {
-  background: #f1f5f9; padding: 12px; border-radius: 12px;
-  margin-top: 20px; width: 100%;
+/* 弹窗内：例句列表 */
+.examples-container {
+  width: 100%; margin-top: 16px;
+  display: flex; flex-direction: column; gap: 10px;
 }
-.ex-zh { font-size: 1.1rem; font-weight: 600; color: #334155; margin-bottom: 4px; }
-.ex-my { font-size: 0.95rem; color: #64748b; }
+.example-item {
+  background: #f8fafc; padding: 10px 12px; border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+.ex-zh { font-size: 1rem; font-weight: 600; color: #334155; margin-bottom: 2px; }
+.ex-my { font-size: 0.85rem; color: #94a3b8; }
+.play-ex-btn {
+  float: right; color: #3b82f6; padding: 4px; 
+  background: #dbeafe; border-radius: 50%;
+  margin-left: 8px; width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+}
 
 /* 弹窗内：录音对比区 */
 .record-section {
-  margin-top: 24px; width: 100%;
-  border-top: 1px dashed #cbd5e1; padding-top: 20px;
-  display: flex; flex-direction: column; gap: 16px;
+  margin-top: 20px; width: 100%;
+  border-top: 1px dashed #cbd5e1; padding-top: 16px;
+  display: flex; flex-direction: column; gap: 14px;
 }
 
 .compare-row {
   display: flex; align-items: center; justify-content: space-between;
   background: #fff; border: 1px solid #e2e8f0;
-  padding: 10px 16px; border-radius: 50px;
+  padding: 8px 16px; border-radius: 50px;
   box-shadow: 0 2px 5px rgba(0,0,0,0.03);
 }
 .compare-label { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.9rem; color: #475569; }
 .action-btn {
-  width: 40px; height: 40px; border-radius: 50%;
+  width: 36px; height: 36px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   border: none; cursor: pointer; color: white;
   transition: transform 0.1s;
@@ -206,10 +221,10 @@ const styles = `
 .btn-play-student:disabled { background: #cbd5e1; }
 
 /* 录音按钮 */
-.record-btn-wrapper { display: flex; justify-content: center; margin-top: 10px; }
+.record-btn-wrapper { display: flex; justify-content: center; margin-top: 6px; }
 .record-btn {
-  width: 70px; height: 70px; border-radius: 50%;
-  background: #ef4444; color: white; font-size: 1.8rem;
+  width: 64px; height: 64px; border-radius: 50%;
+  background: #ef4444; color: white; font-size: 1.6rem;
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
   transition: all 0.2s; border: none;
@@ -223,7 +238,7 @@ const styles = `
 /* 底部完成按钮 */
 .finish-bar {
   position: absolute; bottom: 0; left: 0; right: 0;
-  padding: 20px 20px 40px; /* 提高位置 */
+  padding: 20px 20px 60px; /* 进一步提高位置，防止被手机底部条遮挡 */
   background: linear-gradient(to top, #f8fafc 80%, rgba(248, 250, 252, 0));
   display: flex; justify-content: center; pointer-events: none;
 }
@@ -319,14 +334,18 @@ const WordStudy = ({ data, onNext }) => {
         </div>
       </div>
 
-      {/* 单词网格列表 */}
+      {/* 单词网格列表 (使用 pinyin-pro 动态生成) */}
       <div className="ws-scroll-area">
-        {words?.map((item) => (
-          <div key={item.id} className="mini-card" onClick={() => setActiveWordId(item.id)}>
-            <div className="mini-char">{item.word}</div>
-            <div className="mini-pinyin">{item.pinyin}</div>
-          </div>
-        ))}
+        {words?.map((item) => {
+          // 自动生成拼音
+          const py = pinyin(item.word, { toneType: 'mark' });
+          return (
+            <div key={item.id} className="mini-card" onClick={() => setActiveWordId(item.id)}>
+              <div className="mini-char">{item.word}</div>
+              <div className="mini-pinyin">{py}</div>
+            </div>
+          );
+        })}
       </div>
 
       {/* 底部完成按钮 */}
@@ -346,29 +365,38 @@ const WordStudy = ({ data, onNext }) => {
 
             {/* 大字展示 */}
             <div className="big-char">{activeWord.word}</div>
-            <div className="big-pinyin">{activeWord.pinyin}</div>
+            {/* 实时生成大拼音 */}
+            <div className="big-pinyin">
+                {pinyin(activeWord.word, { toneType: 'mark' })}
+            </div>
             
             {/* 释义 */}
             <div className="definition-row">
-              <div>{activeWord.definition}</div>
+              <div className="font-bold">{activeWord.definition}</div>
               <div className="burmese-sub">{activeWord.burmese}</div>
             </div>
 
-            {/* 例句 */}
-            <div className="example-box">
-              <div className="flex items-start justify-between">
-                <div className="ex-zh">{activeWord.example}</div>
-                <button 
-                  className="text-blue-500 p-1"
-                  onClick={() => audioController.play(activeWord.example)}
-                >
-                  <FaVolumeUp />
-                </button>
-              </div>
-              <div className="ex-my">{activeWord.example_burmese}</div>
+            {/* 例句 (支持多句) */}
+            <div className="examples-container">
+              {activeWord.examples?.map((ex, idx) => (
+                 <div key={idx} className="example-item">
+                   <div className="flex items-start justify-between">
+                     <div>
+                        <div className="ex-zh">{ex.zh}</div>
+                        <div className="ex-my">{ex.my}</div>
+                     </div>
+                     <button 
+                       className="play-ex-btn"
+                       onClick={() => audioController.play(ex.zh)}
+                     >
+                       <FaVolumeUp size={14} />
+                     </button>
+                   </div>
+                 </div>
+              ))}
             </div>
 
-            {/* 录音对比区 (核心优化) */}
+            {/* 录音对比区 */}
             <div className="record-section">
               {/* 老师行 */}
               <div className="compare-row">
