@@ -8,10 +8,9 @@ import {
   FaCheckCircle,
   FaArrowRight 
 } from 'react-icons/fa';
-import { pinyin } from 'pinyin-pro'; // 引入 pinyin-pro 自动生成拼音
 
 // =================================================================================
-// 1. 复用之前的 Audio Controller (老师发音)
+// 1. Audio Controller (保持不变)
 // =================================================================================
 const DB_NAME = 'LessonCacheDB';
 const STORE_NAME = 'tts_audio';
@@ -69,7 +68,7 @@ const audioController = {
 };
 
 // =================================================================================
-// 2. 样式表 (包含弹窗、录音动画、布局)
+// 2. 样式表 (优化了Grid布局防止在窄屏手机上塌陷)
 // =================================================================================
 const styles = `
 .ws-container {
@@ -113,15 +112,16 @@ const styles = `
 /* 单词列表区域 */
 .ws-scroll-area {
   flex: 1; overflow-y: auto;
-  padding: 10px 16px 160px; /* 底部留白 */
+  padding: 10px 16px 180px; /* 底部留白加大 */
   display: grid; 
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); /* 自适应网格 */
-  gap: 12px;
+  /* 调整为 85px，保证小屏手机也能一行显示3个，防止布局算不开导致空白 */
+  grid-template-columns: repeat(auto-fill, minmax(85px, 1fr)); 
+  gap: 10px;
   align-content: start;
   justify-items: center;
 }
 
-/* 单词卡片 (小尺寸) */
+/* 单词卡片 */
 .mini-card {
   background: #fff;
   border: 1px solid #cbd5e1;
@@ -132,10 +132,11 @@ const styles = `
   align-items: center; justify-content: center;
   cursor: pointer;
   transition: all 0.15s;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.02);
 }
 .mini-card:active { transform: scale(0.95); border-bottom-width: 1px; margin-top: 2px; }
-.mini-char { font-size: 1.8rem; font-weight: 700; color: #1e293b; line-height: 1; }
-.mini-pinyin { font-size: 0.8rem; color: #64748b; margin-top: 4px; }
+.mini-char { font-size: 1.6rem; font-weight: 700; color: #1e293b; line-height: 1.2; }
+.mini-pinyin { font-size: 0.75rem; color: #64748b; margin-top: 2px; font-weight: 500;}
 
 /* 弹窗遮罩 */
 .modal-overlay {
@@ -150,12 +151,12 @@ const styles = `
 
 /* 弹窗主体 */
 .modal-content {
-  background: #fff; width: 100%; max-width: 360px;
+  background: #fff; width: 100%; max-width: 340px;
   border-radius: 24px; padding: 24px;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.25);
   display: flex; flex-direction: column; align-items: center;
   position: relative;
-  max-height: 85vh; overflow-y: auto; /* 防止内容过长溢出 */
+  max-height: 85vh; overflow-y: auto;
   animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 @keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -167,10 +168,10 @@ const styles = `
 }
 
 /* 弹窗内：单词展示 */
-.big-char { font-size: 3rem; font-weight: 800; color: #0f172a; margin-bottom: 4px; line-height: 1.1; } /* 字体调小 */
-.big-pinyin { font-size: 1.3rem; color: #475569; font-weight: 600; margin-bottom: 8px;}
+.big-char { font-size: 2.8rem; font-weight: 800; color: #0f172a; margin-bottom: 2px; line-height: 1.1; }
+.big-pinyin { font-size: 1.1rem; color: #475569; font-weight: 600; margin-bottom: 8px;}
 .definition-row { 
-  margin-top: 8px; font-size: 1.1rem; 
+  margin-top: 6px; font-size: 1.1rem; 
   color: #334155; text-align: center;
   border-bottom: 1px solid #f1f5f9;
   padding-bottom: 12px; width: 100%;
@@ -179,14 +180,14 @@ const styles = `
 
 /* 弹窗内：例句列表 */
 .examples-container {
-  width: 100%; margin-top: 16px;
-  display: flex; flex-direction: column; gap: 10px;
+  width: 100%; margin-top: 14px;
+  display: flex; flex-direction: column; gap: 8px;
 }
 .example-item {
-  background: #f8fafc; padding: 10px 12px; border-radius: 12px;
+  background: #f8fafc; padding: 10px; border-radius: 12px;
   border: 1px solid #e2e8f0;
 }
-.ex-zh { font-size: 1rem; font-weight: 600; color: #334155; margin-bottom: 2px; }
+.ex-zh { font-size: 0.95rem; font-weight: 600; color: #334155; margin-bottom: 2px; }
 .ex-my { font-size: 0.85rem; color: #94a3b8; }
 .play-ex-btn {
   float: right; color: #3b82f6; padding: 4px; 
@@ -197,20 +198,20 @@ const styles = `
 
 /* 弹窗内：录音对比区 */
 .record-section {
-  margin-top: 20px; width: 100%;
-  border-top: 1px dashed #cbd5e1; padding-top: 16px;
-  display: flex; flex-direction: column; gap: 14px;
+  margin-top: 16px; width: 100%;
+  border-top: 1px dashed #cbd5e1; padding-top: 14px;
+  display: flex; flex-direction: column; gap: 12px;
 }
 
 .compare-row {
   display: flex; align-items: center; justify-content: space-between;
   background: #fff; border: 1px solid #e2e8f0;
-  padding: 8px 16px; border-radius: 50px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+  padding: 8px 14px; border-radius: 50px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.03);
 }
-.compare-label { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.9rem; color: #475569; }
+.compare-label { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 0.85rem; color: #475569; }
 .action-btn {
-  width: 36px; height: 36px; border-radius: 50%;
+  width: 32px; height: 32px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   border: none; cursor: pointer; color: white;
   transition: transform 0.1s;
@@ -221,10 +222,10 @@ const styles = `
 .btn-play-student:disabled { background: #cbd5e1; }
 
 /* 录音按钮 */
-.record-btn-wrapper { display: flex; justify-content: center; margin-top: 6px; }
+.record-btn-wrapper { display: flex; justify-content: center; margin-top: 4px; }
 .record-btn {
-  width: 64px; height: 64px; border-radius: 50%;
-  background: #ef4444; color: white; font-size: 1.6rem;
+  width: 60px; height: 60px; border-radius: 50%;
+  background: #ef4444; color: white; font-size: 1.5rem;
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
   transition: all 0.2s; border: none;
@@ -238,22 +239,22 @@ const styles = `
 /* 底部完成按钮 */
 .finish-bar {
   position: absolute; bottom: 0; left: 0; right: 0;
-  padding: 20px 20px 60px; /* 进一步提高位置，防止被手机底部条遮挡 */
+  padding: 20px 20px 50px;
   background: linear-gradient(to top, #f8fafc 80%, rgba(248, 250, 252, 0));
   display: flex; justify-content: center; pointer-events: none;
 }
 .finish-btn {
   pointer-events: auto;
   background: #1e293b; color: white;
-  padding: 16px 80px; border-radius: 100px;
-  font-size: 1.15rem; font-weight: 700;
+  padding: 14px 70px; border-radius: 100px;
+  font-size: 1.1rem; font-weight: 700;
   box-shadow: 0 6px 20px rgba(30, 41, 59, 0.3);
   border: none; display: flex; align-items: center; gap: 8px;
 }
 `;
 
 // =================================================================================
-// 3. 组件逻辑
+// 3. 组件逻辑 (Data-Driven，无计算)
 // =================================================================================
 const WordStudy = ({ data, onNext }) => {
   const { title, words } = data.content || {};
@@ -334,18 +335,14 @@ const WordStudy = ({ data, onNext }) => {
         </div>
       </div>
 
-      {/* 单词网格列表 (使用 pinyin-pro 动态生成) */}
+      {/* 单词网格列表 (直接读取 item.pinyin，无函数调用) */}
       <div className="ws-scroll-area">
-        {words?.map((item) => {
-          // 自动生成拼音
-          const py = pinyin(item.word, { toneType: 'mark' });
-          return (
-            <div key={item.id} className="mini-card" onClick={() => setActiveWordId(item.id)}>
-              <div className="mini-char">{item.word}</div>
-              <div className="mini-pinyin">{py}</div>
-            </div>
-          );
-        })}
+        {words?.map((item) => (
+          <div key={item.id} className="mini-card" onClick={() => setActiveWordId(item.id)}>
+            <div className="mini-char">{item.word}</div>
+            <div className="mini-pinyin">{item.pinyin}</div>
+          </div>
+        ))}
       </div>
 
       {/* 底部完成按钮 */}
@@ -365,10 +362,8 @@ const WordStudy = ({ data, onNext }) => {
 
             {/* 大字展示 */}
             <div className="big-char">{activeWord.word}</div>
-            {/* 实时生成大拼音 */}
-            <div className="big-pinyin">
-                {pinyin(activeWord.word, { toneType: 'mark' })}
-            </div>
+            {/* 直接读取数据里的拼音 */}
+            <div className="big-pinyin">{activeWord.pinyin}</div>
             
             {/* 释义 */}
             <div className="definition-row">
@@ -408,7 +403,7 @@ const WordStudy = ({ data, onNext }) => {
                 </button>
               </div>
 
-              {/* 录音按钮 (居中大按钮) */}
+              {/* 录音按钮 */}
               <div className="record-btn-wrapper">
                 <button 
                   className={`record-btn ${isRecording ? 'recording' : ''}`} 
@@ -418,7 +413,7 @@ const WordStudy = ({ data, onNext }) => {
                 </button>
               </div>
               <div className="text-center text-xs text-slate-400 font-bold mb-2">
-                {isRecording ? "正在录音... (Recording)" : "点击录音 (Tap to Record)"}
+                {isRecording ? "正在录音..." : "点击录音"}
               </div>
 
               {/* 学生行 */}
