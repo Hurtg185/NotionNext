@@ -1,17 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   FaVolumeUp, FaChevronRight, FaTimes, 
-  FaMagic, FaMicrophone, FaStop, FaPlay, FaRedo 
+  FaMagic, FaMicrophone, FaStop, FaPlay, FaRedo, FaArrowRight 
 } from "react-icons/fa";
 import { pinyin } from 'pinyin-pro';
 import { Howl, Howler } from 'howler';
 
 // ==========================================
-// 1. 音频控制工具 (纯逻辑 - 严格单音频模式)
+// 1. 音频控制工具 (增强版 - 含音效)
 // ==========================================
 
 const stopAllAudio = () => {
-  // 1. 卸载 Howler (R2 音频)
   try { 
     Howler.unload(); 
     Howler.stop();
@@ -19,7 +18,6 @@ const stopAllAudio = () => {
     console.warn("Howler stop failed", e);
   }
 
-  // 2. 暂停并重置所有原生 Audio 元素 (TTS / 录音回放)
   const audioElements = document.getElementsByTagName('audio');
   for (let i = 0; i < audioElements.length; i++) {
     try {
@@ -29,8 +27,23 @@ const stopAllAudio = () => {
   }
 };
 
+const playSFX = (type) => {
+  const paths = {
+    click: '/sounds/click.mp3',
+    switch: '/sounds/switch-card.mp3'
+  };
+  if (!paths[type]) return;
+
+  const sound = new Howl({
+    src: [paths[type]],
+    volume: 0.6,
+    html5: true
+  });
+  sound.play();
+};
+
 const playR2Audio = (wordObj) => {
-  stopAllAudio(); // 强制停止其他声音
+  stopAllAudio(); 
   
   if (wordObj && wordObj.id && wordObj.hsk_level) {
     const formattedId = String(wordObj.id).padStart(4, '0');
@@ -41,12 +54,8 @@ const playR2Audio = (wordObj) => {
       src: [audioUrl],
       html5: true, 
       volume: 1.0,
-      onloaderror: () => {
-        playTTS(wordObj.word || wordObj.chinese);
-      },
-      onplayerror: () => {
-        playTTS(wordObj.word || wordObj.chinese);
-      }
+      onloaderror: () => playTTS(wordObj.word || wordObj.chinese),
+      onplayerror: () => playTTS(wordObj.word || wordObj.chinese)
     });
     sound.play();
   } else {
@@ -56,9 +65,6 @@ const playR2Audio = (wordObj) => {
 };
 
 const playSpellingAudio = (pyWithTone) => {
-  // 注意：拼读是连续播放，所以在序列开始前外部会调用 stopAllAudio，
-  // 单个字播放时不要在这里调用 stopAllAudio，否则会打断上一个音的尾音（如果连得很紧）。
-  // 但为了防止和主音频冲突，这里仅在Promise开始时确保环境干净。
   return new Promise((resolve) => {
     const filename = encodeURIComponent(pyWithTone); 
     const url = `https://audio.886.best/chinese-vocab-audio/%E6%8B%BC%E8%AF%BB%E9%9F%B3%E9%A2%91/${filename}.mp3`;
@@ -75,16 +81,15 @@ const playSpellingAudio = (pyWithTone) => {
 };
 
 const playTTS = (text) => {
-  stopAllAudio(); // 强制停止其他声音
+  stopAllAudio();
   if (!text) return;
-  
   const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=zh-CN-XiaoyouNeural`;
   const audio = new Audio(url);
   audio.play().catch(e => console.error("TTS error", e));
 };
 
 // ==========================================
-// 2. 拼读弹窗组件 (带录音 - 缅语界面)
+// 2. 拼读弹窗组件 (浅色系优化)
 // ==========================================
 
 const SpellingModal = ({ wordObj, onClose }) => {
@@ -97,7 +102,7 @@ const SpellingModal = ({ wordObj, onClose }) => {
   const audioChunksRef = useRef([]);
 
   useEffect(() => {
-    stopAllAudio(); // 打开弹窗时停止背景声音
+    stopAllAudio();
     let isCancelled = false;
     
     const runSequence = async () => {
@@ -106,7 +111,6 @@ const SpellingModal = ({ wordObj, onClose }) => {
         if (isCancelled) return;
         setActiveCharIndex(i);
         const charPinyin = pinyin(chars[i], { toneType: 'symbol' });
-        // 播放单字
         await playSpellingAudio(charPinyin);
         await new Promise(r => setTimeout(r, 150));
       }
@@ -123,6 +127,7 @@ const SpellingModal = ({ wordObj, onClose }) => {
 
   const startRecording = async () => {
     stopAllAudio();
+    playSFX('click');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
@@ -152,57 +157,68 @@ const SpellingModal = ({ wordObj, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/90 backdrop-blur-md p-6" onClick={onClose}>
+    // 浅色磨砂背景
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/90 backdrop-blur-xl p-6 transition-all duration-300" onClick={onClose}>
       <div className="w-full max-w-sm flex flex-col items-center relative" onClick={e => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute -top-12 right-0 text-white/70 hover:text-white p-2">
-            <FaTimes size={28}/>
+        
+        {/* 关闭按钮 (柔和设计) */}
+        <button 
+          onClick={() => { playSFX('click'); onClose(); }}
+          className="absolute -top-16 right-0 w-10 h-10 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center text-slate-400 transition-colors shadow-sm"
+        >
+            <FaTimes size={16}/>
         </button>
         
-        <h3 className="text-sm font-bold text-white/50 mb-10 tracking-[0.2em] font-['Padauk']">စာလုံးပေါင်း (Spelling)</h3>
+        <h3 className="text-sm font-bold text-slate-400 mb-8 tracking-[0.2em] font-['Padauk'] uppercase">Spelling Practice</h3>
         
-        <div className="flex flex-wrap justify-center gap-4 mb-10">
+        {/* 文字显示区 (浅色模式适配) */}
+        <div className="flex flex-wrap justify-center gap-4 mb-12">
           {rawText.split('').map((char, idx) => {
              const py = pinyin(char, { toneType: 'symbol' });
              const isActive = idx === activeCharIndex || activeCharIndex === 'all';
              return (
                <div key={idx} className="flex flex-col items-center">
-                 <span className={`text-xl font-mono mb-2 ${isActive ? 'text-orange-400 font-bold' : 'text-slate-500'}`}>{py}</span>
-                 <span className={`text-6xl font-black transition-all duration-300 ${isActive ? 'text-white scale-110' : 'text-slate-600 scale-100'}`}>{char}</span>
+                 <span className={`text-xl font-mono mb-2 transition-colors ${isActive ? 'text-blue-500 font-bold' : 'text-slate-300'}`}>
+                   {py}
+                 </span>
+                 <span className={`text-6xl font-black transition-all duration-300 ${isActive ? 'text-slate-800 scale-110 drop-shadow-lg' : 'text-slate-200 scale-100'}`}>
+                   {char}
+                 </span>
                </div>
              )
           })}
         </div>
 
-        {/* 录音控制条 */}
-        <div className="flex items-center gap-8">
+        {/* 录音控制条 (浅色风格) */}
+        <div className="flex items-center gap-10">
             {!isRecording ? (
-                <button onClick={startRecording} className="flex flex-col items-center gap-2 text-white/80 hover:text-white">
-                    <div className="w-16 h-16 rounded-full bg-red-500 flex items-center justify-center shadow-lg shadow-red-500/30 active:scale-95 transition-all">
+                <button onClick={startRecording} className="flex flex-col items-center gap-2 group">
+                    <div className="w-16 h-16 rounded-full bg-white border-2 border-slate-100 flex items-center justify-center shadow-lg group-active:scale-95 transition-all text-red-500">
                         <FaMicrophone size={24} />
                     </div>
-                    <span className="text-xs font-['Padauk']">အသံသွင်းရန်</span>
+                    <span className="text-xs font-['Padauk'] text-slate-500 font-bold">Record</span>
                 </button>
             ) : (
-                <button onClick={stopRecording} className="flex flex-col items-center gap-2 text-white/80 hover:text-white">
-                    <div className="w-16 h-16 rounded-full bg-slate-700 flex items-center justify-center animate-pulse border-2 border-red-500">
+                <button onClick={stopRecording} className="flex flex-col items-center gap-2 group">
+                    <div className="w-16 h-16 rounded-full bg-red-50 border-2 border-red-500 flex items-center justify-center animate-pulse text-red-500">
                         <FaStop size={24} />
                     </div>
-                    <span className="text-xs font-['Padauk']">ရပ်ရန်</span>
+                    <span className="text-xs font-['Padauk'] text-red-500 font-bold">Stop</span>
                 </button>
             )}
 
             {audioBlob && !isRecording && (
                 <div className="flex items-center gap-6 animate-in fade-in slide-in-from-left duration-300">
-                    <button onClick={playUserAudio} className="flex flex-col items-center gap-2 text-white/80 hover:text-white">
-                        <div className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center shadow-lg shadow-green-500/30 active:scale-95 transition-all">
-                            <FaPlay size={22} className="ml-1" />
+                    <button onClick={playUserAudio} className="flex flex-col items-center gap-2 group">
+                        <div className="w-16 h-16 rounded-full bg-blue-500 flex items-center justify-center shadow-lg shadow-blue-200 group-active:scale-95 transition-all text-white">
+                            <FaPlay size={20} className="ml-1" />
                         </div>
-                        <span className="text-xs font-['Padauk']">ပြန်နားထောင်</span>
+                        <span className="text-xs font-['Padauk'] text-slate-500 font-bold">Play</span>
                     </button>
                     
-                    <button onClick={() => setAudioBlob(null)} className="flex flex-col items-center gap-2 text-slate-500 hover:text-slate-300 mt-6">
+                    <button onClick={() => setAudioBlob(null)} className="flex flex-col items-center gap-2 mt-6 text-slate-400 hover:text-slate-600">
                        <FaRedo size={16}/>
-                       <span className="text-[10px] font-['Padauk']">ပြန်စ</span>
+                       <span className="text-[10px] font-['Padauk']">Retry</span>
                     </button>
                 </div>
             )}
@@ -213,20 +229,36 @@ const SpellingModal = ({ wordObj, onClose }) => {
 };
 
 // ==========================================
-// 3. 例句组件 (极简紧凑)
+// 3. 例句组件 (带自动拼音 + 紧凑)
 // ==========================================
 
 const SimpleExampleRow = ({ text, translation }) => {
+  // 自动生成拼音
+  const textWithPinyin = text.split('').map((char, i) => {
+    // 简单判断是否是中文字符
+    if (/[\u4e00-\u9fa5]/.test(char)) {
+      return { char, py: pinyin(char, { toneType: 'symbol' }) };
+    }
+    return { char, py: '' };
+  });
+
   return (
     <div 
-      className="flex flex-col items-center justify-center py-2 px-1 w-full text-center cursor-pointer active:opacity-60 transition-opacity"
-      onClick={() => playTTS(text)}
+      className="flex flex-col items-center justify-center py-3 px-2 w-full text-center cursor-pointer active:opacity-60 transition-opacity"
+      onClick={() => { playSFX('click'); playTTS(text); }}
     >
-      <div className="text-lg text-slate-800 font-medium leading-tight mb-1">
-        {text}
+      {/* 拼音 + 汉字 组合 */}
+      <div className="flex flex-wrap justify-center gap-x-1 mb-1 leading-none">
+        {textWithPinyin.map((item, idx) => (
+            <div key={idx} className="flex flex-col items-center">
+                {item.py && <span className="text-[0.65rem] text-slate-400 mb-[2px] font-mono select-none">{item.py}</span>}
+                <span className="text-lg text-slate-800 font-medium">{item.char}</span>
+            </div>
+        ))}
       </div>
+      
       {translation && (
-        <div className="text-sm text-slate-500 font-['Padauk'] leading-tight">
+        <div className="text-sm text-slate-500 font-['Padauk'] leading-tight mt-1">
           {translation}
         </div>
       )}
@@ -240,7 +272,7 @@ const SimpleExampleRow = ({ text, translation }) => {
 
 export default function WordStudyPlayer({ data, onNext, onPrev }) {
   if (!data || !data.words || data.words.length === 0) {
-    return <div className="h-screen flex items-center justify-center">No Data</div>;
+    return <div className="h-screen flex items-center justify-center text-slate-400">No Data</div>;
   }
 
   const words = data.words;
@@ -260,6 +292,7 @@ export default function WordStudyPlayer({ data, onNext, onPrev }) {
   }, [index, currentWord]);
 
   const handleNext = () => {
+    playSFX('switch'); // 播放翻页音效
     stopAllAudio();
     if (index < total - 1) {
       setIndex(index + 1);
@@ -270,90 +303,91 @@ export default function WordStudyPlayer({ data, onNext, onPrev }) {
 
   const displayWord = currentWord.word || currentWord.chinese;
   const displayPinyin = currentWord.pinyin || pinyin(displayWord, { toneType: 'symbol' });
-
-  // 计算进度百分比 (用于极简进度指示)
   const progressPercent = ((index + 1) / total) * 100;
 
   return (
-    // 容器：全屏，无滚动，内容垂直分布
     <div className="w-full h-[100dvh] flex flex-col bg-slate-50 relative overflow-hidden font-sans">
       
-      {/* 极细的顶部进度条 */}
-      <div className="w-full h-1 bg-slate-200">
+      {/* 顶部极细进度条 */}
+      <div className="w-full h-1 bg-slate-200/50">
         <div 
-          className="h-full bg-blue-500 transition-all duration-300 ease-out" 
+          className="h-full bg-indigo-500 transition-all duration-300 ease-out" 
           style={{ width: `${progressPercent}%` }}
         ></div>
       </div>
 
-      {/* 核心内容区：Flex 1 自动占据剩余空间，居中对齐 */}
-      <div className="flex-1 flex flex-col items-center justify-evenly px-4 py-2 w-full max-w-md mx-auto">
+      {/* 核心内容区 */}
+      <div className="flex-1 flex flex-col items-center justify-center px-4 w-full max-w-md mx-auto relative z-10">
         
-        {/* 1. 单词主体区 */}
-        <div className="w-full flex flex-col items-center text-center space-y-2">
+        {/* 1. 单词主体 */}
+        <div className="w-full flex flex-col items-center text-center">
             
             {/* 拼音 */}
-            <div className="text-lg text-slate-400 font-mono">
+            <div className="text-xl text-slate-400 font-mono mb-2 tracking-wide">
               {displayPinyin}
             </div>
             
-            {/* 汉字 - 点击播放 */}
+            {/* 汉字 */}
             <h1 
-              className="text-6xl font-black text-slate-800 cursor-pointer active:scale-95 transition-transform select-none"
-              onClick={() => playR2Audio(currentWord)}
+              className="text-7xl font-black text-slate-800 cursor-pointer active:scale-95 transition-transform select-none mb-3 tracking-tight"
+              onClick={() => { playSFX('click'); playR2Audio(currentWord); }}
             >
               {displayWord}
             </h1>
 
-            {/* 词性 */}
-            {currentWord.pos && (
-              <div className="text-xs text-slate-400 font-bold bg-slate-100 px-2 py-0.5 rounded">
-                {currentWord.pos}
-              </div>
-            )}
+            {/* 词性 & 解释 */}
+            <div className="flex flex-col items-center gap-2 mb-2">
+                {currentWord.pos && (
+                  <span className="text-[10px] text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                    {currentWord.pos}
+                  </span>
+                )}
+                
+                <div className="text-2xl font-bold text-slate-700 font-['Padauk'] leading-snug px-2">
+                  {currentWord.definition || currentWord.burmese}
+                </div>
 
-            {/* 缅文释义 */}
-            <div className="text-2xl font-bold text-blue-900 font-['Padauk'] pt-2 leading-snug">
-              {currentWord.definition || currentWord.burmese}
+                {/* 缅文谐音 */}
+                {currentWord.sound_burmese && (
+                  <div 
+                    className="text-lg text-orange-500 font-['Padauk'] opacity-90 cursor-pointer hover:opacity-100"
+                    onClick={() => { playSFX('click'); playR2Audio(currentWord); }}
+                  >
+                    ( {currentWord.sound_burmese} )
+                  </div>
+                )}
             </div>
-
-            {/* 缅文谐音 (无标签，仅文本) */}
-            {currentWord.sound_burmese && (
-              <div 
-                className="text-lg text-orange-600 font-['Padauk'] font-medium opacity-90 pt-1"
-                onClick={() => playR2Audio(currentWord)}
-              >
-                ( {currentWord.sound_burmese} )
-              </div>
-            )}
         </div>
 
-        {/* 2. 操作按钮区 (紧凑) */}
-        <div className="flex items-center justify-center gap-6 w-full pt-2">
+        {/* 2. 操作区 (更紧凑，贴近主体) */}
+        <div className="flex items-center justify-center gap-4 w-full mt-4 mb-6">
+           {/* 拼读按钮 (浅色系) */}
            <button 
-              onClick={() => setShowSpelling(true)}
-              className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 text-slate-700 rounded-full shadow-sm active:bg-slate-50 transition-all"
+              onClick={() => { playSFX('click'); setShowSpelling(true); }}
+              className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-full shadow-sm active:bg-slate-50 active:scale-95 transition-all"
            >
-             <FaMagic className="text-blue-500" />
-             <span className="text-sm font-bold font-['Padauk']">စာလုံးပေါင်း</span> {/* Spelling */}
+             <FaMagic className="text-indigo-500 text-sm" />
+             <span className="text-sm font-bold font-['Padauk']">စာလုံးပေါင်း</span>
            </button>
 
+           {/* 发音按钮 (浅色系) */}
            <button 
-              onClick={() => playR2Audio(currentWord)}
-              className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-blue-200 active:scale-95 transition-all"
+              onClick={() => { playSFX('click'); playR2Audio(currentWord); }}
+              className="w-11 h-11 bg-white border border-slate-200 text-indigo-500 rounded-full flex items-center justify-center shadow-sm active:bg-indigo-50 active:scale-95 transition-all"
            >
-             <FaVolumeUp size={20}/>
+             <FaVolumeUp size={18}/>
            </button>
         </div>
 
-        {/* 3. 例句区 (紧凑列表) */}
+        {/* 3. 例句区 (紧凑分割线) */}
         {(currentWord.example || currentWord.example2) && (
-            <div className="w-full flex flex-col items-center border-t border-slate-200/60 pt-4 mt-2">
+            <div className="w-full border-t border-slate-100 pt-2 pb-4">
                 {currentWord.example && (
                     <SimpleExampleRow text={currentWord.example} translation={currentWord.example_burmese} />
                 )}
-                {/* 如果屏幕高度允许，或者有第二个例句，加上微小间距 */}
-                {currentWord.example2 && <div className="h-2"></div>}
+                {/* 极小的垂直间距 */}
+                {currentWord.example && currentWord.example2 && <div className="h-2"></div>}
+                
                 {currentWord.example2 && (
                     <SimpleExampleRow text={currentWord.example2} translation={currentWord.example2_burmese} />
                 )}
@@ -361,16 +395,16 @@ export default function WordStudyPlayer({ data, onNext, onPrev }) {
         )}
       </div>
 
-      {/* 底部按钮 (固定高度，不覆盖内容) */}
-      <div className="flex-none w-full px-6 pb-8 pt-2 bg-slate-50 max-w-md mx-auto">
+      {/* 底部按钮 (提高位置，浅色系) */}
+      <div className="flex-none w-full px-6 pb-12 pt-2 max-w-md mx-auto z-20">
         <button 
           onClick={handleNext}
-          className="w-full h-14 bg-slate-900 text-white rounded-xl font-bold text-lg shadow-md active:scale-[0.98] transition-all flex items-center justify-center gap-3"
+          className="w-full h-14 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-2xl font-bold text-lg shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-3 border border-indigo-100"
         >
-          <span className="font-['Padauk']">
-            {index === total - 1 ? "ပြီးပါပြီ" : "ရှေ့ဆက်"} {/* Finished : Next */}
+          <span className="font-['Padauk'] font-extrabold">
+            {index === total - 1 ? "ပြီးပါပြီ" : "ရှေ့ဆက်"} {/* Continue */}
           </span> 
-          <FaChevronRight size={14} className="text-slate-400" />
+          <FaArrowRight size={16} />
         </button>
       </div>
 
