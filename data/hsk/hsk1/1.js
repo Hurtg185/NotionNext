@@ -273,109 +273,304 @@ export default {
       }
     },
 
-    // ==========================================
-    // 4. 选择题练习
-    // ==========================================
-    {
-      type: "choice",
-      content: {
-        question: "How do you ask 'What is this?' in Chinese?",
-        options: [
-          { id: "1", text: "这是什么？" },
-          { id: "2", text: "这是谁？" },
-          { id: "3", text: "这是哪？" },
-          { id: "4", text: "你好吗？" }
-        ],
-        correctAnswer: "1"
-      }
-    },
-    {
-      type: "choice",
-      content: {
-        question: "Select the correct sentence: (Who is he?)",
-        options: [
-          { id: "1", text: "他是什么？" },
-          { id: "2", text: "他是谁？" },
-          { id: "3", text: "他是哪？" },
-          { id: "4", text: "他是吗？" }
-        ],
-        correctAnswer: "2",
-        explanation: "Ask about a person use '谁' (who)."
-      }
-    },
-    {
-      type: "choice",
-      content: {
-        question: {
-          text: "Look at the flag. Which country is this?",
-          imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Flag_of_Myanmar.svg/200px-Flag_of_Myanmar.svg.png"
-        },
-        options: [
-          { id: "1", text: "中国 (Zhōngguó)" },
-          { id: "2", text: "美国 (Měiguó)" },
-          { id: "3", text: "缅甸 (Miǎndiàn)" },
-          { id: "4", text: "英国 (Yīngguó)" }
-        ],
-        correctAnswer: "3",
-      }
-    },
-
-    // ==========================================
-    // 5. 排序题练习
-    // ==========================================
-    {
-      type: "paixu",
-      content: {
-        title: "连词成句：你是哪国人？",
-        items: [
-          { id: "1", text: "你" },
-          { id: "2", text: "是" },
-          { id: "3", text: "哪" },
-          { id: "4", text: "国" },
-          { id: "5", text: "人" },
-          { id: "6", text: "？" }
-        ],
-        correctOrder: ["1", "2", "3", "4", "5", "6"]
-      }
-    },
-    {
-      type: "paixu",
-      content: {
-        title: "连词成句：你想吃什么？",
-        items: [
-          { id: "1", text: "什么" },
-          { id: "2", text: "想" },
-          { id: "3", text: "你" },
-          { id: "4", text: "吃" },
-          { id: "5", text: "？" }
-        ],
-        correctOrder: ["3", "2", "4", "1", "5"]
-      }
-    },
-    {
-      type: "paixu",
-      content: {
-        title: "连词成句：他不是老师。",
-        items: [
-          { id: "1", text: "是" },
-          { id: "2", text: "不" },
-          { id: "3", text: "他" },
-          { id: "4", text: "老师" },
-          { id: "5", text: "。" }
-        ],
-        correctOrder: ["3", "2", "1", "4", "5"]
-      }
-    },
-
-    // ==========================================
-    // 6. 结束页面
-    // ==========================================
-    {
-      type: "end",
-      content: {
-        title: "第一课完成！",
-        description: "你太棒了！你已经掌握了中文最常用的提问方式。"
-      }
+     // ================= 选择题 (XuanZeTi) =================
+  {
+    id: "c1",
+    type: "choice",
+    content: {
+      question: "“你好” (Nǐ hǎo) မြန်မာလို ဘာလဲ?",
+      correctAnswer: ["1"],
+      explanation: "“你好” သည် တရုတ်ဘာသာစကားတွင် နှုတ်ဆက်ခြင်းဖြစ်သည်။",
+      options: [
+        { id: "1", text: "မင်္ဂလာပါ" },
+        { id: "2", text: "ကျေးဇူးတင်ပါတယ်" },
+        { id: "3", text: "တာ့တာ" },
+        { id: "4", text: "ပြန်တွေ့မယ်" }
+      ]
     }
-  ]
-};
+  },
+  {
+    id: "c2",
+    type: "choice",
+    content: {
+      question: "ပုံထဲက အသီးက ဘာလဲ?",
+      imageUrl: "https://cdn.pixabay.com/photo/2016/09/12/08/22/apple-1663968_640.jpg",
+      correctAnswer: ["2"],
+      explanation: "ပုံထဲကအသီးက ပန်းသီးဖြစ်ပါတယ်။ ပန်းသီးကို တရုတ်လို “苹果” (Píngguǒ) လို့ခေါ်ပါတယ်။",
+      options: [
+        { id: "1", text: "香蕉 (Xiāngjiāo)" },
+        { id: "2", text: "苹果 (Píngguǒ)" },
+        { id: "3", text: "西瓜 (Xīguā)" },
+        { id: "4", text: "葡萄 (Pútáo)" }
+      ]
+    }
+  },
+  {
+    id: "c3",
+    type: "choice",
+    content: {
+      question: "“谢谢” (Xièxie) ပြန်ပြောရင် ဘယ်လိုပြောမလဲ?",
+      correctAnswer: ["3"],
+      explanation: "သူများက ကျေးဇူးတင်တယ်ပြောရင် “不客气” (Bù kèqì - ရပါတယ်) လို့ပြန်ပြောရပါတယ်။",
+      options: [
+        { id: "1", text: "你好 (Nǐ hǎo)" },
+        { id: "2", text: "再见 (Zàijiàn)" },
+        { id: "3", text: "不客气 (Bù kèqì)" },
+        { id: "4", text: "对不起 (Duìbùqǐ)" }
+      ]
+    }
+  },
+  {
+    id: "c4",
+    type: "choice",
+    content: {
+      question: "အောက်ပါတို့မှ ဘယ်ဟာက “မိသားစု” နဲ့မဆိုင်ဘူးလဲ?",
+      correctAnswer: ["4"],
+      explanation: "“爸爸” (အဖေ), “妈妈” (အမေ), “哥哥” (အစ်ကို) တို့သည် မိသားစုဝင်များဖြစ်ပြီး “苹果” (ပန်းသီး) မှာ အစားအစာဖြစ်သည်။",
+      options: [
+        { id: "1", text: "爸爸 (Bàba)" },
+        { id: "2", text: "妈妈 (Māma)" },
+        { id: "3", text: "哥哥 (Gēge)" },
+        { id: "4", text: "苹果 (Píngguǒ)" }
+      ]
+    }
+  },
+  {
+    id: "c5",
+    type: "choice",
+    content: {
+      question: "“၁၀” ကို တရုတ်လို ဘယ်လိုရေးလဲ?",
+      correctAnswer: ["2"],
+      explanation: "一 (1), 十 (10), 八 (8), 五 (5).",
+      options: [
+        { id: "1", text: "一" },
+        { id: "2", text: "十" },
+        { id: "3", text: "八" },
+        { id: "4", text: "五" }
+      ]
+    }
+  },
+  {
+    id: "c6",
+    type: "choice",
+    content: {
+      question: "သူက ဘာလုပ်နေတာလဲ?",
+      imageUrl: "https://cdn.pixabay.com/photo/2014/06/03/19/38/board-361516_640.jpg",
+      correctAnswer: ["1"],
+      explanation: "ပုံထဲမှာ စာရေးနေတာ တွေ့ရပါတယ်။ စာရေးခြင်းကို “写字” ဟုခေါ်သည်။",
+      options: [
+        { id: "1", text: "写字 (Xiězì)" },
+        { id: "2", text: "吃饭 (Chīfàn)" },
+        { id: "3", text: "睡觉 (Shuìjiào)" },
+        { id: "4", text: "喝水 (Hēshuǐ)" }
+      ]
+    }
+  },
+  {
+    id: "c7",
+    type: "choice",
+    content: {
+      question: "“今天天气很好” ဆိုတာ ဘာအဓိပ္ပာယ်လဲ?",
+      correctAnswer: ["2"],
+      explanation: "今天 (ယနေ့) 天气 (ရာသီဥတု) 很好 (အလွန်ကောင်းသည်).",
+      options: [
+        { id: "1", text: "မနေ့က ရာသီဥတုဆိုးတယ်" },
+        { id: "2", text: "ဒီနေ့ ရာသီဥတုအရမ်းကောင်းတယ်" },
+        { id: "3", text: "မနက်ဖြန် မိုးရွာမယ်" },
+        { id: "4", text: "ဒီနေ့ အရမ်းပူတယ်" }
+      ]
+    }
+  },
+  {
+    id: "c8",
+    type: "choice",
+    content: {
+      question: "“猫” (Māo) ဆိုတာ ဘာတိရစ္ဆာန်လဲ?",
+      imageUrl: "https://cdn.pixabay.com/photo/2017/02/20/18/03/cat-2083492_640.jpg",
+      correctAnswer: ["3"],
+      explanation: "猫 (Māo) ဆိုတာ ကြောင် ဖြစ်ပါတယ်။",
+      options: [
+        { id: "1", text: "ခွေး" },
+        { id: "2", text: "ငါး" },
+        { id: "3", text: "ကြောင်" },
+        { id: "4", text: "ငှက်" }
+      ]
+    }
+  },
+  {
+    id: "c9",
+    type: "choice",
+    content: {
+      question: "“喝水” (Hē shuǐ) လုပ်ဖို့ ဘာလိုမလဲ?",
+      correctAnswer: ["1"],
+      explanation: "ရေသောက်ဖို့ ခွက် (杯子) လိုအပ်ပါတယ်။",
+      options: [
+        { id: "1", text: "杯子 (ခွက်)" },
+        { id: "2", text: "书 (စာအုပ်)" },
+        { id: "3", text: "笔 (ဘောပင်)" },
+        { id: "4", text: "衣服 (အင်္ကျီ)" }
+      ]
+    }
+  },
+  {
+    id: "c10",
+    type: "choice",
+    content: {
+      question: "“紅色” (Hóngsè) သည် ဘာအရောင်လဲ?",
+      correctAnswer: ["1"],
+      explanation: "紅色 (Hóngsè) သည် အနီရောင်ဖြစ်သည်။",
+      options: [
+        { id: "1", text: "အနီရောင်" },
+        { id: "2", text: "အပြာရောင်" },
+        { id: "3", text: "အဝါရောင်" },
+        { id: "4", text: "အဖြူရောင်" }
+      ]
+    }
+  },
+
+  // ================= 排序题 (PaiXuTi) =================
+  {
+    id: "p1",
+    type: "paixu",
+    content: {
+      title: "ဝါကျစီပါ: “ကျွန်တော်က တရုတ်လူမျိုးပါ”",
+      correctOrder: ["p1-1", "p1-2", "p1-3"],
+      explanation: "တရုတ်ဝါကျဖွဲ့စည်းပုံ S+V+O: 我 (ကျွန်တော်) + 是 (ဖြစ်သည်) + 中国人 (တရုတ်လူမျိုး)。",
+      items: [
+        { id: "p1-3", text: "中国人" },
+        { id: "p1-1", text: "我" },
+        { id: "p1-2", text: "是" }
+      ]
+    }
+  },
+  {
+    id: "p2",
+    type: "paixu",
+    content: {
+      title: "ဝါကျစီပါ: “မင်း ဘယ်သွားမလို့လဲ?”",
+      correctOrder: ["p2-1", "p2-2", "p2-3", "p2-4"],
+      explanation: "你 (မင်း) + 去 (သွား) + 哪儿 (ဘယ်နေရာ) + 呀 (လဲ)?",
+      items: [
+        { id: "p2-2", text: "去" },
+        { id: "p2-1", text: "你" },
+        { id: "p2-4", text: "呀" },
+        { id: "p2-3", text: "哪儿" }
+      ]
+    }
+  },
+  {
+    id: "p3",
+    type: "paixu",
+    content: {
+      title: "ဝါကျစီပါ: “သူမက လှတယ်”",
+      correctOrder: ["p3-1", "p3-2", "p3-3"],
+      explanation: "နာမဝိသေသနဝါကျတွင် “很” ထည့်လေ့ရှိသည်။ 她 (သူမ) + 很 (အရမ်း) + 漂亮 (လှသည်)။",
+      items: [
+        { id: "p3-2", text: "很" },
+        { id: "p3-3", text: "漂亮" },
+        { id: "p3-1", text: "她" }
+      ]
+    }
+  },
+  {
+    id: "p4",
+    type: "paixu",
+    content: {
+      title: "ဝါကျစီပါ: “ကျွန်တော် ထမင်းစားတယ်”",
+      correctOrder: ["p4-1", "p4-2", "p4-3"],
+      explanation: "我 (I) + 吃 (eat) + 饭 (rice)。",
+      items: [
+        { id: "p4-3", text: "饭" },
+        { id: "p4-1", text: "我" },
+        { id: "p4-2", text: "吃" }
+      ]
+    }
+  },
+  {
+    id: "p5",
+    type: "paixu",
+    content: {
+      title: "ဝါကျစီပါ: “မနက်ဖြန် ကျွန်တော်တို့ ကျောင်းသွားမယ်”",
+      correctOrder: ["p5-1", "p5-2", "p5-3", "p5-4"],
+      explanation: "အချိန်ပြပုဒ် (明天) သည် ဝါကျအစတွင် ထားလေ့ရှိသည်။ 明天 (Tomorrow) + 我们 (We) + 去 (go) + 学校 (school)။",
+      items: [
+        { id: "p5-4", text: "学校" },
+        { id: "p5-1", text: "明天" },
+        { id: "p5-2", text: "我们" },
+        { id: "p5-3", text: "去" }
+      ]
+    }
+  },
+  {
+    id: "p6",
+    type: "paixu",
+    content: {
+      title: "ဝါကျစီပါ: “ဒါက ဘာလဲ?”",
+      correctOrder: ["p6-1", "p6-2", "p6-3"],
+      explanation: "这是 (This is) + 什么 (what)?",
+      items: [
+        { id: "p6-3", text: "什么" },
+        { id: "p6-1", text: "这" },
+        { id: "p6-2", text: "是" }
+      ]
+    }
+  },
+  {
+    id: "p7",
+    type: "paixu",
+    content: {
+      title: "ဝါကျစီပါ: “ကျွန်တော် ပန်းသီးကြိုက်တယ်”",
+      correctOrder: ["p7-1", "p7-2", "p7-3"],
+      explanation: "我 (I) + 喜欢 (like) + 苹果 (apples)။",
+      items: [
+        { id: "p7-2", text: "喜欢" },
+        { id: "p7-1", text: "我" },
+        { id: "p7-3", text: "苹果" }
+      ]
+    }
+  },
+  {
+    id: "p8",
+    type: "paixu",
+    content: {
+      title: "ဝါကျစီပါ: “သူ့မှာ ပိုက်ဆံမရှိဘူး”",
+      correctOrder: ["p8-1", "p8-2", "p8-3", "p8-4"],
+      explanation: "他 (He) + 没 (not) + 有 (have) + 钱 (money)။",
+      items: [
+        { id: "p8-1", text: "他" },
+        { id: "p8-4", text: "钱" },
+        { id: "p8-2", text: "没" },
+        { id: "p8-3", text: "有" }
+      ]
+    }
+  },
+  {
+    id: "p9",
+    type: "paixu",
+    content: {
+      title: "ဝါကျစီပါ: “အခု ဘယ်နှစ်နာရီလဲ?”",
+      correctOrder: ["p9-1", "p9-2", "p9-3"],
+      explanation: "现在 (Now) + 几点 (what time) + 了 (already)?",
+      items: [
+        { id: "p9-3", text: "了" },
+        { id: "p9-1", text: "现在" },
+        { id: "p9-2", text: "几点" }
+      ]
+    }
+  },
+  {
+    id: "p10",
+    type: "paixu",
+    content: {
+      title: "ဝါကျစီပါ: “ကျွန်တော့်အဖေက ဆရာဝန်ပါ”",
+      imageUrl: "https://cdn.pixabay.com/photo/2017/01/31/22/32/doctor-2027768_640.png",
+      correctOrder: ["p10-1", "p10-2", "p10-3"],
+      explanation: "我爸爸 (My dad) + 是 (is) + 医生 (doctor)။",
+      items: [
+        { id: "p10-3", text: "医生" },
+        { id: "p10-1", text: "我爸爸" },
+        { id: "p10-2", text: "是" }
+      ]
+    }
+  }
+];
