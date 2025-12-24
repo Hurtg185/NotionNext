@@ -135,7 +135,7 @@ const cssStyles = `
   font-family: "Padauk","Noto Sans SC",sans-serif;
   position: absolute; inset: 0;
   display: flex; flex-direction: column;
-  background: #fff; /* 整体背景改为纯白或极浅灰 */
+  background: #fff;
 }
 
 /* --- 头部区域 --- */
@@ -147,25 +147,23 @@ const cssStyles = `
 
 .scene-wrapper {
   width: 100%; max-width: 600px;
-  display: flex; align-items: center; /* 垂直居中 */
+  display: flex; align-items: center; 
   gap: 16px;
 }
 
-/* --- 人物图像 (放大) --- */
 .teacher-img {
-  height: 180px; /* 尺寸更大 */
+  height: 180px;
   object-fit: contain;
   mix-blend-mode: multiply; 
   flex-shrink: 0;
 }
 
-/* --- 气泡容器 (更紧凑) --- */
 .bubble-container {
   flex: 1; 
   background: #fff;
   border-radius: 18px;
-  padding: 12px 16px; /* 减小内边距 */
-  border: 2px solid #e5e7eb; /* 边框加粗一点 */
+  padding: 12px 16px;
+  border: 2px solid #e5e7eb;
   position: relative;
   display: flex;
   align-items: center;
@@ -188,43 +186,37 @@ const cssStyles = `
   border-right: 8px solid #fff;
 }
 
-/* 题目图片 (在气泡内显示时) */
 .question-img-bubble {
   max-width: 100px; max-height: 80px;
   border-radius: 8px; object-fit: cover;
 }
 
-/* --- 文本样式 --- */
 .zh-seg { display: inline-flex; flex-direction: column; align-items: center; margin: 0 1px; }
 .zh-py { font-size: .75rem; color: #94a3b8; }
 .zh-char { font-size: 1.25rem; font-weight: 700; color: #1e293b; }
 .my-seg { font-size: 1.1rem; font-weight: 600; color: #334155; }
 
-/* --- 滚动区域 --- */
 .xzt-scroll-area {
   flex: 1; overflow-y: auto;
   padding: 10px 16px 180px; 
   display: flex; flex-direction: column; align-items: center;
 }
 
-/* --- 选项网格 --- */
 .options-grid {
   width: 100%; max-width: 600px;
   display: grid; 
   gap: 12px; margin-top: 20px;
-  grid-template-columns: 1fr; /* 默认单列 */
+  grid-template-columns: 1fr;
 }
-/* 有图片时切换为双列 */
 .options-grid.has-images {
   grid-template-columns: 1fr 1fr; 
 }
 
-/* --- 选项卡片 --- */
 .option-card {
   background: #fff; 
   border-radius: 16px;
   padding: 16px; 
-  border: 2px solid #e5e7eb; /* 底部边框厚度模拟立体感 */
+  border: 2px solid #e5e7eb; 
   border-bottom-width: 4px;
   cursor: pointer;
   transition: all 0.1s;
@@ -235,10 +227,9 @@ const cssStyles = `
   position: relative;
 }
 
-/* 选中状态 */
 .option-card:active { transform: translateY(2px); border-bottom-width: 2px; }
 .option-card.selected { 
-  border-color: #84cc16; /* Duolingo Green */
+  border-color: #84cc16;
   background: #f7fee7; 
   color: #4d7c0f;
 }
@@ -249,7 +240,6 @@ const cssStyles = `
   border-color: #ef4444; background: #fee2e2; color: #991b1b; 
 }
 
-/* 图片选项布局 */
 .option-card.has-image-layout {
   flex-direction: column;
   padding: 10px;
@@ -265,7 +255,6 @@ const cssStyles = `
   font-size: 1.1rem; font-weight: 700;
 }
 
-/* --- 提交按钮区域 --- */
 .submit-bar {
   position: absolute; bottom: 0; left: 0; right: 0;
   padding: 20px 20px calc(30px + env(safe-area-inset-bottom)); 
@@ -276,18 +265,17 @@ const cssStyles = `
 }
 .submit-btn {
   flex: 1;
-  background: #58cc02; /* Duolingo Green */
+  background: #58cc02;
   color: white;
   padding: 14px; border-radius: 16px;
   font-size: 1.1rem; font-weight: 800; text-transform: uppercase;
   border: none;
-  border-bottom: 4px solid #46a302; /* 立体阴影 */
+  border-bottom: 4px solid #46a302;
   transition: all 0.1s;
 }
 .submit-btn:active { transform: translateY(2px); border-bottom-width: 0px; margin-top: 4px; }
 .submit-btn:disabled { background: #e5e7eb; color: #9ca3af; border-bottom-color: #d1d5db; }
 
-/* --- 结果面板 --- */
 .result-sheet {
   position: absolute; bottom: 0; left: 0; right: 0;
   background: #fff;
@@ -319,7 +307,7 @@ const cssStyles = `
 `;
 
 // =================================================================================
-// 4. 工具函数：播放音效与震动
+// 4. 工具函数
 // =================================================================================
 const playSfx = (type) => {
   const paths = {
@@ -332,7 +320,7 @@ const playSfx = (type) => {
   
   const audio = new Audio(path);
   audio.volume = 1.0;
-  audio.play().catch(() => {}); // 忽略自动播放限制错误
+  audio.play().catch(() => {}); 
 };
 
 const vibrate = (pattern) => {
@@ -344,22 +332,20 @@ const vibrate = (pattern) => {
 // =================================================================================
 // 5. 组件主体
 // =================================================================================
-const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) => {
+const XuanZeTi = ({ data: rawData, onCorrect, onWrong }) => {
   const data = rawData?.content || rawData || {};
   const question = data.question || {};
   const questionText = typeof question === 'string' ? question : question.text || '';
-  const questionImg = data.imageUrl || ''; // 题目图片
+  const questionImg = data.imageUrl || ''; 
   const explanation = data.explanation || '';
   
   const options = data.options || [];
 
-  // 判断是否多选
   const correctAnswers = useMemo(() => {
     const raw = data.correctAnswer || [];
     return (Array.isArray(raw) ? raw : [raw]).map(String);
   }, [data.correctAnswer]);
 
-  // 判断选项是否包含图片（用于切换Grid布局）
   const hasOptionImages = useMemo(() => {
     return options.some(opt => opt.img || opt.imageUrl);
   }, [options]);
@@ -368,10 +354,8 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isRight, setIsRight] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [showExplanation, setShowExplanation] = useState(false);
   const nextLockRef = useRef(false);
 
-  // 随机化选项
   const shuffledOptions = useMemo(() => {
     const opts = [...options];
     for (let i = opts.length - 1; i > 0; i--) {
@@ -387,10 +371,8 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
     setSelectedIds([]);
     setIsSubmitted(false);
     setIsRight(false);
-    setShowExplanation(false);
     audioController.stop();
 
-    // 延迟朗读
     let timer;
     if(questionText) {
         timer = setTimeout(() => {
@@ -412,9 +394,8 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
   const toggleOption = (id) => {
     if (isSubmitted) return;
     
-    // 播放音效与震动
     playSfx('click');
-    vibrate(15); // 轻微震动
+    vibrate(15); 
 
     const sid = String(id);
     if (correctAnswers.length === 1) {
@@ -425,12 +406,11 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
         );
     }
     
-    // 朗读选项文本
     const opt = options.find(o => String(o.id) === sid);
     if (opt && opt.text) audioController.playMixed(opt.text);
   };
 
-  // 提交答案
+  // 提交答案 (只做状态更新，绝不调用父组件回调)
   const handleSubmit = () => {
     if (!selectedIds.length) return;
 
@@ -444,24 +424,25 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
     if (correct) {
       playSfx('correct');
       confetti({ particleCount: 120, spread: 80, origin: { y: 0.7 } });
-      onCorrect?.(); 
     } else {
       playSfx('wrong');
-      vibrate([50, 50, 50]); // 两次震动
-      onIncorrect?.(); 
-      if (onWrong) onWrong(); 
+      vibrate([50, 50, 50]); 
     }
   };
 
-  // 下一题
-  const safeNext = () => {
+  // 点击 Continue (这才是真正通知父组件的地方)
+  const handleContinue = () => {
     if (nextLockRef.current) return;
     nextLockRef.current = true;
     audioController.stop();
-    onNext?.(); 
+
+    if (isRight) {
+        onCorrect?.();
+    } else {
+        onWrong?.(); // 这里通知父组件：我错了，父组件决定是否沉题 + 翻页
+    }
   };
 
-  // 渲染文本（带拼音）
   const renderRichText = (text) => {
     if(!text) return null;
     const parts = text.match(/([\u4e00-\u9fa5]+|[^\u4e00-\u9fa5]+)/g) || [];
@@ -483,7 +464,7 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
     <div className="xzt-container">
       <style>{cssStyles}</style>
 
-      {/* Header with Teacher & Question */}
+      {/* Header */}
       <div className="xzt-header">
         <div className="scene-wrapper">
             <img
@@ -494,7 +475,6 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
             <div className="bubble-container">
                 <div className="bubble-tail" />
                 
-                {/* 核心逻辑：如果有图，只显示图；没图，显示富文本 */}
                 <div className="flex-1">
                     {questionImg ? (
                         <div className="text-gray-500 italic text-sm">
@@ -507,7 +487,6 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
                     )}
                 </div>
 
-                {/* 发音按钮始终保留 */}
                 <div
                     className={`p-3 rounded-xl cursor-pointer transition-colors flex-shrink-0 ${
                     isPlaying
@@ -530,15 +509,13 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
         </div>
       </div>
       
-      {/* Question Image (Large View) if exists - 可选：如果题目图很大，可以放在气泡下方
-          根据需求 "标题有图就不显示文字"，这里假设图展示在Header和Options之间 */}
       {questionImg && (
           <div className="w-full flex justify-center mt-2 mb-2 px-4">
               <img src={questionImg} alt="Topic" className="rounded-xl max-h-40 object-contain shadow-sm" />
           </div>
       )}
 
-      {/* Scroll Area for Options */}
+      {/* Options */}
       <div className="xzt-scroll-area">
         <div className={`options-grid ${hasOptionImages ? 'has-images' : ''}`}>
           {shuffledOptions.map(opt => {
@@ -548,7 +525,7 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
             const optImg = opt.img || opt.imageUrl;
 
             let cls = 'option-card';
-            if(optImg) cls += ' has-image-layout'; // 增加图文布局类
+            if(optImg) cls += ' has-image-layout'; 
 
             if (isSubmitted) {
               if (isCorrect) cls += ' correct';
@@ -557,12 +534,8 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
 
             return (
               <div key={sid} className={cls} onClick={() => toggleOption(sid)}>
-                {/* 如果有图，显示图片 */}
                 {optImg && <img src={optImg} alt="option" className="option-img" />}
-                
                 <span className="option-text">{opt.text}</span>
-                
-                {/* 多选模式下的角标 (可视情况添加) */}
                 {correctAnswers.length > 1 && isSel && (
                      <div className="absolute top-2 right-2 text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full">
                          Selected
@@ -587,14 +560,13 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
         </div>
       )}
 
-      {/* 结果面板 (Bottom Sheet) */}
+      {/* 结果面板 */}
       <div className={`result-sheet ${isSubmitted ? 'show' : ''} ${isRight ? 'correct' : 'wrong'}`}>
         <div className="sheet-header">
           {isRight ? <FaCheck className="text-2xl" /> : <FaTimes className="text-2xl" />}
           <span>{isRight ? 'Excellent!' : 'Incorrect'}</span>
         </div>
 
-        {/* 答错时的解析 */}
         {!isRight && explanation && (
             <div className="mb-4 p-4 bg-white/50 rounded-xl border border-red-200 text-red-900">
                 <div className="font-bold flex items-center gap-2 mb-1">
@@ -604,7 +576,6 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
             </div>
         )}
 
-        {/* 答错时显示正确答案提示 (简单版) */}
         {!isRight && !explanation && (
              <div className="mb-4 text-lg font-semibold text-red-800">
                  Correct answer: {options.filter(o => correctAnswers.includes(String(o.id))).map(o=>o.text).join(', ')}
@@ -613,7 +584,7 @@ const XuanZeTi = ({ data: rawData, onCorrect, onIncorrect, onNext, onWrong }) =>
 
         <button 
            className={`next-btn ${isRight ? 'btn-correct' : 'btn-wrong'}`} 
-           onClick={safeNext}
+           onClick={handleContinue}
         >
           CONTINUE
         </button>
