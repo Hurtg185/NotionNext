@@ -76,7 +76,6 @@ const idb = {
 // 2. 音效与TTS控制器
 // =================================================================================
 
-// 播放音效
 const playSfx = (type) => {
   const paths = {
     click: '/sounds/click.mp3',
@@ -92,14 +91,12 @@ const playSfx = (type) => {
   audio.play().catch(() => {});
 };
 
-// 震动反馈
 const vibrate = (pattern) => {
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
     navigator.vibrate(pattern);
   }
 };
 
-// 语音控制器
 const audioController = {
   currentAudio: null,
   latestRequestId: 0,
@@ -115,7 +112,6 @@ const audioController = {
     this.activeUrls = [];
   },
 
-  // 播放单条 (带语速)
   async playSingle(text, lang = 'zh', speed = 1.0) {
     this.stop(); 
     if (!text) return;
@@ -134,7 +130,6 @@ const audioController = {
       this.activeUrls.push(url);
       
       const audio = new Audio(url);
-      // 缅语通常不支持语速调节(取决于引擎)，中文支持
       if (lang !== 'my') audio.playbackRate = speed;
       
       this.currentAudio = audio;
@@ -144,7 +139,6 @@ const audioController = {
     }
   },
 
-  // 播放混合文本 (带语速)
   async playMixed(text, speed = 1.0, onStart, onEnd) {
     this.stop();
     if (!text) return;
@@ -214,10 +208,8 @@ const styles = `
   overflow: hidden;
 }
 
-/* --- 顶部场景区 --- */
 .pxt-header {
   flex-shrink: 0;
-  /* 增加顶部空间，适应更大的人物 */
   padding: 40px 20px 0px; 
   display: flex; justify-content: center;
   margin-bottom: 10px;
@@ -225,11 +217,11 @@ const styles = `
 .scene-wrapper {
   width: 100%; max-width: 600px;
   display: flex; 
-  align-items: flex-end; /* 底部对齐 */
+  align-items: flex-end; 
   gap: 10px;
 }
 .teacher-img {
-  height: 240px; /* 大尺寸 */
+  height: 240px; 
   width: auto;
   object-fit: contain;
   mix-blend-mode: multiply;
@@ -243,7 +235,7 @@ const styles = `
   border: 2px solid #e2e8f0;
   position: relative;
   box-shadow: 0 4px 15px rgba(0,0,0,0.03);
-  margin-bottom: 40px; /* 把气泡顶上去一点 */
+  margin-bottom: 40px; 
 }
 .bubble-tail {
   position: absolute; 
@@ -267,14 +259,12 @@ const styles = `
   border: 1px solid #f1f5f9;
 }
 
-/* --- 核心交互区 --- */
 .pxt-scroll-body {
   flex: 1; overflow-y: auto;
   padding: 0 16px 220px; 
   display: flex; flex-direction: column; align-items: center;
 }
 
-/* --- 答题排序框 --- */
 .sort-area {
   width: 100%; max-width: 600px;
   min-height: 120px;
@@ -291,7 +281,6 @@ const styles = `
 .sort-area.error { border-color: #fca5a5; background: #fef2f2; border-style: solid; }
 .sort-area.success { border-color: #86efac; background: #f0fdf4; border-style: solid; }
 
-/* --- 待选池 --- */
 .pool-area {
   width: 100%; max-width: 600px;
   display: flex; flex-wrap: wrap; 
@@ -299,7 +288,6 @@ const styles = `
   gap: 10px;
 }
 
-/* --- 卡片样式 --- */
 .word-card {
   touch-action: none;
   background: #fff;
@@ -326,7 +314,6 @@ const styles = `
 }
 .pinyin-sub { font-size: 0.75rem; color: #94a3b8; font-weight: 500; margin-bottom: 0px; line-height: 1.2; }
 
-/* --- 底部控制栏 --- */
 .footer-bar {
   position: absolute; bottom: 0; left: 0; right: 0;
   padding: 20px 20px calc(30px + env(safe-area-inset-bottom));
@@ -349,7 +336,6 @@ const styles = `
 .check-btn:active { transform: translateY(4px); box-shadow: none; }
 .check-btn:disabled { background: #e5e7eb; color: #9ca3af; box-shadow: none; transform: none; }
 
-/* --- 结果面板 --- */
 .result-sheet {
   position: absolute; bottom: 0; left: 0; right: 0;
   background: white;
@@ -392,10 +378,9 @@ const styles = `
 `;
 
 // =================================================================================
-// 4. 组件：卡片内容 (统一处理拼音)
+// 4. 组件：卡片内容
 // =================================================================================
 const CardContent = ({ text }) => {
-  // 简单判断是否标点，是则不注音
   const isPunc = /^[。，、？！；：“”‘’（）《》〈〉【】 .,!?;:"'()\[\]{}]+$/.test(text);
   const py = !isPunc ? pinyin(text, { toneType: 'mark' }) : '';
 
@@ -408,7 +393,7 @@ const CardContent = ({ text }) => {
 };
 
 // =================================================================================
-// 5. 组件：排序项 (Draggable)
+// 5. 组件：排序项
 // =================================================================================
 const SortableItem = ({ id, content, isPool, onClick, isOverlay }) => {
   const {
@@ -468,16 +453,14 @@ const PaiXuTi = ({
   const [answerIds, setAnswerIds] = useState([]);
   const [activeId, setActiveId] = useState(null);
   
-  // 状态: 'idle' | 'success' | 'error'
   const [gameStatus, setGameStatus] = useState('idle');
   const [isPlaying, setIsPlaying] = useState(false);
-  const [speed, setSpeed] = useState(1.0); // 语速状态
+  const [speed, setSpeed] = useState(1.0); 
 
   // 初始化
   useEffect(() => {
     if (!items) return;
     
-    // 随机打乱 ID (包含干扰项)
     const ids = items.map(i => i.id);
     for (let i = ids.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -487,7 +470,6 @@ const PaiXuTi = ({
     setAnswerIds([]);
     setGameStatus('idle');
     
-    // 自动朗读题目
     audioController.stop(); 
     let timer;
     if (title) {
@@ -500,9 +482,8 @@ const PaiXuTi = ({
         if(timer) clearTimeout(timer);
         audioController.stop();
     };
-  }, [data]); // 注意：这里没有将 speed 放入依赖，因为切换语速不应重置题目
+  }, [data]);
 
-  // 传感器
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -510,16 +491,12 @@ const PaiXuTi = ({
 
   const findItem = (id) => items.find(i => i.id === id);
 
-  // 切换语速
   const toggleSpeed = (e) => {
       e.stopPropagation();
       const newSpeed = speed === 1.0 ? 0.75 : 1.0;
       setSpeed(newSpeed);
-      // 可选：切换时给个提示音或重读
-      // audioController.playMixed(title, newSpeed); 
   };
 
-  // 点击卡片
   const handleCardClick = (id) => {
     if (gameStatus === 'success') return;
 
@@ -539,7 +516,6 @@ const PaiXuTi = ({
     }
   };
 
-  // 拖拽结束
   const handleDragEnd = (event) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
@@ -553,9 +529,8 @@ const PaiXuTi = ({
     vibrate(15);
   };
 
-  // 提交检查
+  // 提交检查 (只更新状态，不调用 Next)
   const handleCheck = () => {
-    // 先播放点击音效
     playSfx('click'); 
 
     const currentStr = answerIds.join(',');
@@ -563,7 +538,6 @@ const PaiXuTi = ({
 
     const isCorrect = currentStr === correctStr;
 
-    // 延迟一点点出结果，让点击感更自然
     setTimeout(() => {
         if (isCorrect) {
           setGameStatus('success');
@@ -572,21 +546,24 @@ const PaiXuTi = ({
           
           const fullSentence = correctOrder.map(id => findItem(id).text).join('');
           audioController.playSingle(fullSentence, 'zh', speed); 
-          
-          if (onCorrect) onCorrect();
         } else {
           setGameStatus('error');
           playSfx('wrong');
           vibrate([50, 50, 50]);
-          if (onWrong) onWrong();
         }
     }, 150);
   };
 
-  const handleNext = () => {
-    playSfx('switch'); // 翻页音效
+  // 点击 Next (真正通知父组件)
+  const handleContinue = () => {
+    playSfx('switch'); 
     audioController.stop();
-    if (onNext) onNext();
+    
+    if (gameStatus === 'success') {
+        onCorrect?.();
+    } else {
+        onWrong?.();
+    }
   };
 
   const activeItem = activeId ? findItem(activeId) : null;
@@ -604,7 +581,7 @@ const PaiXuTi = ({
         }} 
         onDragEnd={handleDragEnd}
       >
-        {/* --- 顶部 Header --- */}
+        {/* Header */}
         <div className="pxt-header">
           <div className="scene-wrapper">
              <img 
@@ -638,9 +615,8 @@ const PaiXuTi = ({
           </div>
         </div>
 
-        {/* --- 答题区与选词区 --- */ }
+        {/* 答题区 */}
         <div className="pxt-scroll-body">
-          {/* 1. 答案排序区 */}
           <div className={`sort-area ${gameStatus}`}>
              <SortableContext items={answerIds} strategy={rectSortingStrategy}>
                {answerIds.map(id => (
@@ -660,7 +636,6 @@ const PaiXuTi = ({
              )}
           </div>
 
-          {/* 2. 待选池 (自动拼音) */}
           <div className="pool-area">
              {poolIds.map(id => (
                <div key={id} onClick={() => handleCardClick(id)}>
@@ -672,12 +647,11 @@ const PaiXuTi = ({
           </div>
         </div>
 
-        {/* --- 拖拽浮层 --- */}
         <DragOverlay dropAnimation={{ sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0.5' } } }) }}>
           {activeItem ? <SortableItem id={activeId} content={activeItem.text} isOverlay /> : null}
         </DragOverlay>
 
-        {/* --- 底部固定按钮 --- */}
+        {/* 底部按钮 */}
         <div className="footer-bar">
            {!isOrderedResult(gameStatus) && (
              <button 
@@ -690,14 +664,14 @@ const PaiXuTi = ({
            )}
         </div>
 
-        {/* --- 结果弹层 --- */}
+        {/* 结果弹层 */}
         <div className={`result-sheet ${isOrderedResult(gameStatus) ? 'open' : ''} ${gameStatus === 'success' ? 'correct' : 'wrong'}`}>
            {gameStatus === 'success' && (
              <>
                <div className="sheet-header">
                  <FaCheck /> Excellent!
                </div>
-               <button className="next-action-btn btn-correct" onClick={handleNext}>
+               <button className="next-action-btn btn-correct" onClick={handleContinue}>
                  CONTINUE <FaArrowRight style={{marginLeft:8}} />
                </button>
              </>
@@ -723,7 +697,7 @@ const PaiXuTi = ({
                  </div>
                )}
 
-               <button className="next-action-btn btn-wrong" onClick={handleNext}>
+               <button className="next-action-btn btn-wrong" onClick={handleContinue}>
                  GOT IT <FaRedo style={{marginLeft:8, fontSize: '0.9em'}} />
                </button>
              </>
@@ -735,7 +709,6 @@ const PaiXuTi = ({
   );
 };
 
-// 辅助函数
 function isOrderedResult(status) {
   return status === 'success' || status === 'error';
 }
