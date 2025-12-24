@@ -1,19 +1,32 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   FaPaperPlane, FaChevronDown, FaRobot, FaCog, FaTimes, 
-  FaVolumeUp, FaStop, FaCopy, FaRedo, FaMicrophone
+  FaVolumeUp, FaStop, FaCopy, FaRedo, FaHistory, 
+  FaBook, FaQuestionCircle, FaCommentDots, FaTrashAlt
 } from 'react-icons/fa';
 import ReactMarkdown from 'react-markdown';
-import { pinyin } from 'pinyin-pro'; // 确保安装了 npm install pinyin-pro
+import { pinyin } from 'pinyin-pro'; 
 
-// 默认配置
+// --- 常量与配置 ---
+
+const STORAGE_KEY_HISTORY = 'ai_chat_history_v1';
+const STORAGE_KEY_CONFIG = 'ai_dock_config_v6';
+
+// 更新后的教学专用 Prompt
+const DEFAULT_SYSTEM_PROMPT = `你是一位精通汉语和缅甸语的资深翻译老师。
+1. 你的目标是用通俗易懂、口语化的中文为缅甸学生讲解汉语语法。
+2. 排版要求：使用清晰的标题（###）、列表（-）和加粗（**）来组织内容。
+3. 重点内容（如例句、规则）必须提供【中文】和【缅甸语】双语对照。
+4. 如果学生是在做题（Context中有题目信息），且学生选错了，请第一句话明确指出错误原因（例如：“你把'在'当成'到'用了”），然后再解释。
+5. 语气亲切，多给予鼓励。`;
+
 const DEFAULT_CONFIG = {
   apiKey: '', 
   modelId: 'meta/llama-3.1-70b-instruct',
-  systemPrompt: '你是一位精通汉语和缅甸语的资深翻译老师。请用通俗易懂、口语化的中文为缅甸学生讲解汉语语法。排版要求：使用清晰的标题（###）、列表（-）和加粗（**）来组织内容，重点内容请用中文和缅甸语双语对照。',
+  systemPrompt: DEFAULT_SYSTEM_PROMPT,
   ttsSpeed: 1.0,
   ttsVoice: 'zh-CN-XiaoyouNeural',
-  showPinyin: true // 默认开启拼音
+  showPinyin: true 
 };
 
 const VOICES = [
@@ -24,15 +37,13 @@ const VOICES = [
   { label: '缅甸男声 - Thiha', value: 'my-MM-ThihaNeural' }
 ];
 
-// --- 拼音渲染组件 (核心) ---
+// --- 拼音渲染组件 ---
 const PinyinRenderer = ({ text, show }) => {
-  if (!show || !text) return text; // 如果关闭拼音，直接返回文本
-
-  // 如果包含 Markdown 符号，暂时不处理拼音，由 ReactMarkdown 处理结构
-  // 但我们可以在 ReactMarkdown 的 components 里调用这个逻辑
-  // 这里是一个纯文本处理逻辑
+  if (!show || !text) return text;
   
-  const regex = /([\u4e00-\u9fa5]+)/g; // 匹配中文
+  // 简单的正则拆分，避免破坏已有 HTML/React 结构
+  // 仅对连续的中文字符串进行处理
+  const regex = /([\u4e00-\u9fa5]+)/g; 
   const parts = text.split(regex);
 
   return (
@@ -50,7 +61,7 @@ const PinyinRenderer = ({ text, show }) => {
                       fontSize: '0.6em', 
                       color: '#64748b', 
                       fontWeight: 'normal',
-                      userSelect: 'none' // 拼音不可选中复制
+                      userSelect: 'none'
                   }}>
                     {pyArray[i]}
                   </rt>
@@ -66,44 +77,108 @@ const PinyinRenderer = ({ text, show }) => {
 };
 
 export default function AIChatDock({ contextData, ttsPlay }) {
+  // --- State 定义 ---
   const [expanded, setExpanded] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showHistory, setShowHistory] = useState(false); // 控制历史记录抽屉
+  
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [isPlaying, setIsPlaying] = useState(false);
+  
+  // 所有的历史记录数据缓存
+  const [allHistory, setAllHistory] = useState({});
+
   const audioRef = useRef(null);
   const historyRef = useRef(null);
   const abortControllerRef = useRef(null);
 
+  // --- 核心逻辑 1: 计算当前的 Session Key ---
+  // 根据传入的 contextData 决定当前的存储 key
+  const currentSessionKey = useMemo(() => {
+    if (!contextData) return 'free:default';
+    if (contextData.type === 'grammar') return `grammar:${contextData.id}`;
+    if (contextData.type === 'question') return `question:${contextData.id}`;
+    return 'free:default';
+  }, [contextData]);
+
+  // --- 初始化与配置加载 ---
   useEffect(() => {
     if (typeof window !== 'undefined') {
-        const savedConfig = localStorage.getItem('ai_dock_config_v6'); // 版本号 v6
+        // 1. 加载配置
+        const savedConfig = localStorage.getItem(STORAGE_KEY_CONFIG);
         if (savedConfig) {
             try { setConfig({ ...DEFAULT_CONFIG, ...JSON.parse(savedConfig) }); } 
             catch (e) { console.error('Config load error', e); }
         }
+
+        // 2. 加载所有历史记录
+        const savedHistory = localStorage.getItem(STORAGE_KEY_HISTORY);
+        if (savedHistory) {
+            try { setAllHistory(JSON.parse(savedHistory)); }
+            catch (e) { console.error('History load error', e); }
+        }
     }
   }, []);
 
+  // --- 核心逻辑 2: 切换 Session 时恢复消息 ---
+  useEffect(() => {
+    if (allHistory[currentSessionKey]) {
+      setMessages(allHistory[currentSessionKey].messages || []);
+    } else {
+      setMessages([]); // 新的 Session，清空当前显示
+    }
+  }, [currentSessionKey, allHistory]); // 依赖 allHistory 确保初次加载也能同步
+
+  // --- 核心逻辑 3: 自动保存历史记录 ---
+  useEffect(() => {
+    if (messages.length > 0) {
+      const newHistoryItem = {
+        id: currentSessionKey,
+        type: contextData?.type || 'free',
+        title: contextData?.title || '自由提问', // 保存标题用于列表显示
+        updatedAt: Date.now(),
+        messages: messages
+      };
+
+      // 更新 state 中的 allHistory
+      const updatedAllHistory = {
+        ...allHistory,
+        [currentSessionKey]: newHistoryItem
+      };
+
+      // 这里不直接 setAllHistory 以避免循环渲染，而是只在写入 localStorage 时用
+      // 但为了让 UI (历史列表) 即时更新，我们需要 update state
+      // 使用 JSON stringify 比较避免不必要的重渲染
+      if (JSON.stringify(allHistory[currentSessionKey]) !== JSON.stringify(newHistoryItem)) {
+         setAllHistory(updatedAllHistory);
+         localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(updatedAllHistory));
+      }
+    }
+  }, [messages, currentSessionKey, contextData]);
+
+  // --- 滚动到底部 ---
   useEffect(() => {
     if (historyRef.current && expanded) {
       historyRef.current.scrollTop = historyRef.current.scrollHeight;
     }
   }, [messages, expanded, loading]);
 
+
   const saveConfig = (newConfig) => {
     setConfig(newConfig);
-    localStorage.setItem('ai_dock_config_v6', JSON.stringify(newConfig));
+    localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(newConfig));
   };
 
+  // --- TTS 逻辑 ---
   const playInternalTTS = async (text) => {
     if (!text) return;
     if (audioRef.current) audioRef.current.pause();
     setIsPlaying(true);
     
-    // 自动检测语言
+    // 自动检测语言：如果有缅文，强制用缅甸语发音人，否则用配置的中文发音人
     const isBurmese = /[\u1000-\u109F]/.test(text);
     const voice = isBurmese ? 'my-MM-NilarNeural' : config.ttsVoice;
 
@@ -133,7 +208,7 @@ export default function AIChatDock({ contextData, ttsPlay }) {
     navigator.clipboard.writeText(text);
   };
 
-  // === 核心发送逻辑 (修复了所有报错) ===
+  // --- 聊天发送逻辑 ---
   const handleSend = async (textToSend = input) => {
     if (!textToSend.trim() || loading) return;
     if (!config.apiKey) {
@@ -153,10 +228,19 @@ export default function AIChatDock({ contextData, ttsPlay }) {
     const newMessages = [...messages, { role: 'user', content: userText }];
     setMessages([...newMessages, { role: 'assistant', content: '' }]);
 
+    // 构建 System Context Prompt
+    let finalSystemPrompt = config.systemPrompt;
+    
+    // 如果有教材上下文，增强 Prompt
+    let userPrompt = userText;
+    if (contextData) {
+        userPrompt = `[当前教材上下文]\n类型：${contextData.type === 'grammar' ? '语法学习' : '题目练习'}\n标题：${contextData.title}\n内容/句型：${contextData.pattern || contextData.content || '无'}\n\n学生问题：${userText}`;
+    }
+
     const apiMessages = [
-        { role: 'system', content: config.systemPrompt },
-        ...newMessages.slice(-6), 
-        { role: 'user', content: contextData ? `[当前教材内容]\n标题：${contextData.title}\n句型：${contextData.pattern}\n\n学生问题：${userText}` : userText } 
+        { role: 'system', content: finalSystemPrompt },
+        ...newMessages.slice(-6), // 只带最近 6 条历史
+        { role: 'user', content: userPrompt } 
     ];
 
     try {
@@ -175,7 +259,6 @@ export default function AIChatDock({ contextData, ttsPlay }) {
          throw new Error(`服务错误 (${response.status}): ${errText.substring(0, 100)}`);
       }
 
-      // 使用 Reader 读取流，彻底解决 JSON 解析错误
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let done = false;
@@ -189,7 +272,7 @@ export default function AIChatDock({ contextData, ttsPlay }) {
         buffer += chunk;
         
         const lines = buffer.split('\n');
-        buffer = lines.pop(); // 保留不完整行
+        buffer = lines.pop(); 
 
         for (const line of lines) {
             const trimmedLine = line.trim();
@@ -215,7 +298,6 @@ export default function AIChatDock({ contextData, ttsPlay }) {
         }
       }
 
-      // 自动朗读
       if (fullContent && !abortControllerRef.current.signal.aborted) {
           playInternalTTS(fullContent);
       }
@@ -235,16 +317,57 @@ export default function AIChatDock({ contextData, ttsPlay }) {
     }
   };
 
+  // --- 切换历史记录 (只用于浏览，点击可以"恢复"上下文显示，但不改变外部路由) ---
+  // 注意：真实场景下，点击历史通常需要跳转路由。这里为了演示，只做预览。
+  // 如果你想实现点击跳转，需要父组件传入 onContextChange 回调。
+  const handleHistorySelect = (key) => {
+     // 简单处理：如果选中的是当前 session，什么都不做
+     if (key === currentSessionKey) {
+        setShowHistory(false);
+        return;
+     }
+     // 如果选中的是其他 session，在这个 Demo 中我们暂时无法"跳转页面"，
+     // 但我们可以查看那个 session 的消息。
+     // 实际项目中，建议这里调用 router.push('/grammar/id')
+     alert("在实际项目中，这里应该跳转到对应的课程/题目页面。\n当前仅演示数据存储结构。");
+  };
+
+  const deleteHistory = (key, e) => {
+    e.stopPropagation();
+    if(confirm('确定删除这条记录吗？')) {
+        const newHistory = { ...allHistory };
+        delete newHistory[key];
+        setAllHistory(newHistory);
+        localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(newHistory));
+        if (key === currentSessionKey) setMessages([]);
+    }
+  };
+
+  // 整理历史记录列表（排序）
+  const sortedHistoryList = useMemo(() => {
+    return Object.values(allHistory).sort((a, b) => b.updatedAt - a.updatedAt);
+  }, [allHistory]);
+
   return (
     <>
       {expanded && <div onClick={() => setExpanded(false)} style={styles.overlay}/>}
+      
+      {/* 主聊天框 */}
       <div style={{...styles.chatBox, height: expanded ? '85vh' : '60px'}}>
         {expanded && (
           <div style={styles.chatHeader}>
-            <div style={{display:'flex', alignItems:'center', gap: 8}}>
-              <FaRobot className="text-blue-500" />
-              <span style={{fontWeight:'bold', color:'#334155'}}>AI 助教</span>
-              <span style={styles.modelTag}>{config.modelId.split('/').pop()}</span>
+            <div style={{display:'flex', alignItems:'center', gap: 12}}>
+              {/* 历史记录按钮 */}
+              <button onClick={() => setShowHistory(true)} style={styles.headerBtn} title="历史记录">
+                <FaHistory size={16} />
+              </button>
+              <div style={{display:'flex', alignItems:'center', gap: 6}}>
+                 <FaRobot className="text-blue-500" />
+                 <span style={{fontWeight:'bold', color:'#334155', fontSize:'0.95rem'}}>
+                    {contextData?.title || 'AI 助教'}
+                 </span>
+                 <span style={styles.modelTag}>{config.modelId.split('/').pop()}</span>
+              </div>
             </div>
             <div style={{display:'flex', gap: 16}}>
                <button onClick={() => setShowSettings(true)} style={styles.headerBtn}><FaCog size={18} /></button>
@@ -255,18 +378,20 @@ export default function AIChatDock({ contextData, ttsPlay }) {
         
         <div ref={historyRef} style={styles.chatHistory}>
              {messages.length === 0 && (
-                <div style={{textAlign:'center', marginTop: 40, color:'#cbd5e1'}}>
+                <div style={{textAlign:'center', marginTop: 60, color:'#cbd5e1'}}>
                  <FaRobot size={40} style={{marginBottom:10, opacity:0.2}} />
                  <p>你好！我是你的专属 AI 老师。</p>
-                 <p style={{fontSize:'0.85rem', marginTop:4}}>请先设置 API Key 开始使用。</p>
+                 <p style={{fontSize:'0.85rem', marginTop:4}}>
+                    {contextData ? `正在学习：${contextData.title}` : '请先设置 API Key 开始使用。'}
+                 </p>
                </div>
              )}
              {messages.map((m, i) => (
                <div key={i} style={{
                    alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                   maxWidth: '90%', // 增大宽度
+                   maxWidth: '92%', 
                    display: 'flex', flexDirection: 'column',
-                   marginBottom: '16px'
+                   marginBottom: '20px'
                }}>
                  <div style={{
                      padding: '12px 16px',
@@ -280,27 +405,19 @@ export default function AIChatDock({ contextData, ttsPlay }) {
                  }}>
                    {m.role === 'assistant' ? (
                       <div className="markdown-body">
-                        {/* ReactMarkdown 中集成 PinyinRenderer */}
                         <ReactMarkdown
                             components={{
-                                // 拦截所有文本节点，如果是中文则加拼音
-                                p: ({node, children, ...props}) => {
-                                    return <p {...props}>
-                                        {React.Children.map(children, child => {
-                                            if (typeof child === 'string') {
-                                                return <PinyinRenderer text={child} show={config.showPinyin} />;
-                                            }
-                                            return child;
-                                        })}
+                                p: ({node, children, ...props}) => (
+                                    <p {...props}>
+                                        {React.Children.map(children, child => 
+                                            typeof child === 'string' ? <PinyinRenderer text={child} show={config.showPinyin} /> : child
+                                        )}
                                     </p>
-                                },
+                                ),
                                 li: ({node, children, ...props}) => (
                                     <li {...props}>
                                         {React.Children.map(children, child => {
-                                            if (typeof child === 'string') {
-                                                return <PinyinRenderer text={child} show={config.showPinyin} />;
-                                            }
-                                            // 处理 li 内部的 p 标签
+                                            if (typeof child === 'string') return <PinyinRenderer text={child} show={config.showPinyin} />;
                                             if (React.isValidElement(child) && child.type === 'p') {
                                                 return React.cloneElement(child, {
                                                     children: React.Children.map(child.props.children, subChild => 
@@ -312,7 +429,6 @@ export default function AIChatDock({ contextData, ttsPlay }) {
                                         })}
                                     </li>
                                 ),
-                                // 自定义标题样式
                                 h3: ({node, children, ...props}) => (
                                     <h3 {...props} style={{color: '#d946ef'}}>
                                         {React.Children.map(children, child => typeof child === 'string' ? <PinyinRenderer text={child} show={config.showPinyin} /> : child)}
@@ -331,7 +447,6 @@ export default function AIChatDock({ contextData, ttsPlay }) {
                    ) : m.content}
                  </div>
                  
-                 {/* AI 消息底部的操作栏 */}
                  {m.role === 'assistant' && !loading && (
                      <div style={styles.actionBar}>
                          <button onClick={() => playInternalTTS(m.content)} style={styles.actionBtn}>
@@ -362,13 +477,50 @@ export default function AIChatDock({ contextData, ttsPlay }) {
                <FaStop size={12} />
              </button>
            )}
-           <input value={input} onChange={e => setInput(e.target.value)} onFocus={() => setExpanded(true)} onKeyDown={e => e.key === 'Enter' && handleSend()} placeholder="输入问题..." style={styles.chatInput}/>
+           <input value={input} onChange={e => setInput(e.target.value)} onFocus={() => setExpanded(true)} onKeyDown={e => e.key === 'Enter' && handleSend()} placeholder="有问题尽管问..." style={styles.chatInput}/>
            <button onClick={() => handleSend()} disabled={loading} style={{...styles.sendBtn, opacity: loading ? 0.5 : 1}}>
              <FaPaperPlane size={14} />
            </button>
         </div>
       </div>
 
+      {/* 历史记录左侧抽屉 */}
+      {showHistory && (
+          <>
+            <div onClick={() => setShowHistory(false)} style={{...styles.overlay, zIndex: 2900}} />
+            <div style={styles.drawer}>
+                <div style={styles.drawerHeader}>
+                    <h3>学习记录</h3>
+                    <button onClick={() => setShowHistory(false)} style={styles.headerBtn}><FaTimes/></button>
+                </div>
+                <div style={styles.drawerList}>
+                    {sortedHistoryList.length === 0 && <div style={{padding:20, color:'#94a3b8', textAlign:'center'}}>暂无记录</div>}
+                    {sortedHistoryList.map(item => (
+                        <div key={item.id} onClick={() => handleHistorySelect(item.id)} style={{
+                            ...styles.historyItem,
+                            background: item.id === currentSessionKey ? '#eff6ff' : 'transparent',
+                            borderLeft: item.id === currentSessionKey ? '3px solid #3b82f6' : '3px solid transparent'
+                        }}>
+                            <div style={styles.historyIcon}>
+                                {item.type === 'grammar' && <FaBook color="#8b5cf6" />}
+                                {item.type === 'question' && <FaQuestionCircle color="#f59e0b" />}
+                                {item.type === 'free' && <FaCommentDots color="#10b981" />}
+                            </div>
+                            <div style={{flex:1, overflow:'hidden'}}>
+                                <div style={styles.historyTitle}>{item.title}</div>
+                                <div style={styles.historyDate}>{new Date(item.updatedAt).toLocaleString()}</div>
+                            </div>
+                            <button onClick={(e) => deleteHistory(item.id, e)} style={styles.deleteBtn}>
+                                <FaTrashAlt size={12}/>
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            </div>
+          </>
+      )}
+
+      {/* 设置弹窗 */}
       {showSettings && (
         <div style={styles.settingsOverlay}>
           <div style={styles.settingsModal}>
@@ -382,7 +534,6 @@ export default function AIChatDock({ contextData, ttsPlay }) {
                 <input type="password" value={config.apiKey} onChange={e => saveConfig({...config, apiKey: e.target.value})} placeholder="nvapi-..." style={styles.input}/>
               </label>
               
-              {/* 拼音开关 */}
               <label style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
                 <div style={styles.label}>显示拼音</div>
                 <input 
@@ -417,12 +568,11 @@ export default function AIChatDock({ contextData, ttsPlay }) {
         </div>
       )}
       
-      {/* 优化的 Markdown 样式 */}
       <style jsx global>{`
         .markdown-body { font-size: 0.95rem; color: #334155; font-family: 'Padauk', sans-serif; }
         .markdown-body h1, .markdown-body h2, .markdown-body h3 { font-weight: 700; color: #1e293b; margin-top: 1em; margin-bottom: 0.5em; }
         .markdown-body h3 { font-size: 1.1em; border-left: 4px solid #d946ef; padding-left: 8px; }
-        .markdown-body p { margin-bottom: 0.8em; line-height: 2.2; /* 增加行高以容纳拼音 */ }
+        .markdown-body p { margin-bottom: 0.8em; line-height: 2.2; }
         .markdown-body ul, .markdown-body ol { padding-left: 20px; margin-bottom: 0.8em; }
         .markdown-body li { margin-bottom: 0.4em; }
         .markdown-body blockquote { border-left: 4px solid #cbd5e1; padding-left: 12px; color: #64748b; margin: 0 0 1em 0; font-style: italic; }
@@ -435,7 +585,7 @@ const styles = {
   overlay: { position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(2px)', zIndex: 1999 },
   chatBox: { position: 'absolute', bottom: 0, left: 0, width: '100%', background: '#f8fafc', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', boxShadow: '0 -4px 30px rgba(0,0,0,0.12)', transition: 'height 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)', zIndex: 2000, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
   chatHeader: { height: '50px', padding: '0 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', background: '#fff', flexShrink: 0 },
-  headerBtn: { color: '#64748b', cursor: 'pointer', background: 'none', border: 'none' },
+  headerBtn: { color: '#64748b', cursor: 'pointer', background: 'none', border: 'none', padding: '4px' },
   modelTag: { fontSize: '0.7rem', background: '#eff6ff', color: '#3b82f6', padding: '2px 6px', borderRadius: '4px' },
   chatHistory: { flex: 1, overflowY: 'auto', padding: '20px 16px', background: '#f8fafc', display: 'flex', flexDirection: 'column' },
   chatMsg: { maxWidth: '90%', padding: '10px 14px', borderRadius: '12px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', lineHeight: 1.6, fontSize: '0.95rem', wordBreak: 'break-word' },
@@ -443,11 +593,23 @@ const styles = {
   stopBtn: { width:36, height:36, borderRadius:'50%', background:'#fee2e2', color:'#ef4444', border:'none', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' },
   chatInput: { flex: 1, height: '40px', borderRadius: '20px', border: '1px solid #e2e8f0', padding: '0 16px', fontSize: '0.95rem', background: '#f8fafc', outline: 'none' },
   sendBtn: { width: '40px', height: '40px', borderRadius: '50%', background: '#3b82f6', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'opacity 0.2s' },
+  
+  // Settings & Modal
   settingsOverlay: { position: 'absolute', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' },
   settingsModal: { width: '100%', maxWidth: '360px', background: '#fff', borderRadius: '16px', padding: '24px', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' },
   label: { fontSize: '0.85rem', color: '#64748b', marginBottom: '6px', fontWeight: '600' },
   input: { width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem', outline: 'none', fontFamily:'inherit' },
   saveBtn: { width:'100%', marginTop:'24px', padding:'12px', background:'#3b82f6', color:'#fff', border:'none', borderRadius:'10px', fontWeight:'bold', fontSize:'1rem', cursor:'pointer' },
   actionBar: { display: 'flex', gap: '16px', marginTop: '8px', marginLeft: '4px', borderTop: '1px solid #e2e8f0', paddingTop: '8px' },
-  actionBtn: { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', borderRadius: '6px', transition: 'background 0.2s', ':hover': {background: '#f1f5f9'} }
+  actionBtn: { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', borderRadius: '6px', transition: 'background 0.2s' },
+  
+  // Drawer Styles
+  drawer: { position: 'absolute', top: 0, left: 0, bottom: 0, width: '280px', background: '#fff', zIndex: 2901, boxShadow: '4px 0 20px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', transition: 'transform 0.3s ease' },
+  drawerHeader: { height: '50px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px', fontWeight: 'bold' },
+  drawerList: { flex: 1, overflowY: 'auto', padding: '10px 0' },
+  historyItem: { padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', transition: 'background 0.2s', position: 'relative' },
+  historyIcon: { width: '32px', height: '32px', borderRadius: '8px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' },
+  historyTitle: { fontSize: '0.9rem', color: '#334155', fontWeight: '600', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' },
+  historyDate: { fontSize: '0.75rem', color: '#94a3b8' },
+  deleteBtn: { background:'none', border:'none', color:'#cbd5e1', cursor:'pointer', padding:4, ':hover':{color:'#ef4444'} }
 };
