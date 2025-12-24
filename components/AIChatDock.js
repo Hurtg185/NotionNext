@@ -5,13 +5,9 @@ import {
 } from 'react-icons/fa';
 import ReactMarkdown from 'react-markdown';
 
-// ===================================================================
-//  在这里填入您之前部署好的 Cloudflare Worker URL
-// ===================================================================
-const PROXY_WORKER_URL = '886.best'; // <--- ⚠️ 请务必替换成您自己的 Worker URL
-
 const DEFAULT_CONFIG = {
   apiKey: '', 
+  baseUrl: 'https://integrate.api.nvidia.com/v1',
   modelId: 'meta/llama-3.1-70b-instruct',
   systemPrompt: '你是一位精通汉语和缅甸语的资深翻译老师。请用通俗易懂、口语化的中文为缅甸学生讲解汉语语法。如果遇到复杂的概念，请对比缅甸语的思维方式进行解释。态度要亲切、耐心。',
   ttsSpeed: 1.0,
@@ -89,10 +85,6 @@ export default function AIChatDock({ contextData, ttsPlay }) {
       setShowSettings(true);
       return;
     }
-     if (!PROXY_WORKER_URL.includes('.workers.dev')) {
-      alert('代码中的 PROXY_WORKER_URL 未设置，请联系开发者。');
-      return;
-    }
 
     const userText = input;
     setInput('');
@@ -109,7 +101,8 @@ export default function AIChatDock({ contextData, ttsPlay }) {
     ];
 
     try {
-      const response = await fetch(PROXY_WORKER_URL, {
+      // 改回请求本地 API 路由
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -117,7 +110,7 @@ export default function AIChatDock({ contextData, ttsPlay }) {
           config: {
             apiKey: config.apiKey,
             modelId: config.modelId,
-            baseUrl: 'https://integrate.api.nvidia.com/v1'
+            baseUrl: config.baseUrl
           }
         })
       });
@@ -134,9 +127,7 @@ export default function AIChatDock({ contextData, ttsPlay }) {
 
       const data = JSON.parse(rawText);
       
-      // ==================================================
-      //  已修正：使用 ?.[0] 访问数组元素
-      // ==================================================
+      // 语法修复点：使用 ?.[0] 访问数组
       const reply = data?.choices?.[0]?.message?.content;
       
       if (!reply) throw new Error("AI 返回了空内容，请检查 Key 或模型 ID");
@@ -206,6 +197,13 @@ export default function AIChatDock({ contextData, ttsPlay }) {
               <label>
                 <div style={styles.label}>NVIDIA API Key (必填)</div>
                 <input type="password" value={config.apiKey} onChange={e => saveConfig({...config, apiKey: e.target.value})} placeholder="nvapi-..." style={styles.input}/>
+              </label>
+              <label>
+                <div style={styles.label}>接口地址 (Base URL)</div>
+                <input value={config.baseUrl} onChange={e => saveConfig({...config, baseUrl: e.target.value})} style={styles.input}/>
+                 <div style={{fontSize:'0.75rem', color:'#64748b', marginTop:4}}>
+                  默认为 NVIDIA, 可改为 OpenRouter 等兼容 OpenAI 的地址。
+                </div>
               </label>
               <label>
                 <div style={styles.label}>模型 ID</div>
