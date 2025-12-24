@@ -10,13 +10,14 @@ import { pinyin } from 'pinyin-pro';
 // --- 常量与配置 ---
 
 const STORAGE_KEY_HISTORY = 'ai_chat_history_v1';
-const STORAGE_KEY_CONFIG = 'ai_dock_config_v7'; // 版本号更新以避免旧配置冲突
+const STORAGE_KEY_CONFIG = 'ai_dock_config_v7'; // 更新版本号以应用新配置
 
 const DEFAULT_SYSTEM_PROMPT = `你是一位精通汉语和缅甸语的资深翻译老师。
 1. 你的目标是用通俗易懂、口语化的中文为缅甸学生讲解汉语语法。
 2. 排版要求：使用清晰的标题（###）、列表（-）和加粗（**）来组织内容。
 3. 重点内容（如例句、规则）必须提供【中文】和【缅甸语】双语对照。
-4. 语气亲切，多给予鼓励。`;
+4. 如果学生是在做题（Context中有题目信息），且学生选错了，请第一句话明确指出错误原因（例如：“你把'在'当成'到'用了”），然后再解释。
+5. 语气亲切，多给予鼓励。`;
 
 const DEFAULT_CONFIG = {
   apiKey: '', 
@@ -25,7 +26,7 @@ const DEFAULT_CONFIG = {
   ttsSpeed: 1.0,
   ttsVoice: 'zh-CN-XiaoyouNeural',
   showPinyin: true,
-  autoTTS: true // 默认开启自动朗读
+  autoTTS: true // 【新增】默认开启自动朗读
 };
 
 const VOICES = [
@@ -46,12 +47,17 @@ const PinyinRenderer = ({ text, show }) => {
       {parts.map((part, index) => {
         if (/[\u4e00-\u9fa5]/.test(part)) {
           const pyArray = pinyin(part, { type: 'array', toneType: 'symbol' });
-          return part.split('').map((char, i) => (
-            <ruby key={i} style={{rubyPosition: 'over', margin: '0 1px'}}>
-              {char}
-              <rt style={{fontSize: '0.6em', color: '#64748b', fontWeight: 'normal', userSelect: 'none'}}>{pyArray[i]}</rt>
-            </ruby>
-          ));
+          const charArray = part.split('');
+          return (
+            <span key={index} style={{whiteSpace: 'nowrap', marginRight: '2px'}}>
+              {charArray.map((char, i) => (
+                <ruby key={i} style={{rubyPosition: 'over', margin: '0 1px'}}>
+                  {char}
+                  <rt style={{fontSize: '0.6em', color: '#64748b', fontWeight: 'normal', userSelect: 'none'}}>{pyArray[i]}</rt>
+                </ruby>
+              ))}
+            </span>
+          );
         }
         return <span key={index}>{part}</span>;
       })}
@@ -77,16 +83,18 @@ export default function AIChatDock({ contextData }) {
   const audioRef = useRef(null);
   const historyRef = useRef(null);
   const abortControllerRef = useRef(null);
-  
-  // 组件卸载时停止播放
+
+  // 组件卸载时停止播放，防止内存泄漏
   useEffect(() => {
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
+        audioRef.current = null;
       }
     };
   }, []);
 
+  // 初始化悬浮球位置
   useEffect(() => {
     const w = window.innerWidth;
     const h = window.innerHeight;
@@ -95,62 +103,70 @@ export default function AIChatDock({ contextData }) {
 
   const currentSessionKey = useMemo(() => {
     if (!contextData) return 'free:default';
-    return `${contextData.type || 'free'}:${contextData.id || 'default'}`;
+    const type = contextData.type || 'free';
+    const id = contextData.id || 'default';
+    return `${type}:${id}`;
   }, [contextData]);
-
+  
+  // 加载配置和历史记录
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-        const savedConfig = localStorage.getItem(STORAGE_KEY_CONFIG);
-        if (savedConfig) setConfig({ ...DEFAULT_CONFIG, ...JSON.parse(savedConfig) });
-        const savedHistory = localStorage.getItem(STORAGE_KEY_HISTORY);
-        if (savedHistory) setAllHistory(JSON.parse(savedHistory));
+    const savedConfig = localStorage.getItem(STORAGE_KEY_CONFIG);
+    if (savedConfig) {
+      try { setConfig({ ...DEFAULT_CONFIG, ...JSON.parse(savedConfig) }); } catch(e) {}
+    }
+    const savedHistory = localStorage.getItem(STORAGE_KEY_HISTORY);
+    if (savedHistory) {
+      try { setAllHistory(JSON.parse(savedHistory)); } catch(e) {}
     }
   }, []);
-
+  
+  // 切换 session 时加载对应消息
   useEffect(() => {
     setMessages(allHistory[currentSessionKey]?.messages || []);
   }, [currentSessionKey, allHistory]);
 
-  // 【关键修复】只有在 loading 结束后才保存历史记录
+  // 【关键修复】只在 AI 响应结束时保存历史记录，防止保存不完整内容
   useEffect(() => {
     if (messages.length > 0 && !loading) {
-      const newHistoryItem = {
-        id: currentSessionKey,
-        type: contextData?.type || 'free',
-        title: contextData?.title || '自由提问',
-        updatedAt: Date.now(),
-        messages: messages
-      };
-      const updated = { ...allHistory, [currentSessionKey]: newHistoryItem };
-      if (JSON.stringify(allHistory[currentSessionKey]) !== JSON.stringify(newHistoryItem)) {
-         setAllHistory(updated);
-         localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(updated));
+      const lastMessage = messages[messages.length - 1];
+      // 确保最后一条消息是完整的AI消息或用户消息
+      if (lastMessage.role === 'user' || (lastMessage.role === 'assistant' && lastMessage.content)) {
+        const newHistoryItem = {
+          id: currentSessionKey,
+          type: contextData?.type || 'free',
+          title: contextData?.title || '自由提问',
+          updatedAt: Date.now(),
+          messages: messages
+        };
+        const updated = { ...allHistory, [currentSessionKey]: newHistoryItem };
+        if (JSON.stringify(allHistory[currentSessionKey]) !== JSON.stringify(newHistoryItem)) {
+           setAllHistory(updated);
+           localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(updated));
+        }
       }
     }
-  }, [messages, loading, currentSessionKey, contextData, allHistory]);
+  }, [messages, loading, currentSessionKey, contextData]);
   
-  // 保存配置
   const saveConfig = (newConfig) => {
     setConfig(newConfig);
     localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(newConfig));
   };
-
+  
+  // --- 拖拽逻辑 ---
   const onDragStart = (e) => {
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    dragRef.current = { startX: clientX, startY: clientY, initialX: position.x, initialY: position.y, moved: false };
+    e.preventDefault();
+    const touch = e.touches ? e.touches[0] : e;
+    dragRef.current = { startX: touch.clientX, startY: touch.clientY, initialX: position.x, initialY: position.y, moved: false };
     setIsDragging(true);
   };
 
   const onDragMove = (e) => {
     if (!isDragging) return;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const dx = clientX - dragRef.current.startX;
-    const dy = clientY - dragRef.current.startY;
+    const touch = e.touches ? e.touches[0] : e;
+    const dx = touch.clientX - dragRef.current.startX;
+    const dy = touch.clientY - dragRef.current.startY;
     if (Math.abs(dx) > 5 || Math.abs(dy) > 5) dragRef.current.moved = true;
     
-    // 边界限制
     let newX = dragRef.current.initialX + dx;
     let newY = dragRef.current.initialY + dy;
     newX = Math.max(10, Math.min(window.innerWidth - 70, newX));
@@ -160,11 +176,9 @@ export default function AIChatDock({ contextData }) {
   };
 
   const onDragEnd = () => setIsDragging(false);
+  const toggleExpanded = () => { if (!dragRef.current.moved) setExpanded(!expanded); };
 
-  const toggleExpanded = () => {
-    if (!dragRef.current.moved) setExpanded(!expanded);
-  };
-
+  // --- 核心交互 ---
   const handleSend = async (textToSend = input) => {
     if (!textToSend.trim() || loading) return;
     if (!config.apiKey) { alert('请先在设置中填入您的 API Key'); setShowSettings(true); return; }
@@ -176,12 +190,12 @@ export default function AIChatDock({ contextData }) {
     if (abortControllerRef.current) abortControllerRef.current.abort();
     abortControllerRef.current = new AbortController();
 
-    setMessages(prev => [...prev, { role: 'user', content: userText }, { role: 'assistant', content: '' }]);
+    const currentMessages = [...messages, { role: 'user', content: userText }];
+    setMessages([...currentMessages, { role: 'assistant', content: '' }]);
 
     const apiMessages = [
         { role: 'system', content: config.systemPrompt },
-        ...messages.slice(-6),
-        { role: 'user', content: contextData ? `[教学上下文: ${contextData.title}]\n${userText}` : userText }
+        ...currentMessages.slice(-6),
     ];
 
     try {
@@ -191,9 +205,8 @@ export default function AIChatDock({ contextData }) {
         body: JSON.stringify({ messages: apiMessages, config: { apiKey: config.apiKey, modelId: config.modelId } }),
         signal: abortControllerRef.current.signal
       });
-
       if (!response.ok) throw new Error('网络请求失败');
-
+      
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let fullContent = '';
@@ -201,19 +214,21 @@ export default function AIChatDock({ contextData }) {
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value);
+        const chunk = decoder.decode(value, { stream: true });
         const lines = chunk.split('\n');
         for (const line of lines) {
           if (line.trim().startsWith('data: ') && line.trim() !== 'data: [DONE]') {
             try {
               const json = JSON.parse(line.replace('data: ', ''));
               const delta = json.choices[0]?.delta?.content || '';
-              fullContent += delta;
-              setMessages(prev => {
-                const list = [...prev];
-                list[list.length - 1] = { ...list[list.length - 1], content: fullContent };
-                return list;
-              });
+              if(delta) {
+                fullContent += delta;
+                setMessages(prev => {
+                  const list = [...prev];
+                  list[list.length - 1] = { ...list[list.length - 1], content: fullContent };
+                  return list;
+                });
+              }
             } catch(e){}
           }
         }
@@ -249,13 +264,24 @@ export default function AIChatDock({ contextData }) {
     }
     setIsPlaying(false);
   };
+  
+  const deleteHistory = (key, e) => {
+    e.stopPropagation();
+    if(confirm('确定删除这条记录吗？')) {
+        const newHistory = { ...allHistory };
+        delete newHistory[key];
+        setAllHistory(newHistory);
+        localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(newHistory));
+        if (key === currentSessionKey) setMessages([]);
+    }
+  };
 
   return (
     <>
       {!expanded && (
         <div 
           style={{ ...styles.floatingIcon, left: position.x, top: position.y }}
-          onMouseDown={onDragStart} onMouseMove={onDragMove} onMouseUp={onDragEnd}
+          onMouseDown={onDragStart} onMouseMove={onDragMove} onMouseUp={onDragEnd} onMouseLeave={onDragEnd}
           onTouchStart={onDragStart} onTouchMove={onDragMove} onTouchEnd={onDragEnd}
           onClick={toggleExpanded}
         >
@@ -277,11 +303,7 @@ export default function AIChatDock({ contextData }) {
                 </div>
               </div>
               <div style={{display:'flex', gap: 14, alignItems:'center'}}>
-                <button 
-                    onClick={() => saveConfig({...config, autoTTS: !config.autoTTS})} 
-                    style={{...styles.iconBtn, color: config.autoTTS ? '#3b82f6' : '#94a3b8'}}
-                    title={config.autoTTS ? "关闭自动朗读" : "开启自动朗读"}
-                >
+                <button onClick={() => saveConfig({...config, autoTTS: !config.autoTTS})} style={{...styles.iconBtn, color: config.autoTTS ? '#3b82f6' : '#94a3b8'}} title={config.autoTTS ? "关闭自动朗读" : "开启自动朗读"}>
                     {config.autoTTS ? <FaHeadphonesAlt size={18}/> : <FaHeadphones size={18}/>}
                 </button>
                 <button onClick={() => setShowSettings(true)} style={styles.iconBtn}><FaCog /></button>
@@ -300,26 +322,21 @@ export default function AIChatDock({ contextData }) {
                 <div key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%', marginBottom: 20 }}>
                   <div style={{ padding: '12px 16px', borderRadius: 16, background: m.role === 'user' ? '#3b82f6' : '#fff', color: m.role === 'user' ? '#fff' : '#1e293b', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', lineHeight: 1.8 }}>
                     {m.role === 'assistant' ? (
-                       <div className="markdown-body">
-                         <ReactMarkdown components={{ p: ({children}) => <p><PinyinRenderer text={children[0]} show={config.showPinyin}/></p> }}>{m.content}</ReactMarkdown>
-                       </div>
+                       <div className="markdown-body"><ReactMarkdown components={{ p: ({children}) => <p><PinyinRenderer text={children[0]} show={config.showPinyin}/></p> }}>{m.content}</ReactMarkdown></div>
                     ) : m.content}
                   </div>
                   {m.role === 'assistant' && m.content && !loading && (
-                    <div style={styles.msgBar}>
-                       <button onClick={() => playInternalTTS(m.content)} style={styles.msgAction}><FaVolumeUp/> 朗读</button>
-                       <button onClick={() => navigator.clipboard.writeText(m.content)} style={styles.msgAction}><FaCopy/> 复制</button>
-                    </div>
+                    <div style={styles.msgBar}><button onClick={() => playInternalTTS(m.content)} style={styles.msgAction}><FaVolumeUp/> 朗读</button><button onClick={() => navigator.clipboard.writeText(m.content)} style={styles.msgAction}><FaCopy/> 复制</button></div>
                   )}
                 </div>
               ))}
-              {loading && messages[messages.length-1]?.content === '' && <div style={{fontSize:'0.8rem', color:'#94a3b8'}}>正在思考中...</div>}
+              {loading && messages[messages.length - 1]?.content === '' && <div style={{fontSize:'0.8rem', color:'#94a3b8', alignSelf:'flex-start'}}>正在思考中...</div>}
             </div>
 
             <div style={styles.inputBar}>
                {isPlaying && <button onClick={stopTTS} style={styles.stopBtn}><FaStop/></button>}
                <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} placeholder="输入汉语疑问..." style={styles.input} />
-               <button onClick={() => handleSend()} disabled={loading} style={styles.sendBtn}><FaPaperPlane/></button>
+               <button onClick={() => handleSend()} disabled={loading} style={{...styles.sendBtn, opacity: loading ? 0.5: 1}}><FaPaperPlane/></button>
             </div>
           </div>
         </div>
@@ -328,7 +345,7 @@ export default function AIChatDock({ contextData }) {
       {showSettings && (
         <div style={styles.popOverlay} onClick={() => setShowSettings(false)}>
           <div style={styles.popCard} onClick={e => e.stopPropagation()}>
-            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}><h3>设置</h3><button onClick={() => setShowSettings(false)} style={styles.iconBtn}><FaTimes/></button></div>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20}}><h3>设置</h3><button onClick={() => setShowSettings(false)} style={styles.iconBtn}><FaTimes/></button></div>
             <label><div style={styles.label}>NVIDIA API Key</div><input type="password" value={config.apiKey} onChange={e => saveConfig({...config, apiKey:e.target.value})} style={styles.popInput} /></label>
             <button onClick={() => setShowSettings(false)} style={styles.popBtn}>保存并关闭</button>
           </div>
@@ -346,16 +363,16 @@ export default function AIChatDock({ contextData }) {
 const styles = {
   floatingIcon: { position: 'fixed', width: 60, height: 60, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, boxShadow: '0 4px 20px rgba(0,0,0,0.3)', touchAction: 'none', cursor: 'pointer' },
   loader: { position: 'absolute', width: '100%', height: '100%', borderRadius: '50%', border: '3px solid transparent', borderTopColor: '#fff', animation: 'rotate 1s linear infinite' },
-  fullOverlay: { position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' },
+  fullOverlay: { position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }, // 【修改】顶部对齐
   backdrop: { position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: -1, backdropFilter: 'blur(2px)' },
-  chatContainer: { width: '100%', height: '75%', background: '#f8fafc', borderBottomLeftRadius: 24, borderBottomRightRadius: 24, display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' },
+  chatContainer: { width: '100%', height: '75%', background: '#f8fafc', borderBottomLeftRadius: 24, borderBottomRightRadius: 24, display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }, // 【修改】高度75%，底部圆角
   chatHeader: { height: 60, padding: '0 16px', background: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', flexShrink: 0 },
   headerTitle: { display: 'flex', alignItems: 'center', gap: 8, fontWeight: 'bold', color: '#334155' },
   historyList: { flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' },
   inputBar: { height: 80, padding: '0 16px 20px', background: '#fff', borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 },
   input: { flex: 1, height: 45, borderRadius: 22, border: '1px solid #e2e8f0', padding: '0 20px', outline: 'none', background: '#f8fafc', fontSize: '1rem' },
   sendBtn: { width: 45, height: 45, borderRadius: '50%', background: '#3b82f6', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  stopBtn: { width: 34, height: 34, borderRadius: '50%', background: '#fee2e2', color: '#ef4444', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  stopBtn: { width: 34, height: 34, borderRadius: '50%', background: '#fee2e2', color: '#ef4444', border: 'none', display:'flex', alignItems:'center', justifyContent:'center' },
   iconBtn: { background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 4 },
   msgBar: { display: 'flex', gap: 15, marginTop: 4 },
   msgAction: { background: 'none', border: 'none', color: '#94a3b8', fontSize: '0.75rem', cursor: 'pointer', display:'flex', gap:4, alignItems:'center' },
