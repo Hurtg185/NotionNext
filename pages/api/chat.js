@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     const timeoutId = setTimeout(() => controller.abort(), 55000); // 55秒超时
 
     try {
-      const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+      const response = await fetch('https://integrate.api.nvidia.com/v1', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
