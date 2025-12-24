@@ -1,13 +1,18 @@
-// 关键：延长 Vercel Serverless Function 的最大执行时间
-// 将默认的 10-15 秒延长到 60 秒（免费版 Vercel 的上限）
+// pages/api/chat.js
+
+// 关键：延长 Serverless Function 的最大执行时间
+// 将默认的 10-15 秒延长到 60 秒（免费版 Vercel/CF 的上限）
 export const config = {
   maxDuration: 60,
 };
 
+// Pages Router 的标准写法
 export default async function handler(req, res) {
-  // 1. 检查请求方法是否为 POST
+  // 1. 严格检查请求方法，只允许 POST
   if (req.method !== 'POST') {
-    return res.status(405).json({ message: 'Method Not Allowed' });
+    // 设置响应头并返回 405 错误
+    res.setHeader('Allow', ['POST']);
+    return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
   }
 
   try {
@@ -18,15 +23,14 @@ export default async function handler(req, res) {
     const API_KEY = clientConfig?.apiKey;
 
     if (!API_KEY) {
-      // 如果没有 Key，返回 400 错误
       return res.status(400).json({ error: '后端未接收到 API Key' });
     }
 
-    const modelId = clientConfig.modelId || 'meta/llama-3.1-70b-instruct'; // 提供一个备用模型
+    const modelId = clientConfig.modelId || 'meta/llama-3.1-70b-instruct';
     console.log(`[API PROXY] 正在请求 NVIDIA API，模型: ${modelId}`);
 
     // 4. 向 NVIDIA API 发起请求
-    const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+    const apiResponse = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -38,25 +42,24 @@ export default async function handler(req, res) {
         temperature: 0.6,
         top_p: 0.7,
         max_tokens: 1024,
-        stream: false // 必须为 false
+        stream: false
       })
     });
 
-    // 5. 健壮的错误处理：如果 NVIDIA 返回非 200 状态码
-    if (!response.ok) {
-      // 尝试读取返回的错误文本，无论它是什么格式
-      const errorText = await response.text();
-      console.error(`[API PROXY] NVIDIA API 返回错误 (${response.status}):`, errorText);
+    // 5. 如果 NVIDIA 返回了非 200 的状态码
+    if (!apiResponse.ok) {
+      const errorText = await apiResponse.text();
+      console.error(`[API PROXY] NVIDIA API 返回错误 (${apiResponse.status}):`, errorText);
       
-      // 将具体的错误信息返回给前端，而不是让前端去猜
-      return res.status(response.status).json({
-        error: `API 请求失败 (${response.status})`,
-        details: errorText.substring(0, 500) // 只截取前500个字符，防止过长
+      // 将具体的错误信息以 JSON 格式返回给前端
+      return res.status(apiResponse.status).json({
+        error: `API 请求失败 (${apiResponse.status})`,
+        details: errorText.substring(0, 500)
       });
     }
 
-    // 6. 只有在 response.ok 为 true 时，才尝试解析 JSON 并返回
-    const data = await response.json();
+    // 6. 成功后，解析 JSON 并返回
+    const data = await apiResponse.json();
     return res.status(200).json(data);
 
   } catch (error) {
