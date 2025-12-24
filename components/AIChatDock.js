@@ -4,6 +4,7 @@ import {
   FaVolumeUp, FaStop, FaCopy, FaRedo, FaMicrophone
 } from 'react-icons/fa';
 import ReactMarkdown from 'react-markdown';
+import { pinyin } from 'pinyin-pro'; // 确保安装了 npm install pinyin-pro
 
 // 默认配置
 const DEFAULT_CONFIG = {
@@ -11,7 +12,8 @@ const DEFAULT_CONFIG = {
   modelId: 'meta/llama-3.1-70b-instruct',
   systemPrompt: '你是一位精通汉语和缅甸语的资深翻译老师。请用通俗易懂、口语化的中文为缅甸学生讲解汉语语法。排版要求：使用清晰的标题（###）、列表（-）和加粗（**）来组织内容，重点内容请用中文和缅甸语双语对照。',
   ttsSpeed: 1.0,
-  ttsVoice: 'zh-CN-XiaoyouNeural'
+  ttsVoice: 'zh-CN-XiaoyouNeural',
+  showPinyin: true // 默认开启拼音
 };
 
 const VOICES = [
@@ -21,6 +23,47 @@ const VOICES = [
   { label: '缅甸女声 - Nilar', value: 'my-MM-NilarNeural' },
   { label: '缅甸男声 - Thiha', value: 'my-MM-ThihaNeural' }
 ];
+
+// --- 拼音渲染组件 (核心) ---
+const PinyinRenderer = ({ text, show }) => {
+  if (!show || !text) return text; // 如果关闭拼音，直接返回文本
+
+  // 如果包含 Markdown 符号，暂时不处理拼音，由 ReactMarkdown 处理结构
+  // 但我们可以在 ReactMarkdown 的 components 里调用这个逻辑
+  // 这里是一个纯文本处理逻辑
+  
+  const regex = /([\u4e00-\u9fa5]+)/g; // 匹配中文
+  const parts = text.split(regex);
+
+  return (
+    <span>
+      {parts.map((part, index) => {
+        if (/[\u4e00-\u9fa5]/.test(part)) {
+          const pyArray = pinyin(part, { type: 'array', toneType: 'symbol' });
+          const charArray = part.split('');
+          return (
+            <span key={index} style={{whiteSpace: 'nowrap', marginRight: '2px'}}>
+              {charArray.map((char, i) => (
+                <ruby key={i} style={{rubyPosition: 'over', margin: '0 1px'}}>
+                  {char}
+                  <rt style={{
+                      fontSize: '0.6em', 
+                      color: '#64748b', 
+                      fontWeight: 'normal',
+                      userSelect: 'none' // 拼音不可选中复制
+                  }}>
+                    {pyArray[i]}
+                  </rt>
+                </ruby>
+              ))}
+            </span>
+          );
+        }
+        return <span key={index}>{part}</span>;
+      })}
+    </span>
+  );
+};
 
 export default function AIChatDock({ contextData, ttsPlay }) {
   const [expanded, setExpanded] = useState(false);
@@ -36,7 +79,7 @@ export default function AIChatDock({ contextData, ttsPlay }) {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-        const savedConfig = localStorage.getItem('ai_dock_config_v5');
+        const savedConfig = localStorage.getItem('ai_dock_config_v6'); // 版本号 v6
         if (savedConfig) {
             try { setConfig({ ...DEFAULT_CONFIG, ...JSON.parse(savedConfig) }); } 
             catch (e) { console.error('Config load error', e); }
@@ -52,16 +95,15 @@ export default function AIChatDock({ contextData, ttsPlay }) {
 
   const saveConfig = (newConfig) => {
     setConfig(newConfig);
-    localStorage.setItem('ai_dock_config_v5', JSON.stringify(newConfig));
+    localStorage.setItem('ai_dock_config_v6', JSON.stringify(newConfig));
   };
 
-  // 内部 TTS 播放 (支持自动检测语言)
   const playInternalTTS = async (text) => {
     if (!text) return;
     if (audioRef.current) audioRef.current.pause();
     setIsPlaying(true);
     
-    // 简单判断是否主要是缅文
+    // 自动检测语言
     const isBurmese = /[\u1000-\u109F]/.test(text);
     const voice = isBurmese ? 'my-MM-NilarNeural' : config.ttsVoice;
 
@@ -89,10 +131,9 @@ export default function AIChatDock({ contextData, ttsPlay }) {
 
   const copyText = (text) => {
     navigator.clipboard.writeText(text);
-    // 这里可以加一个简单的 Toast 提示，为了简洁省略
   };
 
-  // === 核心发送逻辑 ===
+  // === 核心发送逻辑 (修复了所有报错) ===
   const handleSend = async (textToSend = input) => {
     if (!textToSend.trim() || loading) return;
     if (!config.apiKey) {
@@ -110,7 +151,6 @@ export default function AIChatDock({ contextData, ttsPlay }) {
     abortControllerRef.current = new AbortController();
 
     const newMessages = [...messages, { role: 'user', content: userText }];
-    // 先添加一个空的 AI 消息占位
     setMessages([...newMessages, { role: 'assistant', content: '' }]);
 
     const apiMessages = [
@@ -130,13 +170,12 @@ export default function AIChatDock({ contextData, ttsPlay }) {
         signal: abortControllerRef.current.signal
       });
 
-      // 修复：先检查 status，不直接调用 response.text() 导致流被锁死
       if (!response.ok) {
-         // 只有出错时才读 text
          const errText = await response.text();
          throw new Error(`服务错误 (${response.status}): ${errText.substring(0, 100)}`);
       }
 
+      // 使用 Reader 读取流，彻底解决 JSON 解析错误
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let done = false;
@@ -150,7 +189,7 @@ export default function AIChatDock({ contextData, ttsPlay }) {
         buffer += chunk;
         
         const lines = buffer.split('\n');
-        buffer = lines.pop(); // 保留可能不完整的最后一行
+        buffer = lines.pop(); // 保留不完整行
 
         for (const line of lines) {
             const trimmedLine = line.trim();
@@ -225,7 +264,7 @@ export default function AIChatDock({ contextData, ttsPlay }) {
              {messages.map((m, i) => (
                <div key={i} style={{
                    alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                   maxWidth: '90%', // 增加宽度
+                   maxWidth: '90%', // 增大宽度
                    display: 'flex', flexDirection: 'column',
                    marginBottom: '16px'
                }}>
@@ -235,13 +274,59 @@ export default function AIChatDock({ contextData, ttsPlay }) {
                      borderBottomRightRadius: m.role === 'user' ? 4 : 16,
                      borderBottomLeftRadius: m.role === 'user' ? 16 : 4,
                      background: m.role === 'user' ? '#3b82f6' : '#fff',
-                     color: m.role === 'user' ? '#fff' : '#1e293b', // 加深字体颜色
+                     color: m.role === 'user' ? '#fff' : '#1e293b', 
                      boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                     lineHeight: 1.6
+                     lineHeight: 1.8
                  }}>
                    {m.role === 'assistant' ? (
                       <div className="markdown-body">
-                        <ReactMarkdown>{m.content}</ReactMarkdown>
+                        {/* ReactMarkdown 中集成 PinyinRenderer */}
+                        <ReactMarkdown
+                            components={{
+                                // 拦截所有文本节点，如果是中文则加拼音
+                                p: ({node, children, ...props}) => {
+                                    return <p {...props}>
+                                        {React.Children.map(children, child => {
+                                            if (typeof child === 'string') {
+                                                return <PinyinRenderer text={child} show={config.showPinyin} />;
+                                            }
+                                            return child;
+                                        })}
+                                    </p>
+                                },
+                                li: ({node, children, ...props}) => (
+                                    <li {...props}>
+                                        {React.Children.map(children, child => {
+                                            if (typeof child === 'string') {
+                                                return <PinyinRenderer text={child} show={config.showPinyin} />;
+                                            }
+                                            // 处理 li 内部的 p 标签
+                                            if (React.isValidElement(child) && child.type === 'p') {
+                                                return React.cloneElement(child, {
+                                                    children: React.Children.map(child.props.children, subChild => 
+                                                        typeof subChild === 'string' ? <PinyinRenderer text={subChild} show={config.showPinyin} /> : subChild
+                                                    )
+                                                });
+                                            }
+                                            return child;
+                                        })}
+                                    </li>
+                                ),
+                                // 自定义标题样式
+                                h3: ({node, children, ...props}) => (
+                                    <h3 {...props} style={{color: '#d946ef'}}>
+                                        {React.Children.map(children, child => typeof child === 'string' ? <PinyinRenderer text={child} show={config.showPinyin} /> : child)}
+                                    </h3>
+                                ),
+                                strong: ({node, children, ...props}) => (
+                                    <strong {...props} style={{color: '#2563eb', background: '#eff6ff', padding: '0 4px', borderRadius: '4px'}}>
+                                        {React.Children.map(children, child => typeof child === 'string' ? <PinyinRenderer text={child} show={config.showPinyin} /> : child)}
+                                    </strong>
+                                )
+                            }}
+                        >
+                            {m.content}
+                        </ReactMarkdown>
                       </div>
                    ) : m.content}
                  </div>
@@ -296,6 +381,18 @@ export default function AIChatDock({ contextData, ttsPlay }) {
                 <div style={styles.label}>NVIDIA API Key</div>
                 <input type="password" value={config.apiKey} onChange={e => saveConfig({...config, apiKey: e.target.value})} placeholder="nvapi-..." style={styles.input}/>
               </label>
+              
+              {/* 拼音开关 */}
+              <label style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+                <div style={styles.label}>显示拼音</div>
+                <input 
+                    type="checkbox" 
+                    checked={config.showPinyin} 
+                    onChange={e => saveConfig({...config, showPinyin: e.target.checked})}
+                    style={{width: '20px', height: '20px'}}
+                />
+              </label>
+
               <label>
                 <div style={styles.label}>模型 ID</div>
                 <input value={config.modelId} onChange={e => saveConfig({...config, modelId: e.target.value})} style={styles.input}/>
@@ -310,6 +407,10 @@ export default function AIChatDock({ contextData, ttsPlay }) {
                   {VOICES.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
                 </select>
               </label>
+              <label>
+                <div style={styles.label}>TTS 语速 ({config.ttsSpeed}x)</div>
+                <input type="range" min="0.5" max="2.0" step="0.1" value={config.ttsSpeed} onChange={e => saveConfig({...config, ttsSpeed: parseFloat(e.target.value)})} style={{width:'100%', accentColor:'#3b82f6'}}/>
+              </label>
             </div>
             <button onClick={() => setShowSettings(false)} style={styles.saveBtn}>保存设置</button>
           </div>
@@ -318,14 +419,12 @@ export default function AIChatDock({ contextData, ttsPlay }) {
       
       {/* 优化的 Markdown 样式 */}
       <style jsx global>{`
-        .markdown-body { font-size: 0.95rem; color: #334155; }
+        .markdown-body { font-size: 0.95rem; color: #334155; font-family: 'Padauk', sans-serif; }
         .markdown-body h1, .markdown-body h2, .markdown-body h3 { font-weight: 700; color: #1e293b; margin-top: 1em; margin-bottom: 0.5em; }
-        .markdown-body h3 { font-size: 1.1em; border-left: 4px solid #3b82f6; padding-left: 8px; }
-        .markdown-body p { margin-bottom: 0.8em; line-height: 1.7; }
-        .markdown-body strong { color: #1d4ed8; font-weight: 700; background: #eff6ff; padding: 0 2px; border-radius: 2px; } 
+        .markdown-body h3 { font-size: 1.1em; border-left: 4px solid #d946ef; padding-left: 8px; }
+        .markdown-body p { margin-bottom: 0.8em; line-height: 2.2; /* 增加行高以容纳拼音 */ }
         .markdown-body ul, .markdown-body ol { padding-left: 20px; margin-bottom: 0.8em; }
         .markdown-body li { margin-bottom: 0.4em; }
-        .markdown-body code { background: #f1f5f9; color: #ef4444; padding: 2px 4px; borderRadius: 4px; font-family: monospace; font-size: 0.9em; }
         .markdown-body blockquote { border-left: 4px solid #cbd5e1; padding-left: 12px; color: #64748b; margin: 0 0 1em 0; font-style: italic; }
       `}</style>
     </>
@@ -339,6 +438,7 @@ const styles = {
   headerBtn: { color: '#64748b', cursor: 'pointer', background: 'none', border: 'none' },
   modelTag: { fontSize: '0.7rem', background: '#eff6ff', color: '#3b82f6', padding: '2px 6px', borderRadius: '4px' },
   chatHistory: { flex: 1, overflowY: 'auto', padding: '20px 16px', background: '#f8fafc', display: 'flex', flexDirection: 'column' },
+  chatMsg: { maxWidth: '90%', padding: '10px 14px', borderRadius: '12px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', lineHeight: 1.6, fontSize: '0.95rem', wordBreak: 'break-word' },
   chatInputArea: { height: '60px', padding: '0 12px', display: 'flex', alignItems: 'center', gap: '10px', background: '#fff', borderTop: '1px solid #e2e8f0', flexShrink: 0 },
   stopBtn: { width:36, height:36, borderRadius:'50%', background:'#fee2e2', color:'#ef4444', border:'none', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' },
   chatInput: { flex: 1, height: '40px', borderRadius: '20px', border: '1px solid #e2e8f0', padding: '0 16px', fontSize: '0.95rem', background: '#f8fafc', outline: 'none' },
@@ -348,6 +448,6 @@ const styles = {
   label: { fontSize: '0.85rem', color: '#64748b', marginBottom: '6px', fontWeight: '600' },
   input: { width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem', outline: 'none', fontFamily:'inherit' },
   saveBtn: { width:'100%', marginTop:'24px', padding:'12px', background:'#3b82f6', color:'#fff', border:'none', borderRadius:'10px', fontWeight:'bold', fontSize:'1rem', cursor:'pointer' },
-  actionBar: { display: 'flex', gap: '12px', marginTop: '6px', marginLeft: '4px' },
-  actionBtn: { display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px' }
+  actionBar: { display: 'flex', gap: '16px', marginTop: '8px', marginLeft: '4px', borderTop: '1px solid #e2e8f0', paddingTop: '8px' },
+  actionBtn: { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', borderRadius: '6px', transition: 'background 0.2s', ':hover': {background: '#f1f5f9'} }
 };
