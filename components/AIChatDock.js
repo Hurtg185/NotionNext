@@ -8,7 +8,7 @@ import ReactMarkdown from 'react-markdown';
 // ===================================================================
 //  在这里填入您之前部署好的 Cloudflare Worker URL
 // ===================================================================
-const PROXY_WORKER_URL = 'https://你的-worker-名字.workers.dev'; // <--- ⚠️ 请务必替换成您自己的 Worker URL
+const PROXY_WORKER_URL = 'https://886.best'; // <--- ⚠️ 请务必替换成您自己的 Worker URL
 
 const DEFAULT_CONFIG = {
   apiKey: '', 
