@@ -1,24 +1,25 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   FaPaperPlane, FaChevronDown, FaRobot, FaCog, FaTimes, 
-  FaVolumeUp, FaStop 
+  FaVolumeUp, FaStop, FaCopy, FaRedo, FaMicrophone
 } from 'react-icons/fa';
 import ReactMarkdown from 'react-markdown';
 
 // 默认配置
 const DEFAULT_CONFIG = {
   apiKey: '', 
-  modelId: 'meta/llama-3.1-70b-instruct', // 推荐用这个，速度快效果好
-  systemPrompt: '你是一位精通汉语和缅甸语的资深翻译老师。请用通俗易懂、口语化的中文为缅甸学生讲解汉语语法。如果遇到复杂的概念，请对比缅甸语的思维方式进行解释。态度要亲切、耐心。',
+  modelId: 'meta/llama-3.1-70b-instruct',
+  systemPrompt: '你是一位精通汉语和缅甸语的资深翻译老师。请用通俗易懂、口语化的中文为缅甸学生讲解汉语语法。排版要求：使用清晰的标题（###）、列表（-）和加粗（**）来组织内容，重点内容请用中文和缅甸语双语对照。',
   ttsSpeed: 1.0,
   ttsVoice: 'zh-CN-XiaoyouNeural'
 };
 
 const VOICES = [
-  { label: '女声 - 晓晓', value: 'zh-CN-XiaoxiaoNeural' },
-  { label: '女声 - 晓攸', value: 'zh-CN-XiaoyouNeural' },
-  { label: '男声 - 云希', value: 'zh-CN-YunxiNeural' },
-  { label: '男声 - 云野', value: 'zh-CN-YunyeNeural' }
+  { label: '中文女声 - 晓晓', value: 'zh-CN-XiaoxiaoNeural' },
+  { label: '中文女声 - 晓攸', value: 'zh-CN-XiaoyouNeural' },
+  { label: '中文男声 - 云希', value: 'zh-CN-YunxiNeural' },
+  { label: '缅甸女声 - Nilar', value: 'my-MM-NilarNeural' },
+  { label: '缅甸男声 - Thiha', value: 'my-MM-ThihaNeural' }
 ];
 
 export default function AIChatDock({ contextData, ttsPlay }) {
@@ -35,7 +36,7 @@ export default function AIChatDock({ contextData, ttsPlay }) {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-        const savedConfig = localStorage.getItem('ai_dock_config_v4'); // 升级配置版本号
+        const savedConfig = localStorage.getItem('ai_dock_config_v5');
         if (savedConfig) {
             try { setConfig({ ...DEFAULT_CONFIG, ...JSON.parse(savedConfig) }); } 
             catch (e) { console.error('Config load error', e); }
@@ -43,7 +44,6 @@ export default function AIChatDock({ contextData, ttsPlay }) {
     }
   }, []);
 
-  // 自动滚动：仅当正在生成或展开时
   useEffect(() => {
     if (historyRef.current && expanded) {
       historyRef.current.scrollTop = historyRef.current.scrollHeight;
@@ -52,18 +52,23 @@ export default function AIChatDock({ contextData, ttsPlay }) {
 
   const saveConfig = (newConfig) => {
     setConfig(newConfig);
-    localStorage.setItem('ai_dock_config_v4', JSON.stringify(newConfig));
+    localStorage.setItem('ai_dock_config_v5', JSON.stringify(newConfig));
   };
 
+  // 内部 TTS 播放 (支持自动检测语言)
   const playInternalTTS = async (text) => {
     if (!text) return;
     if (audioRef.current) audioRef.current.pause();
-    setIsPlaying(false);
+    setIsPlaying(true);
     
-    // 简单的清理 Markdown 符号
+    // 简单判断是否主要是缅文
+    const isBurmese = /[\u1000-\u109F]/.test(text);
+    const voice = isBurmese ? 'my-MM-NilarNeural' : config.ttsVoice;
+
     const cleanText = text.replace(/[*#`>~\-\[\]\(\)]/g, ''); 
     let ratePercent = Math.round((config.ttsSpeed - 1) * 100);
-    const url = `/api/tts?t=${encodeURIComponent(cleanText)}&v=${config.ttsVoice}&r=${ratePercent}%`;
+    const url = `/api/tts?t=${encodeURIComponent(cleanText)}&v=${voice}&r=${ratePercent}%`;
+    
     try {
       const res = await fetch(url);
       const blob = await res.blob();
@@ -71,7 +76,6 @@ export default function AIChatDock({ contextData, ttsPlay }) {
       audioRef.current = audio;
       audio.onended = () => setIsPlaying(false);
       audio.play();
-      setIsPlaying(true);
     } catch (e) { 
       console.error('TTS Error', e); 
       setIsPlaying(false);
@@ -83,32 +87,35 @@ export default function AIChatDock({ contextData, ttsPlay }) {
     setIsPlaying(false);
   };
 
-  // === 核心发送逻辑 (带缓冲区) ===
-  const handleSend = async () => {
-    if (!input.trim() || loading) return;
+  const copyText = (text) => {
+    navigator.clipboard.writeText(text);
+    // 这里可以加一个简单的 Toast 提示，为了简洁省略
+  };
+
+  // === 核心发送逻辑 ===
+  const handleSend = async (textToSend = input) => {
+    if (!textToSend.trim() || loading) return;
     if (!config.apiKey) {
-      alert('请点击右上角齿轮图标，设置 API Key');
+      alert('请先在设置中填入您的 API Key');
       setShowSettings(true);
       return;
     }
 
-    const userText = input;
+    const userText = textToSend;
     setInput('');
     setLoading(true);
     if (!expanded) setExpanded(true);
 
-    // 1. 中断旧请求
     if (abortControllerRef.current) abortControllerRef.current.abort();
     abortControllerRef.current = new AbortController();
 
-    // 2. 更新 UI：用户消息 + 空的 AI 消息
     const newMessages = [...messages, { role: 'user', content: userText }];
+    // 先添加一个空的 AI 消息占位
     setMessages([...newMessages, { role: 'assistant', content: '' }]);
 
-    // 3. 构建上下文
     const apiMessages = [
         { role: 'system', content: config.systemPrompt },
-        ...newMessages.slice(-6), // 历史记录
+        ...newMessages.slice(-6), 
         { role: 'user', content: contextData ? `[当前教材内容]\n标题：${contextData.title}\n句型：${contextData.pattern}\n\n学生问题：${userText}` : userText } 
     ];
 
@@ -123,43 +130,27 @@ export default function AIChatDock({ contextData, ttsPlay }) {
         signal: abortControllerRef.current.signal
       });
 
-      // 处理非 200 错误
+      // 修复：先检查 status，不直接调用 response.text() 导致流被锁死
       if (!response.ok) {
-         // 尝试读取 JSON 错误
-         let errorMsg = `Server Error: ${response.status}`;
-         try {
-            const errJson = await response.json();
-            errorMsg = errJson.error || errJson.details || errorMsg;
-         } catch (e) {
-            const errText = await response.text();
-            if (errText) errorMsg = errText.substring(0, 100);
-         }
-         throw new Error(errorMsg);
+         // 只有出错时才读 text
+         const errText = await response.text();
+         throw new Error(`服务错误 (${response.status}): ${errText.substring(0, 100)}`);
       }
 
-      if (!response.body) throw new Error("No response body");
-
-      // 4.流式读取 (核心缓冲区逻辑)
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let done = false;
       let fullContent = '';
-      let buffer = ''; // 🔴 缓冲区：专门处理被截断的数据包
+      let buffer = '';
 
       while (!done) {
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
-        
-        // 解码当前块并拼接到缓冲区
         const chunk = decoder.decode(value, { stream: true });
         buffer += chunk;
         
-        // 按行分割
         const lines = buffer.split('\n');
-        
-        // 🔴 关键：保留最后一行在缓冲区中，因为它可能不完整
-        // 只有当 buffer 以 \n 结尾时，最后一行才是空的，否则就是半截数据
-        buffer = lines.pop(); 
+        buffer = lines.pop(); // 保留可能不完整的最后一行
 
         for (const line of lines) {
             const trimmedLine = line.trim();
@@ -170,10 +161,8 @@ export default function AIChatDock({ contextData, ttsPlay }) {
                     const jsonStr = trimmedLine.replace('data: ', '');
                     const data = JSON.parse(jsonStr);
                     const delta = data.choices?.[0]?.delta?.content || '';
-                    
                     if (delta) {
                         fullContent += delta;
-                        // 更新 UI
                         setMessages(prev => {
                             const last = prev[prev.length - 1];
                             if (last.role === 'assistant') {
@@ -182,18 +171,14 @@ export default function AIChatDock({ contextData, ttsPlay }) {
                             return prev;
                         });
                     }
-                } catch (e) {
-                    // 忽略单行解析错误，因为有缓冲区保护，这通常不会发生
-                    console.warn("JSON Parse skipped:", trimmedLine);
-                }
+                } catch (e) { }
             }
         }
       }
 
-      // 5. 播放语音
+      // 自动朗读
       if (fullContent && !abortControllerRef.current.signal.aborted) {
-          if (ttsPlay) ttsPlay(fullContent);
-          else playInternalTTS(fullContent);
+          playInternalTTS(fullContent);
       }
 
     } catch (err) {
@@ -201,7 +186,6 @@ export default function AIChatDock({ contextData, ttsPlay }) {
           console.error("Chat Error:", err);
           setMessages(prev => {
               const msgs = [...prev];
-              // 将最后一条改为错误信息
               msgs[msgs.length - 1] = { role: 'assistant', content: `❌ 出错了: ${err.message}` };
               return msgs;
           });
@@ -215,7 +199,7 @@ export default function AIChatDock({ contextData, ttsPlay }) {
   return (
     <>
       {expanded && <div onClick={() => setExpanded(false)} style={styles.overlay}/>}
-      <div style={{...styles.chatBox, height: expanded ? '75vh' : '60px'}}>
+      <div style={{...styles.chatBox, height: expanded ? '85vh' : '60px'}}>
         {expanded && (
           <div style={styles.chatHeader}>
             <div style={{display:'flex', alignItems:'center', gap: 8}}>
@@ -239,36 +223,62 @@ export default function AIChatDock({ contextData, ttsPlay }) {
                </div>
              )}
              {messages.map((m, i) => (
-               <div key={i} style={{...styles.chatMsg, alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', background: m.role === 'user' ? '#3b82f6' : '#fff', color: m.role === 'user' ? '#fff' : '#334155'}}>
-                 {m.role === 'assistant' ? (
-                    <ReactMarkdown 
-                        className="markdown-body"
-                        components={{
-                            // 优化链接在新标签打开
-                            a: ({node, ...props}) => <a {...props} target="_blank" rel="noopener noreferrer" style={{color: '#2563eb', textDecoration: 'underline'}} />
-                        }}
-                    >
-                        {m.content}
-                    </ReactMarkdown>
-                 ) : m.content}
+               <div key={i} style={{
+                   alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+                   maxWidth: '90%', // 增加宽度
+                   display: 'flex', flexDirection: 'column',
+                   marginBottom: '16px'
+               }}>
+                 <div style={{
+                     padding: '12px 16px',
+                     borderRadius: '16px',
+                     borderBottomRightRadius: m.role === 'user' ? 4 : 16,
+                     borderBottomLeftRadius: m.role === 'user' ? 16 : 4,
+                     background: m.role === 'user' ? '#3b82f6' : '#fff',
+                     color: m.role === 'user' ? '#fff' : '#1e293b', // 加深字体颜色
+                     boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                     lineHeight: 1.6
+                 }}>
+                   {m.role === 'assistant' ? (
+                      <div className="markdown-body">
+                        <ReactMarkdown>{m.content}</ReactMarkdown>
+                      </div>
+                   ) : m.content}
+                 </div>
+                 
+                 {/* AI 消息底部的操作栏 */}
+                 {m.role === 'assistant' && !loading && (
+                     <div style={styles.actionBar}>
+                         <button onClick={() => playInternalTTS(m.content)} style={styles.actionBtn}>
+                             <FaVolumeUp size={12}/> 朗读
+                         </button>
+                         <button onClick={() => copyText(m.content)} style={styles.actionBtn}>
+                             <FaCopy size={12}/> 复制
+                         </button>
+                         {i === messages.length - 1 && (
+                             <button onClick={() => handleSend(messages[i-1].content)} style={styles.actionBtn}>
+                                 <FaRedo size={12}/> 重试
+                             </button>
+                         )}
+                     </div>
+                 )}
                </div>
              ))}
-             {/* 思考中状态：只有在最后一条内容为空时显示 */}
-             {loading && messages[messages.length-1]?.role === 'assistant' && !messages[messages.length-1]?.content && (
+             {loading && messages[messages.length-1]?.role === 'assistant' && messages[messages.length-1]?.content === '' && (
                  <div style={{alignSelf:'flex-start', background:'#fff', padding:'10px 14px', borderRadius:'12px', color:'#94a3b8', fontSize:'0.85rem'}}>
-                    Thinking...
+                    正在思考...
                  </div>
              )}
         </div>
 
         <div style={styles.chatInputArea}>
            {expanded && isPlaying && (
-             <button onClick={stopTTS} style={styles.stopBtn}>
+             <button onClick={stopTTS} style={styles.stopBtn} title="停止朗读">
                <FaStop size={12} />
              </button>
            )}
            <input value={input} onChange={e => setInput(e.target.value)} onFocus={() => setExpanded(true)} onKeyDown={e => e.key === 'Enter' && handleSend()} placeholder="输入问题..." style={styles.chatInput}/>
-           <button onClick={handleSend} disabled={loading && !messages[messages.length-1]?.content} style={{...styles.sendBtn, opacity: (loading && !messages[messages.length-1]?.content) ? 0.5 : 1}}>
+           <button onClick={() => handleSend()} disabled={loading} style={{...styles.sendBtn, opacity: loading ? 0.5 : 1}}>
              <FaPaperPlane size={14} />
            </button>
         </div>
@@ -289,7 +299,6 @@ export default function AIChatDock({ contextData, ttsPlay }) {
               <label>
                 <div style={styles.label}>模型 ID</div>
                 <input value={config.modelId} onChange={e => saveConfig({...config, modelId: e.target.value})} style={styles.input}/>
-                <div style={{fontSize:'0.75rem', color:'#64748b', marginTop:4}}>推荐: meta/llama-3.1-70b-instruct</div>
               </label>
               <label>
                 <div style={styles.label}>系统提示词</div>
@@ -301,25 +310,23 @@ export default function AIChatDock({ contextData, ttsPlay }) {
                   {VOICES.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
                 </select>
               </label>
-              <label>
-                <div style={styles.label}>TTS 语速 ({config.ttsSpeed}x)</div>
-                <input type="range" min="0.5" max="2.0" step="0.1" value={config.ttsSpeed} onChange={e => saveConfig({...config, ttsSpeed: parseFloat(e.target.value)})} style={{width:'100%', accentColor:'#3b82f6'}}/>
-              </label>
             </div>
             <button onClick={() => setShowSettings(false)} style={styles.saveBtn}>保存设置</button>
           </div>
         </div>
       )}
+      
+      {/* 优化的 Markdown 样式 */}
       <style jsx global>{`
-        .markdown-body { line-height: 1.6; font-size: 0.95rem; }
-        .markdown-body h1, .markdown-body h2, .markdown-body h3 { font-weight: bold; margin: 0.8em 0 0.4em; }
-        .markdown-body p { margin-bottom: 0.6em; }
-        .markdown-body strong { color: #1d4ed8; font-weight: 700; } 
-        .markdown-body ul, .markdown-body ol { padding-left: 20px; margin-bottom: 0.6em; }
-        .markdown-body code { background: #f1f5f9; color: #ef4444; padding: 2px 4px; borderRadius: 4px; font-size: 0.9em; font-family: monospace; }
-        .markdown-body pre { background: #1e293b; color: #f8fafc; padding: 10px; borderRadius: 8px; overflow-x: auto; margin-bottom: 0.8em; }
-        .markdown-body pre code { background: transparent; color: inherit; padding: 0; }
-        .markdown-body blockquote { border-left: 4px solid #cbd5e1; padding-left: 10px; color: #64748b; margin: 0 0 0.8em 0; }
+        .markdown-body { font-size: 0.95rem; color: #334155; }
+        .markdown-body h1, .markdown-body h2, .markdown-body h3 { font-weight: 700; color: #1e293b; margin-top: 1em; margin-bottom: 0.5em; }
+        .markdown-body h3 { font-size: 1.1em; border-left: 4px solid #3b82f6; padding-left: 8px; }
+        .markdown-body p { margin-bottom: 0.8em; line-height: 1.7; }
+        .markdown-body strong { color: #1d4ed8; font-weight: 700; background: #eff6ff; padding: 0 2px; border-radius: 2px; } 
+        .markdown-body ul, .markdown-body ol { padding-left: 20px; margin-bottom: 0.8em; }
+        .markdown-body li { margin-bottom: 0.4em; }
+        .markdown-body code { background: #f1f5f9; color: #ef4444; padding: 2px 4px; borderRadius: 4px; font-family: monospace; font-size: 0.9em; }
+        .markdown-body blockquote { border-left: 4px solid #cbd5e1; padding-left: 12px; color: #64748b; margin: 0 0 1em 0; font-style: italic; }
       `}</style>
     </>
   );
@@ -327,19 +334,20 @@ export default function AIChatDock({ contextData, ttsPlay }) {
 
 const styles = {
   overlay: { position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(2px)', zIndex: 1999 },
-  chatBox: { position: 'absolute', bottom: 0, left: 0, width: '100%', background: '#fff', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', boxShadow: '0 -4px 20px rgba(0,0,0,0.1)', transition: 'height 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)', zIndex: 2000, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
-  chatHeader: { height: '50px', padding: '0 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', background: '#fff', flexShrink: 0 },
-  headerBtn: { color: '#94a3b8', cursor: 'pointer', background: 'none', border: 'none' },
+  chatBox: { position: 'absolute', bottom: 0, left: 0, width: '100%', background: '#f8fafc', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', boxShadow: '0 -4px 30px rgba(0,0,0,0.12)', transition: 'height 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)', zIndex: 2000, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+  chatHeader: { height: '50px', padding: '0 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', background: '#fff', flexShrink: 0 },
+  headerBtn: { color: '#64748b', cursor: 'pointer', background: 'none', border: 'none' },
   modelTag: { fontSize: '0.7rem', background: '#eff6ff', color: '#3b82f6', padding: '2px 6px', borderRadius: '4px' },
-  chatHistory: { flex: 1, overflowY: 'auto', padding: '16px', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '12px' },
-  chatMsg: { maxWidth: '85%', padding: '10px 14px', borderRadius: '12px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', lineHeight: 1.6, fontSize: '0.95rem', wordBreak: 'break-word' },
-  chatInputArea: { height: '60px', padding: '0 12px', display: 'flex', alignItems: 'center', gap: '10px', background: '#fff', borderTop: '1px solid #f1f5f9', flexShrink: 0 },
+  chatHistory: { flex: 1, overflowY: 'auto', padding: '20px 16px', background: '#f8fafc', display: 'flex', flexDirection: 'column' },
+  chatInputArea: { height: '60px', padding: '0 12px', display: 'flex', alignItems: 'center', gap: '10px', background: '#fff', borderTop: '1px solid #e2e8f0', flexShrink: 0 },
   stopBtn: { width:36, height:36, borderRadius:'50%', background:'#fee2e2', color:'#ef4444', border:'none', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' },
   chatInput: { flex: 1, height: '40px', borderRadius: '20px', border: '1px solid #e2e8f0', padding: '0 16px', fontSize: '0.95rem', background: '#f8fafc', outline: 'none' },
   sendBtn: { width: '40px', height: '40px', borderRadius: '50%', background: '#3b82f6', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'opacity 0.2s' },
   settingsOverlay: { position: 'absolute', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' },
-  settingsModal: { width: '100%', maxWidth: '360px', background: '#fff', borderRadius: '16px', padding: '20px', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' },
+  settingsModal: { width: '100%', maxWidth: '360px', background: '#fff', borderRadius: '16px', padding: '24px', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' },
   label: { fontSize: '0.85rem', color: '#64748b', marginBottom: '6px', fontWeight: '600' },
   input: { width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem', outline: 'none', fontFamily:'inherit' },
-  saveBtn: { width:'100%', marginTop:'24px', padding:'12px', background:'#3b82f6', color:'#fff', border:'none', borderRadius:'10px', fontWeight:'bold', fontSize:'1rem', cursor:'pointer' }
+  saveBtn: { width:'100%', marginTop:'24px', padding:'12px', background:'#3b82f6', color:'#fff', border:'none', borderRadius:'10px', fontWeight:'bold', fontSize:'1rem', cursor:'pointer' },
+  actionBar: { display: 'flex', gap: '12px', marginTop: '6px', marginLeft: '4px' },
+  actionBtn: { display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px' }
 };
