@@ -8,7 +8,7 @@ import ReactMarkdown from 'react-markdown';
 // ===================================================================
 //  在这里填入您之前部署好的 Cloudflare Worker URL
 // ===================================================================
-const PROXY_WORKER_URL = 'https://886.best'; // <--- ⚠️ 请务必替换成您自己的 Worker URL
+const PROXY_WORKER_URL = '886.best'; // <--- ⚠️ 请务必替换成您自己的 Worker URL
 
 const DEFAULT_CONFIG = {
   apiKey: '', 
@@ -135,9 +135,9 @@ export default function AIChatDock({ contextData, ttsPlay }) {
       const data = JSON.parse(rawText);
       
       // ==================================================
-      //  这里是修复后的代码
+      //  已修正：使用 ?.[0] 访问数组元素
       // ==================================================
-      const reply = data?.choices?.?.message?.content;
+      const reply = data?.choices?.[0]?.message?.content;
       
       if (!reply) throw new Error("AI 返回了空内容，请检查 Key 或模型 ID");
       
@@ -235,6 +235,8 @@ export default function AIChatDock({ contextData, ttsPlay }) {
         .markdown-body h3 { font-weight: bold; font-size: 1.1em; margin: 1em 0 0.5em; }
         .markdown-body p, .markdown-body ul, .markdown-body ol { margin-bottom: 0.8em; }
         .markdown-body ul, .markdown-body ol { padding-left: 20px; }
+        .markdown-body strong { font-weight: bold; }
+        .markdown-body code { background-color: #eff6ff; color: #3b82f6; padding: 2px 4px; border-radius: 4px; font-size: 0.9em; }
       `}</style>
     </>
   );
@@ -249,6 +251,7 @@ const styles = {
   chatHistory: { flex: 1, overflowY: 'auto', padding: '16px', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '12px' },
   chatMsg: { maxWidth: '85%', padding: '10px 14px', borderRadius: '12px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', lineHeight: 1.6, fontSize: '0.95rem', wordBreak: 'break-word' },
   chatInputArea: { height: '60px', padding: '0 12px', display: 'flex', alignItems: 'center', gap: '10px', background: '#fff', borderTop: '1px solid #f1f5f9', flexShrink: 0 },
+  stopBtn: { width:36, height:36, borderRadius:'50%', background:'#fee2e2', color:'#ef4444', border:'none', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' },
   chatInput: { flex: 1, height: '40px', borderRadius: '20px', border: '1px solid #e2e8f0', padding: '0 16px', fontSize: '0.95rem', background: '#f8fafc', outline: 'none' },
   sendBtn: { width: '40px', height: '40px', borderRadius: '50%', background: '#3b82f6', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'opacity 0.2s' },
   settingsOverlay: { position: 'absolute', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' },
