@@ -2,19 +2,21 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   FaPaperPlane, FaChevronUp, FaRobot, FaCog, FaTimes,
   FaVolumeUp, FaStop, FaCopy, FaMicrophone, FaEraser,
-  FaList, FaEdit, FaTrashAlt, FaPlus, FaLightbulb, FaFeatherAlt
+  FaList, FaEdit, FaTrashAlt, FaPlus, FaLightbulb, FaFeatherAlt,
+  FaLanguage, FaCheck
 } from 'react-icons/fa';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm'; // 建议安装: npm install remark-gfm 以支持表格
 import { pinyin } from 'pinyin-pro'; 
 
 // --- 配置与常量 ---
-const CONFIG_KEY = 'ai_dock_config_v10';
-const HISTORY_KEY = 'ai_dock_sessions_v10';
+const CONFIG_KEY = 'ai_dock_config_v11';
+const HISTORY_KEY = 'ai_dock_sessions_v11';
 
 const DEFAULT_CONFIG = {
   apiKey: '',
   modelId: 'deepseek-ai/deepseek-v3.2',
-  systemPrompt: '你是一位精通汉语和缅甸语的资深翻译老师。请用通俗易懂、口语化的中文为缅甸学生讲解汉语语法。排版要求：\n1. 使用 Notion 风格的标题（# 大标题, ## 中标题, ### 小标题）组织内容。\n2. 重点词汇加粗（**）。\n3. 错误用法请使用删除线（~~错误~~）。\n4. 列表使用层级结构。\n5. 在回答的最后，请严格按照以下格式给出3个建议追问：\n[建议]: 问题1 | 问题2 | 问题3',
+  systemPrompt: '你是一位精通汉语和缅甸语的资深翻译老师。请用通俗易懂、口语化的中文为缅甸学生讲解汉语语法。排版要求：\n1. 使用 Notion 风格排版，重点清晰。\n2. 列表请使用多级结构，逻辑分明。\n3. 重点词汇请加粗(**)。\n4. 涉及表格时请使用 Markdown 表格。\n5. 在回答最后，请严格按照格式给出3个建议追问：\n[建议]: 问题1 | 问题2 | 问题3',
   ttsSpeed: 1.0,
   ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural',
   showPinyin: true,
@@ -47,13 +49,13 @@ const playTickSound = () => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(600, ctx.currentTime);
-    gain.gain.setValueAtTime(0.03, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.03);
+    osc.frequency.setValueAtTime(800, ctx.currentTime);
+    gain.gain.setValueAtTime(0.02, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start();
-    osc.stop(ctx.currentTime + 0.03);
+    osc.stop(ctx.currentTime + 0.04);
   } catch (e) {}
 };
 
@@ -73,7 +75,7 @@ const PinyinRenderer = ({ text, show }) => {
               {charArray.map((char, i) => (
                 <ruby key={i} style={{rubyPosition: 'over', margin: '0 1px'}}>
                   {char}
-                  <rt style={{fontSize: '0.6em', color: '#64748b', fontWeight: 'normal', userSelect: 'none'}}>
+                  <rt style={{fontSize: '0.6em', color: '#64748b', fontWeight: 'normal', userSelect: 'none', fontFamily:'Arial'}}>
                     {pyArray[i]}
                   </rt>
                 </ruby>
@@ -107,6 +109,7 @@ export default function AIChatDock({ contextData }) {
   
   // 选文菜单
   const [selectionMenu, setSelectionMenu] = useState({ show: false, x: 0, y: 0, text: '' });
+  const [isCopied, setIsCopied] = useState(false); // 复制反馈
 
   // 悬浮按钮位置
   const [btnPos, setBtnPos] = useState({ right: 20, bottom: 40 });
@@ -143,12 +146,15 @@ export default function AIChatDock({ contextData }) {
       setCurrentSessionId(parsedSessions[0].id);
       setMessages(parsedSessions[0].messages);
 
+      // 监听选文
       document.addEventListener('selectionchange', handleSelectionChange);
       document.addEventListener('mousedown', handleOutsideClick);
+      document.addEventListener('touchstart', handleOutsideClick);
     }
     return () => {
         document.removeEventListener('selectionchange', handleSelectionChange);
         document.removeEventListener('mousedown', handleOutsideClick);
+        document.removeEventListener('touchstart', handleOutsideClick);
     };
   }, []);
 
@@ -158,6 +164,7 @@ export default function AIChatDock({ contextData }) {
     const updatedSessions = sessions.map(s => {
       if (s.id === currentSessionId) {
         let newTitle = s.title;
+        // 如果是新对话且有消息，自动更新标题
         if (s.title === '新对话' && messages.length > 0) {
             newTitle = messages[0].content.substring(0, 15);
         }
@@ -173,44 +180,58 @@ export default function AIChatDock({ contextData }) {
     }
   }, [messages, currentSessionId]); 
 
+  // 自动滚动
   useEffect(() => {
     if (historyRef.current && expanded) {
       historyRef.current.scrollTop = historyRef.current.scrollHeight;
     }
   }, [messages, expanded, loading]);
 
-  // --- 选文菜单 ---
+  // --- 选文菜单逻辑 (优化版) ---
   const handleSelectionChange = () => {
-     // 使用 debounce 避免频繁触发
+     // 使用 debounce 防止移动端选区变化过快闪烁
      if (window.selectionTimeout) clearTimeout(window.selectionTimeout);
      window.selectionTimeout = setTimeout(() => {
          const selection = window.getSelection();
+         if (!selection || selection.rangeCount === 0) return;
+
          const text = selection.toString().trim();
          
          if (text.length > 0 && expanded) { 
              const range = selection.getRangeAt(0);
              const rect = range.getBoundingClientRect();
-             // 确保菜单在可视区域内
+             
+             // 计算位置，防止超出屏幕
+             let top = rect.top - 50;
+             let left = rect.left + rect.width / 2;
+             
+             if (top < 10) top = rect.bottom + 10; // 如果上方没空间，显示在下方
+             
              setSelectionMenu({
                  show: true,
-                 x: rect.left + rect.width / 2, 
-                 y: rect.top - 60, // 向上偏移
+                 x: left, 
+                 y: top,
                  text: text
              });
-         } else {
-             // 只有当确信没有选区时才隐藏
-             // 这里不立刻隐藏，mousedown 会处理点击外部隐藏
-         }
+             setIsCopied(false);
+         } 
      }, 200);
   };
 
   const handleOutsideClick = (e) => {
       const menu = document.getElementById('selection-popover');
+      // 如果点击的不是菜单且不是选区本身
       if (menu && !menu.contains(e.target)) {
-          // 清除选区并隐藏菜单
-          if(window.getSelection) window.getSelection().removeAllRanges();
+          // 在触摸屏上，如果不点击菜单，通常希望清除菜单
           setSelectionMenu(prev => ({ ...prev, show: false }));
       }
+  };
+
+  const handleTranslateSelection = () => {
+      if (!selectionMenu.text) return;
+      handleSend(`请详细解释并翻译这段文字：\n"${selectionMenu.text}"`);
+      setSelectionMenu(prev => ({...prev, show: false}));
+      window.getSelection().removeAllRanges();
   };
 
   // --- 拖动逻辑 ---
@@ -244,7 +265,7 @@ export default function AIChatDock({ contextData }) {
     draggingRef.current = false;
   };
 
-  // --- 消息管理 ---
+  // --- 会话管理 ---
   const createNewSession = () => {
       const newSession = { id: Date.now(), title: '新对话', messages: [], date: new Date().toISOString() };
       const newSessions = [newSession, ...sessions];
@@ -300,6 +321,7 @@ export default function AIChatDock({ contextData }) {
         return;
     }
 
+    // 兼容不同浏览器前缀
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
         alert("抱歉，您的浏览器不支持语音识别功能，请尝试 Chrome 或 Safari。");
@@ -317,7 +339,6 @@ export default function AIChatDock({ contextData }) {
         recognition.onerror = (event) => {
             console.error("Speech recognition error", event.error);
             setIsListening(false);
-            if(event.error === 'not-allowed') alert('请允许麦克风权限');
         };
         
         recognition.onresult = (event) => {
@@ -332,12 +353,11 @@ export default function AIChatDock({ contextData }) {
         recognitionRef.current = recognition;
         recognition.start();
     } catch (e) {
-        console.error(e);
-        alert('无法启动语音识别');
+        alert('无法启动语音识别: ' + e.message);
     }
   };
 
-  // --- 发送逻辑 ---
+  // --- 发送逻辑 (增强防卡顿) ---
   const handleSend = async (textToSend = input) => {
     if (!textToSend.trim() || loading) return;
     if (!config.apiKey) {
@@ -374,7 +394,7 @@ export default function AIChatDock({ contextData }) {
         signal: abortControllerRef.current.signal  
       });  
 
-      if (!response.ok) throw new Error("网络错误");
+      if (!response.ok) throw new Error("网络连接异常");
 
       const reader = response.body.getReader();  
       const decoder = new TextDecoder();  
@@ -389,7 +409,7 @@ export default function AIChatDock({ contextData }) {
         const chunk = decoder.decode(value, { stream: true });  
         buffer += chunk;  
         const lines = buffer.split('\n');  
-        buffer = lines.pop(); 
+        buffer = lines.pop(); // 保留最后一个可能不完整的片段
 
         for (const line of lines) {  
             const trimmed = line.trim();  
@@ -414,25 +434,27 @@ export default function AIChatDock({ contextData }) {
         }  
       } 
       
-      // 处理建议
+      // 处理建议和自动朗读
+      let cleanContent = fullContent;
       if (fullContent.includes('[建议]:')) {
           const parts = fullContent.split('[建议]:');
-          const cleanContent = parts[0].trim();
+          cleanContent = parts[0].trim();
           const suggestionText = parts[1];
+          // 移除建议部分的文本
           setMessages(prev => [...prev.slice(0, -1), { role: 'assistant', content: cleanContent }]);
           
           if(suggestionText) {
               const sugs = suggestionText.split('|').map(s => s.trim()).filter(s => s);
               setSuggestions(sugs);
           }
-          if (config.autoTTS) playInternalTTS(cleanContent);
-      } else {
-          if (config.autoTTS) playInternalTTS(fullContent);
       }
+
+      if (config.autoTTS) playInternalTTS(cleanContent);
 
     } catch (err) {  
       if (err.name !== 'AbortError') {  
-          setMessages(prev => [...prev.slice(0,-1), { role: 'assistant', content: `❌ 错误: ${err.message}` }]);  
+          console.error(err);
+          setMessages(prev => [...prev.slice(0,-1), { role: 'assistant', content: prev[prev.length-1].content + `\n\n[系统]: 生成中断 (${err.message})` }]);  
       }  
     } finally {  
       setLoading(false);  
@@ -445,6 +467,7 @@ export default function AIChatDock({ contextData }) {
     if (!text) return;
     if (audioRef.current) audioRef.current.pause();
     setIsPlaying(true);
+    // 去除 markdown 符号以免 TTS 读出来
     const clean = text.replace(/[*#`>~\-\[\]]/g, '');   
     const rate = Math.round((config.ttsSpeed - 1) * 100);  
     const url = `/api/tts?t=${encodeURIComponent(clean)}&v=${config.ttsVoice}&r=${rate}%`;  
@@ -460,20 +483,26 @@ export default function AIChatDock({ contextData }) {
 
   const copyText = (text) => {
     navigator.clipboard.writeText(text);
-    setSelectionMenu(prev => ({...prev, show: false}));
+    setIsCopied(true);
+    setTimeout(() => setSelectionMenu(prev => ({...prev, show: false})), 800);
   };
 
   return (
     <>
-      {/* 划词菜单 */}
+      {/* 划词菜单 (黑色悬浮) */}
       {selectionMenu.show && (
           <div id="selection-popover" style={{...styles.popover, left: selectionMenu.x, top: selectionMenu.y}}>
+              <button onClick={handleTranslateSelection} style={styles.popBtn} title="解释/翻译">
+                  <FaLanguage size={14}/> 解释
+              </button>
+              <div style={styles.popDivider}></div>
               <button onClick={() => playInternalTTS(selectionMenu.text)} style={styles.popBtn} title="朗读">
                   <FaVolumeUp size={14}/> 朗读
               </button>
               <div style={styles.popDivider}></div>
               <button onClick={() => copyText(selectionMenu.text)} style={styles.popBtn} title="复制">
-                  <FaCopy size={14}/> 复制
+                  {isCopied ? <FaCheck size={14} color="#4ade80"/> : <FaCopy size={14}/>} 
+                  {isCopied ? '已复制' : '复制'}
               </button>
               <div style={styles.popArrow}></div>
           </div>
@@ -499,6 +528,7 @@ export default function AIChatDock({ contextData }) {
         <>
             {showSidebar && <div onClick={() => setShowSidebar(false)} style={styles.sidebarOverlay} />}
             
+            {/* 侧边栏 (历史记录) */}
             <div style={{...styles.sidebar, transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)'}}>
                 <div style={styles.sidebarHeader}>
                     <h3>历史记录</h3>
@@ -525,22 +555,23 @@ export default function AIChatDock({ contextData }) {
                 </div>
             </div>
 
+            {/* 主聊天界面 */}
             <div style={styles.chatWindow}>
-                {/* 顶部 (变窄) */}
+                {/* 顶部 (变窄，极简) */}
                 <div style={styles.header}>
                     <button onClick={() => setShowSidebar(true)} style={styles.headerIconBtn}><FaList size={16}/></button>
-                    <div style={{flex:1, textAlign:'center', fontWeight:'bold', color:'#0f172a', fontSize:'0.95rem'}}>
+                    <div style={{flex:1, textAlign:'center', fontWeight:'bold', color:'#334155', fontSize:'0.9rem'}}>
                         AI 助教
                     </div>
                     <button onClick={() => setShowSettings(true)} style={styles.headerIconBtn}><FaCog size={16}/></button>
                 </div>
 
-                {/* 消息流 */}
+                {/* 消息流区域 */}
                 <div ref={historyRef} style={styles.messageArea}>
                     {messages.length === 0 && (
                         <div style={styles.emptyState}>
-                            <FaRobot size={50} color="#cbd5e1"/>
-                            <p style={{color:'#94a3b8', marginTop:10}}>你好！有什么我可以帮你的吗？</p>
+                            <FaRobot size={40} color="#cbd5e1"/>
+                            <p style={{color:'#94a3b8', marginTop:10, fontSize:'0.9rem'}}>有什么问题都可以问我哦</p>
                         </div>
                     )}
                     
@@ -550,27 +581,35 @@ export default function AIChatDock({ contextData }) {
                                 ...styles.bubbleWrapper,
                                 alignItems: m.role === 'user' ? 'flex-end' : 'flex-start'
                             }}>
-                                {/* 消息气泡 */}
+                                {/* 消息内容 - 无气泡，纯文本风格 */}
                                 <div style={{
                                     ...styles.bubble,
-                                    background: m.role === 'user' ? '#eff6ff' : 'transparent',
-                                    borderRadius: m.role === 'user' ? '16px 16px 4px 16px' : '0',
-                                    padding: m.role === 'user' ? '12px 16px' : '0',
+                                    background: m.role === 'user' ? '#f1f5f9' : 'transparent',
+                                    borderRadius: m.role === 'user' ? '12px' : '0',
+                                    padding: m.role === 'user' ? '10px 14px' : '0',
                                     textAlign: m.role === 'user' ? 'right' : 'left'
                                 }}>
                                     {m.role === 'user' ? (
-                                        <div style={{fontSize:'1rem', color:'#1e293b', fontWeight:500}}>{m.content}</div>
+                                        <div style={{fontSize:'0.95rem', color:'#1e293b', fontWeight:500}}>{m.content}</div>
                                     ) : (
                                         <div className="notion-md">
                                             <ReactMarkdown
+                                                remarkPlugins={[remarkGfm]} // 支持表格
                                                 components={{
                                                     h1: ({children}) => <h1 style={styles.h1}>{children}</h1>,
                                                     h2: ({children}) => <h2 style={styles.h2}>{children}</h2>,
                                                     h3: ({children}) => <h3 style={styles.h3}>{children}</h3>,
                                                     p: ({children}) => <p style={styles.p}>{React.Children.map(children, c => typeof c==='string'?<PinyinRenderer text={c} show={config.showPinyin}/>:c)}</p>,
                                                     strong: ({children}) => <strong style={styles.strong}>{children}</strong>,
-                                                    li: ({children}) => <li style={styles.li}><span>▪️</span> <span style={{flex:1}}>{React.Children.map(children, c => typeof c==='string'?<PinyinRenderer text={c} show={config.showPinyin}/>:c)}</span></li>,
-                                                    del: ({children}) => <del style={styles.del}>{children}</del>
+                                                    ul: ({children}) => <ul style={styles.ul}>{children}</ul>,
+                                                    li: ({children, ...props}) => {
+                                                        // 自定义列表符号：一级实心方，二级空心圆
+                                                        return <li style={styles.li}>{children}</li>
+                                                    },
+                                                    del: ({children}) => <del style={styles.del}>{children}</del>,
+                                                    table: ({children}) => <div style={{overflowX:'auto'}}><table style={styles.table}>{children}</table></div>,
+                                                    th: ({children}) => <th style={styles.th}>{children}</th>,
+                                                    td: ({children}) => <td style={styles.td}>{React.Children.map(children, c => typeof c==='string'?<PinyinRenderer text={c} show={config.showPinyin}/>:c)}</td>
                                                 }}
                                             >
                                                 {m.content}
@@ -579,7 +618,7 @@ export default function AIChatDock({ contextData }) {
                                     )}
                                 </div>
 
-                                {/* 底部操作栏 (朗读/复制/删除) */}
+                                {/* 底部操作栏 */}
                                 <div style={styles.msgActionBar}>
                                     {m.role === 'assistant' && !loading && (
                                         <>
@@ -594,62 +633,66 @@ export default function AIChatDock({ contextData }) {
                             </div>
                         </div>
                     ))}
-                    
-                    {/* 3个建议按钮 */}
-                    {!loading && suggestions.length > 0 && (
-                         <div style={styles.suggestionGroup}>
-                             {suggestions.slice(0, 3).map((s, idx) => (
-                                 <button key={idx} onClick={() => handleSend(s)} style={styles.suggestionBtn}>
-                                     <FaLightbulb color="#eab308" size={12}/>
-                                     <span>{s}</span>
-                                 </button>
-                             ))}
-                         </div>
-                    )}
                 </div>
 
-                {/* 底部输入框 (融合版) */}
-                <div style={styles.inputContainer}>
-                    {isPlaying && (
-                        <div style={styles.ttsBar} onClick={() => setIsPlaying(false)}>
-                            <FaVolumeUp className="animate-pulse"/> 正在朗读... <FaStop/>
+                {/* 底部功能区 */}
+                <div style={styles.footer}>
+                    {/* 横向滚动建议 */}
+                    {!loading && suggestions.length > 0 && (
+                        <div style={styles.scrollSuggestionContainer}>
+                            {suggestions.map((s, idx) => (
+                                <button key={idx} onClick={() => handleSend(s)} style={styles.scrollSuggestionBtn}>
+                                    <FaLightbulb color="#eab308" size={10} style={{marginRight:4}}/>
+                                    {s}
+                                </button>
+                            ))}
                         </div>
                     )}
                     
-                    <div style={styles.inputBox}>
-                        <textarea 
-                            value={input}
-                            onChange={e => setInput(e.target.value)}
-                            onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }}}
-                            placeholder={isListening ? "正在听..." : "输入问题..."}
-                            style={styles.textarea}
-                            rows={1}
-                        />
-                        
-                        {/* 动态按钮：有字显示发送，没字显示麦克风 */}
-                        {input.trim().length > 0 ? (
-                            <button onClick={() => handleSend()} disabled={loading} style={styles.sendBtn}>
-                                <FaPaperPlane size={16}/>
-                            </button>
-                        ) : (
-                            <button 
-                                onClick={toggleListening} 
-                                style={{...styles.micBtn, background: isListening ? '#ef4444' : 'transparent'}}
-                            >
-                                <FaMicrophone size={18} color={isListening ? '#fff' : '#64748b'} className={isListening ? 'animate-pulse' : ''}/>
-                            </button>
+                    {/* 输入框与 TTS 状态 */}
+                    <div style={styles.inputContainer}>
+                        {isPlaying && (
+                            <div style={styles.ttsBar} onClick={() => setIsPlaying(false)}>
+                                <FaVolumeUp className="animate-pulse"/> 正在朗读... <FaStop/>
+                            </div>
                         )}
+                        
+                        <div style={styles.inputBox}>
+                            <textarea 
+                                value={input}
+                                onChange={e => setInput(e.target.value)}
+                                onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }}}
+                                placeholder={isListening ? "正在聆听..." : "输入问题..."}
+                                style={styles.textarea}
+                                rows={1}
+                            />
+                            
+                            {/* 动态按钮：有文字显示发送，无文字显示话筒 */}
+                            {input.trim().length > 0 ? (
+                                <button onClick={() => handleSend()} disabled={loading} style={styles.sendBtn}>
+                                    <FaPaperPlane size={15}/>
+                                </button>
+                            ) : (
+                                <button 
+                                    onClick={toggleListening} 
+                                    style={{...styles.micBtn, background: isListening ? '#ef4444' : 'transparent'}}
+                                >
+                                    <FaMicrophone size={18} color={isListening ? '#fff' : '#94a3b8'} className={isListening ? 'animate-pulse' : ''}/>
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
 
+            {/* 底部阴影关闭区 */}
             <div style={styles.closeArea} onClick={() => setExpanded(false)}>
-                <FaChevronUp color="rgba(255,255,255,0.8)" />
+                <FaChevronUp color="rgba(255,255,255,0.8)" size={14} />
             </div>
         </>
       )}
 
-      {/* 设置 */}
+      {/* 设置弹窗 */}
       {showSettings && (
         <div style={styles.settingsOverlay} onClick={(e) => e.target === e.currentTarget && setShowSettings(false)}>
             <div style={styles.settingsModal}>
@@ -694,7 +737,7 @@ export default function AIChatDock({ contextData }) {
                     <button onClick={()=>{
                         localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
                         setShowSettings(false);
-                    }} style={styles.saveBtn}>保存</button>
+                    }} style={styles.saveBtn}>保存设置</button>
                 </div>
             </div>
         </div>
@@ -703,9 +746,19 @@ export default function AIChatDock({ contextData }) {
       <style jsx global>{`
         @keyframes pulse { 0% {transform:scale(1);} 50% {transform:scale(1.2);} 100% {transform:scale(1);} }
         .animate-pulse { animation: pulse 1.5s infinite; }
-        .notion-md { font-family: -apple-system, sans-serif; color: #37352f; line-height: 1.8; }
-        .notion-md ul { padding-left: 0; list-style: none; margin: 0; }
-        .notion-md li { margin-bottom: 4px; display: flex; align-items: flex-start; gap: 8px; }
+        .notion-md { font-family: -apple-system, system-ui, sans-serif; color: #333; line-height: 1.9; }
+        /* 列表样式增强 */
+        .notion-md ul { padding-left: 1.2em; list-style: none; margin: 0.5em 0; }
+        .notion-md li { position: relative; padding-left: 0.2em; margin-bottom: 4px; }
+        /* 一级列表实心方块 */
+        .notion-md > ul > li::before {
+            content: "▪️"; font-size: 0.7em; position: absolute; left: -1.2em; top: 0.4em; color: #333;
+        }
+        /* 二级列表空心圆 */
+        .notion-md ul ul > li::before {
+            content: "◦"; font-size: 1.2em; position: absolute; left: -1em; top: -0.1em; color: #555;
+            font-weight: bold;
+        }
       `}</style>
     </>
   );
@@ -727,46 +780,54 @@ const styles = {
     boxShadow: '0 10px 40px rgba(0,0,0,0.1)'
   },
   header: {
-    height: 46, borderBottom: '1px solid #e5e7eb', display: 'flex', // 高度变窄
-    alignItems: 'center', padding: '0 12px', background: '#fff'
+    height: 44, borderBottom: '1px solid #f1f5f9', display: 'flex', 
+    alignItems: 'center', padding: '0 12px', background: '#fff', flexShrink: 0
   },
   headerIconBtn: { background:'none', border:'none', color:'#64748b', padding:8, cursor:'pointer' },
   
-  messageArea: { flex: 1, overflowY: 'auto', padding: '20px 16px', display:'flex', flexDirection:'column' },
+  messageArea: { flex: 1, overflowY: 'auto', padding: '16px 20px', display:'flex', flexDirection:'column' },
   emptyState: { marginTop:'40%', textAlign:'center' },
   messageRow: { display: 'flex', marginBottom: 24, width: '100%', flexDirection: 'column' },
   bubbleWrapper: { display: 'flex', flexDirection: 'column', maxWidth: '100%' },
-  bubble: { fontSize: '1rem', width: 'fit-content', maxWidth: '95%' },
+  bubble: { fontSize: '0.95rem', width: 'fit-content', maxWidth: '100%' },
   
-  // 消息底部工具栏
-  msgActionBar: { display: 'flex', gap: 12, marginTop: 4, paddingLeft: 2, opacity: 0.7 },
-  msgActionBtn: { background:'none', border:'none', color:'#94a3b8', cursor:'pointer', padding:'2px 4px', fontSize:'0.9rem' },
+  msgActionBar: { display: 'flex', gap: 12, marginTop: 4, paddingLeft: 2, opacity: 0.6 },
+  msgActionBtn: { background:'none', border:'none', color:'#94a3b8', cursor:'pointer', padding:'2px 4px', fontSize:'0.85rem' },
 
-  // Markdown
-  h1: { fontSize: '1.6em', fontWeight: 800, margin: '1em 0 0.5em 0', color:'#111' },
-  h2: { fontSize: '1.3em', fontWeight: 700, margin: '0.8em 0 0.4em 0', borderBottom:'1px solid #f1f5f9', color:'#333' },
-  h3: { fontSize: '1.1em', fontWeight: 600, margin: '0.6em 0 0.3em 0', color:'#444' },
-  p: { margin: '0 0 10px 0', color: '#37352f' },
+  // Markdown 样式细化 (Notion 风格)
+  h1: { fontSize: '1.4em', fontWeight: 700, margin: '1em 0 0.5em 0', color:'#111', lineHeight:1.3 },
+  h2: { fontSize: '1.2em', fontWeight: 600, margin: '0.8em 0 0.4em 0', borderBottom:'1px solid #f1f5f9', paddingBottom:4, color:'#333' },
+  h3: { fontSize: '1.05em', fontWeight: 600, margin: '0.6em 0 0.3em 0', color:'#444' },
+  p: { margin: '0 0 8px 0', color: '#333' },
   strong: { fontWeight: 700, color: '#000' },
-  li: { color: '#37352f' },
+  ul: { paddingLeft: '1.2em' }, 
+  li: { marginBottom: '4px' },
   del: { textDecoration: 'line-through', color: '#ef4444', opacity: 0.7 },
+  // 表格样式
+  table: { width: '100%', borderCollapse: 'collapse', margin: '10px 0', fontSize: '0.9em' },
+  th: { border: '1px solid #e2e8f0', padding: '6px 10px', background: '#f8fafc', fontWeight: '600', textAlign: 'left' },
+  td: { border: '1px solid #e2e8f0', padding: '6px 10px', verticalAlign: 'top' },
 
-  // 建议按钮组
-  suggestionGroup: { display:'flex', flexDirection:'column', gap:8, marginTop: 10, alignItems:'flex-start' },
-  suggestionBtn: { 
-      background: '#fff', border: '1px solid #e2e8f0', borderRadius: 20, 
-      padding: '8px 16px', fontSize: '0.9rem', color: '#334155', cursor: 'pointer',
-      display:'flex', alignItems:'center', gap:8, boxShadow:'0 2px 5px rgba(0,0,0,0.03)',
-      transition:'all 0.2s', width:'fit-content'
+  // 底部区域
+  footer: { background: '#fff', borderTop: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column' },
+
+  // 横向建议滚动
+  scrollSuggestionContainer: { 
+      display: 'flex', gap: 8, padding: '10px 16px 0 16px', overflowX: 'auto', 
+      whiteSpace: 'nowrap', scrollbarWidth: 'none' 
+  },
+  scrollSuggestionBtn: { 
+      flexShrink: 0, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 20, 
+      padding: '6px 12px', fontSize: '0.85rem', color: '#475569', cursor: 'pointer',
+      display:'flex', alignItems:'center', boxShadow:'0 1px 2px rgba(0,0,0,0.05)'
   },
 
   // 底部输入区
   inputContainer: { 
-      padding: '12px 16px', borderTop: '1px solid #f1f5f9', background: '#fff',
-      display: 'flex', flexDirection: 'column', gap: 8 
+      padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 
   },
   ttsBar: { 
-      background:'#eff6ff', color:'#2563eb', fontSize:'0.8rem', padding:'4px 10px', 
+      background:'#eff6ff', color:'#2563eb', fontSize:'0.75rem', padding:'4px 10px', 
       borderRadius:4, display:'flex', alignItems:'center', gap:8, cursor:'pointer', alignSelf:'flex-start'
   },
   inputBox: {
@@ -775,14 +836,14 @@ const styles = {
   },
   textarea: {
       flex: 1, border: 'none', background: 'transparent', resize: 'none',
-      fontSize: '1rem', outline: 'none', fontFamily: 'inherit', height: '40px', lineHeight: '40px'
+      fontSize: '1rem', outline: 'none', fontFamily: 'inherit', height: '36px', lineHeight: '36px'
   },
   sendBtn: {
-      width: 36, height: 36, borderRadius: '50%', background: '#4f46e5', color: '#fff',
+      width: 32, height: 32, borderRadius: '50%', background: '#4f46e5', color: '#fff',
       border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink:0
   },
   micBtn: {
-      width: 36, height: 36, borderRadius: '50%', border: 'none', 
+      width: 32, height: 32, borderRadius: '50%', border: 'none', 
       display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink:0, transition: 'background 0.2s'
   },
 
@@ -805,17 +866,17 @@ const styles = {
       cursor: 'pointer'
   },
 
-  // Popover 菜单
+  // Popover 菜单 (黑色)
   popover: {
       position: 'fixed', transform: 'translateX(-50%)', background: '#1e293b', 
-      borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 10,
+      borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 12,
       boxShadow: '0 4px 15px rgba(0,0,0,0.3)', zIndex: 11000, color: '#fff'
   },
   popArrow: {
       position: 'absolute', bottom: -6, left: '50%', marginLeft: -6,
       borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '6px solid #1e293b'
   },
-  popBtn: { background:'transparent', border:'none', color:'#fff', cursor:'pointer', display:'flex', alignItems:'center', gap:6, fontSize:'0.9rem' },
+  popBtn: { background:'transparent', border:'none', color:'#fff', cursor:'pointer', display:'flex', alignItems:'center', gap:6, fontSize:'0.85rem' },
   popDivider: { width: 1, height: 16, background: 'rgba(255,255,255,0.3)' },
 
   // 设置
