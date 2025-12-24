@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/router';
-// --- 修改点 1: 导入全屏控制图标 ---
 import { FaPlay, FaHome, FaRedo, FaStar, FaRegStar, FaClock, FaMedal, FaExpand, FaCompress } from "react-icons/fa";
 import confetti from 'canvas-confetti';
 
@@ -235,16 +234,15 @@ export default function InteractiveLesson({ lesson }) {
   const [timeSpent, setTimeSpent] = useState(0);
   const timerRef = useRef(null);
 
-  // --- 修改点 2: 添加全屏状态和 Ref ---
+  // 全屏控制
   const lessonContainerRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // --- 修改点 3: 实现进入和退出全屏的函数 ---
   const enterFullscreen = useCallback(() => {
     const elem = lessonContainerRef.current;
     if (elem) {
       if (elem.requestFullscreen) {
-        elem.requestFullscreen().catch(err => console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`));
+        elem.requestFullscreen().catch(err => console.error(`Error attempting to enable full-screen mode: ${err.message}`));
       } else if (elem.webkitRequestFullscreen) { // Safari
         elem.webkitRequestFullscreen();
       } else if (elem.msRequestFullscreen) { // IE11
@@ -263,16 +261,12 @@ export default function InteractiveLesson({ lesson }) {
     }
   }, []);
   
-  // --- 修改点 4: 添加 Effect 来监听全屏状态变化 ---
   useEffect(() => {
     const handleFullscreenChange = () => {
-      // document.fullscreenElement will be null if not in fullscreen
       setIsFullscreen(!!document.fullscreenElement || !!document.webkitFullscreenElement);
     };
-
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange); // For Safari
-
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange); 
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
@@ -321,6 +315,8 @@ export default function InteractiveLesson({ lesson }) {
 
 
   // --- 核心动作 ---
+  
+  // 1. 进入下一页
   const goNext = useCallback(() => {
     audioManager.stop();
     if (currentIndex < dynamicBlocks.length - 1) {
@@ -330,15 +326,15 @@ export default function InteractiveLesson({ lesson }) {
     }
   }, [currentIndex, dynamicBlocks.length]);
 
-  // --- 修改点 5: 创建一个新的开始函数，用于触发全屏 ---
+  // 2. 开始课程
   const handleStartLesson = useCallback(() => {
     enterFullscreen();
     goNext();
   }, [enterFullscreen, goNext]);
 
+  // 3. 完成课程
   const handleFinish = () => {
     setIsFinished(true);
-    // 如果在全屏，则退出
     if (isFullscreen) {
       exitFullscreen();
     }
@@ -356,10 +352,14 @@ export default function InteractiveLesson({ lesson }) {
     setIsFinished(false);
   };
 
+  // 4. 错题处理 (Append to end)
   const handleWrong = useCallback(() => {
     setMistakeCount(prev => prev + 1);
     setDynamicBlocks(prev => {
       const currentBlockData = prev[currentIndex];
+      // 防止重复添加已经是 retry 的题目
+      if (currentBlockData._isRetry) return prev;
+      
       const retryBlock = { ...currentBlockData, _isRetry: true };
       console.log("错题已加入重做队列:", retryBlock);
       return [...prev, retryBlock];
@@ -385,12 +385,8 @@ export default function InteractiveLesson({ lesson }) {
     if (!currentBlock) return <div className="p-10 text-center text-slate-400">Loading Lesson...</div>;
 
     const commonProps = {
-      key: `${currentIndex}-${currentBlock.id || 'idx'}`,
+      key: `${currentIndex}-${currentBlock.id || 'idx'}`, // 确保 Key 变化以重置组件状态
       data: currentBlock.content,
-      onNext: goNext,
-      onComplete: goNext,
-      onCorrect: goNext,
-      onWrong: handleWrong,
       settings: { playTTS: audioManager?.playTTS },
       isRetry: currentBlock._isRetry
     };
@@ -398,21 +394,47 @@ export default function InteractiveLesson({ lesson }) {
     switch (type) {
       case 'cover':
       case 'start_page': 
-        // --- 修改点 6: 将 onNext 指向新的 handleStartLesson 函数 ---
         return <CoverBlock {...commonProps} onNext={handleStartLesson} />;
       
-      case 'word_study': return <WordStudyPlayer {...commonProps} />;
+      case 'word_study': return <WordStudyPlayer {...commonProps} onNext={goNext} />;
       case 'phrase_study': 
-      case 'sentences': return <CardListRenderer {...commonProps} type={type} />;
+      case 'sentences': return <CardListRenderer {...commonProps} type={type} onComplete={goNext} />;
       case 'grammar_study': return <GrammarPointPlayer grammarPoints={commonProps.data.grammarPoints} onComplete={goNext} />;
       
-      case 'choice': return <XuanZeTi {...commonProps} onIncorrect={handleWrong} />; 
-      case 'paixu': return <PaiXuTi {...commonProps} />; 
+      // ✅ 关键修改：在这里完全控制 Choice 和 PaiXu 的流程
+      // 子组件不再拥有 onNext 权限，只能通过 onCorrect / onWrong 触发
+      case 'choice': 
+        return (
+          <XuanZeTi 
+            {...commonProps} 
+            onCorrect={() => {
+              goNext();
+            }}
+            onWrong={() => {
+              handleWrong(); // 先记错 + 沉底
+              goNext();      // 再下一题
+            }}
+          />
+        );
+        
+      case 'paixu': 
+        return (
+          <PaiXuTi 
+            {...commonProps} 
+            onCorrect={() => {
+              goNext();
+            }}
+            onWrong={() => {
+              handleWrong();
+              goNext();
+            }}
+          />
+        );
       
-      case 'lianxian': return <LianXianTi {...commonProps} />;
+      case 'lianxian': return <LianXianTi {...commonProps} onNext={goNext} onWrong={handleWrong} />;
       case 'panduan': return <div className="p-8 text-center">暂未适配错题沉底</div>; 
-      case 'gaicuo': return <GaiCuoTi {...commonProps} />;
-      case 'image_match_blanks': return <TianKongTi {...commonProps} />;
+      case 'gaicuo': return <GaiCuoTi {...commonProps} onNext={goNext} onWrong={handleWrong} />;
+      case 'image_match_blanks': return <TianKongTi {...commonProps} onNext={goNext} onWrong={handleWrong} />;
       
       case 'complete': 
       case 'end': 
@@ -425,7 +447,6 @@ export default function InteractiveLesson({ lesson }) {
   const hideTopProgressBar = ['cover', 'start_page', 'complete', 'end'].includes(type);
 
   return (
-    // --- 修改点 7: 附加 ref 到主容器 ---
     <div ref={lessonContainerRef} className="fixed inset-0 w-screen h-screen bg-slate-50 flex flex-col overflow-hidden font-sans" style={{ touchAction: 'none' }}>
       <style>{`
         ::-webkit-scrollbar { display: none; } 
@@ -435,7 +456,6 @@ export default function InteractiveLesson({ lesson }) {
       `}</style>
       
       {!hideTopProgressBar && (
-        // --- 修改点 8: 在顶部栏添加全屏切换按钮 ---
         <div className="absolute top-0 left-0 right-0 pt-[env(safe-area-inset-top)] px-4 py-3 z-50 pointer-events-none flex items-center justify-center gap-3 bg-slate-50/80 backdrop-blur-sm">
            <div className="flex-1 max-w-lg h-1.5 bg-slate-200 rounded-full overflow-hidden">
              <div 
