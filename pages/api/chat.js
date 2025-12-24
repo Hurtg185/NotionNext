@@ -1,11 +1,9 @@
-// pages/api/chat.js
-
+// 关键 1: 将运行时切换到 Edge，它非常适合流式传输，且超时更宽松
 export const config = {
-  runtime: 'edge', // 关键：将运行时切换到 Edge，它非常适合流式传输
-  maxDuration: 60,
+  runtime: 'edge',
 };
 
-export default async function handler(req, res) {
+export default async function handler(req) {
   if (req.method !== 'POST') {
     return new Response('Method Not Allowed', { status: 405 });
   }
@@ -15,13 +13,15 @@ export default async function handler(req, res) {
     const API_KEY = clientConfig?.apiKey;
 
     if (!API_KEY) {
-      return new Response(JSON.stringify({ error: 'API Key is missing' }), { status: 400 });
+      return new Response('data: {"error": {"message": "API Key is missing"}}\n\n', { status: 400, headers: { 'Content-Type': 'text/event-stream' } });
     }
 
     const modelId = clientConfig.modelId || 'meta/llama-3.1-70b-instruct';
+    const baseUrl = clientConfig.baseUrl || 'https://integrate.api.nvidia.com/v1';
+    const targetUrl = `${baseUrl.replace(/\/+$/, '')}/chat/completions`;
 
-    // 向 NVIDIA API 请求时，开启 stream: true
-    const apiResponse = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+    // 关键 2: 开启 stream: true
+    const apiResponse = await fetch(targetUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -30,14 +30,27 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: modelId,
         messages: messages,
-        temperature: 0.6,
-        top_p: 0.7,
-        max_tokens: 4096, // 可以适当调大
-        stream: true // 关键：开启流式传输
+        temperature: 0.7,
+        max_tokens: 4096, // 可以设置一个较大的值
+        stream: true 
       })
     });
-    
-    // 直接将 NVIDIA 返回的流转发给前端
+
+    // 如果 API 本身返回错误（例如 Key 错误），也以流的形式返回错误信息
+    if (!apiResponse.ok) {
+        const errorText = await apiResponse.text();
+        console.error(`[API PROXY] Upstream API Error (${apiResponse.status}):`, errorText);
+        const errorStream = new ReadableStream({
+            start(controller) {
+                const errorPayload = `data: ${JSON.stringify({ error: { message: `API Error (${apiResponse.status}): ${errorText.substring(0, 100)}...` } })}\n\n`;
+                controller.enqueue(new TextEncoder().encode(errorPayload));
+                controller.close();
+            }
+        });
+        return new Response(errorStream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    }
+
+    // 关键 3: 直接将 API 返回的流转发给前端
     return new Response(apiResponse.body, {
       status: 200,
       headers: {
@@ -48,7 +61,15 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('[API STREAM ERROR]', error);
-    return new Response(JSON.stringify({ error: `Server Error: ${error.message}` }), { status: 500 });
+    console.error('[API PROXY] Server Error:', error);
+    // 捕获服务器自身错误，也以流的形式返回
+    const errorStream = new ReadableStream({
+        start(controller) {
+            const errorPayload = `data: ${JSON.stringify({ error: { message: `代理服务器错误: ${error.message}` } })}\n\n`;
+            controller.enqueue(new TextEncoder().encode(errorPayload));
+            controller.close();
+        }
+    });
+    return new Response(errorStream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
   }
 }
