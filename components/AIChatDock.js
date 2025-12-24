@@ -21,7 +21,7 @@ const DEFAULT_SYSTEM_PROMPT = `你是一位精通汉语和缅甸语的资深翻�
 
 const DEFAULT_CONFIG = {
   apiKey: '', 
-  modelId: 'meta/llama-3.1-70b-instruct',
+  modelId: 'deepseek-ai/deepseek-v3.2',
   systemPrompt: DEFAULT_SYSTEM_PROMPT,
   ttsSpeed: 1.0,
   ttsVoice: 'zh-CN-XiaoyouNeural',
@@ -319,8 +319,22 @@ export default function AIChatDock({ contextData }) {
                 </div>
               )}
               {messages.map((m, i) => (
-                <div key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%', marginBottom: 20 }}>
-                  <div style={{ padding: '12px 16px', borderRadius: 16, background: m.role === 'user' ? '#3b82f6' : '#fff', color: m.role === 'user' ? '#fff' : '#1e293b', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', lineHeight: 1.8 }}>
+                <div key={i} style={{ 
+                    // 【修改】如果是AI（assistant），alignSelf为 stretch（拉伸），宽度100%
+                    // 如果是用户，保持 flex-end（右对齐），宽度限制 85%
+                    alignSelf: m.role === 'user' ? 'flex-end' : 'stretch', 
+                    maxWidth: m.role === 'user' ? '85%' : '100%', 
+                    marginBottom: 20 
+                }}>
+                  <div style={{ 
+                      padding: '12px 16px', 
+                      borderRadius: 16, 
+                      // 【修改】明确指定背景颜色，防止透视背景
+                      background: m.role === 'user' ? '#3b82f6' : '#ffffff', 
+                      color: m.role === 'user' ? '#fff' : '#1e293b', 
+                      boxShadow: '0 2px 10px rgba(0,0,0,0.08)', 
+                      lineHeight: 1.8 
+                  }}>
                     {m.role === 'assistant' ? (
                        <div className="markdown-body"><ReactMarkdown components={{ p: ({children}) => <p><PinyinRenderer text={children[0]} show={config.showPinyin}/></p> }}>{m.content}</ReactMarkdown></div>
                     ) : m.content}
@@ -363,9 +377,9 @@ export default function AIChatDock({ contextData }) {
 const styles = {
   floatingIcon: { position: 'fixed', width: 60, height: 60, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, boxShadow: '0 4px 20px rgba(0,0,0,0.3)', touchAction: 'none', cursor: 'pointer' },
   loader: { position: 'absolute', width: '100%', height: '100%', borderRadius: '50%', border: '3px solid transparent', borderTopColor: '#fff', animation: 'rotate 1s linear infinite' },
-  fullOverlay: { position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }, // 【修改】顶部对齐
+  fullOverlay: { position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }, 
   backdrop: { position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: -1, backdropFilter: 'blur(2px)' },
-  chatContainer: { width: '100%', height: '75%', background: '#f8fafc', borderBottomLeftRadius: 24, borderBottomRightRadius: 24, display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }, // 【修改】高度75%，底部圆角
+  chatContainer: { width: '100%', height: '75%', background: '#f8fafc', borderBottomLeftRadius: 24, borderBottomRightRadius: 24, display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }, 
   chatHeader: { height: 60, padding: '0 16px', background: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', flexShrink: 0 },
   headerTitle: { display: 'flex', alignItems: 'center', gap: 8, fontWeight: 'bold', color: '#334155' },
   historyList: { flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' },
