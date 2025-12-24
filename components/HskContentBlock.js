@@ -249,7 +249,7 @@ const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection }) => {
       {/* 新增：AI 助手入口 */}
       {/* ==================================================== */}
       <button 
-        onClick={() => router.push('/AIChatDrawer')} // 点击跳转到 /ai-assistant 页面
+        onClick={() => router.push('@/components/AIChatDrawer')} // 点击跳转到 /ai-assistant 页面
         className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100/50 active:scale-95 transition-transform group"
       >
         <div className="flex items-center gap-3">
