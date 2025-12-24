@@ -1,554 +1,525 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import PropTypes from 'prop-types';
-import { useTransition, animated } from '@react-spring/web';
-import { pinyin } from 'pinyin-pro';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
-  FaPause, FaPlay, FaChevronRight, FaTachometerAlt, 
-  FaExclamationTriangle, FaBookReader, FaVolumeUp
+  FaPaperPlane, FaChevronDown, FaRobot, FaCog, FaTimes, 
+  FaVolumeUp, FaStop, FaCopy, FaRedo, FaHistory, 
+  FaBook, FaQuestionCircle, FaCommentDots, FaTrashAlt
 } from 'react-icons/fa';
-import AIChatDock from '../AIChatDock';
+import ReactMarkdown from 'react-markdown';
+import { pinyin } from 'pinyin-pro'; 
 
-// =================================================================================
-// ===== 0. 音效工具 =====
-// =================================================================================
-const playSFX = (type) => {
-  const audio = new Audio(
-    type === 'switch' ? '/sounds/switch-card.mp3' : '/sounds/click.mp3'
-  );
-  audio.volume = 0.6;
-  audio.play().catch(() => {});
+// --- 常量与配置 ---
+
+const STORAGE_KEY_HISTORY = 'ai_chat_history_v1';
+const STORAGE_KEY_CONFIG = 'ai_dock_config_v6';
+
+const DEFAULT_SYSTEM_PROMPT = `你是一位精通汉语和缅甸语的资深翻译老师。
+1. 你的目标是用通俗易懂、口语化的中文为缅甸学生讲解汉语语法。
+2. 排版要求：使用清晰的标题（###）、列表（-）和加粗（**）来组织内容。
+3. 重点内容（如例句、规则）必须提供【中文】和【缅甸语】双语对照。
+4. 如果学生是在做题（Context中有题目信息），且学生选错了，请第一句话明确指出错误原因（例如：“你把'在'当成'到'用了”），然后再解释。
+5. 语气亲切，多给予鼓励。`;
+
+const DEFAULT_CONFIG = {
+  apiKey: '', 
+  modelId: 'meta/llama-3.1-70b-instruct',
+  systemPrompt: DEFAULT_SYSTEM_PROMPT,
+  ttsSpeed: 1.0,
+  ttsVoice: 'zh-CN-XiaoyouNeural',
+  showPinyin: true 
 };
 
-// =================================================================================
-// ===== 1. 健壮的 TTS Hook =====
-// =================================================================================
-function useRobustTTS() {
-  const [playerState, setPlayerState] = useState({
-    isPlaying: false, isPaused: false, loadingId: null, activeId: null, 
-    duration: 0, currentTime: 0, playbackRate: 0.9,
-  });
+const VOICES = [
+  { label: '中文女声 - 晓晓', value: 'zh-CN-XiaoxiaoNeural' },
+  { label: '中文女声 - 晓攸', value: 'zh-CN-XiaoyouNeural' },
+  { label: '中文男声 - 云希', value: 'zh-CN-YunxiNeural' },
+  { label: '缅甸女声 - Nilar', value: 'my-MM-NilarNeural' },
+  { label: '缅甸男声 - Thiha', value: 'my-MM-ThihaNeural' }
+];
 
-  const audioRef = useRef(null);      
-  const audioUrlRef = useRef(null);   
-  const requestRef = useRef(null);    
-  const mountedRef = useRef(true);    
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      cleanupAudio();
-    };
-  }, []);
-
-  const cleanupAudio = useCallback(() => {
-    if (requestRef.current) cancelAnimationFrame(requestRef.current);
-    if (audioRef.current) {
-      const audio = audioRef.current;
-      audio.pause();
-      audio.removeAttribute('src'); 
-      audio.load();
-    }
-    if (audioUrlRef.current) {
-      URL.revokeObjectURL(audioUrlRef.current);
-      audioUrlRef.current = null;
-    }
-    audioRef.current = null;
-  }, []);
-
-  const stop = useCallback(() => {
-    cleanupAudio();
-    setPlayerState(prev => ({
-      ...prev, isPlaying: false, isPaused: false, activeId: null, 
-      loadingId: null, currentTime: 0, duration: 0
-    }));
-  }, [cleanupAudio]);
-
-  const updateProgress = useCallback(() => {
-    if (audioRef.current && !audioRef.current.paused) {
-      setPlayerState(prev => ({
-        ...prev, currentTime: audioRef.current.currentTime, duration: audioRef.current.duration || 0
-      }));
-      requestRef.current = requestAnimationFrame(updateProgress);
-    }
-  }, []);
-
-  const toggle = useCallback(() => {
-    const audio = audioRef.current;
-    if (audio) {
-      if (audio.paused) {
-        if (audio.ended) audio.currentTime = 0;
-        audio.play().catch(err => console.warn("Play interrupted", err));
-        setPlayerState(prev => ({ ...prev, isPaused: false, isPlaying: true }));
-        requestRef.current = requestAnimationFrame(updateProgress);
-      } else {
-        audio.pause();
-        if (requestRef.current) cancelAnimationFrame(requestRef.current);
-        setPlayerState(prev => ({ ...prev, isPaused: true, isPlaying: false }));
-      }
-    }
-  }, [updateProgress]);
-
-  const seek = useCallback((time) => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = time;
-      setPlayerState(prev => ({ ...prev, currentTime: time }));
-    }
-  }, []);
-
-  const setRate = useCallback((rate) => {
-    setPlayerState(prev => ({ ...prev, playbackRate: rate }));
-    if (audioRef.current) {
-      audioRef.current.playbackRate = rate;
-    }
-  }, []);
-
-  const play = useCallback(async (text, uniqueId, voiceOverride = null) => {
-    playSFX('click');
-    if (playerState.activeId === uniqueId && audioRef.current && !audioRef.current.ended) {
-      toggle();
-      return;
-    }
-    cleanupAudio();
-    setPlayerState(prev => ({ ...prev, loadingId: uniqueId, activeId: uniqueId, isPlaying: false }));
-
-    let cleanText = String(text).replace(/\*\*|###/g, '').replace(/<[^>]+>/g, '').trim();
-    if (!cleanText) {
-      setPlayerState(prev => ({ ...prev, loadingId: null }));
-      return;
-    }
-
-    let targetVoice = 'zh-CN-XiaoyouNeural'; 
-    if (voiceOverride) targetVoice = voiceOverride;
-    else if (/[\u1000-\u109F]/.test(text)) targetVoice = 'my-MM-NilarNeural'; 
-
-    try {
-      const url = `/api/tts?t=${encodeURIComponent(cleanText)}&v=${targetVoice}`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('TTS API Error');
-      const blob = await response.blob();
-      if (!mountedRef.current) return;
-
-      const blobUrl = URL.createObjectURL(blob);
-      audioUrlRef.current = blobUrl;
-      const audio = new Audio(blobUrl);
-      audioRef.current = audio;
-      audio.playbackRate = playerState.playbackRate;
-
-      audio.onloadedmetadata = () => {
-         if (!mountedRef.current) return;
-         setPlayerState(prev => ({ ...prev, duration: audio.duration, currentTime: 0 }));
-      };
-      audio.onended = () => {
-         if (!mountedRef.current) return;
-         setPlayerState(prev => ({ ...prev, isPlaying: false, isPaused: false, currentTime: 0 }));
-         cancelAnimationFrame(requestRef.current);
-      };
-      await audio.play();
-      setPlayerState(prev => ({ ...prev, isPlaying: true, isPaused: false, loadingId: null }));
-      requestRef.current = requestAnimationFrame(updateProgress);
-    } catch (e) {
-      console.error("TTS Play failed:", e);
-      setPlayerState(prev => ({ ...prev, loadingId: null, activeId: null }));
-    }
-  }, [playerState.activeId, playerState.playbackRate, cleanupAudio, updateProgress, toggle]);
-
-  return { ...playerState, play, stop, toggle, seek, setRate };
-}
-
-// =================================================================================
-// ===== 2. 文本渲染组件 =====
-// =================================================================================
-
-const PinyinText = ({ text, onClick, color = 'inherit', bold = false }) => {
-  if (!text) return null;
-  const displayable = text.replace(/\*\*|###/g, '').replace(/\{\{|\}\}/g, '');
-  const regex = /([\u4e00-\u9fa5]+)/g;
-  const parts = displayable.split(regex);
+// --- 拼音渲染组件 ---
+const PinyinRenderer = ({ text, show }) => {
+  if (!show || !text) return text;
+  
+  const regex = /([\u4e00-\u9fa5]+)/g; 
+  const parts = text.split(regex);
 
   return (
-    <span 
-      onClick={(e) => {
-        if(onClick) { e.stopPropagation(); onClick(text); }
-      }}
-      style={{ 
-        lineHeight: '2.2', wordBreak: 'break-word', color: color, 
-        fontWeight: bold ? '700' : '400', fontSize: '1.1rem', cursor: onClick ? 'pointer' : 'default'
-      }}
-    >
-      {parts.map((part, idx) => {
+    <span>
+      {parts.map((part, index) => {
         if (/[\u4e00-\u9fa5]/.test(part)) {
           const pyArray = pinyin(part, { type: 'array', toneType: 'symbol' });
-          return part.split('').map((char, cIdx) => (
-            <ruby key={`${idx}-${cIdx}`} style={{ rubyPosition: 'over', margin: '0 1px' }}>
-              {char}<rt style={{ fontSize: '0.6em', userSelect: 'none', color: '#64748b' }}>{pyArray[cIdx] || ''}</rt>
-            </ruby>
-          ));
-        } else {
-          return <span key={idx}>{part}</span>;
+          const charArray = part.split('');
+          return (
+            <span key={index} style={{whiteSpace: 'nowrap', marginRight: '2px'}}>
+              {charArray.map((char, i) => (
+                <ruby key={i} style={{rubyPosition: 'over', margin: '0 1px'}}>
+                  {char}
+                  <rt style={{
+                      fontSize: '0.6em', 
+                      color: '#64748b', 
+                      fontWeight: 'normal',
+                      userSelect: 'none'
+                  }}>
+                    {pyArray[i]}
+                  </rt>
+                </ruby>
+              ))}
+            </span>
+          );
         }
+        return <span key={index}>{part}</span>;
       })}
     </span>
   );
 };
 
-const RichTextRenderer = ({ content, onPlayText }) => {
-    if (!content) return null;
-    return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {content.split('\n').map((line, idx) => {
-                const trimmed = line.trim();
-                if (!trimmed) return null;
-                if (trimmed.startsWith('###')) {
-                    return (
-                        <h3 key={idx} style={{ 
-                            fontSize: '1.1rem', fontWeight: 'bold', color: '#4338ca', 
-                            marginTop: '10px', marginBottom: '4px', borderLeft: '4px solid #818cf8', paddingLeft: '8px' 
-                        }}>{trimmed.replace(/###\s?/, '')}</h3>
-                    );
-                }
-                const parts = trimmed.split(/(\*\*.*?\*\*)/g);
-                return (
-                    <div key={idx} style={{ marginBottom: '4px', lineHeight: '1.8' }}>
-                        {parts.map((part, pIdx) => {
-                            if (part.startsWith('**') && part.endsWith('**')) {
-                                return (
-                                    <span key={pIdx} style={{ background: '#fff7ed', padding: '0 4px', borderRadius: '4px', borderBottom: '1px solid #fed7aa' }}>
-                                        <PinyinText text={part.slice(2, -2)} onClick={onPlayText} color="#9a3412" bold />
-                                    </span>
-                                );
-                            } else if (part.trim()) {
-                                return <PinyinText key={pIdx} text={part} onClick={onPlayText} color="#334155" />;
-                            }
-                            return null;
-                        })}
-                    </div>
-                );
-            })}
-        </div>
-    );
-};
-
-// =================================================================================
-// ===== 3. 顶部固定播放器 (常驻) =====
-// =================================================================================
-const TopPlayer = ({ 
-  isPlaying, isPaused, duration, currentTime, 
-  onToggle, onSeek, onRateChange, playbackRate, label, visible 
-}) => {
-  if (!visible) return null;
-
-  const cycleRate = () => {
-    if (playbackRate === 0.9) onRateChange(1.0);
-    else if (playbackRate === 1.0) onRateChange(0.7);
-    else onRateChange(0.9);
-  };
-
-  const formatTime = (t) => {
-    if (!t) return '0:00';
-    const min = Math.floor(t / 60);
-    const sec = Math.floor(t % 60);
-    return `${min}:${sec < 10 ? '0' + sec : sec}`;
-  };
-
-  return (
-    <div style={styles.topPlayerWrapper}>
-      <div style={styles.topPlayerCapsule}>
-        <button onClick={(e) => { playSFX('click'); onToggle(); }} style={styles.mainPlayBtn}>
-           {(isPlaying || isPaused) && !isPaused ? <FaPause size={14} /> : <FaPlay size={14} style={{marginLeft:2}} />}
-        </button>
-        <div style={styles.bpInfo}>
-           <div style={styles.bpLabel}>{label}</div>
-           <div style={styles.bpTimeRow}>
-             <span style={styles.bpTime}>{formatTime(currentTime)}</span>
-             <div style={styles.bpProgressBg}>
-                <div style={{...styles.bpProgressFill, width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%`}} />
-                <input type="range" min="0" max={duration || 100} value={currentTime} onChange={(e) => onSeek(Number(e.target.value))} style={styles.hiddenRangeInput} />
-             </div>
-             <span style={styles.bpTime}>{formatTime(duration)}</span>
-           </div>
-        </div>
-        <button onClick={(e) => { playSFX('click'); cycleRate(); }} style={styles.bpSpeedBtn}>
-          <FaTachometerAlt size={12} /><span>{playbackRate}x</span>
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// =================================================================================
-// ===== 4. 主组件 GrammarPointPlayer =====
-// =================================================================================
-const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
-  const normalizedPoints = useMemo(() => {
-    if (!Array.isArray(grammarPoints)) return [];
-    return grammarPoints.map((item, idx) => ({
-      id: item.id || idx,
-      title: item['语法标题'] || item.grammarPoint || '',
-      pattern: item['句型结构'] || item.pattern || '',
-      explanationScript: item['讲解脚本'] || (item['语法详解'] || '').replace(/\*\*|###/g, ''),
-      explanationRaw: item['语法详解'] || item.visibleExplanation || '',
-      attention: item['注意事项'] || item.attention || '', 
-      dialogues: (item['例句列表'] || item.examples || []).map((ex, i) => {
-        const isBoy = ex.speaker === 'B' || ex.speaker === 'Boy' || (ex.speaker && ex.speaker.includes('男'));
-        return {
-          id: ex.id || i, gender: isBoy ? 'male' : 'female',
-          sentence: ex['句子'] || ex.sentence || '',
-          translation: ex['翻译'] || ex.translation || '',
-          script: ex['例句发音'] || ex['句子'] || ''
-        };
-      })
-    }));
-  }, [grammarPoints]);
-
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const contentRef = useRef(null);
+export default function AIChatDock({ contextData, ttsPlay }) {
+  // --- State 定义 ---
+  const [expanded, setExpanded] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showHistory, setShowHistory] = useState(false); 
   
-  const { 
-    play, stop, toggle, seek, setRate,
-    isPlaying, isPaused, loadingId, activeId, currentTime, duration, playbackRate 
-  } = useRobustTTS();
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [config, setConfig] = useState(DEFAULT_CONFIG);
+  const [isPlaying, setIsPlaying] = useState(false);
+  
+  // 拖拽相关状态
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragRef = useRef({ startX: 0, startY: 0, initialX: 0, initialY: 0 });
+
+  const [allHistory, setAllHistory] = useState({});
+
+  const audioRef = useRef(null);
+  const historyRef = useRef(null);
+  const abortControllerRef = useRef(null);
+
+  // 初始化悬浮球位置 (右侧居中)
+  useEffect(() => {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    setPosition({ x: w - 70, y: h / 2 - 30 });
+  }, []);
+
+  const currentSessionKey = useMemo(() => {
+    if (!contextData) return 'free:default';
+    if (contextData.type === 'grammar') return `grammar:${contextData.id}`;
+    if (contextData.type === 'question') return `question:${contextData.id}`;
+    return 'free:default';
+  }, [contextData]);
 
   useEffect(() => {
-    stop(); 
-    if (contentRef.current) contentRef.current.scrollTop = 0;
-  }, [currentIndex, stop]);
+    if (typeof window !== 'undefined') {
+        const savedConfig = localStorage.getItem(STORAGE_KEY_CONFIG);
+        if (savedConfig) {
+            try { setConfig({ ...DEFAULT_CONFIG, ...JSON.parse(savedConfig) }); } 
+            catch (e) { console.error('Config load error', e); }
+        }
+        const savedHistory = localStorage.getItem(STORAGE_KEY_HISTORY);
+        if (savedHistory) {
+            try { setAllHistory(JSON.parse(savedHistory)); }
+            catch (e) { console.error('History load error', e); }
+        }
+    }
+  }, []);
 
-  const handleNext = () => {
-    playSFX('switch');
-    if (currentIndex < normalizedPoints.length - 1) {
-      setCurrentIndex(p => p + 1);
+  useEffect(() => {
+    if (allHistory[currentSessionKey]) {
+      setMessages(allHistory[currentSessionKey].messages || []);
     } else {
-      if (onComplete) onComplete();
+      setMessages([]); 
+    }
+  }, [currentSessionKey, allHistory]);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      const newHistoryItem = {
+        id: currentSessionKey,
+        type: contextData?.type || 'free',
+        title: contextData?.title || '自由提问', 
+        updatedAt: Date.now(),
+        messages: messages
+      };
+      const updatedAllHistory = { ...allHistory, [currentSessionKey]: newHistoryItem };
+      if (JSON.stringify(allHistory[currentSessionKey]) !== JSON.stringify(newHistoryItem)) {
+         setAllHistory(updatedAllHistory);
+         localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(updatedAllHistory));
+      }
+    }
+  }, [messages, currentSessionKey, contextData]);
+
+  // --- 拖拽逻辑 ---
+  const onDragStart = (e) => {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    dragRef.current = {
+      startX: clientX,
+      startY: clientY,
+      initialX: position.x,
+      initialY: position.y,
+      moved: false
+    };
+    setIsDragging(true);
+    // 防止移动端滚动
+    if(e.touches) {
+        document.body.style.overflow = 'hidden';
     }
   };
 
-  const transitions = useTransition(currentIndex, {
-    key: currentIndex,
-    from: { opacity: 0, transform: 'translate3d(100%,0,0)' },
-    enter: { opacity: 1, transform: 'translate3d(0%,0,0)' },
-    leave: { opacity: 0, transform: 'translate3d(-100%,0,0)', position: 'absolute' },
-  });
+  const onDragMove = (e) => {
+    if (!isDragging) return;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    const deltaX = clientX - dragRef.current.startX;
+    const deltaY = clientY - dragRef.current.startY;
+    
+    if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
+        dragRef.current.moved = true;
+    }
 
-  if (!normalizedPoints.length) return <div style={styles.center}>Data Loading...</div>;
+    let newX = dragRef.current.initialX + deltaX;
+    let newY = dragRef.current.initialY + deltaY;
 
-  const currentPoint = normalizedPoints[currentIndex];
-  const narrationId = `narration_${currentPoint.id}`;
-  const isControllingNarration = activeId === narrationId;
-  
-  const handleTopPlayClick = () => {
-      if (isControllingNarration) toggle();
-      else play(currentPoint.explanationScript, narrationId);
+    // 边界检测
+    newX = Math.max(0, Math.min(window.innerWidth - 60, newX));
+    newY = Math.max(0, Math.min(window.innerHeight - 60, newY));
+
+    setPosition({ x: newX, y: newY });
+  };
+
+  const onDragEnd = () => {
+    setIsDragging(false);
+    document.body.style.overflow = 'auto';
+  };
+
+  const handleIconClick = () => {
+    if (!dragRef.current.moved) {
+        setExpanded(true);
+    }
+  };
+
+  const saveConfig = (newConfig) => {
+    setConfig(newConfig);
+    localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(newConfig));
+  };
+
+  const playInternalTTS = async (text) => {
+    if (!text) return;
+    if (audioRef.current) audioRef.current.pause();
+    setIsPlaying(true);
+    const isBurmese = /[\u1000-\u109F]/.test(text);
+    const voice = isBurmese ? 'my-MM-NilarNeural' : config.ttsVoice;
+    const cleanText = text.replace(/[*#`>~\-\[\]\(\)]/g, ''); 
+    let ratePercent = Math.round((config.ttsSpeed - 1) * 100);
+    const url = `/api/tts?t=${encodeURIComponent(cleanText)}&v=${voice}&r=${ratePercent}%`;
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const audio = new Audio(URL.createObjectURL(blob));
+      audioRef.current = audio;
+      audio.onended = () => setIsPlaying(false);
+      audio.play();
+    } catch (e) { setIsPlaying(false); }
+  };
+
+  const stopTTS = () => {
+    if (audioRef.current) audioRef.current.pause();
+    setIsPlaying(false);
+  };
+
+  const handleSend = async (textToSend = input) => {
+    if (!textToSend.trim() || loading) return;
+    if (!config.apiKey) {
+      alert('请先设置 API Key');
+      setShowSettings(true);
+      return;
+    }
+    const userText = textToSend;
+    setInput('');
+    setLoading(true);
+    if (abortControllerRef.current) abortControllerRef.current.abort();
+    abortControllerRef.current = new AbortController();
+    const newMessages = [...messages, { role: 'user', content: userText }];
+    setMessages([...newMessages, { role: 'assistant', content: '' }]);
+    let userPrompt = contextData ? `[当前教材上下文]\n类型：${contextData.type}\n标题：${contextData.title}\n内容：${contextData.pattern || contextData.content || '无'}\n\n学生问题：${userText}` : userText;
+    const apiMessages = [{ role: 'system', content: config.systemPrompt }, ...newMessages.slice(-6), { role: 'user', content: userPrompt }];
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: apiMessages, config: { apiKey: config.apiKey, modelId: config.modelId } }),
+        signal: abortControllerRef.current.signal
+      });
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let done = false; let fullContent = ''; let buffer = '';
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); 
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (trimmedLine.startsWith('data: ') && trimmedLine !== 'data: [DONE]') {
+                try {
+                    const data = JSON.parse(trimmedLine.replace('data: ', ''));
+                    const delta = data.choices?.[0]?.delta?.content || '';
+                    if (delta) {
+                        fullContent += delta;
+                        setMessages(prev => {
+                            const last = prev[prev.length - 1];
+                            return [...prev.slice(0, -1), { ...last, content: fullContent }];
+                        });
+                    }
+                } catch (e) { }
+            }
+        }
+      }
+      if (fullContent) playInternalTTS(fullContent);
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+          setMessages(prev => [...prev.slice(0, -1), { role: 'assistant', content: `❌ 出错了: ${err.message}` }]);
+      }
+    } finally { setLoading(false); }
+  };
+
+  const deleteHistory = (key, e) => {
+    e.stopPropagation();
+    if(confirm('确定删除这条记录吗？')) {
+        const newHistory = { ...allHistory };
+        delete newHistory[key];
+        setAllHistory(newHistory);
+        localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(newHistory));
+        if (key === currentSessionKey) setMessages([]);
+    }
   };
 
   return (
-    <div style={styles.container}>
-      <TopPlayer 
-        label={loadingId === narrationId ? '加载中...' : (isControllingNarration ? '正在播放讲解' : '点击播放全文讲解')}
-        isPlaying={isControllingNarration && isPlaying}
-        isPaused={isControllingNarration && isPaused}
-        currentTime={isControllingNarration ? currentTime : 0}
-        duration={isControllingNarration ? duration : 0}
-        playbackRate={playbackRate}
-        onToggle={handleTopPlayClick}
-        onSeek={seek}
-        onRateChange={setRate}
-        visible={true} 
-      />
+    <>
+      {/* 悬浮球图标 */}
+      {!expanded && (
+        <div 
+          style={{
+            ...styles.floatingIcon,
+            left: position.x,
+            top: position.y,
+            cursor: isDragging ? 'grabbing' : 'pointer',
+            transition: isDragging ? 'none' : 'all 0.1s ease-out'
+          }}
+          onMouseDown={onDragStart}
+          onMouseMove={onDragMove}
+          onMouseUp={onDragEnd}
+          onMouseLeave={onDragEnd}
+          onTouchStart={onDragStart}
+          onTouchMove={onDragMove}
+          onTouchEnd={onDragEnd}
+          onClick={handleIconClick}
+        >
+          <FaRobot size={30} color="white" />
+          {loading && <div style={styles.loadingPulse} />}
+        </div>
+      )}
 
-      {transitions((style, i) => {
-        const gp = normalizedPoints[i];
-        if (!gp) return null;
-        
-        return (
-          <animated.div style={{ ...styles.page, ...style }}>
-            <div style={styles.scrollContainer} ref={contentRef}>
-              <div style={styles.contentWrapper}>
-                
-                <h2 style={styles.title}>{gp.title}</h2>
-
-                {gp.pattern && (
-                  <div style={styles.card}>
-                    <div style={styles.cardLabel}><FaBookReader /> 核心句型</div>
-                    <div 
-                      onClick={() => play(gp.pattern, `pattern_${gp.id}`)}
-                      style={{ 
-                        cursor: 'pointer', ...styles.patternText,
-                        color: activeId === `pattern_${gp.id}` ? '#3b82f6' : '#0f172a'
-                      }}
-                      className="active-scale"
-                    >
-                      <PinyinText text={gp.pattern} />
-                    </div>
-                  </div>
-                )}
-
-                <div style={styles.section}>
-                  <div style={styles.sectionHeader}>
-                    <span style={styles.sectionTitle}>📝 语法详解</span>
-                    <button onClick={() => play(gp.explanationScript, narrationId)} style={styles.playBtnCircle}>
-                      {loadingId === narrationId ? <div className="spin" style={styles.miniSpin}/> : 
-                        (activeId === narrationId && (isPlaying || isPaused) ? <FaPause size={10}/> : <FaPlay size={10} style={{marginLeft:2}}/>)}
-                    </button>
-                  </div>
-                  <div style={styles.richTextBlock}>
-                      <RichTextRenderer content={gp.explanationRaw} onPlayText={(text) => play(text, `text_${Date.now()}`)} />
-                  </div>
+      {/* 聊天界面遮罩与容器 */}
+      {expanded && (
+        <div style={styles.fullOverlay}>
+          <div onClick={() => setExpanded(false)} style={styles.clickableArea} />
+          
+          <div style={styles.chatContainer}>
+            <div style={styles.chatHeader}>
+              <div style={{display:'flex', alignItems:'center', gap: 12}}>
+                <button onClick={() => setShowHistory(true)} style={styles.headerBtn}><FaHistory size={16} /></button>
+                <div style={{display:'flex', alignItems:'center', gap: 6}}>
+                   <FaRobot className="text-blue-500" />
+                   <span style={{fontWeight:'bold', color:'#334155'}}>{contextData?.title || 'AI 助教'}</span>
                 </div>
-
-                {gp.attention && (
-                  <div style={styles.section}>
-                    <div style={styles.sectionHeader}>
-                      <span style={{...styles.sectionTitle, color: '#b91c1c', display:'flex', alignItems:'center', gap:6}}>
-                        <FaExclamationTriangle /> 注意事项
-                      </span>
-                    </div>
-                    <div style={styles.attentionBox}>
-                      <div style={styles.attentionText}>
-                          <PinyinText text={gp.attention} onClick={(t) => play(t, `attn_${gp.id}`)} />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div style={styles.section}>
-                  <div style={styles.sectionHeader}>
-                    <span style={styles.sectionTitle}>💬 场景对话</span>
-                  </div>
-                  <div style={styles.dialogueContainer}>
-                    {gp.dialogues.map((ex, idx) => {
-                      const exId = `ex_${gp.id}_${idx}`;
-                      const isBoy = ex.gender === 'male';
-                      const voiceId = isBoy ? 'zh-CN-YunxiNeural' : 'zh-CN-XiaoyouNeural';
-
-                      return (
-                        <div key={idx} 
-                             onClick={() => play(ex.script, exId, voiceId)}
-                             style={{ 
-                               ...styles.dialogueRow, 
-                               flexDirection: isBoy ? 'row-reverse' : 'row',
-                             }}
-                             className="active-scale"
-                        >
-                          <div style={styles.avatarWrapper}>
-                             <img 
-                                src={isBoy 
-                                  ? "https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/10111437211381.jpg" 
-                                  : "https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/images.jpeg"}
-                                alt={isBoy ? "Boy" : "Girl"}
-                                style={styles.avatarImg}
-                             />
-                          </div>
-                          
-                          <div style={{...styles.bubbleCol, alignItems: isBoy ? 'flex-end' : 'flex-start'}}>
-                             <div style={{
-                                ...styles.bubble,
-                                background: isBoy ? '#eff6ff' : '#fff1f2',
-                                border: isBoy ? '1px solid #bfdbfe' : '1px solid #fbcfe8',
-                                color: activeId === exId ? (isBoy ? '#1e40af' : '#be185d') : '#334155'
-                             }}>
-                                <div style={isBoy ? styles.tailRight : styles.tailLeft} />
-                                <div style={styles.bubbleText}>
-                                  <PinyinText text={ex.sentence} />
-                                </div>
-                                <div style={styles.bubbleTrans}>{ex.translation}</div>
-                             </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                
-                <div style={styles.nextButtonContainer}>
-                   <button style={styles.nextBtn} onClick={handleNext}>
-                     {i === normalizedPoints.length -1 ? '完成学习' : '下一页'} <FaChevronRight size={14} />
-                   </button>
-                </div>
-                
-                {/* 底部留白增加到 140px，确保不被 AI 框遮挡 */}
-                <div style={{ height: '140px' }} />
+              </div>
+              <div style={{display:'flex', gap: 16}}>
+                 <button onClick={() => setShowSettings(true)} style={styles.headerBtn}><FaCog size={18} /></button>
+                 <button onClick={() => setExpanded(false)} style={styles.headerBtn}><FaTimes size={20} /></button>
               </div>
             </div>
-          </animated.div>
-        );
-      })}
 
-      <AIChatDock contextData={currentPoint} />
+            <div ref={historyRef} style={styles.chatHistory}>
+              {messages.length === 0 && (
+                <div style={{textAlign:'center', marginTop: 100, color:'#cbd5e1'}}>
+                  <FaRobot size={50} style={{marginBottom:15, opacity:0.1}} />
+                  <p>有什么学习问题可以随时问我哦！</p>
+                </div>
+              )}
+              {messages.map((m, i) => (
+                <div key={i} style={{
+                    alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+                    maxWidth: '90%', marginBottom: '24px', display: 'flex', flexDirection: 'column'
+                }}>
+                  <div style={{
+                      padding: '12px 16px', borderRadius: '18px',
+                      background: m.role === 'user' ? '#3b82f6' : '#fff',
+                      color: m.role === 'user' ? '#fff' : '#1e293b', 
+                      boxShadow: '0 2px 12px rgba(0,0,0,0.06)', lineHeight: 1.8
+                  }}>
+                    {m.role === 'assistant' ? (
+                      <div className="markdown-body">
+                        <ReactMarkdown components={{
+                          p: ({children}) => <p>{React.Children.map(children, child => typeof child === 'string' ? <PinyinRenderer text={child} show={config.showPinyin} /> : child)}</p>,
+                          li: ({children}) => <li>{React.Children.map(children, child => typeof child === 'string' ? <PinyinRenderer text={child} show={config.showPinyin} /> : child)}</li>,
+                          h3: ({children}) => <h3 style={{color: '#d946ef'}}>{React.Children.map(children, child => typeof child === 'string' ? <PinyinRenderer text={child} show={config.showPinyin} /> : child)}</h3>,
+                          strong: ({children}) => <strong style={{color: '#2563eb', background: '#eff6ff', padding: '0 4px', borderRadius: '4px'}}>{React.Children.map(children, child => typeof child === 'string' ? <PinyinRenderer text={child} show={config.showPinyin} /> : child)}</strong>
+                        }}>
+                          {m.content}
+                        </ReactMarkdown>
+                      </div>
+                    ) : m.content}
+                  </div>
+                  {m.role === 'assistant' && m.content && (
+                    <div style={styles.actionBar}>
+                       <button onClick={() => playInternalTTS(m.content)} style={styles.actionBtn}><FaVolumeUp size={12}/> 朗读</button>
+                       <button onClick={() => navigator.clipboard.writeText(m.content)} style={styles.actionBtn}><FaCopy size={12}/> 复制</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {loading && <div style={styles.thinkingMsg}>思考中...</div>}
+              {/* 底部强制留白 */}
+              <div style={{ height: '20px', flexShrink: 0 }} />
+            </div>
+
+            <div style={styles.chatInputArea}>
+               {isPlaying && <button onClick={stopTTS} style={styles.stopBtn}><FaStop size={12} /></button>}
+               <input 
+                 value={input} 
+                 onChange={e => setInput(e.target.value)} 
+                 onKeyDown={e => e.key === 'Enter' && handleSend()} 
+                 placeholder="输入你的汉语疑问..." 
+                 style={styles.chatInput}
+               />
+               <button onClick={() => handleSend()} disabled={loading} style={{...styles.sendBtn, opacity: loading ? 0.5 : 1}}>
+                 <FaPaperPlane size={16} />
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 历史记录抽屉 */}
+      {showHistory && (
+          <div style={styles.drawerOverlay}>
+            <div style={styles.drawer}>
+                <div style={styles.drawerHeader}>
+                    <h3 style={{margin:0}}>学习记录</h3>
+                    <button onClick={() => setShowHistory(false)} style={styles.headerBtn}><FaTimes/></button>
+                </div>
+                <div style={styles.drawerList}>
+                    {Object.values(allHistory).length === 0 && <div style={{padding:40, color:'#94a3b8', textAlign:'center'}}>暂无记录</div>}
+                    {Object.values(allHistory).sort((a,b)=>b.updatedAt-a.updatedAt).map(item => (
+                        <div key={item.id} onClick={() => { setMessages(item.messages); setShowHistory(false); }} style={{
+                            ...styles.historyItem,
+                            borderLeft: item.id === currentSessionKey ? '4px solid #3b82f6' : '4px solid transparent'
+                        }}>
+                            <div style={{flex:1, overflow:'hidden'}}>
+                                <div style={styles.historyTitle}>{item.title}</div>
+                                <div style={styles.historyDate}>{new Date(item.updatedAt).toLocaleString()}</div>
+                            </div>
+                            <button onClick={(e) => deleteHistory(item.id, e)} style={styles.deleteBtn}><FaTrashAlt size={14}/></button>
+                        </div>
+                    ))}
+                </div>
+            </div>
+          </div>
+      )}
+
+      {/* 设置 */}
+      {showSettings && (
+        <div style={styles.settingsOverlay}>
+          <div style={styles.settingsModal}>
+            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'20px', alignItems:'center'}}>
+              <h3 style={{margin:0}}>AI 老师配置</h3>
+              <button onClick={() => setShowSettings(false)} style={styles.headerBtn}><FaTimes size={18}/></button>
+            </div>
+            <div style={{display:'flex', flexDirection:'column', gap:'16px'}}>
+              <label><div style={styles.label}>NVIDIA API Key</div><input type="password" value={config.apiKey} onChange={e => saveConfig({...config, apiKey: e.target.value})} style={styles.inputField}/></label>
+              <label style={{display:'flex', justifyContent:'space-between'}}><div style={styles.label}>显示拼音</div><input type="checkbox" checked={config.showPinyin} onChange={e => saveConfig({...config, showPinyin: e.target.checked})}/></label>
+              <label><div style={styles.label}>模型 ID</div><input value={config.modelId} onChange={e => saveConfig({...config, modelId: e.target.value})} style={styles.inputField}/></label>
+              <label><div style={styles.label}>TTS 发音人</div><select value={config.ttsVoice} onChange={e => saveConfig({...config, ttsVoice: e.target.value})} style={styles.inputField}>{VOICES.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}</select></label>
+              <label><div style={styles.label}>TTS 语速 ({config.ttsSpeed}x)</div><input type="range" min="0.5" max="2.0" step="0.1" value={config.ttsSpeed} onChange={e => saveConfig({...config, ttsSpeed: parseFloat(e.target.value)})} style={{width:'100%'}}/></label>
+            </div>
+            <button onClick={() => setShowSettings(false)} style={styles.saveBtn}>保存并返回</button>
+          </div>
+        </div>
+      )}
       
-    </div>
+      <style jsx global>{`
+        .markdown-body { font-size: 0.95rem; color: #334155; font-family: 'Padauk', sans-serif; }
+        .markdown-body h3 { font-size: 1.1em; border-left: 4px solid #d946ef; padding-left: 8px; margin: 1em 0 0.5em; }
+        .markdown-body p { margin-bottom: 0.8em; line-height: 2.2; }
+        .markdown-body li { margin-bottom: 0.4em; }
+        @keyframes pulse-ring { 0% { transform: scale(0.8); opacity: 0.5; } 100% { transform: scale(1.3); opacity: 0; } }
+      `}</style>
+    </>
   );
-};
-
-GrammarPointPlayer.propTypes = {
-  grammarPoints: PropTypes.array.isRequired,
-  onComplete: PropTypes.func,
-};
-
-const styles = {
-  container: { position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#f8fafc', fontFamily: '"Padauk", "Myanmar3", sans-serif' },
-  center: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#94a3b8' },
-  page: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'white' },
-  scrollContainer: { flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 16px', paddingTop: '70px' },
-  contentWrapper: { maxWidth: '600px', margin: '0 auto', paddingTop: '20px' }, 
-  
-  topPlayerWrapper: { position: 'absolute', top: '15px', left: 0, right: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, pointerEvents: 'none' },
-  topPlayerCapsule: { pointerEvents: 'auto', width: '94%', maxWidth: '500px', height: '56px', background: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', borderRadius: '28px', border: '1px solid rgba(0,0,0,0.08)', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', padding: '0 12px', gap: '12px' },
-  mainPlayBtn: { width: 38, height: 38, borderRadius: '50%', background: '#3b82f6', color: 'white', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, boxShadow: '0 4px 10px rgba(59, 130, 246, 0.3)' },
-  bpInfo: { flex: 1, display: 'flex', flexDirection: 'column', gap: '2px', overflow: 'hidden' },
-  bpLabel: { fontSize: '0.75rem', fontWeight: 'bold', color: '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-  bpTimeRow: { display: 'flex', alignItems: 'center', gap: '8px' },
-  bpTime: { fontSize: '0.65rem', color: '#94a3b8', fontFamily: 'monospace', width: '28px' },
-  bpProgressBg: { flex: 1, height: '4px', background: '#e2e8f0', borderRadius: '2px', position: 'relative' },
-  bpProgressFill: { height: '100%', background: '#3b82f6', borderRadius: '2px' },
-  hiddenRangeInput: { position: 'absolute', top: -6, left: 0, width: '100%', height: '16px', opacity: 0, cursor: 'pointer', margin: 0 },
-  bpSpeedBtn: { background: '#f1f5f9', border: 'none', borderRadius: '12px', padding: '4px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', gap: '1px', fontSize: '0.6rem', color: '#64748b', fontWeight: 'bold' },
-
-  title: { fontSize: '1.5rem', fontWeight: '800', textAlign: 'center', color: '#1e293b', marginBottom: '24px', marginTop: '10px' },
-  card: { background: 'white', borderRadius: '16px', padding: '24px', marginBottom: '30px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9' },
-  cardLabel: { fontSize: '0.85rem', color: '#64748b', fontWeight: 'bold', marginBottom: '12px', display:'flex', gap: '6px', alignItems:'center' },
-  patternText: { fontSize: '1.3rem', fontWeight: '600', color: '#0f172a', lineHeight: 1.6, textAlign: 'center' },
-
-  section: { marginBottom: '36px' },
-  sectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' },
-  sectionTitle: { fontSize: '1.15rem', fontWeight: '700', color: '#334155' },
-  playBtnCircle: { width: 30, height: 30, borderRadius: '50%', background: '#eff6ff', color: '#3b82f6', border: '1px solid #dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
-  miniSpin: { width: 14, height: 14, border: '2px solid #3b82f6', borderTopColor: 'transparent', borderRadius: '50%' },
-
-  richTextBlock: { fontSize: '1.05rem', lineHeight: '1.8', color: '#475569' },
-  attentionBox: { background: '#fef2f2', borderRadius: '16px', border: '1px solid #fee2e2', padding: '20px', boxShadow: '0 2px 8px rgba(220, 38, 38, 0.05)' },
-  attentionText: { lineHeight: 1.8, color: '#991b1b', fontSize: '1rem', whiteSpace: 'pre-wrap' },
-
-  dialogueContainer: { display: 'flex', flexDirection: 'column', gap: '16px' }, 
-  dialogueRow: { display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' },
-  avatarWrapper: { display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '4px' },
-  avatarImg: { width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', border: '2px solid white', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' },
-  
-  bubbleCol: { display: 'flex', flexDirection: 'column', maxWidth: '85%' },
-  bubble: { 
-    padding: '10px 14px', position: 'relative', borderRadius: '14px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.03)', transition: 'background 0.2s', minWidth: '60px'
-  },
-  tailLeft: { position: 'absolute', top: '12px', left: '-6px', width: 0, height: 0, borderTop: '6px solid transparent', borderBottom: '6px solid transparent', borderRight: '6px solid #fff1f2' },
-  tailRight: { position: 'absolute', top: '12px', right: '-6px', width: 0, height: 0, borderTop: '6px solid transparent', borderBottom: '6px solid transparent', borderLeft: '6px solid #eff6ff' },
-
-  bubbleText: { fontSize: '1.05rem', marginBottom: '4px' },
-  bubbleTrans: { fontSize: '0.85rem', opacity: 0.85, fontFamily: '"Padauk", sans-serif' },
-
-  nextButtonContainer: { marginTop: '30px', marginBottom: '20px', display: 'flex', justifyContent: 'center', width: '100%' },
-  nextBtn: { background: '#1e293b', color: 'white', border: 'none', padding: '16px 48px', borderRadius: '50px', fontSize: '1.1rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', boxShadow: '0 10px 25px rgba(30, 41, 59, 0.25)', transition: 'transform 0.1s', fontFamily: '"Padauk", sans-serif' },
-};
-
-if (typeof document !== 'undefined' && !document.getElementById('gp-player-style')) {
-  const style = document.createElement('style');
-  style.id = 'gp-player-style';
-  style.innerHTML = `
-    .spin { animation: spin 1s linear infinite; }
-    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-    .active-scale:active { transform: scale(0.98); opacity: 0.9; }
-    .attention-box * { color: #991b1b !important; }
-  `;
-  document.head.appendChild(style);
 }
 
-export default GrammarPointPlayer;
+const styles = {
+  floatingIcon: {
+    position: 'fixed', width: '60px', height: '60px', borderRadius: '50%',
+    background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    boxShadow: '0 4px 20px rgba(37, 99, 235, 0.4)', zIndex: 9999, touchAction: 'none'
+  },
+  loadingPulse: {
+    position: 'absolute', inset: 0, borderRadius: '50%',
+    border: '4px solid #3b82f6', animation: 'pulse-ring 1.5s infinite'
+  },
+  fullOverlay: {
+    position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', flexDirection: 'column',
+    justifyContent: 'flex-end', background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)'
+  },
+  clickableArea: { position: 'absolute', inset: 0, zIndex: -1 },
+  chatContainer: {
+    width: '100%', height: '85vh', background: '#f8fafc',
+    borderTopLeftRadius: '24px', borderTopRightRadius: '24px',
+    display: 'flex', flexDirection: 'column', overflow: 'hidden',
+    boxShadow: '0 -10px 40px rgba(0,0,0,0.2)'
+  },
+  chatHeader: {
+    height: '60px', padding: '0 16px', display: 'flex', justifyContent: 'space-between',
+    alignItems: 'center', background: '#fff', borderBottom: '1px solid #e2e8f0', flexShrink: 0
+  },
+  chatHistory: {
+    flex: 1, overflowY: 'auto', padding: '20px 16px', display: 'flex',
+    flexDirection: 'column', justifyContent: 'flex-start'
+  },
+  thinkingMsg: { alignSelf:'flex-start', background:'#fff', padding:'8px 14px', borderRadius:'12px', color:'#94a3b8', fontSize:'0.85rem' },
+  chatInputArea: {
+    height: '80px', padding: '0 16px 20px 16px', display: 'flex', alignItems: 'center',
+    gap: '10px', background: '#fff', borderTop: '1px solid #e2e8f0', flexShrink: 0
+  },
+  chatInput: { flex: 1, height: '45px', borderRadius: '22px', border: '1px solid #e2e8f0', padding: '0 16px', fontSize: '1rem', outline: 'none', background: '#f8fafc' },
+  sendBtn: { width: '45px', height: '45px', borderRadius: '50%', background: '#3b82f6', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  stopBtn: { width:34, height:34, borderRadius:'50%', background:'#fee2e2', color:'#ef4444', border:'none', display:'flex', alignItems:'center', justifyContent:'center' },
+  actionBar: { display: 'flex', gap: '16px', marginTop: '6px' },
+  actionBtn: { background:'none', border:'none', color:'#94a3b8', fontSize:'0.75rem', cursor:'pointer', display:'flex', alignItems:'center', gap:'4px' },
+  headerBtn: { background:'none', border:'none', color:'#64748b', cursor:'pointer' },
+  
+  // 历史抽屉
+  drawerOverlay: { position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:11000 },
+  drawer: { position:'absolute', top:0, left:0, bottom:0, width:'80%', maxWidth:'300px', background:'#fff', display:'flex', flexDirection:'column' },
+  drawerHeader: { padding:'16px', borderBottom:'1px solid #eee', display:'flex', justifyContent:'space-between', alignItems:'center' },
+  drawerList: { flex:1, overflowY:'auto' },
+  historyItem: { padding:'12px 16px', borderBottom:'1px solid #f8fafc', display:'flex', alignItems:'center' },
+  historyTitle: { fontSize:'0.9rem', fontWeight:'600', color:'#334155', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' },
+  historyDate: { fontSize:'0.7rem', color:'#94a3b8' },
+  deleteBtn: { background:'none', border:'none', color:'#cbd5e1', padding:'8px' },
+
+  // 设置弹窗
+  settingsOverlay: { position: 'fixed', inset: 0, zIndex: 12000, background: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' },
+  settingsModal: { width: '100%', maxWidth: '360px', background: '#fff', borderRadius: '20px', padding: '24px' },
+  label: { fontSize: '0.8rem', color: '#64748b', marginBottom: '4px', fontWeight: 'bold' },
+  inputField: { width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none' },
+  saveBtn: { width:'100%', marginTop:'20px', padding:'12px', background:'#3b82f6', color:'#fff', border:'none', borderRadius:'10px', fontWeight:'bold' }
+};
