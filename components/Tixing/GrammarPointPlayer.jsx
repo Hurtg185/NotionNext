@@ -284,6 +284,7 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
     if (!Array.isArray(grammarPoints)) return [];
     return grammarPoints.map((item, idx) => ({
       id: item.id || idx,
+      type: 'grammar', // 为 AI Dock 提供上下文类型
       title: item['语法标题'] || item.grammarPoint || '',
       pattern: item['句型结构'] || item.pattern || '',
       explanationScript: item['讲解脚本'] || (item['语法详解'] || '').replace(/\*\*|###/g, ''),
@@ -425,7 +426,7 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
                     {gp.dialogues.map((ex, idx) => {
                       const exId = `ex_${gp.id}_${idx}`;
                       const isBoy = ex.gender === 'male';
-                      const voiceId = isBoy ? 'zh-CN-YunxiaNeural' : 'zh-CN-XiaoyouNeural';
+                      const voiceId = isBoy ? 'zh-CN-YunxiNeural' : 'zh-CN-XiaoyouNeural';
 
                       return (
                         <div key={idx} 
@@ -473,8 +474,8 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
                    </button>
                 </div>
                 
-                {/* 底部留白给 AI Dock */}
-                <div style={{ height: '80px' }} />
+                {/* 底部留白，悬浮球模式下不需要很大空间 */}
+                <div style={{ height: '40px' }} />
               </div>
             </div>
           </animated.div>
@@ -533,7 +534,7 @@ const styles = {
   attentionText: { lineHeight: 1.8, color: '#991b1b', fontSize: '1rem', whiteSpace: 'pre-wrap' },
 
   // Dialogue
-  dialogueContainer: { display: 'flex', flexDirection: 'column', gap: '16px' }, // 间距缩小
+  dialogueContainer: { display: 'flex', flexDirection: 'column', gap: '16px' },
   dialogueRow: { display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' },
   avatarWrapper: { display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '4px' },
   avatarImg: { width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', border: '2px solid white', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' },
