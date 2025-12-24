@@ -1,60 +1,61 @@
 // pages/api/chat.js
 
+// 🔴 关键：使用 Edge Runtime，无超时限制，专为流式传输设计
 export const config = {
-  runtime: 'edge', // 适配 Cloudflare Pages
+  runtime: 'edge',
 };
 
 export default async function handler(req) {
+  // 1. 检查 POST
   if (req.method !== 'POST') {
     return new Response('Method Not Allowed', { status: 405 });
   }
 
   try {
     const { messages, config: clientConfig } = await req.json();
-    
-    // 从前端传来的配置中获取
     const API_KEY = clientConfig?.apiKey;
-    const modelId = clientConfig?.modelId || 'meta/llama-3.1-70b-instruct';
-    const baseUrl = clientConfig?.baseUrl || 'https://integrate.api.nvidia.com/v1';
 
     if (!API_KEY) {
-      return new Response(JSON.stringify({ error: '后端未接收到 API Key' }), { status: 400 });
+      return new Response(JSON.stringify({ error: 'API Key 缺失' }), { status: 400 });
     }
 
-    const targetUrl = `${baseUrl.replace(/\/+$/, '')}/chat/completions`;
-
-    const apiResponse = await fetch(targetUrl, {
+    // 2. 向 Nvidia 发起请求
+    const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${API_KEY}`
       },
       body: JSON.stringify({
-        model: modelId,
+        model: clientConfig.modelId || 'deepseek-ai/deepseek-r1', // 支持 DeepSeek
         messages: messages,
-        temperature: 0.7,
-        max_tokens: 4096,
-        stream: true
+        temperature: 0.6,
+        top_p: 0.7,
+        max_tokens: 4096, // 允许长回复
+        stream: true // 🔴 必须开启流式，否则 DeepSeek 必超时
       })
     });
 
-    if (!apiResponse.ok) {
-      const errorText = await apiResponse.text();
-      console.error(`[API PROXY] Error (${apiResponse.status}):`, errorText);
-      return new Response(JSON.stringify({ 
-        error: `API 请求失败 (${apiResponse.status})`, 
-        details: errorText.substring(0, 500) 
-      }), { status: apiResponse.status });
+    // 3. 错误处理
+    if (!response.ok) {
+      const errorText = await response.text();
+      return new Response(JSON.stringify({ error: `Upstream Error: ${response.status}`, details: errorText }), { 
+        status: response.status,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
-    const data = await apiResponse.json();
-    return new Response(JSON.stringify(data), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
+    // 4. 🔴 关键：直接透传流，不要使用 await response.json()
+    return new Response(response.body, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
     });
 
   } catch (error) {
-    console.error('[API PROXY] Server Error:', error);
-    return new Response(JSON.stringify({ error: `服务器错误: ${error.message}` }), { status: 500 });
+    console.error('Proxy Error:', error);
+    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
   }
 }
