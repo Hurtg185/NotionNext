@@ -37,7 +37,7 @@ export default function AIChatDock({ contextData, ttsPlay }) {
   const historyRef = useRef(null);
 
   useEffect(() => {
-    const savedConfig = localStorage.getItem('ai_dock_config_v2'); // 使用新 key 避免旧数据冲突
+    const savedConfig = localStorage.getItem('ai_dock_config_v2'); 
     if (savedConfig) {
       try { setConfig({ ...DEFAULT_CONFIG, ...JSON.parse(savedConfig) }); } 
       catch (e) { console.error('Config load error', e); }
