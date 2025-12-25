@@ -30,7 +30,7 @@ const playTickSound = () => {
   } catch (e) {}
 };
 
-// 拼音渲染组件 (修复了正则错误)
+// 拼音渲染组件 (正则已修复)
 const PinyinRenderer = ({ text, show }) => {
   const cleanText = typeof text === 'string' ? text.replace(/<[^>]+>/g, '') : text;
   if (!show || !cleanText) return <span style={{userSelect: 'text'}}>{cleanText}</span>;
@@ -72,28 +72,38 @@ const ThinkingIndicator = () => (
 // --- 2. 外部触发解析按钮 (导出给题目组件使用) ---
 export const AIExplainButton = ({ title, content }) => {
   const { isActivated, canUseAI, remainingQuota, triggerAI } = useAI();
+  const [showExplanation, setShowExplanation] = useState(false);
 
   const handleClick = (e) => {
     e.stopPropagation();
-    // 如果未激活且次数用完，进行拦截
     if (!isActivated && !canUseAI()) {
       alert(`今日免费提问次数已用完，请激活课程以获得无限次 AI 解析。`);
       return;
     }
     // 触发全局 AI 状态
     triggerAI(title, content);
+    setShowExplanation(true);
   };
 
   return (
-    <button onClick={handleClick} style={styles.explainButton}>
-      <FaLightbulb /> AI 解析题目
-    </button>
+    <>
+        <button onClick={handleClick} style={styles.explainButton}>
+        <FaLightbulb /> AI 解析题目
+        </button>
+        {/* 当点击按钮时，才渲染并显示 AIChatDock */}
+        {showExplanation && (
+            <AIChatDock 
+            initialTask={{ title, content }} 
+            onClose={() => setShowExplanation(false)} 
+            />
+        )}
+    </>
   );
 };
 
 // --- 3. 主组件 AIChatDock ---
 
-export default function AIChatDock() {
+export default function AIChatDock({ initialTask, onClose }) {
   const {
     config, setConfig,
     isActivated,
@@ -129,7 +139,7 @@ export default function AIChatDock() {
   const abortControllerRef = useRef(null);
   const recognitionRef = useRef(null);
   const selectionTimeoutRef = useRef(null);
-  const prevTaskRef = useRef(null); // 用于记录上一次的任务，避免重复触发
+  const prevTaskRef = useRef(null);
 
   // 获取当前会话的消息
   const messages = sessions.find(s => s.id === currentSessionId)?.messages || [];
@@ -141,7 +151,6 @@ export default function AIChatDock() {
       prevSessions.map(s => {
         if (s.id === currentSessionId) {
           const newMessages = typeof updater === 'function' ? updater(s.messages || []) : updater;
-          // 自动更新会话标题 (如果是新对话且有用户消息)
           let newTitle = s.title;
           if (s.title === '新对话' && newMessages.length > 0) {
             const firstUserMsg = newMessages.find(m => m.role === 'user');
@@ -184,18 +193,27 @@ export default function AIChatDock() {
     // 立即在UI上显示用户消息和空的AI消息
     updateCurrentSessionMessages(prev => [...prev, currentUserMessage, { role: 'assistant', content: '' }]);
 
-    // 构建发送给API的消息历史 (最近6条 + 当前)
+    // **关键修复：构建正确的消息历史**
+    // 之前这里可能传递了错误的格式导致 [Object Object]
+    const historyMessages = messages.slice(-6).map(m => ({
+        role: m.role,
+        content: m.content
+    }));
+
     const apiMessages = [
         { role: 'system', content: config.systemPrompt },
-        ...messages.slice(-6),
-        currentUserMessage
+        ...historyMessages,
+        { role: 'user', content: textToSend }
     ];
 
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: apiMessages, config }),
+        body: JSON.stringify({ 
+            messages: apiMessages, 
+            config: { apiKey: config.apiKey, modelId: config.modelId } // 确保 config 结构正确
+        }),
         signal: abortControllerRef.current.signal
       });
 
@@ -279,19 +297,36 @@ export default function AIChatDock() {
 
   // 监听任务变化，自动触发解析
   useEffect(() => {
-    if (activeTask && activeTask.timestamp && activeTask.timestamp !== prevTaskRef.current) {
-        prevTaskRef.current = activeTask.timestamp;
-        const contextMsg = `[系统注：用户正在学习新内容: ${activeTask.title}]\n请围绕这个主题进行解析。`;
-        handleSend(contextMsg, true); 
+    // 只有当 initialTask 存在，且是一个新任务时才触发
+    if (initialTask && (!prevTaskRef.current || prevTaskRef.current.title !== initialTask.title)) {
+        prevTaskRef.current = initialTask;
+        
+        // 创建一个新的解析会话，不与之前的混淆
+        const newId = Date.now();
+        const newSession = { 
+            id: newId, 
+            title: `解析: ${initialTask.title}`, 
+            messages: [], 
+            date: new Date().toISOString(), 
+            pinned: false 
+        };
+        setSessions(prev => [newSession, ...prev]);
+        setCurrentSessionId(newId);
+
+        // 延时一点点确保会话已建立
+        setTimeout(() => {
+            const contextMsg = `请作为老师，详细解析这道题目：\n\n# 题目: ${initialTask.title}\n\n${initialTask.content}\n\n请分析考点、解题思路和正确答案。`;
+            handleSend(contextMsg, true);
+        }, 100);
     }
-  }, [activeTask, handleSend]);
+  }, [initialTask, setSessions, setCurrentSessionId, handleSend]);
 
   // 自动滚动到底部
   useEffect(() => {
-    if (historyRef.current && isAiOpen) {
+    if (historyRef.current) {
       historyRef.current.scrollTop = historyRef.current.scrollHeight;
     }
-  }, [messages, isAiOpen, loading]);
+  }, [messages, loading]);
 
   // TTS 朗读函数
   const playInternalTTS = async (text) => {
@@ -346,8 +381,7 @@ export default function AIChatDock() {
             const text = selection.toString().trim();
             
             // 排除输入框内的选词
-            if (text.length > 0 && isAiOpen && !e.target.matches('textarea, input')) {
-                e.preventDefault(); // 阻止浏览器默认菜单
+            if (text.length > 0 && !e.target.matches('textarea, input')) {
                 const range = selection.getRangeAt(0);
                 const rect = range.getBoundingClientRect();
                 setSelectionMenu({ show: true, x: rect.left + rect.width / 2, y: rect.top - 60, text: text });
@@ -367,41 +401,13 @@ export default function AIChatDock() {
         document.removeEventListener('touchend', handleMouseUp);
         document.removeEventListener('mousedown', handleOutsideClick);
     };
-  }, [isAiOpen]);
+  }, []);
 
   const handleTranslateSelection = () => {
       if (!selectionMenu.text) return;
       handleSend(`请详细解释并翻译这段文字：\n"${selectionMenu.text}"`);
       setSelectionMenu(prev => ({...prev, show: false}));
       window.getSelection().removeAllRanges();
-  };
-
-  // 拖动逻辑
-  const handleTouchStart = (e) => {
-    draggingRef.current = false;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    dragStartPos.current = { x: clientX, y: clientY };
-    btnStartPos.current = { ...btnPos };
-  };
-
-  const handleTouchMove = (e) => {
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const dx = dragStartPos.current.x - clientX;
-    const dy = dragStartPos.current.y - clientY;
-    // 反向移动逻辑
-    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
-        draggingRef.current = true;
-        setBtnPos({ right: btnStartPos.current.right + dx, bottom: btnStartPos.current.bottom + dy });
-    }
-  };
-
-  const handleTouchEnd = () => {
-    if (!draggingRef.current) {
-        setIsAiOpen(true);
-    }
-    draggingRef.current = false;
   };
 
   // 会话管理
@@ -446,10 +452,11 @@ export default function AIChatDock() {
   const pinnedSessions = sessions.filter(s => s.pinned);
   const historySessions = sessions.filter(s => !s.pinned);
 
-  // --- 界面渲染 ---
+  // --- 界面渲染 (弹窗模式) ---
 
   return (
-    <>
+    <div style={styles.modalOverlay}>
+      
       {/* 划词菜单 */}
       {selectionMenu.show && (
           <div id="selection-popover" style={{...styles.popover, left: selectionMenu.x, top: selectionMenu.y}}>
@@ -464,178 +471,154 @@ export default function AIChatDock() {
           </div>
       )}
 
-      {/* 悬浮球 */}
-      {!isAiOpen && (
-        <div 
-            style={{...styles.floatingBtn, right: btnPos.right, bottom: btnPos.bottom}}
-            onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
-            onMouseDown={handleTouchStart} onMouseMove={(e) => draggingRef.current && handleTouchMove(e)} onMouseUp={handleTouchEnd}
-        >
-            <FaFeatherAlt size={24} color="#fff" />
-        </div>
-      )}
+      {/* 侧边栏 */}
+      {showSidebar && <div onClick={() => setShowSidebar(false)} style={styles.sidebarOverlay} />}
+      <div style={{...styles.sidebar, transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)'}}>
+          <div style={styles.sidebarHeader}>
+              <h3 style={{fontSize:'1.1rem', margin:0, fontWeight:'bold', color:'#334155'}}>会话管理</h3>
+              <button onClick={createNewSession} style={styles.newChatBtn}><FaPlus size={12}/> 新对话</button>
+          </div>
+          <div style={styles.sessionList}>
+              {bookmarks.length > 0 && (
+                  <div style={styles.sessionGroup}>
+                      <h4 style={styles.groupTitle}>收藏夹</h4>
+                      {bookmarks.map((bm, idx) => (
+                          <div key={`bm-${idx}`} style={styles.bookmarkItem}>
+                              <p style={{margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{bm.content.substring(0, 50)}</p>
+                              <button onClick={() => toggleBookmark(bm)} style={styles.bookmarkActionBtn}><FaTrashAlt/></button>
+                          </div>
+                      ))}
+                  </div>
+              )}
+              {pinnedSessions.length > 0 && (
+                  <div style={styles.sessionGroup}>
+                      <h4 style={styles.groupTitle}>置顶</h4>
+                      {pinnedSessions.map(s => (
+                          <div key={s.id} onClick={() => switchSession(s.id)} style={{...styles.sessionItem, background: currentSessionId === s.id ? '#eff6ff' : 'transparent'}}>
+                              <div style={styles.sessionTitle}>{s.title}</div>
+                              <div style={styles.sessionActions}>
+                                  <button onClick={(e) => togglePinSession(e, s.id)} style={styles.sessionActionBtn}><FaThumbtack color="#4f46e5"/></button>
+                                  <button onClick={(e)=>renameSession(e, s.id)} style={styles.sessionActionBtn}><FaEdit/></button>
+                                  <button onClick={(e)=>deleteSession(e, s.id)} style={{...styles.sessionActionBtn, color:'#ef4444'}}><FaTrashAlt/></button>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              )}
+              <div style={styles.sessionGroup}>
+                  <h4 style={styles.groupTitle}>历史会话</h4>
+                  {historySessions.map(s => (
+                      <div key={s.id} onClick={() => switchSession(s.id)} style={{...styles.sessionItem, background: currentSessionId === s.id ? '#eff6ff' : 'transparent'}}>
+                          <div style={styles.sessionTitle}>{s.title}</div>
+                          <div style={styles.sessionActions}>
+                              <button onClick={(e) => togglePinSession(e, s.id)} style={styles.sessionActionBtn}><FaThumbtack/></button>
+                              <button onClick={(e)=>deleteSession(e, s.id)} style={{...styles.sessionActionBtn, color:'#ef4444'}}><FaTrashAlt/></button>
+                          </div>
+                      </div>
+                  ))}
+              </div>
+          </div>
+      </div>
 
-      {/* 主界面 */}
-      {isAiOpen && (
-        <>
-            {showSidebar && <div onClick={() => setShowSidebar(false)} style={styles.sidebarOverlay} />}
-            
-            {/* 侧边栏 */}
-            <div style={{...styles.sidebar, transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)'}}>
-                <div style={styles.sidebarHeader}>
-                    <h3 style={{fontSize:'1.1rem', margin:0, fontWeight:'bold', color:'#334155'}}>会话管理</h3>
-                    <button onClick={createNewSession} style={styles.newChatBtn}><FaPlus size={12}/> 新对话</button>
-                </div>
-                <div style={styles.sessionList}>
-                    {bookmarks.length > 0 && (
-                        <div style={styles.sessionGroup}>
-                            <h4 style={styles.groupTitle}>收藏夹</h4>
-                            {bookmarks.map((bm, idx) => (
-                                <div key={`bm-${idx}`} style={styles.bookmarkItem}>
-                                    <p style={{margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{bm.content.substring(0, 50)}</p>
-                                    <button onClick={() => toggleBookmark(bm)} style={styles.bookmarkActionBtn}><FaTrashAlt/></button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                    {pinnedSessions.length > 0 && (
-                        <div style={styles.sessionGroup}>
-                            <h4 style={styles.groupTitle}>置顶</h4>
-                            {pinnedSessions.map(s => (
-                                <div key={s.id} onClick={() => switchSession(s.id)} style={{...styles.sessionItem, background: currentSessionId === s.id ? '#eff6ff' : 'transparent'}}>
-                                    <div style={styles.sessionTitle}>{s.title}</div>
-                                    <div style={styles.sessionActions}>
-                                        <button onClick={(e) => togglePinSession(e, s.id)} style={styles.sessionActionBtn}><FaThumbtack color="#4f46e5"/></button>
-                                        <button onClick={(e)=>renameSession(e, s.id)} style={styles.sessionActionBtn}><FaEdit/></button>
-                                        <button onClick={(e)=>deleteSession(e, s.id)} style={{...styles.sessionActionBtn, color:'#ef4444'}}><FaTrashAlt/></button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                    <div style={styles.sessionGroup}>
-                        <h4 style={styles.groupTitle}>历史会话</h4>
-                        {historySessions.map(s => (
-                            <div key={s.id} onClick={() => switchSession(s.id)} style={{...styles.sessionItem, background: currentSessionId === s.id ? '#eff6ff' : 'transparent'}}>
-                                <div style={styles.sessionTitle}>{s.title}</div>
-                                <div style={styles.sessionActions}>
-                                    <button onClick={(e) => togglePinSession(e, s.id)} style={styles.sessionActionBtn}><FaThumbtack/></button>
-                                    <button onClick={(e)=>renameSession(e, s.id)} style={styles.sessionActionBtn}><FaEdit/></button>
-                                    <button onClick={(e)=>deleteSession(e, s.id)} style={{...styles.sessionActionBtn, color:'#ef4444'}}><FaTrashAlt/></button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
+      {/* 主聊天窗口 */}
+      <div style={styles.chatWindow}>
+          <div style={styles.header}>
+              <button onClick={() => setShowSidebar(true)} style={styles.headerIconBtn}><FaList size={16}/></button>
+              <div style={{fontWeight:'bold', color:'#334155'}}>AI 解析助教</div>
+              <div style={{display:'flex', gap:8}}>
+                  <button onClick={() => setShowSettings(true)} style={styles.headerIconBtn}><FaCog size={16}/></button>
+                  <button onClick={onClose} style={styles.headerIconBtn}><FaTimes size={16}/></button>
+              </div>
+          </div>
 
-            {/* 聊天窗口 */}
-            <div style={styles.chatWindow}>
-                <div style={styles.header}>
-                    <button onClick={() => setShowSidebar(true)} style={styles.headerIconBtn}><FaList size={16}/></button>
-                    <div style={{fontWeight:'bold', color:'#334155'}}>AI 助教</div>
-                    <div style={{display:'flex', gap:8}}>
-                        <button onClick={() => setShowSettings(true)} style={styles.headerIconBtn}><FaCog size={16}/></button>
-                        <button onClick={() => setIsAiOpen(false)} style={styles.headerIconBtn}><FaChevronUp size={16}/></button>
-                    </div>
-                </div>
+          <div ref={historyRef} style={styles.messageArea}>
+              {messages.map((m, i) => {
+                  // **卡顿优化**：如果是正在生成的最后一条消息(loading态)，强制关闭拼音，只显示纯文本
+                  const isStreaming = loading && i === messages.length - 1;
+                  const showPinyinForThisMessage = !isStreaming && (pinyinToggles[i] ?? config.showPinyin);
+                  
+                  const markdownComponents = {
+                      strong: ({children}) => <strong style={styles.strong}><PinyinRenderer text={Array.isArray(children) ? children.join('') : children} show={showPinyinForThisMessage}/></strong>,
+                      p: ({children}) => <p style={styles.p}>{React.Children.map(children, c => <PinyinRenderer text={c ? c.toString() : ''} show={showPinyinForThisMessage}/>)}</p>,
+                      li: ({children}) => <li style={styles.li}>{React.Children.map(children, c => <PinyinRenderer text={c ? c.toString() : ''} show={showPinyinForThisMessage}/>)}</li>,
+                      td: ({children}) => <td style={styles.td}>{React.Children.map(children, c => <PinyinRenderer text={c ? c.toString() : ''} show={showPinyinForThisMessage}/>)}</td>,
+                      h1: ({children}) => <h1 style={styles.h1}>{children}</h1>,
+                      h2: ({children}) => <h2 style={styles.h2}>{children}</h2>,
+                      table: ({children}) => <div style={{overflowX:'auto'}}><table style={styles.table}>{children}</table></div>,
+                      th: ({children}) => <th style={styles.th}>{children}</th>,
+                  };
 
-                <div ref={historyRef} style={styles.messageArea}>
-                    {messages.map((m, i) => {
-                        // **卡顿优化**：如果是正在生成的最后一条消息(loading态)，强制关闭拼音，只显示纯文本
-                        const isStreaming = loading && i === messages.length - 1;
-                        const showPinyinForThisMessage = !isStreaming && (pinyinToggles[i] ?? config.showPinyin);
-                        
-                        const markdownComponents = {
-                            strong: ({children}) => <strong style={styles.strong}><PinyinRenderer text={Array.isArray(children) ? children.join('') : children} show={showPinyinForThisMessage}/></strong>,
-                            p: ({children}) => <p style={styles.p}>{React.Children.map(children, c => <PinyinRenderer text={c ? c.toString() : ''} show={showPinyinForThisMessage}/>)}</p>,
-                            li: ({children}) => <li style={styles.li}>{React.Children.map(children, c => <PinyinRenderer text={c ? c.toString() : ''} show={showPinyinForThisMessage}/>)}</li>,
-                            td: ({children}) => <td style={styles.td}>{React.Children.map(children, c => <PinyinRenderer text={c ? c.toString() : ''} show={showPinyinForThisMessage}/>)}</td>,
-                            h1: ({children}) => <h1 style={styles.h1}>{children}</h1>,
-                            h2: ({children}) => <h2 style={styles.h2}>{children}</h2>,
-                            table: ({children}) => <div style={{overflowX:'auto'}}><table style={styles.table}>{children}</table></div>,
-                            th: ({children}) => <th style={styles.th}>{children}</th>,
-                        };
+                  const isBookmarked = m.role === 'assistant' && bookmarks.some(b => b.content === m.content);
 
-                        const isBookmarked = m.role === 'assistant' && bookmarks.some(b => b.content === m.content);
+                  return (
+                      <div key={i} style={{...styles.messageRow, alignItems: m.role === 'user' ? 'flex-end' : 'flex-start'}}>
+                          <div style={{...styles.bubbleWrapper, alignItems: m.role === 'user' ? 'flex-end' : 'flex-start'}}>
+                              <div style={{...styles.bubble, background: m.role === 'user' ? '#f1f5f9' : 'transparent', border: m.role === 'assistant' ? 'none' : '1px solid #f1f5f9'}}>
+                                  {m.role === 'user' ? (
+                                      <div style={{color:'#1e293b'}}>{m.content}</div>
+                                  ) : (
+                                      (m.content === '' && loading) 
+                                      ? <ThinkingIndicator/>
+                                      : <div className="notion-md"><ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{m.content}</ReactMarkdown></div>
+                                  )}
+                              </div>
+                              <div style={styles.msgActionBar}>
+                                  {m.role === 'assistant' && m.content && !loading && (
+                                      <>
+                                          <button onClick={() => playInternalTTS(m.content)} style={styles.msgActionBtn} title="朗读"><FaVolumeUp/></button>
+                                          <button onClick={() => copyText(m.content)} style={styles.msgActionBtn} title="复制"><FaCopy/></button>
+                                          <button onClick={() => toggleBookmark(m)} style={{...styles.msgActionBtn, color: isBookmarked ? '#f59e0b' : 'inherit'}} title="收藏">
+                                              {isBookmarked ? <FaStar/> : <FaRegStar/>}
+                                          </button>
+                                          <button onClick={() => setPinyinToggles(prev => ({ ...prev, [i]: !(prev[i] ?? config.showPinyin) }))} style={{...styles.msgActionBtn, fontSize: '0.75rem', border:'1px solid #e2e8f0', borderRadius:'4px', padding:'0 4px'}}>
+                                              {(pinyinToggles[i] ?? config.showPinyin) ? '文' : '拼'}
+                                          </button>
+                                      </>
+                                  )}
+                                  {m.role === 'user' && !m.content.startsWith('[系统注') && (
+                                      <button onClick={() => deleteMessage(i)} style={{...styles.msgActionBtn, color:'#ef4444'}} title="删除"><FaTrashAlt/></button>
+                                  )}
+                              </div>
+                          </div>
+                      </div>
+                  )
+              })}
+          </div>
 
-                        return (
-                            <div key={i} style={{...styles.messageRow, alignItems: m.role === 'user' ? 'flex-end' : 'flex-start'}}>
-                                <div style={{...styles.bubbleWrapper, alignItems: m.role === 'user' ? 'flex-end' : 'flex-start'}}>
-                                    <div style={{...styles.bubble, background: m.role === 'user' ? '#f1f5f9' : 'transparent', border: m.role === 'assistant' ? 'none' : '1px solid #f1f5f9'}}>
-                                        {m.role === 'user' ? (
-                                            <div style={{color:'#1e293b'}}>{m.content}</div>
-                                        ) : (
-                                            (m.content === '' && loading) 
-                                            ? <ThinkingIndicator/>
-                                            : <div className="notion-md"><ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{m.content}</ReactMarkdown></div>
-                                        )}
-                                    </div>
-                                    <div style={styles.msgActionBar}>
-                                        {m.role === 'assistant' && m.content && !loading && (
-                                            <>
-                                                <button onClick={() => playInternalTTS(m.content)} style={styles.msgActionBtn} title="朗读"><FaVolumeUp/></button>
-                                                <button onClick={() => copyText(m.content)} style={styles.msgActionBtn} title="复制"><FaCopy/></button>
-                                                <button onClick={() => toggleBookmark(m)} style={{...styles.msgActionBtn, color: isBookmarked ? '#f59e0b' : 'inherit'}} title="收藏">
-                                                    {isBookmarked ? <FaStar/> : <FaRegStar/>}
-                                                </button>
-                                                <button onClick={() => setPinyinToggles(prev => ({ ...prev, [i]: !(prev[i] ?? config.showPinyin) }))} style={{...styles.msgActionBtn, fontSize: '0.75rem', border:'1px solid #e2e8f0', borderRadius:'4px', padding:'0 4px'}}>
-                                                    {(pinyinToggles[i] ?? config.showPinyin) ? '文' : '拼'}
-                                                </button>
-                                            </>
-                                        )}
-                                        {m.role === 'user' && !m.content.startsWith('[系统注') && (
-                                            <button onClick={() => deleteMessage(i)} style={{...styles.msgActionBtn, color:'#ef4444'}} title="删除"><FaTrashAlt/></button>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        )
-                    })}
-                </div>
+          <div style={styles.footer}>
+              {!loading && suggestions.length > 0 && (
+                  <div style={styles.scrollSuggestionContainer}>
+                      {suggestions.map((s, idx) => (
+                          <button key={idx} onClick={() => handleSend(s)} style={styles.scrollSuggestionBtn}>
+                              <FaLightbulb color="#eab308" size={10} style={{marginRight:4}}/>{s}
+                          </button>
+                      ))}
+                  </div>
+              )}
+              
+              <div style={styles.inputContainer}>
+                  {isPlaying && <div style={styles.ttsBar} onClick={() => audioRef.current?.pause()}><FaVolumeUp/> 正在朗读... <FaStop/></div>}
+                  <div style={styles.inputBox}>
+                      <textarea 
+                          value={input}
+                          onChange={e => setInput(e.target.value)}
+                          onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }}}
+                          placeholder={isListening ? "正在聆听..." : "输入问题..."}
+                          style={styles.textarea}
+                          rows={1}
+                      />
+                      {input.trim().length > 0 ? (
+                          <button onClick={() => handleSend()} disabled={loading} style={styles.sendBtn}><FaPaperPlane/></button>
+                      ) : (
+                          <button onClick={toggleListening} style={{...styles.micBtn, background: isListening ? '#ef4444' : 'transparent'}}>
+                              <FaMicrophone color={isListening ? '#fff' : '#94a3b8'} className={isListening ? 'animate-pulse' : ''}/>
+                          </button>
+                      )}
+                  </div>
+              </div>
+          </div>
+      </div>
 
-                <div style={styles.footer}>
-                    {!loading && suggestions.length > 0 && (
-                        <div style={styles.scrollSuggestionContainer}>
-                            {suggestions.map((s, idx) => (
-                                <button key={idx} onClick={() => handleSend(s)} style={styles.scrollSuggestionBtn}>
-                                    <FaLightbulb color="#eab308" size={10} style={{marginRight:4}}/>{s}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                    
-                    <div style={styles.inputContainer}>
-                        {isPlaying && <div style={styles.ttsBar} onClick={() => audioRef.current?.pause()}><FaVolumeUp/> 正在朗读... <FaStop/></div>}
-                        <div style={styles.inputBox}>
-                            <textarea 
-                                value={input}
-                                onChange={e => setInput(e.target.value)}
-                                onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }}}
-                                placeholder={isListening ? "正在聆听..." : "输入问题..."}
-                                style={styles.textarea}
-                                rows={1}
-                            />
-                            {input.trim().length > 0 ? (
-                                <button onClick={() => handleSend()} disabled={loading} style={styles.sendBtn}><FaPaperPlane/></button>
-                            ) : (
-                                <button onClick={toggleListening} style={{...styles.micBtn, background: isListening ? '#ef4444' : 'transparent'}}>
-                                    <FaMicrophone color={isListening ? '#fff' : '#94a3b8'} className={isListening ? 'animate-pulse' : ''}/>
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            {/* 关闭区域 */}
-            <div style={styles.closeArea} onClick={() => setIsAiOpen(false)}>
-                <FaChevronUp color="rgba(255,255,255,0.8)" size={14} />
-            </div>
-        </>
-      )}
-
-      {/* 设置面板 */}
       {showSettings && (
         <div style={styles.settingsOverlay} onClick={(e) => e.target === e.currentTarget && setShowSettings(false)}>
             <div style={styles.settingsModal} onClick={e => e.stopPropagation()}>
@@ -646,7 +629,6 @@ export default function AIChatDock() {
                     </div>}
                     <label style={styles.settingRow}><span>API Key</span><input type="password" value={config.apiKey} onChange={e=>setConfig({...config, apiKey:e.target.value})} style={styles.input}/></label>
                     <div style={styles.switchRow}><span>全局显示拼音</span><input type="checkbox" checked={config.showPinyin} onChange={e=>setConfig({...config, showPinyin:e.target.checked})}/></div>
-                    <div style={styles.switchRow}><span>打字音效</span><input type="checkbox" checked={config.soundEnabled} onChange={e=>setConfig({...config, soundEnabled:e.target.checked})}/></div>
                     <label style={styles.settingRow}><span>语音朗读语速 ({config.ttsSpeed}x)</span><input type="range" min="0.5" max="2.0" step="0.1" value={config.ttsSpeed} onChange={e=>setConfig({...config, ttsSpeed:parseFloat(e.target.value)})}/></label>
                     <button onClick={()=>setShowSettings(false)} style={styles.saveBtn}>保存并关闭</button>
                 </div>
@@ -654,7 +636,6 @@ export default function AIChatDock() {
         </div>
       )}
 
-      {/* 动画与Markdown样式 */}
       <style jsx global>{`
         @keyframes pulse { 0%, 100% {transform:scale(1);} 50% {transform:scale(1.1);} }
         .animate-pulse { animation: pulse 1.5s infinite; }
@@ -664,68 +645,79 @@ export default function AIChatDock() {
         .notion-md li { margin-bottom: 4px; }
         @keyframes thinking-dot { 0%, 80%, 100% { transform: scale(0); opacity: 0.5; } 40% { transform: scale(1.0); opacity: 1; } }
       `}</style>
-    </>
+    </div>
   );
 }
 
 const styles = {
-  floatingBtn: { position: 'fixed', width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #4f46e5)', boxShadow: '0 8px 20px rgba(79, 70, 229, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, cursor: 'grab', touchAction: 'none' },
-  chatWindow: { position: 'fixed', top: 0, left: 0, width: '100%', height: '85%', background: '#fff', borderBottomLeftRadius: 24, borderBottomRightRadius: 24, display: 'flex', flexDirection: 'column', zIndex: 10000, boxShadow: '0 10px 40px rgba(0,0,0,0.1)' },
-  header: { height: 44, borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', padding: '0 12px', justifyContent: 'space-between', flexShrink: 0 },
-  headerIconBtn: { background:'none', border:'none', color:'#64748b', padding:8, cursor:'pointer' },
-  messageArea: { flex: 1, overflowY: 'auto', padding: '16px 20px' },
+  modalOverlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0, 0, 0, 0.5)',
+    backdropFilter: 'blur(4px)',
+    zIndex: 10000,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chatWindow: {
+    width: '92%',
+    maxWidth: '460px',
+    height: '82vh',
+    maxHeight: '750px',
+    background: '#fff',
+    borderRadius: '28px',
+    display: 'flex',
+    flexDirection: 'column',
+    boxShadow: '0 25px 60px rgba(0,0,0,0.3)',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  header: { height: 52, borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', padding: '0 16px', justifyContent: 'space-between', flexShrink: 0 },
+  headerIconBtn: { background:'none', border:'none', color:'#64748b', cursor:'pointer', padding: 8 },
+  messageArea: { flex: 1, overflowY: 'auto', padding: '20px' },
   messageRow: { display: 'flex', marginBottom: 24, flexDirection: 'column' },
   bubbleWrapper: { display: 'flex', flexDirection: 'column', maxWidth: '100%' },
-  bubble: { fontSize: '0.96rem', padding: '10px 14px', borderRadius: '12px' },
-  msgActionBar: { display: 'flex', gap: 12, marginTop: 8, opacity: 0.8, alignItems: 'center', flexWrap: 'wrap' },
-  msgActionBtn: { background:'none', border:'none', color:'#64748b', cursor:'pointer', padding:'2px', fontSize:'0.9rem', display: 'flex', alignItems: 'center' },
+  bubble: { fontSize: '0.96rem', padding: '12px 16px', borderRadius: '18px' },
+  msgActionBar: { display: 'flex', gap: 12, marginTop: 8, opacity: 0.6, alignItems: 'center', flexWrap: 'wrap' },
+  msgActionBtn: { background:'none', border:'none', color:'#64748b', cursor:'pointer', fontSize:'0.9rem' },
   thinkingIndicator: { background: '#f1f5f9', borderRadius: '12px', padding: '12px 16px', display: 'inline-flex', gap: '5px', alignItems:'center' },
   thinkingDot: { width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#94a3b8', animation: 'thinking-dot 1.4s infinite ease-in-out both' },
-  h1: { fontSize: '1.4em', fontWeight: 700, margin: '1em 0 0.5em 0' },
-  h2: { fontSize: '1.2em', fontWeight: 600, margin: '0.8em 0 0.4em 0', borderBottom:'1px solid #f1f5f9', paddingBottom:4 },
-  p: { margin: '0 0 8px 0' },
-  strong: { fontWeight: 700, color: '#000' },
-  ul: { paddingLeft: '1.2em' }, 
-  li: { marginBottom: '4px' },
-  table: { width: '100%', borderCollapse: 'collapse', margin: '10px 0', fontSize: '0.9em' },
-  th: { border: '1px solid #e2e8f0', padding: '6px 10px', background: '#f8fafc', fontWeight: '600', textAlign: 'left' },
-  td: { border: '1px solid #e2e8f0', padding: '6px 10px', verticalAlign: 'top' },
   footer: { background: '#fff', borderTop: '1px solid #f1f5f9', paddingBottom: 10 },
-  scrollSuggestionContainer: { display: 'flex', gap: 8, padding: '10px 16px 0 16px', overflowX: 'auto', scrollbarWidth: 'none' },
-  scrollSuggestionBtn: { flexShrink: 0, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 20, padding: '6px 12px', fontSize: '0.8rem', color: '#475569', cursor: 'pointer', display:'flex', alignItems:'center', gap: 4 },
-  inputContainer: { padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 },
-  ttsBar: { background:'#eff6ff', color:'#2563eb', fontSize:'0.75rem', padding:'4px 10px', borderRadius:4, display:'flex', alignItems:'center', gap:8, cursor:'pointer', alignSelf:'flex-start' },
-  inputBox: { display: 'flex', alignItems: 'center', gap: 8, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 24, padding: '4px 6px 4px 16px' },
-  textarea: { flex: 1, border: 'none', background: 'transparent', resize: 'none', fontSize: '1rem', outline: 'none', height: '24px', lineHeight: '24px', paddingTop: 6, paddingBottom: 6 },
-  sendBtn: { width: 32, height: 32, borderRadius: '50%', background: '#4f46e5', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
-  micBtn: { width: 32, height: 32, borderRadius: '50%', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'background 0.2s' },
-  sidebar: { position: 'fixed', top: 0, left: 0, width: '75%', maxWidth: 280, height: '85%', background: '#fff', borderRight: '1px solid #e2e8f0', zIndex: 10002, transition: 'transform 0.3s ease', display: 'flex', flexDirection: 'column' },
-  sidebarOverlay: { position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', zIndex:10001 },
+  scrollSuggestionContainer: { display: 'flex', gap: 8, padding: '12px 16px 0 16px', overflowX: 'auto', scrollbarWidth: 'none' },
+  scrollSuggestionBtn: { flexShrink: 0, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 20, padding: '6px 14px', fontSize: '0.8rem', color: '#475569', cursor: 'pointer', display:'flex', alignItems:'center', gap: 6 },
+  inputContainer: { padding: '12px 16px' },
+  inputBox: { display: 'flex', alignItems: 'center', gap: 10, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 24, padding: '4px 6px 4px 16px' },
+  textarea: { flex: 1, border: 'none', background: 'transparent', resize: 'none', fontSize: '1rem', outline: 'none', height: '24px', lineHeight: '24px', paddingTop: 6 },
+  sendBtn: { width: 34, height: 34, borderRadius: '50%', background: '#4f46e5', color: '#fff', border: 'none', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' },
+  micBtn: { width: 34, height: 34, borderRadius: '50%', border: 'none', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', transition: 'background 0.2s' },
+  sidebar: { position: 'absolute', top: 0, left: 0, width: '280px', height: '100%', background: '#fff', borderRight: '1px solid #e2e8f0', zIndex: 10002, transition: 'transform 0.3s ease', display: 'flex', flexDirection: 'column' },
+  sidebarOverlay: { position:'absolute', inset:0, background:'rgba(0,0,0,0.4)', zIndex:10001 },
   sidebarHeader: { padding: '16px', borderBottom: '1px solid #e2e8f0', display:'flex', justifyContent:'space-between', alignItems:'center' },
-  newChatBtn: { background:'#fff', border:'1px solid #cbd5e1', borderRadius:6, padding:'4px 8px', fontSize:'0.8rem', display:'flex', alignItems:'center', gap:4, cursor:'pointer' },
-  sessionList: { flex: 1, overflowY: 'auto', padding: '8px' },
-  sessionGroup: { marginBottom: '16px' },
-  groupTitle: { fontSize: '0.75rem', color: '#94a3b8', fontWeight: 'bold', textTransform: 'uppercase', padding: '0 8px 4px 8px', margin: 0 },
-  sessionItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', borderRadius: 6, cursor: 'pointer', '&:hover': { background: '#f1f5f9' } },
+  newChatBtn: { background:'#fff', border:'1px solid #cbd5e1', borderRadius:6, padding:'4px 10px', fontSize:'0.8rem', cursor:'pointer', display:'flex', alignItems:'center', gap:4 },
+  sessionList: { flex: 1, overflowY: 'auto', padding: '10px' },
+  sessionItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', borderRadius: 10, cursor: 'pointer', marginBottom: 4 },
   sessionTitle: { flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.9rem' },
   sessionActions: { display: 'flex', gap: 4 },
   sessionActionBtn: { background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' },
   bookmarkItem: { background: '#f8fafc', padding: '8px 12px', borderRadius: 6, marginBottom: 4, fontSize: '0.85rem', color: '#334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   bookmarkActionBtn: { background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' },
   closeArea: { position: 'fixed', bottom: 0, left: 0, width: '100%', height: '15%', background: 'linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.6))', backdropFilter: 'blur(3px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
-  popover: { position: 'fixed', transform: 'translateX(-50%)', background: '#1e293b', borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 4px 15px rgba(0,0,0,0.3)', zIndex: 11000, color: '#fff' },
-  popArrow: { position: 'absolute', bottom: -6, left: '50%', marginLeft: -6, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '6px solid #1e293b' },
-  popBtn: { background:'transparent', border:'none', color:'#fff', cursor:'pointer', display:'flex', alignItems:'center', gap:6, fontSize:'0.85rem' },
-  popDivider: { width: 1, height: 16, background: 'rgba(255,255,255,0.3)' },
+  popover: { position: 'fixed', transform: 'translateX(-50%)', background: '#1e293b', borderRadius: 10, padding: '10px 15px', display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 10px 25px rgba(0,0,0,0.4)', zIndex: 11000, color: '#fff' },
+  popBtn: { background:'transparent', border:'none', color:'#fff', cursor:'pointer', display:'flex', alignItems:'center', gap:8, fontSize:'0.85rem' },
+  popDivider: { width: 1, height: 18, background: 'rgba(255,255,255,0.2)' },
   settingsOverlay: { position:'fixed', inset:0, zIndex:12000, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center' },
-  settingsModal: { width: '85%', maxWidth: 340, background: '#fff', borderRadius: 16, overflow:'hidden' },
-  modalHeader: { padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display:'flex', justifyContent:'space-between', alignItems:'center' },
-  closeBtn: { background:'none', border:'none', fontSize:'1.2rem', color:'#64748b', cursor:'pointer' },
-  modalBody: { padding: 20, display:'flex', flexDirection:'column', gap: 16 },
-  settingRow: { display:'flex', flexDirection:'column', gap:6, fontSize:'0.9rem', color:'#475569' },
-  switchRow: { display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:'0.9rem' },
-  input: { padding: 10, borderRadius: 8, border: '1px solid #cbd5e1', fontSize: '1rem' },
-  select: { padding: 10, borderRadius: 8, border: '1px solid #cbd5e1', fontSize: '1rem', background:'#fff' },
-  saveBtn: { background: '#4f46e5', color: '#fff', border: 'none', padding: 12, borderRadius: 8, fontSize: '1rem', fontWeight: 'bold', marginTop: 10, cursor:'pointer' },
-  explainButton: { display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 18px', borderRadius: '22px', border: '1px solid #dbeafe', background: '#eff6ff', color: '#3b82f6', fontWeight: 'bold', cursor: 'pointer', marginTop: '16px', fontSize:'0.9rem' }
+  settingsModal: { width: '85%', maxWidth: '360px', background: '#fff', borderRadius: 20, padding: 20 },
+  explainButton: { display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 18px', borderRadius: '22px', border: '1px solid #dbeafe', background: '#eff6ff', color: '#3b82f6', fontWeight: 'bold', cursor: 'pointer', marginTop: '16px', fontSize:'0.9rem' },
+  h1: { fontSize: '1.4rem', margin: '15px 0' },
+  h2: { fontSize: '1.2rem', margin: '12px 0', borderBottom: '1px solid #eee' },
+  strong: { color: '#000', fontWeight: 'bold' },
+  td: { verticalAlign: 'top' },
+  th: { background: '#f8fafc' },
+  modalBody: { padding: '10px 0' },
+  closeBtn: { background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' },
+  settingRow: { display: 'flex', flexDirection: 'column', marginBottom: 12 },
+  switchRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  input: { width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0', marginTop: 4 },
+  saveBtn: { width: '100%', padding: '10px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', marginTop: 10 }
 };
