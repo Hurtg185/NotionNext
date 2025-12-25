@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   FaPaperPlane, FaChevronUp, FaRobot, FaCog, FaTimes,
   FaVolumeUp, FaStop, FaCopy, FaMicrophone, FaEraser,
@@ -32,11 +32,10 @@ const playTickSound = () => {
 
 // --- 拼音组件 (已修复) ---
 const PinyinRenderer = ({ text, show }) => {
-  // 步骤 4: 清洗传入文本中的 HTML 标签
   const cleanText = typeof text === 'string' ? text.replace(/<[^>]+>/g, '') : text;
   
   if (!show || !cleanText) return cleanText;
-  const regex = /([\u4e00-\u9fa5]+)/g;
+  const regex = /([\u4e--\u9fa5]+)/g;
   const parts = cleanText.split(regex);
   return (
     <span style={{userSelect: 'text'}}>
@@ -63,8 +62,7 @@ const PinyinRenderer = ({ text, show }) => {
   );
 };
 
-export default function AIChatDock({ contextData }) {
-  // 步骤 1: 全面集成全局 Context
+export default function AIChatDock() {
   const {
     config, setConfig,
     isActivated,
@@ -75,7 +73,6 @@ export default function AIChatDock({ contextData }) {
     currentSessionId, setCurrentSessionId
   } = useAI();
   
-  // 本地 UI 状态
   const [showSettings, setShowSettings] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [input, setInput] = useState('');
@@ -85,11 +82,8 @@ export default function AIChatDock({ contextData }) {
   const [isListening, setIsListening] = useState(false);
   const [selectionMenu, setSelectionMenu] = useState({ show: false, x: 0, y: 0, text: '' });
   const [isCopied, setIsCopied] = useState(false);
-  
-  // 步骤 6: 新增“单条消息拼音开关”功能
   const [pinyinToggles, setPinyinToggles] = useState({});
 
-  // 悬浮按钮位置
   const [btnPos, setBtnPos] = useState({ right: 20, bottom: 40 });
   const draggingRef = useRef(false);
   const dragStartPos = useRef({ x: 0, y: 0 });
@@ -100,36 +94,128 @@ export default function AIChatDock({ contextData }) {
   const abortControllerRef = useRef(null);
   const recognitionRef = useRef(null);
 
-  // 从当前会话中获取或初始化消息
-  const currentSession = sessions.find(s => s.id === currentSessionId) || { messages: [] };
-  const messages = currentSession.messages || [];
+  // **关键修复**：从 sessions 中正确派生消息状态，而不是创建新的 state
+  const messages = sessions.find(s => s.id === currentSessionId)?.messages || [];
 
-  const setMessages = (newMessages) => {
+  // **关键修复**：创建一个稳定的函数来更新全局 sessions 状态
+  const updateCurrentSessionMessages = useCallback((newMessages) => {
     if (!currentSessionId) return;
-    const updatedSessions = sessions.map(s =>
-      s.id === currentSessionId ? { ...s, messages: newMessages } : s
+    setSessions(prevSessions =>
+      prevSessions.map(s =>
+        s.id === currentSessionId ? { ...s, messages: newMessages } : s
+      )
     );
-    setSessions(updatedSessions);
-  };
+  }, [currentSessionId, setSessions]);
   
-  // 步骤 2: 实现自动化的上下文切换逻辑
+  const handleSend = useCallback(async (textToSend = input, isSystemMessage = false) => {
+    if (!textToSend.trim() || loading) return;
+    if (!config.apiKey) {
+      alert('请先在设置中配置 API Key');
+      setShowSettings(true);
+      return;
+    }
+
+    setInput('');
+    setSuggestions([]);
+    setLoading(true);
+    
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+
+    const currentUserMessage = { role: 'user', content: textToSend };
+    // 立即更新UI，显示用户消息和加载中的AI消息
+    const initialMessages = [...messages, currentUserMessage, { role: 'assistant', content: '' }];
+    updateCurrentSessionMessages(initialMessages);
+
+    const apiMessages = [
+        { role: 'system', content: config.systemPrompt },
+        ...initialMessages.slice(-7, -1).map(m => ({ role: m.role, content: m.content })),
+    ];
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: apiMessages,
+          config: { apiKey: config.apiKey, modelId: config.modelId }
+        }),
+        signal: abortControllerRef.current.signal
+      });
+
+      if (!response.ok) throw new Error("网络连接异常");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = '';
+      let buffer = '';
+      let soundThrottler = 0;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+            if (line.trim().startsWith('data: ')) {
+                try {
+                    const data = JSON.parse(line.replace('data: ', ''));
+                    const delta = data.choices?.[0]?.delta?.content || '';
+                    if (delta) {
+                        fullContent += delta;
+                        if (config.soundEnabled && ++soundThrottler % 3 === 0) playTickSound();
+                        
+                        // 在流式传输中，只更新最后一条消息
+                        const streamingMessages = [...messages, currentUserMessage, { role: 'assistant', content: fullContent }];
+                        updateCurrentSessionMessages(streamingMessages);
+                    }
+                } catch (e) {}
+            }
+        }
+      }
+      
+      let finalContent = fullContent;
+      if (fullContent.includes('[建议]:')) {
+          const parts = fullContent.split('[建议]:');
+          finalContent = parts[0].trim();
+          if(parts[1]) {
+              setSuggestions(parts[1].split('|').map(s => s.trim()).filter(Boolean));
+          }
+      }
+
+      // 最终确认消息
+      const finalMessages = [...messages, currentUserMessage, { role: 'assistant', content: finalContent }];
+      updateCurrentSessionMessages(finalMessages);
+
+      if (config.autoTTS) playInternalTTS(finalContent);
+
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+          const errorMessages = [...messages, currentUserMessage, { role: 'assistant', content: `\n\n[系统]: 生成中断 (${err.message})` }];
+          updateCurrentSessionMessages(errorMessages);
+      }
+    } finally {
+      setLoading(false);
+      abortControllerRef.current = null;
+    }
+  }, [messages, currentSessionId, config, loading, input, updateCurrentSessionMessages]);
+
   useEffect(() => {
-    if (activeTask && activeTask.title) {
+    if (activeTask && activeTask.timestamp) {
         const contextMsg = `[系统注：用户正在学习新内容: ${activeTask.title}]\n请围绕这个主题进行解析。`;
-        // 第二个参数 'true' 标识这是一条自动发送的系统消息
         handleSend(contextMsg, true); 
     }
   }, [activeTask]);
 
 
-  // 自动滚动
   useEffect(() => {
     if (historyRef.current && isAiOpen) {
       historyRef.current.scrollTop = historyRef.current.scrollHeight;
     }
   }, [messages, isAiOpen, loading]);
   
-  // --- 选文菜单逻辑 ---
   useEffect(() => {
     const handleSelectionChange = () => {
      if (window.selectionTimeout) clearTimeout(window.selectionTimeout);
@@ -171,7 +257,6 @@ export default function AIChatDock({ contextData }) {
       window.getSelection().removeAllRanges();
   };
 
-  // --- 拖动逻辑 ---
   const handleTouchStart = (e) => {
     draggingRef.current = false;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -198,7 +283,6 @@ export default function AIChatDock({ contextData }) {
     draggingRef.current = false;
   };
 
-  // --- 会话管理 ---
   const createNewSession = () => {
       const newSession = { id: Date.now(), title: '新对话', messages: [], date: new Date().toISOString(), pinned: false };
       setSessions([newSession, ...sessions]);
@@ -207,11 +291,8 @@ export default function AIChatDock({ contextData }) {
   };
 
   const switchSession = (id) => {
-      const session = sessions.find(s => s.id === id);
-      if (session) {
-          setCurrentSessionId(id);
-          setShowSidebar(false);
-      }
+      setCurrentSessionId(id);
+      setShowSidebar(false);
   };
 
   const deleteSession = (e, id) => {
@@ -239,7 +320,7 @@ export default function AIChatDock({ contextData }) {
 
   const deleteMessage = (index) => {
       if (confirm('确定删除这条消息吗？')) {
-          setMessages(messages.filter((_, i) => i !== index));
+          updateCurrentSessionMessages(messages.filter((_, i) => i !== index));
       }
   };
 
@@ -252,7 +333,6 @@ export default function AIChatDock({ contextData }) {
     }
   };
 
-  // --- 语音识别 ---
   const toggleListening = () => {
     if (isListening) {
         if (recognitionRef.current) recognitionRef.current.stop();
@@ -279,99 +359,6 @@ export default function AIChatDock({ contextData }) {
     } catch (e) { alert('无法启动语音识别: ' + e.message); }
   };
 
-  // --- 发送逻辑 ---
-  const handleSend = async (textToSend = input, isSystemMessage = false) => {
-    if (!textToSend.trim() || loading) return;
-    if (!config.apiKey) {
-      alert('请先在设置中配置 API Key');
-      setShowSettings(true);
-      return;
-    }
-
-    setInput('');
-    setSuggestions([]);
-    setLoading(true);
-    
-    if (abortControllerRef.current) abortControllerRef.current.abort();
-    abortControllerRef.current = new AbortController();
-
-    let newMessages = [...messages];
-    if (!isSystemMessage) {
-      newMessages.push({ role: 'user', content: textToSend });
-    }
-    setMessages([...newMessages, { role: 'assistant', content: '' }]);
-
-    const apiMessages = [
-        { role: 'system', content: config.systemPrompt }, // 步骤 3: 确保使用全局 systemPrompt
-        ...newMessages.slice(-6).map(m => ({ role: m.role, content: m.content })),
-        { role: 'user', content: textToSend }
-    ];
-
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: apiMessages,
-          config: { apiKey: config.apiKey, modelId: config.modelId }
-        }),
-        signal: abortControllerRef.current.signal
-      });
-
-      if (!response.ok) throw new Error("网络连接异常");
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let fullContent = '';
-      let buffer = '';
-      let soundThrottler = 0;
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop();
-
-        for (const line of lines) {
-            if (line.trim().startsWith('data: ')) {
-                try {
-                    const data = JSON.parse(line.replace('data: ', ''));
-                    const delta = data.choices?.[0]?.delta?.content || '';
-                    if (delta) {
-                        fullContent += delta;
-                        if (config.soundEnabled && ++soundThrottler % 3 === 0) playTickSound();
-                        setMessages([...newMessages, { role: 'assistant', content: fullContent }]);
-                    }
-                } catch (e) { }
-            }
-        }
-      }
-      
-      let cleanContent = fullContent;
-      if (fullContent.includes('[建议]:')) {
-          const parts = fullContent.split('[建议]:');
-          cleanContent = parts[0].trim();
-          setMessages([...newMessages, { role: 'assistant', content: cleanContent }]);
-          if(parts[1]) {
-              setSuggestions(parts[1].split('|').map(s => s.trim()).filter(Boolean));
-          }
-      }
-
-      if (config.autoTTS) playInternalTTS(cleanContent);
-
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-          const currentMsgs = [...newMessages, { role: 'assistant', content: `\n\n[系统]: 生成中断 (${err.message})` }];
-          setMessages(currentMsgs);
-      }
-    } finally {
-      setLoading(false);
-      abortControllerRef.current = null;
-    }
-  };
-
-  // --- TTS ---
   const playInternalTTS = async (text) => {
     if (!text) return;
     if (audioRef.current) audioRef.current.pause();
@@ -395,13 +382,11 @@ export default function AIChatDock({ contextData }) {
     setTimeout(() => setSelectionMenu(prev => ({...prev, show: false})), 800);
   };
   
-  // 分组渲染
   const pinnedSessions = sessions.filter(s => s.pinned);
   const historySessions = sessions.filter(s => !s.pinned);
 
   return (
     <>
-      {/* 划词菜单 */}
       {selectionMenu.show && (
           <div id="selection-popover" style={{...styles.popover, left: selectionMenu.x, top: selectionMenu.y}}>
               <button onClick={handleTranslateSelection} style={styles.popBtn}><FaLanguage size={14}/> 解释</button>
@@ -415,7 +400,6 @@ export default function AIChatDock({ contextData }) {
           </div>
       )}
 
-      {/* 步骤 1: 悬浮球显示条件更新 */}
       {!isAiOpen && (
         <div 
             style={{...styles.floatingBtn, right: btnPos.right, bottom: btnPos.bottom}}
@@ -426,19 +410,16 @@ export default function AIChatDock({ contextData }) {
         </div>
       )}
 
-      {/* 步骤 1: 展开窗口显示条件更新 */}
       {isAiOpen && (
         <>
             {showSidebar && <div onClick={() => setShowSidebar(false)} style={styles.sidebarOverlay} />}
             
-            {/* 步骤 5: 升级侧边栏 */}
             <div style={{...styles.sidebar, transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)'}}>
                 <div style={styles.sidebarHeader}>
                     <h3>会话管理</h3>
                     <button onClick={createNewSession} style={styles.newChatBtn}><FaPlus size={12}/> 新对话</button>
                 </div>
                 <div style={styles.sessionList}>
-                    {/* 收藏夹 */}
                     {bookmarks.length > 0 && (
                         <div style={styles.sessionGroup}>
                             <h4 style={styles.groupTitle}>收藏夹</h4>
@@ -450,7 +431,6 @@ export default function AIChatDock({ contextData }) {
                             ))}
                         </div>
                     )}
-                    {/* 置顶 */}
                     {pinnedSessions.length > 0 && (
                         <div style={styles.sessionGroup}>
                             <h4 style={styles.groupTitle}>置顶</h4>
@@ -466,7 +446,6 @@ export default function AIChatDock({ contextData }) {
                             ))}
                         </div>
                     )}
-                    {/* 历史记录 */}
                     <div style={styles.sessionGroup}>
                         <h4 style={styles.groupTitle}>历史记录</h4>
                         {historySessions.map(s => (
@@ -483,7 +462,6 @@ export default function AIChatDock({ contextData }) {
                 </div>
             </div>
 
-            {/* 主聊天界面 */}
             <div style={styles.chatWindow}>
                 <div style={styles.header}>
                     <button onClick={() => setShowSidebar(true)} style={styles.headerIconBtn}><FaList size={16}/></button>
@@ -493,17 +471,15 @@ export default function AIChatDock({ contextData }) {
 
                 <div ref={historyRef} style={styles.messageArea}>
                     {messages.map((m, i) => {
-                        // 步骤 6: 为每条消息创建独立的渲染器配置
                         const markdownComponents = {
                             h1: ({children}) => <h1 style={styles.h1}>{children}</h1>,
                             h2: ({children}) => <h2 style={styles.h2}>{children}</h2>,
                             p: ({children}) => <p style={styles.p}>{React.Children.map(children, c => typeof c==='string' ? <PinyinRenderer text={c} show={pinyinToggles[i] ?? config.showPinyin}/> : c)}</p>,
                             strong: ({children}) => <strong style={styles.strong}>{children}</strong>,
                             ul: ({children}) => <ul style={styles.ul}>{children}</ul>,
-                            li: ({children}) => <li style={styles.li}>{children}</li>,
+                            li: ({children}) => <li style={styles.li}>{React.Children.map(children, c => typeof c === 'string' ? <PinyinRenderer text={c} show={pinyinToggles[i] ?? config.showPinyin}/> : c)}</li>,
                             table: ({children}) => <div style={{overflowX:'auto'}}><table style={styles.table}>{children}</table></div>,
                             th: ({children}) => <th style={styles.th}>{children}</th>,
-                            // 步骤 4: 修复表格渲染
                             td: ({children}) => <td style={styles.td}>{React.Children.map(children, c => typeof c==='string' ? <PinyinRenderer text={c} show={pinyinToggles[i] ?? config.showPinyin}/> : c)}</td>,
                         };
 
@@ -528,11 +504,9 @@ export default function AIChatDock({ contextData }) {
                                             <>
                                                 <button onClick={() => playInternalTTS(m.content)} style={styles.msgActionBtn} title="朗读"><FaVolumeUp/></button>
                                                 <button onClick={() => navigator.clipboard.writeText(m.content)} style={styles.msgActionBtn} title="复制"><FaCopy/></button>
-                                                {/* 步骤 5: 增加收藏按钮 */}
                                                 <button onClick={() => toggleBookmark(m)} style={{...styles.msgActionBtn, color: isBookmarked ? '#f59e0b' : 'inherit'}} title={isBookmarked ? '取消收藏' : '收藏'}>
                                                     {isBookmarked ? <FaStar/> : <FaRegStar/>}
                                                 </button>
-                                                {/* 步骤 6: 增加拼音开关按钮 */}
                                                 <button onClick={() => setPinyinToggles(prev => ({ ...prev, [i]: !(prev[i] ?? config.showPinyin) }))} style={{...styles.msgActionBtn, fontSize: '0.75rem'}}>
                                                     {(pinyinToggles[i] ?? config.showPinyin) ? '隐藏拼音' : '显示拼音'}
                                                 </button>
@@ -582,14 +556,12 @@ export default function AIChatDock({ contextData }) {
                 </div>
             </div>
             
-            {/* 步骤 1: 关闭区域事件更新 */}
             <div style={styles.closeArea} onClick={() => setIsAiOpen(false)}>
                 <FaChevronUp color="rgba(255,255,255,0.8)" size={14} />
             </div>
         </>
       )}
 
-      {/* 设置弹窗 */}
       {showSettings && (
         <div style={styles.settingsOverlay} onClick={(e) => e.target === e.currentTarget && setShowSettings(false)}>
             <div style={styles.settingsModal}>
@@ -630,7 +602,6 @@ export default function AIChatDock({ contextData }) {
   );
 }
 
-// --- 样式定义 ---
 const styles = {
   floatingBtn: { position: 'fixed', width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #4f46e5)', boxShadow: '0 8px 20px rgba(79, 70, 229, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, cursor: 'grab', touchAction: 'none' },
   chatWindow: { position: 'fixed', top: 0, left: 0, width: '100%', height: '85%', background: '#fff', borderBottomLeftRadius: 24, borderBottomRightRadius: 24, display: 'flex', flexDirection: 'column', zIndex: 10000, boxShadow: '0 10px 40px rgba(0,0,0,0.1)' },
