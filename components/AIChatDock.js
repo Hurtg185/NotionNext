@@ -3,7 +3,7 @@ import {
   FaPaperPlane, FaChevronUp, FaRobot, FaCog, FaTimes,
   FaVolumeUp, FaStop, FaCopy, FaMicrophone, FaEraser,
   FaList, FaEdit, FaTrashAlt, FaPlus, FaLightbulb, FaFeatherAlt,
-  FaLanguage, FaCheck
+  FaLanguage, FaCheck, FaFont
 } from 'react-icons/fa';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm'; 
@@ -179,7 +179,6 @@ export default function AIChatDock() {
           setSessions(prev => [newSession, ...prev]);
           setCurrentSessionId(newSessionId);
 
-          // 根据任务自动构造 Prompt
           const prompt = `请作为老师，详细解析这道题目：\n\n# 题目: ${activeTask.title}\n\n${activeTask.content}\n\n请结合语法点进行分析。`;
           
           setTimeout(() => {
@@ -327,7 +326,7 @@ export default function AIChatDock() {
     } catch (e) { alert('无法启动语音识别: ' + e.message); }
   };
 
-  // --- 核心升级：发送逻辑 (后端校验 + 动态Prompt + 建议气泡) ---
+  // --- 发送逻辑 (修复与增强版) ---
   const handleSend = async (textToSend = input, isSystemTrigger = false) => {
     if (!textToSend.trim() || loading) return;
     if (!config.apiKey) {
@@ -336,13 +335,12 @@ export default function AIChatDock() {
       return;
     }
 
-    // 1. 严格权限校验 (后端 API)
+    // 1. 严格权限校验
     if (!isSystemTrigger && !isActivated) {
         try {
-            // 调用 Context 中的异步校验方法，该方法应请求 /api/can-use-ai
             const auth = await canUseAI(); 
-            // 兼容返回格式：可能是 { canUse: false } 或直接 false
-            const canUse = typeof auth === 'object' ? auth.canUse : auth;
+            // 兼容不同的返回值结构
+            const canUse = (auth && typeof auth === 'object') ? auth.canUse : auth;
             
             if (!canUse) {
                 alert(`免费提问次数已用完 (${remainingQuota}/${TOTAL_FREE_QUOTA})，请激活课程以获得无限次 AI 解析。`);
@@ -350,7 +348,7 @@ export default function AIChatDock() {
             }
         } catch (e) {
             console.error("Quota check failed", e);
-            alert("网络校验失败，请检查网络");
+            alert("网络校验失败，请检查网络连接");
             return;
         }
     }
@@ -363,19 +361,17 @@ export default function AIChatDock() {
     if (abortControllerRef.current) abortControllerRef.current.abort();  
     abortControllerRef.current = new AbortController();  
 
-    // 2. 动态构建 System Prompt (HSK 等级适配)
-    // 默认 H1，如果有 Context 传入 userLevel 则使用
+    // 2. 动态 Prompt (H1/H2 vs H3+)
     const currentLevel = config.userLevel || 'H1';
     let dynamicSystemPrompt = config.systemPrompt || '你是一位专业的缅甸汉语助教。';
     
-    // 注入等级规则
     if (['H1', 'H2'].includes(currentLevel)) {
-        dynamicSystemPrompt += `\n【当前学生等级】：${currentLevel} (初学者)\n【要求】：请务必使用大量的【缅甸语】进行解释，中文仅用于展示例句和关键词。解释要非常简单。`;
+        dynamicSystemPrompt += `\n【当前等级】：${currentLevel} (初学者)\n【要求】：请使用【缅甸语】解释，中文仅用于例句。`;
     } else {
-        dynamicSystemPrompt += `\n【当前学生等级】：${currentLevel} (进阶)\n【要求】：请以【中文】讲解为主，仅在难点或生词处辅以缅甸语解释。`;
+        dynamicSystemPrompt += `\n【当前等级】：${currentLevel} (进阶)\n【要求】：以中文讲解为主，难点辅以缅甸语。`;
     }
-    // 注入追问气泡规则
-    dynamicSystemPrompt += `\n【最后一步】：请严格在回复末尾，以 "SUGGESTIONS: 建议1|||建议2|||建议3" 的格式给出 3-5 个相关追问建议。`;
+    // 强制 AI 使用特定格式方便解析，同时兼容旧格式
+    dynamicSystemPrompt += `\n【追问建议】：请在最后一行，严格以 "SUGGESTIONS: 建议1|||建议2|||..." 的格式给出 3-5 个追问建议。`;
 
     const userMsg = { role: 'user', content: userText };
     updateMessages(prev => [...prev, userMsg, { role: 'assistant', content: '' }]);
@@ -398,7 +394,8 @@ export default function AIChatDock() {
         signal: abortControllerRef.current.signal  
       });  
 
-      if (!response.ok) throw new Error("网络连接异常");
+      if (!response.ok) throw new Error("API 请求失败");
+      if (!response.body) throw new Error("无响应内容");
 
       const reader = response.body.getReader();  
       const decoder = new TextDecoder();  
@@ -439,45 +436,51 @@ export default function AIChatDock() {
         }  
       } 
       
-      // 3. 解析追问建议 (气泡)
+      // 3. 解析建议 (强化正则逻辑)
       let cleanContent = fullContent;
-      // 优先匹配 SUGGESTIONS: 格式，同时也兼容旧版 [建议]:
+      let rawSuggestionsStr = '';
+
       if (fullContent.includes('SUGGESTIONS:')) {
           const parts = fullContent.split('SUGGESTIONS:');
           cleanContent = parts[0].trim();
-          const rawSuggestions = parts[1].split('|||');
-          const finalSuggestions = rawSuggestions
-              .map(s => s.trim().replace(/^\d+\.\s*/, '')) // 去掉可能的 "1. "
-              .filter(s => s && s.length > 2)
-              .slice(0, 10);
-          
-          setSuggestions(finalSuggestions);
-          // 更新 UI 去掉 SUGGESTIONS 标记
-          updateMessages(prev => [...prev.slice(0, -1), { role: 'assistant', content: cleanContent }]);
-          
+          rawSuggestionsStr = parts[1];
       } else if (fullContent.includes('[建议]:')) {
           const parts = fullContent.split('[建议]:');
           cleanContent = parts[0].trim();
-          const suggestionText = parts[1];
-          updateMessages(prev => [...prev.slice(0, -1), { role: 'assistant', content: cleanContent }]);
-          if(suggestionText) {
-              setSuggestions(suggestionText.split('|').map(s => s.trim()).filter(s => s));
-          }
+          rawSuggestionsStr = parts[1];
       }
 
-      // 4. 关键：真正消耗成功后，记录后端次数
-      // 只有非系统触发、且未激活用户需要记录
+      // 更新消息去除标记
+      updateMessages(prev => [...prev.slice(0, -1), { role: 'assistant', content: cleanContent }]);
+
+      // 提取气泡，兼容 ||| 和 | 以及换行
+      if (rawSuggestionsStr) {
+          const splitRegex = /\|\|\||\||\n/; // 兼容多种分隔符
+          const finalSuggestions = rawSuggestionsStr
+              .split(splitRegex)
+              .map(s => s.trim().replace(/^(\d+[\.、\s]+)/, '')) // 关键：正则去序号
+              .filter(s => s && s.length > 1)
+              .slice(0, 10);
+          setSuggestions(finalSuggestions);
+      }
+
+      // 4. 记录扣费
       if (!isSystemTrigger && !isActivated) {
-          await recordUsage(); // 调用 Context 提供的 recordUsage (内部 fetch /api/record-ai-usage)
+          await recordUsage(); 
       }
 
       if (config.autoTTS) playInternalTTS(cleanContent);
 
     } catch (err) {  
       if (err.name !== 'AbortError') {  
+          console.error("Chat Error:", err);
           updateMessages(prev => {
               const last = prev[prev.length - 1];
-              return [...prev.slice(0, -1), { ...last, content: last.content + `\n\n[系统]: 生成中断 (${err.message})` }];
+              // 避免重复追加错误信息
+              if (!last.content.includes('[系统]:')) {
+                  return [...prev.slice(0, -1), { ...last, content: last.content + `\n\n[系统]: 生成中断，请重试。(${err.message})` }];
+              }
+              return prev;
           });
       }  
     } finally {  
@@ -512,7 +515,7 @@ export default function AIChatDock() {
 
   return (
     <>
-      {/* 划词菜单 (黑色悬浮) */}
+      {/* 划词菜单 */}
       {selectionMenu.show && (
           <div id="selection-popover" style={{...styles.popover, left: selectionMenu.x, top: selectionMenu.y}}>
               <button onClick={handleTranslateSelection} style={styles.popBtn} title="解释/翻译">
@@ -551,7 +554,7 @@ export default function AIChatDock() {
         <>
             {showSidebar && <div onClick={() => setShowSidebar(false)} style={styles.sidebarOverlay} />}
             
-            {/* 侧边栏 (历史记录) */}
+            {/* 侧边栏 */}
             <div style={{...styles.sidebar, transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)'}}>
                 <div style={styles.sidebarHeader}>
                     <h3>历史记录</h3>
@@ -641,12 +644,24 @@ export default function AIChatDock() {
                                     )}
                                 </div>
 
-                                {/* 底部操作栏 */}
+                                {/* 底部操作栏 - 修复：添加拼音开关 */}
                                 <div style={styles.msgActionBar}>
                                     {m.role === 'assistant' && !loading && (
                                         <>
-                                            <button onClick={() => playInternalTTS(m.content)} style={styles.msgActionBtn} title="朗读"><FaVolumeUp/></button>
-                                            <button onClick={() => copyText(m.content)} style={styles.msgActionBtn} title="复制"><FaCopy/></button>
+                                            <button onClick={() => playInternalTTS(m.content)} style={styles.msgActionBtn} title="朗读">
+                                                <FaVolumeUp/>
+                                            </button>
+                                            <button onClick={() => copyText(m.content)} style={styles.msgActionBtn} title="复制">
+                                                <FaCopy/>
+                                            </button>
+                                            {/* 修复：这里加回了快捷拼音开关 */}
+                                            <button 
+                                                onClick={() => setConfig({...config, showPinyin: !config.showPinyin})} 
+                                                style={{...styles.msgActionBtn, color: config.showPinyin ? '#4f46e5' : '#94a3b8'}} 
+                                                title="切换拼音"
+                                            >
+                                                <FaFont size={12} /> 拼
+                                            </button>
                                         </>
                                     )}
                                     {m.role === 'user' && (
@@ -660,7 +675,7 @@ export default function AIChatDock() {
 
                 {/* 底部功能区 */}
                 <div style={styles.footer}>
-                    {/* 横向滚动建议 (升级为气泡样式) */}
+                    {/* 横向滚动建议 (修复：滑动与样式) */}
                     {!loading && suggestions.length > 0 && (
                         <div style={styles.scrollSuggestionContainer}>
                             {suggestions.map((s, idx) => (
@@ -821,7 +836,7 @@ const styles = {
   bubble: { fontSize: '0.95rem', width: 'fit-content', maxWidth: '100%' },
   
   msgActionBar: { display: 'flex', gap: 12, marginTop: 4, paddingLeft: 2, opacity: 0.6 },
-  msgActionBtn: { background:'none', border:'none', color:'#94a3b8', cursor:'pointer', padding:'2px 4px', fontSize:'0.85rem' },
+  msgActionBtn: { background:'none', border:'none', color:'#94a3b8', cursor:'pointer', padding:'2px 4px', fontSize:'0.85rem', display: 'flex', alignItems: 'center', gap: 4 },
 
   // Markdown 样式
   h1: { fontSize: '1.4em', fontWeight: 700, margin: '1em 0 0.5em 0', color:'#111', lineHeight:1.3 },
@@ -839,11 +854,13 @@ const styles = {
   // 底部区域
   footer: { background: '#fff', borderTop: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column' },
 
+  // 修复：滑动手感优化
   scrollSuggestionContainer: { 
       display: 'flex', gap: 10, padding: '12px 16px 4px 16px', overflowX: 'auto', 
-      whiteSpace: 'nowrap', scrollbarWidth: 'none' 
+      whiteSpace: 'nowrap', scrollbarWidth: 'none',
+      WebkitOverflowScrolling: 'touch', // iOS 关键优化
+      msOverflowStyle: 'none'
   },
-  // 气泡样式升级
   scrollSuggestionBtn: { 
       flexShrink: 0, 
       background: '#ffffff', 
