@@ -35,7 +35,7 @@ const PinyinRenderer = ({ text, show }) => {
   const cleanText = typeof text === 'string' ? text.replace(/<[^>]+>/g, '') : text;
   
   if (!show || !cleanText) return cleanText;
-  const regex = /([\u4e--\u9fa5]+)/g;
+  const regex = /([\u4e00-\u9fa5]+)/g;
   const parts = cleanText.split(regex);
   return (
     <span style={{userSelect: 'text'}}>
