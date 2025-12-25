@@ -78,6 +78,7 @@ const PinyinRenderer = ({ text, show }) => {
 export default function AIChatDock() {
   // --- 接入 Context ---
   const {
+    user, // 必须获取 user，用于传 email 和判断登录状态
     config, setConfig,
     sessions, setSessions,
     currentSessionId, setCurrentSessionId,
@@ -329,13 +330,21 @@ export default function AIChatDock() {
   // --- 发送逻辑 (修复与增强版) ---
   const handleSend = async (textToSend = input, isSystemTrigger = false) => {
     if (!textToSend.trim() || loading) return;
+
+    // --- 1. 新增：未登录拦截 ---
+    // 如果不是系统自动触发（如解析题目），且用户对象为空（未登录）
+    if (!isSystemTrigger && !user) {
+        alert("请先登录 Google 账号，即可使用 AI 助教。");
+        return;
+    }
+
     if (!config.apiKey) {
       alert('请先在设置中配置 API Key');
       setShowSettings(true);
       return;
     }
 
-    // 1. 严格权限校验
+    // 2. 权限校验 (后端 API)
     if (!isSystemTrigger && !isActivated) {
         try {
             const auth = await canUseAI(); 
@@ -361,7 +370,7 @@ export default function AIChatDock() {
     if (abortControllerRef.current) abortControllerRef.current.abort();  
     abortControllerRef.current = new AbortController();  
 
-    // 2. 动态 Prompt (H1/H2 vs H3+)
+    // 3. 动态 Prompt (H1/H2 vs H3+)
     const currentLevel = config.userLevel || 'H1';
     let dynamicSystemPrompt = config.systemPrompt || '你是一位专业的缅甸汉语助教。';
     
@@ -370,7 +379,7 @@ export default function AIChatDock() {
     } else {
         dynamicSystemPrompt += `\n【当前等级】：${currentLevel} (进阶)\n【要求】：以中文讲解为主，难点辅以缅甸语。`;
     }
-    // 强制 AI 使用特定格式方便解析，同时兼容旧格式
+    // 强制 AI 使用特定格式方便解析
     dynamicSystemPrompt += `\n【追问建议】：请在最后一行，严格以 "SUGGESTIONS: 建议1|||建议2|||..." 的格式给出 3-5 个追问建议。`;
 
     const userMsg = { role: 'user', content: userText };
@@ -388,7 +397,9 @@ export default function AIChatDock() {
         method: 'POST',  
         headers: { 'Content-Type': 'application/json' },  
         body: JSON.stringify({  
-          messages: apiMessages,  
+          messages: apiMessages,
+          // --- 关键修复：必须带上 email，否则后端报错 401 ---
+          email: user?.email, 
           config: { apiKey: config.apiKey, modelId: config.modelId }  
         }),  
         signal: abortControllerRef.current.signal  
@@ -436,7 +447,7 @@ export default function AIChatDock() {
         }  
       } 
       
-      // 3. 解析建议 (强化正则逻辑)
+      // 4. 解析建议 (强化正则逻辑)
       let cleanContent = fullContent;
       let rawSuggestionsStr = '';
 
@@ -464,7 +475,7 @@ export default function AIChatDock() {
           setSuggestions(finalSuggestions);
       }
 
-      // 4. 记录扣费
+      // 5. 记录扣费
       if (!isSystemTrigger && !isActivated) {
           await recordUsage(); 
       }
