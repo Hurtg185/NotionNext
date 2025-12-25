@@ -10,7 +10,7 @@ import remarkGfm from 'remark-gfm';
 import { pinyin } from 'pinyin-pro'; 
 import { useAI } from './AIConfigContext'; // 引入拆分后的 Context
 
-// --- 常量定义 (原保留) ---
+// --- 常量定义 ---
 const VOICES = [
   { label: '中文女声 - 晓晓 (多语言)', value: 'zh-CN-XiaoxiaoMultilingualNeural' },
   { label: '中文男声 - 云希', value: 'zh-CN-YunxiNeural' },
@@ -24,7 +24,7 @@ const STT_LANGS = [
   { label: '英语', value: 'en-US' }
 ];
 
-// --- 简易音效引擎 (原保留) ---
+// --- 简易音效引擎 ---
 const playTickSound = () => {
   if (typeof window === 'undefined') return;
   try {
@@ -44,10 +44,9 @@ const playTickSound = () => {
   } catch (e) {}
 };
 
-// --- 拼音组件 (原保留) ---
+// --- 拼音组件 ---
 const PinyinRenderer = ({ text, show }) => {
   if (!show || !text) return text; 
-  // 简单清洗 HTML 标签
   const cleanText = typeof text === 'string' ? text : String(text);
   const regex = /([\u4e00-\u9fa5]+)/g; 
   const parts = cleanText.split(regex);
@@ -83,12 +82,15 @@ export default function AIChatDock() {
     sessions, setSessions,
     currentSessionId, setCurrentSessionId,
     isAiOpen, setIsAiOpen,
-    activeTask, // 外部触发的任务
-    isActivated, canUseAI, recordUsage, remainingQuota, TOTAL_FREE_QUOTA
+    activeTask, 
+    isActivated, 
+    canUseAI,     // 必须是 async 函数
+    recordUsage,  // 必须是 async 函数
+    remainingQuota, 
+    TOTAL_FREE_QUOTA
   } = useAI();
 
   // --- 本地 UI 状态 ---
-  // 注意：Expanded 状态现在由 Context 的 isAiOpen 控制同步，但也保留本地切换能力
   const [showSettings, setShowSettings] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [input, setInput] = useState('');
@@ -112,7 +114,6 @@ export default function AIChatDock() {
   const historyRef = useRef(null);
   const abortControllerRef = useRef(null);
   const recognitionRef = useRef(null);
-  // 用于监听 activeTask 变化的 ref，防止重复触发
   const prevTaskRef = useRef(null);
 
   // --- 核心：从 Sessions 中派生当前 Messages ---
@@ -121,14 +122,13 @@ export default function AIChatDock() {
     return session ? session.messages : [];
   }, [sessions, currentSessionId]);
 
-  // 辅助函数：更新当前会话的消息 (替代原先的 setMessages)
+  // 辅助函数：更新当前会话的消息
   const updateMessages = (updater) => {
     if (!currentSessionId) return;
     setSessions(prevSessions => 
       prevSessions.map(s => {
         if (s.id === currentSessionId) {
             const newMsgs = typeof updater === 'function' ? updater(s.messages) : updater;
-            // 自动重命名逻辑保留
             let newTitle = s.title;
             if (s.title === '新对话' && newMsgs.length > 0) {
                 const firstUserMsg = newMsgs.find(m => m.role === 'user');
@@ -143,7 +143,6 @@ export default function AIChatDock() {
 
   // --- 初始化与监听 ---
   useEffect(() => {
-    // 监听选文
     if (typeof window !== 'undefined') {
         document.addEventListener('selectionchange', handleSelectionChange);
         document.addEventListener('mousedown', handleOutsideClick);
@@ -154,7 +153,7 @@ export default function AIChatDock() {
         document.removeEventListener('mousedown', handleOutsideClick);
         document.removeEventListener('touchstart', handleOutsideClick);
     };
-  }, [isAiOpen]); // 依赖 isAiOpen (原 expanded)
+  }, [isAiOpen]);
 
   // 自动滚动
   useEffect(() => {
@@ -165,14 +164,11 @@ export default function AIChatDock() {
 
   // --- 监听外部触发 (ActiveTask) ---
   useEffect(() => {
-      // 如果 activeTask 存在，且是一个新的任务（时间戳或标题不同）
       if (activeTask && (!prevTaskRef.current || prevTaskRef.current.timestamp !== activeTask.timestamp)) {
           prevTaskRef.current = activeTask;
           
-          // 1. 打开窗口
           setIsAiOpen(true);
           
-          // 2. 新建一个专用会话
           const newSessionId = Date.now();
           const newSession = { 
               id: newSessionId, 
@@ -183,18 +179,16 @@ export default function AIChatDock() {
           setSessions(prev => [newSession, ...prev]);
           setCurrentSessionId(newSessionId);
 
-          // 3. 构建上下文 Prompt
-          // 这里的 activeTask.content 可能包含了 grammarContext 信息，如果上层传入了
+          // 根据任务自动构造 Prompt
           const prompt = `请作为老师，详细解析这道题目：\n\n# 题目: ${activeTask.title}\n\n${activeTask.content}\n\n请结合语法点进行分析。`;
           
-          // 4. 自动发送 (延迟一点确保 Session 建立)
           setTimeout(() => {
-              handleSend(prompt, true); // true 表示这是系统/自动触发，不扣费或另行处理
+              handleSend(prompt, true); // true = 系统触发
           }, 200);
       }
   }, [activeTask, setIsAiOpen, setSessions, setCurrentSessionId]);
 
-  // --- 选文菜单逻辑 (保留原版) ---
+  // --- 选文菜单逻辑 ---
   const handleSelectionChange = () => {
      if (window.selectionTimeout) clearTimeout(window.selectionTimeout);
      window.selectionTimeout = setTimeout(() => {
@@ -203,7 +197,6 @@ export default function AIChatDock() {
 
          const text = selection.toString().trim();
          
-         // 只有当窗口打开时才显示菜单 (isAiOpen)
          if (text.length > 0 && isAiOpen) { 
              const range = selection.getRangeAt(0);
              const rect = range.getBoundingClientRect();
@@ -238,7 +231,7 @@ export default function AIChatDock() {
       window.getSelection().removeAllRanges();
   };
 
-  // --- 拖动逻辑 (保留原版) ---
+  // --- 拖动逻辑 ---
   const handleTouchStart = (e) => {
     draggingRef.current = false;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -264,7 +257,7 @@ export default function AIChatDock() {
 
   const handleTouchEnd = () => {
     if (!draggingRef.current) {
-        setIsAiOpen(true); // 打开窗口
+        setIsAiOpen(true);
     }
     draggingRef.current = false;
   };
@@ -334,7 +327,7 @@ export default function AIChatDock() {
     } catch (e) { alert('无法启动语音识别: ' + e.message); }
   };
 
-  // --- 发送逻辑 (修改：接入 Context 鉴权) ---
+  // --- 核心升级：发送逻辑 (后端校验 + 动态Prompt + 建议气泡) ---
   const handleSend = async (textToSend = input, isSystemTrigger = false) => {
     if (!textToSend.trim() || loading) return;
     if (!config.apiKey) {
@@ -343,10 +336,21 @@ export default function AIChatDock() {
       return;
     }
 
-    // --- 鉴权逻辑 ---
+    // 1. 严格权限校验 (后端 API)
     if (!isSystemTrigger && !isActivated) {
-        if (!canUseAI()) {
-            alert(`今日免费提问次数已用完 (${remainingQuota}/${TOTAL_FREE_QUOTA})，请激活课程以获得无限次 AI 解析。`);
+        try {
+            // 调用 Context 中的异步校验方法，该方法应请求 /api/can-use-ai
+            const auth = await canUseAI(); 
+            // 兼容返回格式：可能是 { canUse: false } 或直接 false
+            const canUse = typeof auth === 'object' ? auth.canUse : auth;
+            
+            if (!canUse) {
+                alert(`免费提问次数已用完 (${remainingQuota}/${TOTAL_FREE_QUOTA})，请激活课程以获得无限次 AI 解析。`);
+                return;
+            }
+        } catch (e) {
+            console.error("Quota check failed", e);
+            alert("网络校验失败，请检查网络");
             return;
         }
     }
@@ -359,15 +363,28 @@ export default function AIChatDock() {
     if (abortControllerRef.current) abortControllerRef.current.abort();  
     abortControllerRef.current = new AbortController();  
 
-    // 立即显示用户消息
+    // 2. 动态构建 System Prompt (HSK 等级适配)
+    // 默认 H1，如果有 Context 传入 userLevel 则使用
+    const currentLevel = config.userLevel || 'H1';
+    let dynamicSystemPrompt = config.systemPrompt || '你是一位专业的缅甸汉语助教。';
+    
+    // 注入等级规则
+    if (['H1', 'H2'].includes(currentLevel)) {
+        dynamicSystemPrompt += `\n【当前学生等级】：${currentLevel} (初学者)\n【要求】：请务必使用大量的【缅甸语】进行解释，中文仅用于展示例句和关键词。解释要非常简单。`;
+    } else {
+        dynamicSystemPrompt += `\n【当前学生等级】：${currentLevel} (进阶)\n【要求】：请以【中文】讲解为主，仅在难点或生词处辅以缅甸语解释。`;
+    }
+    // 注入追问气泡规则
+    dynamicSystemPrompt += `\n【最后一步】：请严格在回复末尾，以 "SUGGESTIONS: 建议1|||建议2|||建议3" 的格式给出 3-5 个相关追问建议。`;
+
     const userMsg = { role: 'user', content: userText };
     updateMessages(prev => [...prev, userMsg, { role: 'assistant', content: '' }]);
 
     const historyMsgs = messages.slice(-6).map(m => ({role: m.role, content: m.content}));
     const apiMessages = [  
-        { role: 'system', content: config.systemPrompt },  
+        { role: 'system', content: dynamicSystemPrompt },  
         ...historyMsgs, 
-        { role: 'user', content: userText }   
+        userMsg
     ];  
 
     try {  
@@ -411,7 +428,6 @@ export default function AIChatDock() {
                             soundThrottler++;
                             if (soundThrottler % 3 === 0) playTickSound(); 
                         }
-                        // 流式更新最后一条消息
                         updateMessages(prev => {  
                             const last = prev[prev.length - 1];  
                             const list = prev.slice(0, -1);
@@ -423,9 +439,23 @@ export default function AIChatDock() {
         }  
       } 
       
-      // 处理建议
+      // 3. 解析追问建议 (气泡)
       let cleanContent = fullContent;
-      if (fullContent.includes('[建议]:')) {
+      // 优先匹配 SUGGESTIONS: 格式，同时也兼容旧版 [建议]:
+      if (fullContent.includes('SUGGESTIONS:')) {
+          const parts = fullContent.split('SUGGESTIONS:');
+          cleanContent = parts[0].trim();
+          const rawSuggestions = parts[1].split('|||');
+          const finalSuggestions = rawSuggestions
+              .map(s => s.trim().replace(/^\d+\.\s*/, '')) // 去掉可能的 "1. "
+              .filter(s => s && s.length > 2)
+              .slice(0, 10);
+          
+          setSuggestions(finalSuggestions);
+          // 更新 UI 去掉 SUGGESTIONS 标记
+          updateMessages(prev => [...prev.slice(0, -1), { role: 'assistant', content: cleanContent }]);
+          
+      } else if (fullContent.includes('[建议]:')) {
           const parts = fullContent.split('[建议]:');
           cleanContent = parts[0].trim();
           const suggestionText = parts[1];
@@ -435,8 +465,11 @@ export default function AIChatDock() {
           }
       }
 
-      // 扣除次数（如果是用户手动发送）
-      if (!isSystemTrigger) recordUsage();
+      // 4. 关键：真正消耗成功后，记录后端次数
+      // 只有非系统触发、且未激活用户需要记录
+      if (!isSystemTrigger && !isActivated) {
+          await recordUsage(); // 调用 Context 提供的 recordUsage (内部 fetch /api/record-ai-usage)
+      }
 
       if (config.autoTTS) playInternalTTS(cleanContent);
 
@@ -627,12 +660,12 @@ export default function AIChatDock() {
 
                 {/* 底部功能区 */}
                 <div style={styles.footer}>
-                    {/* 横向滚动建议 */}
+                    {/* 横向滚动建议 (升级为气泡样式) */}
                     {!loading && suggestions.length > 0 && (
                         <div style={styles.scrollSuggestionContainer}>
                             {suggestions.map((s, idx) => (
                                 <button key={idx} onClick={() => handleSend(s)} style={styles.scrollSuggestionBtn}>
-                                    <FaLightbulb color="#eab308" size={10} style={{marginRight:4}}/>
+                                    <FaLightbulb color="#4f46e5" size={10} style={{marginRight:6}}/>
                                     {s}
                                 </button>
                             ))}
@@ -681,7 +714,7 @@ export default function AIChatDock() {
         </>
       )}
 
-      {/* 设置弹窗 (修改：直接更新 Context 的 Config) */}
+      {/* 设置弹窗 */}
       {showSettings && (
         <div style={styles.settingsOverlay} onClick={(e) => e.target === e.currentTarget && setShowSettings(false)}>
             <div style={styles.settingsModal}>
@@ -695,6 +728,14 @@ export default function AIChatDock() {
                             试用剩余: {remainingQuota} / {TOTAL_FREE_QUOTA} 次
                         </div>
                     )}
+                    <label style={styles.settingRow}>
+                        <span>学生等级</span>
+                        <select value={config.userLevel || 'H1'} onChange={e=>setConfig({...config, userLevel:e.target.value})} style={styles.select}>
+                            <option value="H1">HSK 1-2 (初学者)</option>
+                            <option value="H3">HSK 3 (进阶)</option>
+                            <option value="H4">HSK 4+ (高级)</option>
+                        </select>
+                    </label>
                     <label style={styles.settingRow}>
                         <span>API Key</span>
                         <input type="password" value={config.apiKey} onChange={e=>setConfig({...config, apiKey:e.target.value})} style={styles.input}/>
@@ -752,7 +793,7 @@ export default function AIChatDock() {
   );
 }
 
-// --- 样式定义 (保持原版完全一致) ---
+// --- 样式定义 ---
 const styles = {
   floatingBtn: {
     position: 'fixed', width: 56, height: 56, borderRadius: '50%',
@@ -799,13 +840,24 @@ const styles = {
   footer: { background: '#fff', borderTop: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column' },
 
   scrollSuggestionContainer: { 
-      display: 'flex', gap: 8, padding: '10px 16px 0 16px', overflowX: 'auto', 
+      display: 'flex', gap: 10, padding: '12px 16px 4px 16px', overflowX: 'auto', 
       whiteSpace: 'nowrap', scrollbarWidth: 'none' 
   },
+  // 气泡样式升级
   scrollSuggestionBtn: { 
-      flexShrink: 0, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 20, 
-      padding: '6px 12px', fontSize: '0.85rem', color: '#475569', cursor: 'pointer',
-      display:'flex', alignItems:'center', boxShadow:'0 1px 2px rgba(0,0,0,0.05)'
+      flexShrink: 0, 
+      background: '#ffffff', 
+      border: '1px solid #e0e7ff', // 浅紫边框
+      borderRadius: '20px', 
+      padding: '8px 16px', 
+      fontSize: '0.88rem', 
+      color: '#4f46e5', // 品牌色
+      cursor: 'pointer',
+      display: 'flex', 
+      alignItems: 'center', 
+      boxShadow: '0 4px 12px rgba(79, 70, 229, 0.08)', // 柔和阴影
+      transition: 'transform 0.1s',
+      fontWeight: '500'
   },
 
   inputContainer: { 
