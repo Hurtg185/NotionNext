@@ -9,7 +9,7 @@ const USER_KEY = 'hsk_user';
 
 const AIContext = createContext();
 
-// --- 辅助函数：激活码校验 ---
+// --- 辅助函数：激活码校验 (原样保留) ---
 const validateActivationCode = (code) => {
   if (!code) return { isValid: false, error: '请输入激活码' };
   const c = code.trim().toUpperCase();
@@ -22,74 +22,104 @@ const validateActivationCode = (code) => {
 
 export const AIProvider = ({ children }) => {
   /* ======================
-     1. 用户 / 激活 / 谷歌状态
+     1. 用户 / 激活 / 谷歌状态 (原样保留)
   ====================== */
   const [user, setUser] = useState(null);
   const [isActivated, setIsActivated] = useState(false);
-  const [isGoogleLoaded, setIsGoogleLoaded] = useState(false); // 状态已定义
+  const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
 
   /* ======================
-     2. AI 配置 (核心 Prompt 修正版)
+     2. AI 配置 (保留基础配置)
   ====================== */
   const [config, setConfig] = useState({
     apiKey: '',
     modelId: 'deepseek-ai/deepseek-v3.2',
     userLevel: 'H1',
-    showPinyin: true, // UI组件需要此字段
-    autoSendStt: false, // UI组件需要此字段
-    systemPrompt: `
-你是一位专门教【缅甸学生】学习汉语的老师。
-
-【当前学生等级】
-{{LEVEL}}
-
-【当前语法内容】
-{{CONTEXT}}
-
-【语言强制规则】
-- H1 / H2：
-  - 解释必须以【缅文为主】
-  - 中文只能作为关键词或例句
-  - 不允许连续两句只有中文
-
-- H3 / H4：
-  - 中文 + 缅文对照
-
-- H5 及以上：
-  - 中文为主，必要时补缅文
-
-【回答结构】
-1. 用符合等级的语言解释语法
-2. 结合【当前语法内容】举例
-3. 结尾给出 5–7 个【只能基于当前语法内容】的追问
-
-【追问格式（必须遵守）】
-- 只输出问题
-- 用 "|||" 分隔
-- 不要编号、不换行
-`,
+    showPinyin: true, 
+    autoSendStt: false, 
     ttsSpeed: 1,
     ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural',
     soundEnabled: true,
+    // 注意：原本的 systemPrompt 字段现在由下方的 SYSTEM_PROMPTS 常量替代管理
+    // 但为了兼容旧的 UI 设置页读取，这里保留字段，虽然实际生成 Prompt 不再完全依赖它
+    systemPrompt: '' 
   });
 
   /* ======================
-     3. AI UI / 上下文 / 历史记录
+     3. AI UI / 会话 / 历史记录 (原样保留)
   ====================== */
   const [isAiOpen, setIsAiOpen] = useState(false);
-  const [activeTask, setActiveTask] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [bookmarks, setBookmarks] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
 
   /* ======================
-     4. 配额管理
+     4. 配额管理 (原样保留)
   ====================== */
-  const TOTAL_FREE_QUOTA = 60; // 与 UI 文案保持一致
+  const TOTAL_FREE_QUOTA = 60; 
   const [remainingQuota, setRemainingQuota] = useState(0);
 
   /* ======================
-     5. 初始化与本地存储
+     5. 新增：模式与上下文管理 (核心修改)
+  ====================== */
+  // aiMode: 'CHAT' (普通/PPT模式) | 'INTERACTIVE' (互动题模式)
+  const [aiMode, setAiMode] = useState('CHAT');
+  
+  // activeTask: 用于存储互动题的具体信息 { grammarPoint, question, userChoice, ... }
+  const [activeTask, setActiveTask] = useState(null); 
+  
+  // pageContext: 用于存储当前 PPT/页面 的内容文本 (静默更新)
+  const [pageContext, setPageContext] = useState('');
+
+  /* ======================
+     6. 提示词模板 (新增)
+  ====================== */
+  const SYSTEM_PROMPTS = {
+    // 模式 A: 普通教学/PPT 翻页模式
+    CHAT: `你是一位专门教【缅甸学生】学习汉语的老师。
+【当前学生等级】{{LEVEL}}
+【当前页面内容】{{CONTEXT}}
+
+【语言强制规则】
+- H1 / H2 (初学者)：解释必须以【缅文为主】，中文仅作为关键词或例句。不允许连续两句只有中文。
+- H3 / H4 (进阶)：中文 + 缅文对照讲解。
+- H5 及以上 (高级)：以中文讲解为主，难点辅以缅文。
+
+【回答结构】
+1. 用符合等级的语言解释。
+2. 结合【当前页面内容】举例。
+3. 结尾给出 3-5 个追问建议。
+
+【追问格式（必须遵守）】
+请在最后一行，严格以 "SUGGESTIONS: 建议1|||建议2|||..." 的格式输出。`,
+
+    // 模式 B: 互动题错题补课模式
+    INTERACTIVE: `你是一名“汉语语法互动助教 AI”。
+【当前任务】学生做错题了，需要补课。
+【学生等级】{{LEVEL}}
+
+【错题信息】
+- 语法点：{{GRAMMAR}}
+- 题目：{{QUESTION}}
+- 学生误选：{{USER_CHOICE}}
+
+【工作流程（必须遵守）】
+1. 先判断：学生为什么会选错？
+2. 指出判断依据哪里出了问题。
+3. 提醒当前语法点的关键判断线索。
+
+【语言规则】
+- 中文是唯一标准答案语言。
+- 缅甸语只用于：解释中文为什么这样用、指出缅甸母语常见误区。
+- 禁止直接给答案，要引导。
+
+【追问生成】
+- 结尾生成 3 个追问：用法确认 / 对比 / 错误预警。
+- 使用 "SUGGESTIONS: Q1|||Q2|||Q3" 格式。`
+  };
+
+  /* ======================
+     7. 初始化与本地存储 (完整代码)
   ====================== */
   useEffect(() => {
     // 加载用户
@@ -138,37 +168,18 @@ export const AIProvider = ({ children }) => {
   }, [user]);
 
   /* ======================
-     6. Prompt 动态注入 (核心逻辑)
+     8. Google 登录逻辑 (完整代码)
   ====================== */
-  const finalSystemPrompt = useMemo(() => {
-    let p = config.systemPrompt;
-    p = p.replace('{{LEVEL}}', config.userLevel || 'H1');
-    p = p.replace(
-      '{{CONTEXT}}',
-      activeTask?.content
-        ? activeTask.content
-        : '（当前未提供具体语法页面内容，请基于通用语法知识回答）'
-    );
-    return p;
-  }, [config.systemPrompt, config.userLevel, activeTask]);
-
-  /* ======================
-     7. Google 登录逻辑 (修复版)
-  ====================== */
-  
-  // 初始化 Google SDK
   useEffect(() => {
     if (isGoogleLoaded && window.google) {
         window.google.accounts.id.initialize({
-            client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID, // 确保环境变量存在
+            client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID, 
             callback: handleGoogleCallback,
             auto_select: false
         });
-        // 这里不自动 render Button，由 UI 组件（侧边栏）自己渲染
     }
   }, [isGoogleLoaded]);
 
-  // 回调处理
   const handleGoogleCallback = async (response) => {
     try {
         const res = await fetch('/api/verify-google', {
@@ -187,7 +198,6 @@ export const AIProvider = ({ children }) => {
     }
   };
 
-  // 手动触发登录 (弹窗模式)
   const login = () => {
       if (window.google) {
           window.google.accounts.id.prompt();
@@ -203,7 +213,7 @@ export const AIProvider = ({ children }) => {
   };
 
   /* ======================
-     8. 权限与 API 交互
+     9. 权限与 API 交互 (完整代码)
   ====================== */
   const syncQuota = async (email) => {
     try {
@@ -217,7 +227,6 @@ export const AIProvider = ({ children }) => {
     } catch (e) {}
   };
 
-  // 检查是否可用 (UI 组件调用)
   const canUseAI = async () => {
       if (isActivated) return true;
       if (!user || !user.email) return false;
@@ -236,7 +245,6 @@ export const AIProvider = ({ children }) => {
       }
   };
 
-  // 记录使用 (UI 组件调用)
   const recordUsage = async () => {
       if (isActivated) return;
       if (!user || !user.email) return;
@@ -250,7 +258,6 @@ export const AIProvider = ({ children }) => {
       } catch (e) {}
   };
 
-  // 激活课程
   const handleActivate = async (code) => {
     if (!user) return { success: false, error: '请先登录' };
     const check = validateActivationCode(code);
@@ -276,26 +283,78 @@ export const AIProvider = ({ children }) => {
   };
 
   /* ======================
-     9. AI 入口
+     10. Prompt 动态生成逻辑 (核心修改)
   ====================== */
-  const triggerAI = (title, content) => {
+  const finalSystemPrompt = useMemo(() => {
+    let template = '';
+    
+    // 判断当前模式
+    if (aiMode === 'INTERACTIVE' && activeTask) {
+        // --- 互动题错题模式 ---
+        template = SYSTEM_PROMPTS.INTERACTIVE;
+        template = template.replace('{{LEVEL}}', config.userLevel || 'H1');
+        template = template.replace('{{GRAMMAR}}', activeTask.grammarPoint || '通用语法');
+        template = template.replace('{{QUESTION}}', activeTask.question || '');
+        template = template.replace('{{USER_CHOICE}}', activeTask.userChoice || '');
+    } else {
+        // --- 默认 CHAT / PPT 模式 ---
+        template = SYSTEM_PROMPTS.CHAT;
+        template = template.replace('{{LEVEL}}', config.userLevel || 'H1');
+        // 如果当前有 PPT 页面内容，就填入，否则填通用提示
+        template = template.replace('{{CONTEXT}}', pageContext || '（当前未提供具体语法页面内容，请基于通用汉语语法知识回答）');
+    }
+
+    return template;
+  }, [config.userLevel, aiMode, activeTask, pageContext]);
+
+  /* ======================
+     11. 触发器函数 (核心修改)
+  ====================== */
+  
+  // 1. 触发互动题解析 (外部调用这个)
+  const triggerInteractiveAI = (payload) => {
+    setAiMode('INTERACTIVE');
     setActiveTask({
-      title,
-      content,
-      timestamp: Date.now(), // 时间戳用于触发 useEffect
+      ...payload,
+      timestamp: Date.now() // 时间戳用于触发 useEffect
     });
     setIsAiOpen(true);
   };
 
+  // 2. 静默更新 PPT 上下文 (GrammarPointPlayer 调用这个)
+  const updatePageContext = (content) => {
+    // 只有当不在做互动题时，才允许更新上下文并切回 CHAT 模式
+    // 这样可以防止翻页打断了正在进行的互动题辅导
+    if (aiMode !== 'INTERACTIVE') {
+        setPageContext(content);
+    }
+  };
+
+  // 3. 退出错题模式，强制回到普通聊天 (Dock 关闭时可调用)
+  const resetToChatMode = () => {
+      setAiMode('CHAT');
+      setActiveTask(null);
+  };
+  
+  // 4. 旧版 triggerAI 兼容 (保留以防其他组件报错)
+  const triggerAI = (title, content) => {
+      // 这里的行为映射到旧的“主动任务”逻辑，可视作一种特殊的 Chat 模式上下文注入
+      setAiMode('CHAT');
+      setActiveTask({ title, content, timestamp: Date.now() }); 
+      setPageContext(content); // 顺便更新上下文
+      setIsAiOpen(true);
+  };
+
   /* ======================
-     10. Provider 值 (这里加回了 isGoogleLoaded)
+     12. Provider 导出
   ====================== */
   const value = {
+    // 基础数据
     user,
     login,
     logout,
     isActivated,
-    isGoogleLoaded, // 🔥 修复关键：加回这个，侧边栏按钮就会出来了！
+    isGoogleLoaded,
     config,
     setConfig,
     sessions,
@@ -306,15 +365,24 @@ export const AIProvider = ({ children }) => {
     setBookmarks,
     isAiOpen,
     setIsAiOpen,
-    activeTask,
-    triggerAI,
-    systemPrompt: finalSystemPrompt,
+    
+    // 权限相关
     canUseAI,
     recordUsage,
     remainingQuota,
     TOTAL_FREE_QUOTA,
     handleActivate,
-    handleGoogleCallback
+    handleGoogleCallback,
+    
+    // 新增的核心 AI 逻辑导出
+    activeTask,           // 给 Dock 监听变化
+    aiMode,               // 给 UI 判断当前是 PPT 还是 互动题
+    systemPrompt: finalSystemPrompt, // 统一计算好的 Prompt
+    
+    triggerInteractiveAI, // 互动题专用触发器
+    updatePageContext,    // PPT 翻页静默更新
+    resetToChatMode,      // 重置为普通模式
+    triggerAI             // 兼容旧版触发器
   };
 
   return (
