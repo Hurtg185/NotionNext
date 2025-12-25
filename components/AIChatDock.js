@@ -1,18 +1,30 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   FaPaperPlane, FaChevronUp, FaRobot, FaCog, FaTimes,
   FaVolumeUp, FaStop, FaCopy, FaMicrophone, FaEraser,
   FaList, FaEdit, FaTrashAlt, FaPlus, FaLightbulb, FaFeatherAlt,
-  FaLanguage, FaCheck, FaStar, FaRegStar, FaThumbtack
+  FaLanguage, FaCheck
 } from 'react-icons/fa';
 import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { pinyin } from 'pinyin-pro';
-import { useAI } from './AIConfigContext';
+import remarkGfm from 'remark-gfm'; 
+import { pinyin } from 'pinyin-pro'; 
+import { useAI } from './AIConfigContext'; // 引入拆分后的 Context
 
-// --- 1. 辅助组件与函数 ---
+// --- 常量定义 (原保留) ---
+const VOICES = [
+  { label: '中文女声 - 晓晓 (多语言)', value: 'zh-CN-XiaoxiaoMultilingualNeural' },
+  { label: '中文男声 - 云希', value: 'zh-CN-YunxiNeural' },
+  { label: '缅甸女声 - Nilar', value: 'my-MM-NilarNeural' },
+  { label: '缅甸男声 - Thiha', value: 'my-MM-ThihaNeural' }
+];
 
-// 音效播放
+const STT_LANGS = [
+  { label: '中文 (普通话)', value: 'zh-CN' },
+  { label: '缅甸语', value: 'my-MM' },
+  { label: '英语', value: 'en-US' }
+];
+
+// --- 简易音效引擎 (原保留) ---
 const playTickSound = () => {
   if (typeof window === 'undefined') return;
   try {
@@ -25,17 +37,19 @@ const playTickSound = () => {
     osc.frequency.setValueAtTime(800, ctx.currentTime);
     gain.gain.setValueAtTime(0.02, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.start(); osc.stop(ctx.currentTime + 0.04);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.04);
   } catch (e) {}
 };
 
-// 拼音渲染组件
+// --- 拼音组件 (原保留) ---
 const PinyinRenderer = ({ text, show }) => {
-  const cleanText = typeof text === 'string' ? text.replace(/<[^>]+>/g, '') : text;
-  if (!show || !cleanText) return <span style={{userSelect: 'text'}}>{cleanText}</span>;
-  
-  const regex = /([\u4e00-\u9fa5]+)/g;
+  if (!show || !text) return text; 
+  // 简单清洗 HTML 标签
+  const cleanText = typeof text === 'string' ? text : String(text);
+  const regex = /([\u4e00-\u9fa5]+)/g; 
   const parts = cleanText.split(regex);
   return (
     <span style={{userSelect: 'text'}}>
@@ -48,7 +62,9 @@ const PinyinRenderer = ({ text, show }) => {
               {charArray.map((char, i) => (
                 <ruby key={i} style={{rubyPosition: 'over', margin: '0 1px'}}>
                   {char}
-                  <rt style={{fontSize: '0.6em', color: '#64748b', fontWeight: 'normal', userSelect: 'none', fontFamily:'Arial'}}>{pyArray[i]}</rt>
+                  <rt style={{fontSize: '0.6em', color: '#64748b', fontWeight: 'normal', userSelect: 'none', fontFamily:'Arial'}}>
+                    {pyArray[i]}
+                  </rt>
                 </ruby>
               ))}
             </span>
@@ -60,401 +76,160 @@ const PinyinRenderer = ({ text, show }) => {
   );
 };
 
-// 思考中动态效果组件
-const ThinkingIndicator = () => (
-  <div style={styles.thinkingIndicator}>
-    <span style={{...styles.thinkingDot, animationDelay: '0s'}}></span>
-    <span style={{...styles.thinkingDot, animationDelay: '0.2s'}}></span>
-    <span style={{...styles.thinkingDot, animationDelay: '0.4s'}}></span>
-  </div>
-);
-
-// --- 2. 外部触发解析按钮 (已升级支持 grammarContext) ---
-/**
- * grammarContext 结构示例:
- * {
- *   grammarName: "把字句",
- *   level: "HSK2",
- *   explanation: "主语 + 把 + 宾语 + 动词..."
- * }
- */
-export const AIExplainButton = ({ title, content, grammarContext }) => {
-  const { isActivated, canUseAI, triggerAI } = useAI();
-  const [showExplanation, setShowExplanation] = useState(false);
-
-  const handleClick = (e) => {
-    e.stopPropagation();
-    if (!isActivated && !canUseAI()) {
-      alert(`今日免费提问次数已用完，请激活课程以获得无限次 AI 解析。`);
-      return;
-    }
-    // 这里触发只是为了可能的全局状态同步，实际上主要靠渲染 AIChatDock
-    triggerAI(title, content); 
-    setShowExplanation(true);
-  };
-
-  return (
-    <>
-        <button onClick={handleClick} style={styles.explainButton}>
-        <FaLightbulb /> AI 解析题目
-        </button>
-        {/* 将 grammarContext 传递给 AI 窗口 */}
-        {showExplanation && (
-            <AIChatDock 
-            initialTask={{ title, content }} 
-            grammarContext={grammarContext}
-            onClose={() => setShowExplanation(false)} 
-            />
-        )}
-    </>
-  );
-};
-
-// --- 3. 主组件 AIChatDock ---
-
-export default function AIChatDock({ initialTask, grammarContext, onClose }) {
+export default function AIChatDock() {
+  // --- 接入 Context ---
   const {
     config, setConfig,
-    isActivated,
-    activeTask,
     sessions, setSessions,
-    bookmarks, setBookmarks,
     currentSessionId, setCurrentSessionId,
-    recordUsage, canUseAI, remainingQuota, TOTAL_FREE_QUOTA
+    isAiOpen, setIsAiOpen,
+    activeTask, // 外部触发的任务
+    isActivated, canUseAI, recordUsage, remainingQuota, TOTAL_FREE_QUOTA
   } = useAI();
-  
-  // 本地 UI 状态
+
+  // --- 本地 UI 状态 ---
+  // 注意：Expanded 状态现在由 Context 的 isAiOpen 控制同步，但也保留本地切换能力
   const [showSettings, setShowSettings] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [suggestions, setSuggestions] = useState([]);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isListening, setIsListening] = useState(false);
+  const [suggestions, setSuggestions] = useState([]); 
   
-  // 划词菜单状态
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isListening, setIsListening] = useState(false); 
+  
+  // 选文菜单
   const [selectionMenu, setSelectionMenu] = useState({ show: false, x: 0, y: 0, text: '' });
-  const [isCopied, setIsCopied] = useState(false);
-  const [pinyinToggles, setPinyinToggles] = useState({});
+  const [isCopied, setIsCopied] = useState(false); 
 
-  // Refs
+  // 悬浮按钮位置
+  const [btnPos, setBtnPos] = useState({ right: 20, bottom: 40 });
+  const draggingRef = useRef(false);
+  const dragStartPos = useRef({ x: 0, y: 0 });
+  const btnStartPos = useRef({ right: 0, bottom: 0 });
+
   const audioRef = useRef(null);
   const historyRef = useRef(null);
   const abortControllerRef = useRef(null);
   const recognitionRef = useRef(null);
+  // 用于监听 activeTask 变化的 ref，防止重复触发
   const prevTaskRef = useRef(null);
-  const selectionTimeoutRef = useRef(null);
 
-  // 获取当前会话的消息
-  const messages = sessions.find(s => s.id === currentSessionId)?.messages || [];
+  // --- 核心：从 Sessions 中派生当前 Messages ---
+  const messages = useMemo(() => {
+    const session = sessions.find(s => s.id === currentSessionId);
+    return session ? session.messages : [];
+  }, [sessions, currentSessionId]);
 
-  // 更新当前会话消息
-  const updateCurrentSessionMessages = useCallback((updater) => {
+  // 辅助函数：更新当前会话的消息 (替代原先的 setMessages)
+  const updateMessages = (updater) => {
     if (!currentSessionId) return;
-    setSessions(prevSessions =>
+    setSessions(prevSessions => 
       prevSessions.map(s => {
         if (s.id === currentSessionId) {
-          const newMessages = typeof updater === 'function' ? updater(s.messages || []) : updater;
-          let newTitle = s.title;
-          if (s.title === '新对话' && newMessages.length > 0) {
-            const firstUserMsg = newMessages.find(m => m.role === 'user');
-            if(firstUserMsg) newTitle = firstUserMsg.content.substring(0, 15).replace(/\[.*?\]/g, '');
-          }
-          return { ...s, messages: newMessages, title: newTitle, date: new Date().toISOString() };
+            const newMsgs = typeof updater === 'function' ? updater(s.messages) : updater;
+            // 自动重命名逻辑保留
+            let newTitle = s.title;
+            if (s.title === '新对话' && newMsgs.length > 0) {
+                const firstUserMsg = newMsgs.find(m => m.role === 'user');
+                if(firstUserMsg) newTitle = firstUserMsg.content.substring(0, 15);
+            }
+            return { ...s, messages: newMsgs, title: newTitle, date: new Date().toISOString() };
         }
         return s;
       })
     );
-  }, [currentSessionId, setSessions]);
+  };
 
-  // 发送消息核心逻辑
-  const handleSend = useCallback(async (textToSend = input, isSystemMessage = false) => {
-    if (!textToSend.trim() || loading) return;
-    if (!config.apiKey) {
-      alert('请先在设置中配置 API Key');
-      setShowSettings(true);
-      return;
-    }
-    
-    // 次数限制检查
-    if (!isSystemMessage && !isActivated) {
-        if (!canUseAI()) {
-            alert(`免费试用次数已用完 (${remainingQuota}/${TOTAL_FREE_QUOTA})，请激活课程以无限使用。`);
-            return;
-        }
-    }
-
-    if (!isSystemMessage) setInput('');
-    setSuggestions([]);
-    setLoading(true);
-    
-    if (abortControllerRef.current) abortControllerRef.current.abort();
-    abortControllerRef.current = new AbortController();
-
-    const currentUserMessage = { role: 'user', content: textToSend };
-    
-    updateCurrentSessionMessages(prev => [...prev, currentUserMessage, { role: 'assistant', content: '' }]);
-
-    const historyMessages = messages.slice(-6).map(m => ({
-        role: m.role,
-        content: m.content
-    }));
-
-    const apiMessages = [
-        { role: 'system', content: config.systemPrompt },
-        ...historyMessages,
-        { role: 'user', content: textToSend }
-    ];
-
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            messages: apiMessages, 
-            config: { apiKey: config.apiKey, modelId: config.modelId }
-        }),
-        signal: abortControllerRef.current.signal
-      });
-
-      if (!response.ok) throw new Error("网络连接异常");
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let fullContent = '';
-      let buffer = '';
-      let soundThrottler = 0;
-      
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop();
-
-        for (const line of lines) {
-            if (line.trim().startsWith('data: ')) {
-                try {
-                    const data = JSON.parse(line.replace('data: ', ''));
-                    const delta = data.choices?.[0]?.delta?.content || '';
-                    if (delta) {
-                        fullContent += delta;
-                        if (config.soundEnabled && ++soundThrottler % 3 === 0) playTickSound();
-                        
-                        updateCurrentSessionMessages(prev => {
-                            const newMsgs = [...prev];
-                            if (newMsgs.length > 0) {
-                                newMsgs[newMsgs.length - 1] = { ...newMsgs[newMsgs.length - 1], content: fullContent };
-                            }
-                            return newMsgs;
-                        });
-                    }
-                } catch (e) {}
-            }
-        }
-      }
-      
-      let finalContent = fullContent;
-      if (fullContent.includes('[建议]:')) {
-          const parts = fullContent.split('[建议]:');
-          finalContent = parts[0].trim();
-          if(parts[1]) {
-              setSuggestions(parts[1].split('|').map(s => s.trim()).filter(Boolean));
-          }
-      }
-
-      updateCurrentSessionMessages(prev => {
-          const newMsgs = [...prev];
-          if (newMsgs.length > 0) {
-              newMsgs[newMsgs.length - 1] = { ...newMsgs[newMsgs.length - 1], content: finalContent };
-          }
-          return newMsgs;
-      });
-
-      if (!isSystemMessage) recordUsage();
-      if (config.autoTTS) playInternalTTS(finalContent);
-
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-          updateCurrentSessionMessages(prev => {
-              const newMsgs = [...prev];
-              if (newMsgs.length > 0) {
-                  newMsgs[newMsgs.length - 1] = { role: 'assistant', content: `[系统]: 生成中断 (${err.message})` };
-              }
-              return newMsgs;
-          });
-      }
-    } finally {
-      setLoading(false);
-      abortControllerRef.current = null;
-    }
-  }, [messages, config, loading, input, updateCurrentSessionMessages, isActivated, canUseAI, remainingQuota, TOTAL_FREE_QUOTA, recordUsage]);
-
-  // --- 关键逻辑：监听任务变化，自动触发解析（注入 grammarContext） ---
+  // --- 初始化与监听 ---
   useEffect(() => {
-    if (initialTask && (!prevTaskRef.current || prevTaskRef.current.title !== initialTask.title)) {
-        prevTaskRef.current = initialTask;
-        
-        const newId = Date.now();
-        const newSession = { 
-            id: newId, 
-            title: `解析: ${initialTask.title}`, 
-            messages: [], 
-            date: new Date().toISOString(), 
-            pinned: false 
-        };
-        setSessions(prev => [newSession, ...prev]);
-        setCurrentSessionId(newId);
-
-        // 核心改造：构建“助教级”上下文
-        let contextMsg = '';
-        
-        if (grammarContext) {
-            contextMsg = `
-你是一位【汉语-缅语】助教老师，学生是【${grammarContext.level || '初学者'}】。
-
-【当前学习语法】
-语法点：${grammarContext.grammarName}
-${grammarContext.explanation ? `【教材解释】：\n${grammarContext.explanation}` : ''}
-
-⚠️ 你的教学原则：
-1. 不要重复教材已经讲过的内容，重点解释学生为什么会做错。
-2. 用【缅文为主 + 简单中文】回答。
-3. 必须结合下面的具体题目进行拆解。
-
-【学生遇到的题目】
-# 题目: ${initialTask.title}
-${initialTask.content}
-`;
-        } else {
-            // 回退到普通解析模式
-            contextMsg = `
-请作为老师，详细解析这道题目：
-# 题目: ${initialTask.title}
-${initialTask.content}
-
-请分析考点、解题思路和正确答案（使用缅语辅助解释）。
-`;
-        }
-
-        setTimeout(() => {
-            handleSend(contextMsg, true);
-        }, 100);
+    // 监听选文
+    if (typeof window !== 'undefined') {
+        document.addEventListener('selectionchange', handleSelectionChange);
+        document.addEventListener('mousedown', handleOutsideClick);
+        document.addEventListener('touchstart', handleOutsideClick);
     }
-  }, [initialTask, grammarContext, setSessions, setCurrentSessionId, handleSend]);
+    return () => {
+        document.removeEventListener('selectionchange', handleSelectionChange);
+        document.removeEventListener('mousedown', handleOutsideClick);
+        document.removeEventListener('touchstart', handleOutsideClick);
+    };
+  }, [isAiOpen]); // 依赖 isAiOpen (原 expanded)
 
   // 自动滚动
   useEffect(() => {
-    if (historyRef.current) {
+    if (historyRef.current && isAiOpen) {
       historyRef.current.scrollTop = historyRef.current.scrollHeight;
     }
-  }, [messages, loading]);
+  }, [messages, isAiOpen, loading]);
 
-  // TTS
-  const playInternalTTS = async (text) => {
-    if (typeof window === 'undefined') return;
-    if (audioRef.current) audioRef.current.pause();
-    setIsPlaying(true);
-    const clean = text.replace(/[*#`>~\-\[\]]/g, '');
-    const rate = Math.round((config.ttsSpeed - 1) * 100);
-    const url = `/api/tts?t=${encodeURIComponent(clean)}&v=${config.ttsVoice}&r=${rate}%`;
-    try {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const audio = new Audio(URL.createObjectURL(blob));
-      audioRef.current = audio;
-      audio.onended = () => setIsPlaying(false);
-      audio.play();
-    } catch (e) { setIsPlaying(false); }
-  };
-
-  // STT
-  const toggleListening = () => {
-    if (isListening) {
-      if (recognitionRef.current) recognitionRef.current.stop();
-      return;
-    }
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) { alert("当前浏览器不支持语音识别"); return; }
-    
-    const rec = new SpeechRecognition();
-    rec.lang = config.sttLang;
-    rec.continuous = false;
-    rec.interimResults = false;
-    rec.onstart = () => setIsListening(true);
-    rec.onend = () => setIsListening(false);
-    rec.onerror = () => setIsListening(false);
-    rec.onresult = (e) => {
-      const transcript = e.results[0][0].transcript;
-      setInput(transcript);
-      if (config.autoSendStt) handleSend(transcript);
-    };
-    recognitionRef.current = rec;
-    rec.start();
-  };
-
-  // --- 关键逻辑：划词菜单修复 (selectionchange + pointerdown) ---
+  // --- 监听外部触发 (ActiveTask) ---
   useEffect(() => {
-    const onSelectionChange = () => {
-        // 使用 debounce 避免拖拽时频繁闪烁
-        if (selectionTimeoutRef.current) clearTimeout(selectionTimeoutRef.current);
-        
-        selectionTimeoutRef.current = setTimeout(() => {
-            const sel = window.getSelection();
-            if (!sel || sel.isCollapsed) {
-                // 如果没有选区，且菜单当前是显示的，才关闭（防止点击菜单本身时误关）
-                // 但为了严谨，点击外部的关闭由 handleOutsideClick 处理
-                return;
-            }
+      // 如果 activeTask 存在，且是一个新的任务（时间戳或标题不同）
+      if (activeTask && (!prevTaskRef.current || prevTaskRef.current.timestamp !== activeTask.timestamp)) {
+          prevTaskRef.current = activeTask;
+          
+          // 1. 打开窗口
+          setIsAiOpen(true);
+          
+          // 2. 新建一个专用会话
+          const newSessionId = Date.now();
+          const newSession = { 
+              id: newSessionId, 
+              title: `解析: ${activeTask.title.substring(0,10)}`, 
+              messages: [], 
+              date: new Date().toISOString() 
+          };
+          setSessions(prev => [newSession, ...prev]);
+          setCurrentSessionId(newSessionId);
 
-            const text = sel.toString().trim();
-            if (!text) return;
+          // 3. 构建上下文 Prompt
+          // 这里的 activeTask.content 可能包含了 grammarContext 信息，如果上层传入了
+          const prompt = `请作为老师，详细解析这道题目：\n\n# 题目: ${activeTask.title}\n\n${activeTask.content}\n\n请结合语法点进行分析。`;
+          
+          // 4. 自动发送 (延迟一点确保 Session 建立)
+          setTimeout(() => {
+              handleSend(prompt, true); // true 表示这是系统/自动触发，不扣费或另行处理
+          }, 200);
+      }
+  }, [activeTask, setIsAiOpen, setSessions, setCurrentSessionId]);
 
-            // 限制：只在 Markdown 内容区域生效，避免选输入框文字跳出菜单
-            if (sel.anchorNode && sel.anchorNode.parentElement) {
-                const wrapper = sel.anchorNode.parentElement.closest('.notion-md');
-                if (!wrapper) return; 
-            }
+  // --- 选文菜单逻辑 (保留原版) ---
+  const handleSelectionChange = () => {
+     if (window.selectionTimeout) clearTimeout(window.selectionTimeout);
+     window.selectionTimeout = setTimeout(() => {
+         const selection = window.getSelection();
+         if (!selection || selection.rangeCount === 0) return;
 
-            const range = sel.getRangeAt(0);
-            const rect = range.getBoundingClientRect();
+         const text = selection.toString().trim();
+         
+         // 只有当窗口打开时才显示菜单 (isAiOpen)
+         if (text.length > 0 && isAiOpen) { 
+             const range = selection.getRangeAt(0);
+             const rect = range.getBoundingClientRect();
+             
+             let top = rect.top - 50;
+             let left = rect.left + rect.width / 2;
+             
+             if (top < 10) top = rect.bottom + 10; 
+             
+             setSelectionMenu({
+                 show: true,
+                 x: left, 
+                 y: top,
+                 text: text
+             });
+             setIsCopied(false);
+         } 
+     }, 200);
+  };
 
-            // 确保菜单位置正确（居中显示在选区上方）
-            setSelectionMenu({
-                show: true,
-                x: rect.left + rect.width / 2,
-                y: rect.top - 60, 
-                text
-            });
-            setIsCopied(false);
-        }, 300); // 300ms 延迟，等待用户选完
-    };
-
-    const handleOutsideClick = (e) => {
-        // 使用 pointerdown 兼容移动端和 PC
-        const menu = document.getElementById('selection-popover');
-        // 如果点击的是菜单内部，不关闭
-        if (menu && menu.contains(e.target)) return;
-        
-        // 否则关闭菜单
-        setSelectionMenu(prev => {
-            if (prev.show) {
-                window.getSelection().removeAllRanges(); // 同时清除选区
-                return { ...prev, show: false };
-            }
-            return prev;
-        });
-    };
-
-    document.addEventListener('selectionchange', onSelectionChange);
-    document.addEventListener('pointerdown', handleOutsideClick, true); // 使用 pointerdown 且捕获阶段
-
-    return () => {
-        document.removeEventListener('selectionchange', onSelectionChange);
-        document.removeEventListener('pointerdown', handleOutsideClick, true);
-        if (selectionTimeoutRef.current) clearTimeout(selectionTimeoutRef.current);
-    };
-  }, []);
+  const handleOutsideClick = (e) => {
+      const menu = document.getElementById('selection-popover');
+      if (menu && !menu.contains(e.target)) {
+          setSelectionMenu(prev => ({ ...prev, show: false }));
+      }
+  };
 
   const handleTranslateSelection = () => {
       if (!selectionMenu.text) return;
@@ -463,315 +238,641 @@ ${initialTask.content}
       window.getSelection().removeAllRanges();
   };
 
-  // 会话管理
+  // --- 拖动逻辑 (保留原版) ---
+  const handleTouchStart = (e) => {
+    draggingRef.current = false;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    dragStartPos.current = { x: clientX, y: clientY };
+    btnStartPos.current = { ...btnPos };
+  };
+
+  const handleTouchMove = (e) => {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const dx = dragStartPos.current.x - clientX;
+    const dy = dragStartPos.current.y - clientY;
+
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+        draggingRef.current = true;
+        setBtnPos({
+            right: btnStartPos.current.right + dx,
+            bottom: btnStartPos.current.bottom + dy
+        });
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!draggingRef.current) {
+        setIsAiOpen(true); // 打开窗口
+    }
+    draggingRef.current = false;
+  };
+
+  // --- 会话管理 ---
   const createNewSession = () => {
-      const newSession = { id: Date.now(), title: '新对话', messages: [], date: new Date().toISOString(), pinned: false };
+      const newSession = { id: Date.now(), title: '新对话', messages: [], date: new Date().toISOString() };
       setSessions(prev => [newSession, ...prev]);
       setCurrentSessionId(newSession.id);
       setShowSidebar(false);
   };
-  const switchSession = (id) => { setCurrentSessionId(id); setShowSidebar(false); };
+
+  const switchSession = (id) => {
+      setCurrentSessionId(id);
+      setShowSidebar(false);
+  };
+
   const deleteSession = (e, id) => {
       e.stopPropagation();
-      if(sessions.length <= 1) return;
-      setSessions(prev => prev.filter(s => s.id !== id));
-      if (id === currentSessionId) setCurrentSessionId(sessions.filter(s => s.id !== id)[0].id);
+      if(sessions.length <= 1) return; 
+      setSessions(prev => {
+          const newSessions = prev.filter(s => s.id !== id);
+          if (id === currentSessionId) setCurrentSessionId(newSessions[0].id);
+          return newSessions;
+      });
   };
+  
   const renameSession = (e, id) => {
       e.stopPropagation();
       const newTitle = prompt("请输入新标题");
-      if(newTitle) setSessions(prev => prev.map(s => s.id === id ? {...s, title: newTitle} : s));
-  };
-  const togglePinSession = (e, id) => {
-      e.stopPropagation();
-      setSessions(prev => prev.map(s => s.id === id ? {...s, pinned: !s.pinned} : s));
-  };
-  const deleteMessage = (index) => {
-      if (confirm('确定删除这条消息吗？')) {
-          updateCurrentSessionMessages(messages.filter((_, i) => i !== index));
+      if(newTitle) {
+          setSessions(prev => prev.map(s => s.id === id ? {...s, title: newTitle} : s));
       }
   };
-  const toggleBookmark = (message) => {
-    const isBookmarked = bookmarks.some(b => b.content === message.content);
-    if (isBookmarked) setBookmarks(prev => prev.filter(b => b.content !== message.content));
-    else setBookmarks(prev => [...prev, {id: Date.now(), ...message}]);
+
+  const deleteMessage = (index) => {
+      if (confirm('确定删除这条消息吗？')) {
+          updateMessages(prev => prev.filter((_, i) => i !== index));
+      }
   };
+
+  // --- 语音识别 ---
+  const toggleListening = () => {
+    if (isListening) {
+        if (recognitionRef.current) recognitionRef.current.stop();
+        setIsListening(false);
+        return;
+    }
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) { alert("您的浏览器不支持语音识别。"); return; }
+
+    try {
+        const recognition = new SpeechRecognition();
+        recognition.lang = config.sttLang;
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.onstart = () => setIsListening(true);
+        recognition.onend = () => setIsListening(false);
+        recognition.onerror = () => setIsListening(false);
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            if (config.autoSendStt) handleSend(transcript);
+            else setInput(prev => prev + transcript);
+        };
+        recognitionRef.current = recognition;
+        recognition.start();
+    } catch (e) { alert('无法启动语音识别: ' + e.message); }
+  };
+
+  // --- 发送逻辑 (修改：接入 Context 鉴权) ---
+  const handleSend = async (textToSend = input, isSystemTrigger = false) => {
+    if (!textToSend.trim() || loading) return;
+    if (!config.apiKey) {
+      alert('请先在设置中配置 API Key');
+      setShowSettings(true);
+      return;
+    }
+
+    // --- 鉴权逻辑 ---
+    if (!isSystemTrigger && !isActivated) {
+        if (!canUseAI()) {
+            alert(`今日免费提问次数已用完 (${remainingQuota}/${TOTAL_FREE_QUOTA})，请激活课程以获得无限次 AI 解析。`);
+            return;
+        }
+    }
+
+    const userText = textToSend;  
+    if (!isSystemTrigger) setInput('');  
+    setSuggestions([]); 
+    setLoading(true);  
+    
+    if (abortControllerRef.current) abortControllerRef.current.abort();  
+    abortControllerRef.current = new AbortController();  
+
+    // 立即显示用户消息
+    const userMsg = { role: 'user', content: userText };
+    updateMessages(prev => [...prev, userMsg, { role: 'assistant', content: '' }]);
+
+    const historyMsgs = messages.slice(-6).map(m => ({role: m.role, content: m.content}));
+    const apiMessages = [  
+        { role: 'system', content: config.systemPrompt },  
+        ...historyMsgs, 
+        { role: 'user', content: userText }   
+    ];  
+
+    try {  
+      const response = await fetch('/api/chat', {  
+        method: 'POST',  
+        headers: { 'Content-Type': 'application/json' },  
+        body: JSON.stringify({  
+          messages: apiMessages,  
+          config: { apiKey: config.apiKey, modelId: config.modelId }  
+        }),  
+        signal: abortControllerRef.current.signal  
+      });  
+
+      if (!response.ok) throw new Error("网络连接异常");
+
+      const reader = response.body.getReader();  
+      const decoder = new TextDecoder();  
+      let done = false;  
+      let fullContent = '';  
+      let buffer = '';
+      let soundThrottler = 0;
+
+      while (!done) {  
+        const { value, done: readerDone } = await reader.read();  
+        done = readerDone;  
+        const chunk = decoder.decode(value, { stream: true });  
+        buffer += chunk;  
+        const lines = buffer.split('\n');  
+        buffer = lines.pop(); 
+
+        for (const line of lines) {  
+            const trimmed = line.trim();  
+            if (!trimmed || trimmed === 'data: [DONE]') continue;  
+            if (trimmed.startsWith('data: ')) {  
+                try {  
+                    const data = JSON.parse(trimmed.replace('data: ', ''));  
+                    const delta = data.choices?.[0]?.delta?.content || '';  
+                    if (delta) {  
+                        fullContent += delta;  
+                        if (config.soundEnabled) {
+                            soundThrottler++;
+                            if (soundThrottler % 3 === 0) playTickSound(); 
+                        }
+                        // 流式更新最后一条消息
+                        updateMessages(prev => {  
+                            const last = prev[prev.length - 1];  
+                            const list = prev.slice(0, -1);
+                            return [...list, { ...last, content: fullContent }];  
+                        });  
+                    }  
+                } catch (e) { }  
+            }  
+        }  
+      } 
+      
+      // 处理建议
+      let cleanContent = fullContent;
+      if (fullContent.includes('[建议]:')) {
+          const parts = fullContent.split('[建议]:');
+          cleanContent = parts[0].trim();
+          const suggestionText = parts[1];
+          updateMessages(prev => [...prev.slice(0, -1), { role: 'assistant', content: cleanContent }]);
+          if(suggestionText) {
+              setSuggestions(suggestionText.split('|').map(s => s.trim()).filter(s => s));
+          }
+      }
+
+      // 扣除次数（如果是用户手动发送）
+      if (!isSystemTrigger) recordUsage();
+
+      if (config.autoTTS) playInternalTTS(cleanContent);
+
+    } catch (err) {  
+      if (err.name !== 'AbortError') {  
+          updateMessages(prev => {
+              const last = prev[prev.length - 1];
+              return [...prev.slice(0, -1), { ...last, content: last.content + `\n\n[系统]: 生成中断 (${err.message})` }];
+          });
+      }  
+    } finally {  
+      setLoading(false);  
+      abortControllerRef.current = null;  
+    }
+  };
+
+  // --- TTS ---
+  const playInternalTTS = async (text) => {
+    if (!text) return;
+    if (audioRef.current) audioRef.current.pause();
+    setIsPlaying(true);
+    const clean = text.replace(/[*#`>~\-\[\]]/g, '');   
+    const rate = Math.round((config.ttsSpeed - 1) * 100);  
+    const url = `/api/tts?t=${encodeURIComponent(clean)}&v=${config.ttsVoice}&r=${rate}%`;  
+    try {  
+      const res = await fetch(url);  
+      const blob = await res.blob();  
+      const audio = new Audio(URL.createObjectURL(blob));  
+      audioRef.current = audio;  
+      audio.onended = () => setIsPlaying(false);  
+      audio.play();  
+    } catch (e) { setIsPlaying(false); }
+  };
+
   const copyText = (text) => {
     navigator.clipboard.writeText(text);
     setIsCopied(true);
-    setTimeout(() => { setSelectionMenu(prev => ({...prev, show: false})); setIsCopied(false); }, 800);
+    setTimeout(() => setSelectionMenu(prev => ({...prev, show: false})), 800);
   };
 
-  const pinnedSessions = sessions.filter(s => s.pinned);
-  const historySessions = sessions.filter(s => !s.pinned);
-
-  // --- 界面渲染 ---
-
   return (
-    <div style={styles.modalOverlay}>
-      
-      {/* 划词菜单 (修复了点击穿透和消失问题) */}
+    <>
+      {/* 划词菜单 (黑色悬浮) */}
       {selectionMenu.show && (
           <div id="selection-popover" style={{...styles.popover, left: selectionMenu.x, top: selectionMenu.y}}>
-              <button onPointerDown={handleTranslateSelection} style={styles.popBtn}><FaLanguage size={14}/> 解释</button>
+              <button onClick={handleTranslateSelection} style={styles.popBtn} title="解释/翻译">
+                  <FaLanguage size={14}/> 解释
+              </button>
               <div style={styles.popDivider}></div>
-              <button onPointerDown={() => playInternalTTS(selectionMenu.text)} style={styles.popBtn}><FaVolumeUp size={14}/> 朗读</button>
+              <button onClick={() => playInternalTTS(selectionMenu.text)} style={styles.popBtn} title="朗读">
+                  <FaVolumeUp size={14}/> 朗读
+              </button>
               <div style={styles.popDivider}></div>
-              <button onPointerDown={() => copyText(selectionMenu.text)} style={styles.popBtn}>
-                  {isCopied ? <><FaCheck size={14} color="#4ade80"/> 已复制</> : <><FaCopy size={14}/> 复制</>}
+              <button onClick={() => copyText(selectionMenu.text)} style={styles.popBtn} title="复制">
+                  {isCopied ? <FaCheck size={14} color="#4ade80"/> : <FaCopy size={14}/>} 
+                  {isCopied ? '已复制' : '复制'}
               </button>
               <div style={styles.popArrow}></div>
           </div>
       )}
 
-      {/* 侧边栏 */}
-      {showSidebar && <div onClick={() => setShowSidebar(false)} style={styles.sidebarOverlay} />}
-      <div style={{...styles.sidebar, transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)'}}>
-          <div style={styles.sidebarHeader}>
-              <h3 style={{fontSize:'1.1rem', margin:0, fontWeight:'bold', color:'#334155'}}>会话管理</h3>
-              <button onClick={createNewSession} style={styles.newChatBtn}><FaPlus size={12}/> 新对话</button>
-          </div>
-          <div style={styles.sessionList}>
-              {bookmarks.length > 0 && (
-                  <div style={styles.sessionGroup}>
-                      <h4 style={styles.groupTitle}>收藏夹</h4>
-                      {bookmarks.map((bm, idx) => (
-                          <div key={`bm-${idx}`} style={styles.bookmarkItem}>
-                              <p style={{margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{bm.content.substring(0, 50)}</p>
-                              <button onClick={() => toggleBookmark(bm)} style={styles.bookmarkActionBtn}><FaTrashAlt/></button>
-                          </div>
-                      ))}
-                  </div>
-              )}
-              {pinnedSessions.length > 0 && (
-                  <div style={styles.sessionGroup}>
-                      <h4 style={styles.groupTitle}>置顶</h4>
-                      {pinnedSessions.map(s => (
-                          <div key={s.id} onClick={() => switchSession(s.id)} style={{...styles.sessionItem, background: currentSessionId === s.id ? '#eff6ff' : 'transparent'}}>
-                              <div style={styles.sessionTitle}>{s.title}</div>
-                              <div style={styles.sessionActions}>
-                                  <button onClick={(e) => togglePinSession(e, s.id)} style={styles.sessionActionBtn}><FaThumbtack color="#4f46e5"/></button>
-                                  <button onClick={(e)=>renameSession(e, s.id)} style={styles.sessionActionBtn}><FaEdit/></button>
-                                  <button onClick={(e)=>deleteSession(e, s.id)} style={{...styles.sessionActionBtn, color:'#ef4444'}}><FaTrashAlt/></button>
-                              </div>
-                          </div>
-                      ))}
-                  </div>
-              )}
-              <div style={styles.sessionGroup}>
-                  <h4 style={styles.groupTitle}>历史会话</h4>
-                  {historySessions.map(s => (
-                      <div key={s.id} onClick={() => switchSession(s.id)} style={{...styles.sessionItem, background: currentSessionId === s.id ? '#eff6ff' : 'transparent'}}>
-                          <div style={styles.sessionTitle}>{s.title}</div>
-                          <div style={styles.sessionActions}>
-                              <button onClick={(e) => togglePinSession(e, s.id)} style={styles.sessionActionBtn}><FaThumbtack/></button>
-                              <button onClick={(e)=>deleteSession(e, s.id)} style={{...styles.sessionActionBtn, color:'#ef4444'}}><FaTrashAlt/></button>
-                          </div>
-                      </div>
-                  ))}
-              </div>
-          </div>
-      </div>
+      {/* 悬浮球 */}
+      {!isAiOpen && (
+        <div 
+            style={{...styles.floatingBtn, right: btnPos.right, bottom: btnPos.bottom}}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onMouseDown={handleTouchStart} 
+            onMouseMove={(e) => draggingRef.current && handleTouchMove(e)}
+            onMouseUp={handleTouchEnd}
+        >
+            <FaFeatherAlt size={24} color="#fff" />
+        </div>
+      )}
 
-      {/* 主聊天窗口 */}
-      <div style={styles.chatWindow}>
-          <div style={styles.header}>
-              <button onClick={() => setShowSidebar(true)} style={styles.headerIconBtn}><FaList size={16}/></button>
-              <div style={{fontWeight:'bold', color:'#334155'}}>AI 解析助教</div>
-              <div style={{display:'flex', gap:8}}>
-                  <button onClick={() => setShowSettings(true)} style={styles.headerIconBtn}><FaCog size={16}/></button>
-                  <button onClick={onClose} style={styles.headerIconBtn}><FaTimes size={16}/></button>
-              </div>
-          </div>
+      {/* 展开窗口 */}
+      {isAiOpen && (
+        <>
+            {showSidebar && <div onClick={() => setShowSidebar(false)} style={styles.sidebarOverlay} />}
+            
+            {/* 侧边栏 (历史记录) */}
+            <div style={{...styles.sidebar, transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)'}}>
+                <div style={styles.sidebarHeader}>
+                    <h3>历史记录</h3>
+                    <button onClick={createNewSession} style={styles.newChatBtn}><FaPlus size={12}/> 新对话</button>
+                </div>
+                <div style={styles.sessionList}>
+                    {sessions.map(s => (
+                        <div key={s.id} onClick={() => switchSession(s.id)} style={{
+                            ...styles.sessionItem,
+                            background: currentSessionId === s.id ? '#eff6ff' : 'transparent',
+                            color: currentSessionId === s.id ? '#2563eb' : '#334155'
+                        }}>
+                            <div style={{flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+                                {s.title}
+                            </div>
+                            {currentSessionId === s.id && (
+                                <div style={{display:'flex', gap:8}}>
+                                    <FaEdit size={12} onClick={(e)=>renameSession(e, s.id)} style={{cursor:'pointer'}}/>
+                                    <FaTrashAlt size={12} onClick={(e)=>deleteSession(e, s.id)} style={{cursor:'pointer', color:'#ef4444'}}/>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </div>
 
-          <div ref={historyRef} style={styles.messageArea}>
-              {messages.map((m, i) => {
-                  const isStreaming = loading && i === messages.length - 1;
-                  const showPinyinForThisMessage = !isStreaming && (pinyinToggles[i] ?? config.showPinyin);
-                  
-                  const markdownComponents = {
-                      strong: ({children}) => <strong style={styles.strong}><PinyinRenderer text={Array.isArray(children) ? children.join('') : children} show={showPinyinForThisMessage}/></strong>,
-                      p: ({children}) => <p style={styles.p}>{React.Children.map(children, c => <PinyinRenderer text={c ? c.toString() : ''} show={showPinyinForThisMessage}/>)}</p>,
-                      li: ({children}) => <li style={styles.li}>{React.Children.map(children, c => <PinyinRenderer text={c ? c.toString() : ''} show={showPinyinForThisMessage}/>)}</li>,
-                      td: ({children}) => <td style={styles.td}>{React.Children.map(children, c => <PinyinRenderer text={c ? c.toString() : ''} show={showPinyinForThisMessage}/>)}</td>,
-                      h1: ({children}) => <h1 style={styles.h1}>{children}</h1>,
-                      h2: ({children}) => <h2 style={styles.h2}>{children}</h2>,
-                      table: ({children}) => <div style={{overflowX:'auto'}}><table style={styles.table}>{children}</table></div>,
-                      th: ({children}) => <th style={styles.th}>{children}</th>,
-                  };
+            {/* 主聊天界面 */}
+            <div style={styles.chatWindow}>
+                {/* 顶部 */}
+                <div style={styles.header}>
+                    <button onClick={() => setShowSidebar(true)} style={styles.headerIconBtn}><FaList size={16}/></button>
+                    <div style={{flex:1, textAlign:'center', fontWeight:'bold', color:'#334155', fontSize:'0.9rem'}}>
+                        AI 助教 {isActivated ? '(已激活)' : `(免费: ${remainingQuota})`}
+                    </div>
+                    <button onClick={() => setShowSettings(true)} style={styles.headerIconBtn}><FaCog size={16}/></button>
+                </div>
 
-                  const isBookmarked = m.role === 'assistant' && bookmarks.some(b => b.content === m.content);
+                {/* 消息流区域 */}
+                <div ref={historyRef} style={styles.messageArea}>
+                    {messages.length === 0 && (
+                        <div style={styles.emptyState}>
+                            <FaRobot size={40} color="#cbd5e1"/>
+                            <p style={{color:'#94a3b8', marginTop:10, fontSize:'0.9rem'}}>
+                                有什么问题都可以问我哦<br/>
+                                <span style={{fontSize:'0.75rem', opacity:0.8}}>支持划词翻译、语音提问</span>
+                            </p>
+                        </div>
+                    )}
+                    
+                    {messages.map((m, i) => (
+                        <div key={i} style={{...styles.messageRow, alignItems: m.role === 'user' ? 'flex-end' : 'flex-start'}}>
+                            <div style={{
+                                ...styles.bubbleWrapper,
+                                alignItems: m.role === 'user' ? 'flex-end' : 'flex-start'
+                            }}>
+                                {/* 消息内容 */}
+                                <div style={{
+                                    ...styles.bubble,
+                                    background: m.role === 'user' ? '#f1f5f9' : 'transparent',
+                                    borderRadius: m.role === 'user' ? '12px' : '0',
+                                    padding: m.role === 'user' ? '10px 14px' : '0',
+                                    textAlign: m.role === 'user' ? 'right' : 'left'
+                                }}>
+                                    {m.role === 'user' ? (
+                                        <div style={{fontSize:'0.95rem', color:'#1e293b', fontWeight:500}}>{m.content}</div>
+                                    ) : (
+                                        <div className="notion-md">
+                                            <ReactMarkdown
+                                                remarkPlugins={[remarkGfm]} 
+                                                components={{
+                                                    h1: ({children}) => <h1 style={styles.h1}>{children}</h1>,
+                                                    h2: ({children}) => <h2 style={styles.h2}>{children}</h2>,
+                                                    h3: ({children}) => <h3 style={styles.h3}>{children}</h3>,
+                                                    p: ({children}) => <p style={styles.p}>{React.Children.map(children, c => typeof c==='string'?<PinyinRenderer text={c} show={config.showPinyin}/>:c)}</p>,
+                                                    strong: ({children}) => <strong style={styles.strong}>{children}</strong>,
+                                                    ul: ({children}) => <ul style={styles.ul}>{children}</ul>,
+                                                    li: ({children}) => <li style={styles.li}>{children}</li>,
+                                                    del: ({children}) => <del style={styles.del}>{children}</del>,
+                                                    table: ({children}) => <div style={{overflowX:'auto'}}><table style={styles.table}>{children}</table></div>,
+                                                    th: ({children}) => <th style={styles.th}>{children}</th>,
+                                                    td: ({children}) => <td style={styles.td}>{React.Children.map(children, c => typeof c==='string'?<PinyinRenderer text={c} show={config.showPinyin}/>:c)}</td>
+                                                }}
+                                            >
+                                                {m.content}
+                                            </ReactMarkdown>
+                                        </div>
+                                    )}
+                                </div>
 
-                  return (
-                      <div key={i} style={{...styles.messageRow, alignItems: m.role === 'user' ? 'flex-end' : 'flex-start'}}>
-                          <div style={{...styles.bubbleWrapper, alignItems: m.role === 'user' ? 'flex-end' : 'flex-start'}}>
-                              <div style={{...styles.bubble, background: m.role === 'user' ? '#f1f5f9' : 'transparent', border: m.role === 'assistant' ? 'none' : '1px solid #f1f5f9'}}>
-                                  {m.role === 'user' ? (
-                                      <div style={{color:'#1e293b'}}>{m.content}</div>
-                                  ) : (
-                                      (m.content === '' && loading) 
-                                      ? <ThinkingIndicator/>
-                                      : <div className="notion-md"><ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{m.content}</ReactMarkdown></div>
-                                  )}
-                              </div>
-                              <div style={styles.msgActionBar}>
-                                  {m.role === 'assistant' && m.content && !loading && (
-                                      <>
-                                          <button onClick={() => playInternalTTS(m.content)} style={styles.msgActionBtn} title="朗读"><FaVolumeUp/></button>
-                                          <button onClick={() => copyText(m.content)} style={styles.msgActionBtn} title="复制"><FaCopy/></button>
-                                          <button onClick={() => toggleBookmark(m)} style={{...styles.msgActionBtn, color: isBookmarked ? '#f59e0b' : 'inherit'}} title="收藏">
-                                              {isBookmarked ? <FaStar/> : <FaRegStar/>}
-                                          </button>
-                                          <button onClick={() => setPinyinToggles(prev => ({ ...prev, [i]: !(prev[i] ?? config.showPinyin) }))} style={{...styles.msgActionBtn, fontSize: '0.75rem', border:'1px solid #e2e8f0', borderRadius:'4px', padding:'0 4px'}}>
-                                              {(pinyinToggles[i] ?? config.showPinyin) ? '文' : '拼'}
-                                          </button>
-                                      </>
-                                  )}
-                                  {m.role === 'user' && !m.content.startsWith('[系统注') && (
-                                      <button onClick={() => deleteMessage(i)} style={{...styles.msgActionBtn, color:'#ef4444'}} title="删除"><FaTrashAlt/></button>
-                                  )}
-                              </div>
-                          </div>
-                      </div>
-                  )
-              })}
-          </div>
+                                {/* 底部操作栏 */}
+                                <div style={styles.msgActionBar}>
+                                    {m.role === 'assistant' && !loading && (
+                                        <>
+                                            <button onClick={() => playInternalTTS(m.content)} style={styles.msgActionBtn} title="朗读"><FaVolumeUp/></button>
+                                            <button onClick={() => copyText(m.content)} style={styles.msgActionBtn} title="复制"><FaCopy/></button>
+                                        </>
+                                    )}
+                                    {m.role === 'user' && (
+                                        <button onClick={() => deleteMessage(i)} style={{...styles.msgActionBtn, color:'#ef4444'}} title="删除"><FaTrashAlt/></button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
 
-          <div style={styles.footer}>
-              {!loading && suggestions.length > 0 && (
-                  <div style={styles.scrollSuggestionContainer}>
-                      {suggestions.map((s, idx) => (
-                          <button key={idx} onClick={() => handleSend(s)} style={styles.scrollSuggestionBtn}>
-                              <FaLightbulb color="#eab308" size={10} style={{marginRight:4}}/>{s}
-                          </button>
-                      ))}
-                  </div>
-              )}
-              
-              <div style={styles.inputContainer}>
-                  {isPlaying && <div style={styles.ttsBar} onClick={() => audioRef.current?.pause()}><FaVolumeUp/> 正在朗读... <FaStop/></div>}
-                  <div style={styles.inputBox}>
-                      <textarea 
-                          value={input}
-                          onChange={e => setInput(e.target.value)}
-                          onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }}}
-                          placeholder={isListening ? "正在聆听..." : "输入问题..."}
-                          style={styles.textarea}
-                          rows={1}
-                      />
-                      {input.trim().length > 0 ? (
-                          <button onClick={() => handleSend()} disabled={loading} style={styles.sendBtn}><FaPaperPlane/></button>
-                      ) : (
-                          <button onClick={toggleListening} style={{...styles.micBtn, background: isListening ? '#ef4444' : 'transparent'}}>
-                              <FaMicrophone color={isListening ? '#fff' : '#94a3b8'} className={isListening ? 'animate-pulse' : ''}/>
-                          </button>
-                      )}
-                  </div>
-              </div>
-          </div>
-      </div>
+                {/* 底部功能区 */}
+                <div style={styles.footer}>
+                    {/* 横向滚动建议 */}
+                    {!loading && suggestions.length > 0 && (
+                        <div style={styles.scrollSuggestionContainer}>
+                            {suggestions.map((s, idx) => (
+                                <button key={idx} onClick={() => handleSend(s)} style={styles.scrollSuggestionBtn}>
+                                    <FaLightbulb color="#eab308" size={10} style={{marginRight:4}}/>
+                                    {s}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                    
+                    {/* 输入框与 TTS 状态 */}
+                    <div style={styles.inputContainer}>
+                        {isPlaying && (
+                            <div style={styles.ttsBar} onClick={() => setIsPlaying(false)}>
+                                <FaVolumeUp className="animate-pulse"/> 正在朗读... <FaStop/>
+                            </div>
+                        )}
+                        
+                        <div style={styles.inputBox}>
+                            <textarea 
+                                value={input}
+                                onChange={e => setInput(e.target.value)}
+                                onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }}}
+                                placeholder={isListening ? "正在聆听..." : "输入问题..."}
+                                style={styles.textarea}
+                                rows={1}
+                            />
+                            
+                            {input.trim().length > 0 ? (
+                                <button onClick={() => handleSend()} disabled={loading} style={styles.sendBtn}>
+                                    <FaPaperPlane size={15}/>
+                                </button>
+                            ) : (
+                                <button 
+                                    onClick={toggleListening} 
+                                    style={{...styles.micBtn, background: isListening ? '#ef4444' : 'transparent'}}
+                                >
+                                    <FaMicrophone size={18} color={isListening ? '#fff' : '#94a3b8'} className={isListening ? 'animate-pulse' : ''}/>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
 
+            {/* 底部阴影关闭区 */}
+            <div style={styles.closeArea} onClick={() => setIsAiOpen(false)}>
+                <FaChevronUp color="rgba(255,255,255,0.8)" size={14} />
+            </div>
+        </>
+      )}
+
+      {/* 设置弹窗 (修改：直接更新 Context 的 Config) */}
       {showSettings && (
         <div style={styles.settingsOverlay} onClick={(e) => e.target === e.currentTarget && setShowSettings(false)}>
-            <div style={styles.settingsModal} onClick={e => e.stopPropagation()}>
-                <div style={styles.modalHeader}><h3>AI 设置</h3><button onClick={()=>setShowSettings(false)} style={styles.closeBtn}><FaTimes/></button></div>
+            <div style={styles.settingsModal}>
+                <div style={styles.modalHeader}>
+                    <h3>AI 设置</h3>
+                    <button onClick={()=>setShowSettings(false)} style={styles.closeBtn}><FaTimes/></button>
+                </div>
                 <div style={styles.modalBody}>
-                    {!isActivated && <div style={{...styles.settingRow, background: '#fffbeb', padding: '8px 12px', borderRadius: '8px', color: '#d97706', fontSize: '0.8rem', marginBottom: '12px'}}>
-                        <span>免费额度剩余: {remainingQuota} / {TOTAL_FREE_QUOTA} 次</span>
-                    </div>}
-                    <label style={styles.settingRow}><span>API Key</span><input type="password" value={config.apiKey} onChange={e=>setConfig({...config, apiKey:e.target.value})} style={styles.input}/></label>
-                    <div style={styles.switchRow}><span>全局显示拼音</span><input type="checkbox" checked={config.showPinyin} onChange={e=>setConfig({...config, showPinyin:e.target.checked})}/></div>
-                    <label style={styles.settingRow}><span>语音朗读语速 ({config.ttsSpeed}x)</span><input type="range" min="0.5" max="2.0" step="0.1" value={config.ttsSpeed} onChange={e=>setConfig({...config, ttsSpeed:parseFloat(e.target.value)})}/></label>
-                    <button onClick={()=>setShowSettings(false)} style={styles.saveBtn}>保存并关闭</button>
+                    {!isActivated && (
+                        <div style={{background:'#fff7ed', color:'#c2410c', padding:8, borderRadius:6, fontSize:'0.85rem'}}>
+                            试用剩余: {remainingQuota} / {TOTAL_FREE_QUOTA} 次
+                        </div>
+                    )}
+                    <label style={styles.settingRow}>
+                        <span>API Key</span>
+                        <input type="password" value={config.apiKey} onChange={e=>setConfig({...config, apiKey:e.target.value})} style={styles.input}/>
+                    </label>
+                    <div style={styles.switchRow}>
+                        <span>显示拼音</span>
+                        <input type="checkbox" checked={config.showPinyin} onChange={e=>setConfig({...config, showPinyin:e.target.checked})}/>
+                    </div>
+                    <div style={styles.switchRow}>
+                        <span>打字音效</span>
+                        <input type="checkbox" checked={config.soundEnabled} onChange={e=>setConfig({...config, soundEnabled:e.target.checked})}/>
+                    </div>
+                    <label style={styles.settingRow}>
+                        <span>语速 ({config.ttsSpeed}x)</span>
+                        <input type="range" min="0.5" max="2.0" step="0.1" value={config.ttsSpeed} onChange={e=>setConfig({...config, ttsSpeed:parseFloat(e.target.value)})} style={{width:'100%'}}/>
+                    </label>
+                    <label style={styles.settingRow}>
+                        <span>发音人</span>
+                        <select value={config.ttsVoice} onChange={e=>setConfig({...config, ttsVoice:e.target.value})} style={styles.select}>
+                            {VOICES.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
+                        </select>
+                    </label>
+                    <hr style={{margin:'10px 0', borderColor:'#f1f5f9'}}/>
+                    <label style={styles.settingRow}>
+                        <span>语音识别语言</span>
+                        <select value={config.sttLang} onChange={e=>setConfig({...config, sttLang:e.target.value})} style={styles.select}>
+                            {STT_LANGS.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
+                        </select>
+                    </label>
+                    <div style={styles.switchRow}>
+                        <span>识别后自动发送</span>
+                        <input type="checkbox" checked={config.autoSendStt} onChange={e=>setConfig({...config, autoSendStt:e.target.checked})}/>
+                    </div>
+                    <button onClick={()=>setShowSettings(false)} style={styles.saveBtn}>保存设置</button>
                 </div>
             </div>
         </div>
       )}
 
       <style jsx global>{`
-        @keyframes pulse { 0%, 100% {transform:scale(1);} 50% {transform:scale(1.1);} }
+        @keyframes pulse { 0% {transform:scale(1);} 50% {transform:scale(1.2);} 100% {transform:scale(1);} }
         .animate-pulse { animation: pulse 1.5s infinite; }
-        .notion-md { font-family: -apple-system, sans-serif; color: #333; line-height: 1.8; }
-        .notion-md table { border-collapse: collapse; margin: 10px 0; width: 100%; font-size: 0.9em; }
-        .notion-md th, .notion-md td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; }
-        .notion-md li { margin-bottom: 4px; }
-        @keyframes thinking-dot { 0%, 80%, 100% { transform: scale(0); opacity: 0.5; } 40% { transform: scale(1.0); opacity: 1; } }
+        .notion-md { font-family: -apple-system, system-ui, sans-serif; color: #333; line-height: 1.9; }
+        .notion-md ul { padding-left: 1.2em; list-style: none; margin: 0.5em 0; }
+        .notion-md li { position: relative; padding-left: 0.2em; margin-bottom: 4px; }
+        .notion-md > ul > li::before {
+            content: "▪️"; font-size: 0.7em; position: absolute; left: -1.2em; top: 0.4em; color: #333;
+        }
+        .notion-md ul ul > li::before {
+            content: "◦"; font-size: 1.2em; position: absolute; left: -1em; top: -0.1em; color: #555;
+            font-weight: bold;
+        }
       `}</style>
-    </div>
+    </>
   );
 }
 
+// --- 样式定义 (保持原版完全一致) ---
 const styles = {
-  modalOverlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0, 0, 0, 0.5)',
-    backdropFilter: 'blur(4px)',
-    zIndex: 10000,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+  floatingBtn: {
+    position: 'fixed', width: 56, height: 56, borderRadius: '50%',
+    background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+    boxShadow: '0 8px 20px rgba(79, 70, 229, 0.4)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    zIndex: 9999, cursor: 'grab', touchAction: 'none' 
   },
   chatWindow: {
-    width: '92%',
-    maxWidth: '460px',
-    height: '82vh',
-    maxHeight: '750px',
-    background: '#fff',
-    borderRadius: '28px',
-    display: 'flex',
-    flexDirection: 'column',
-    boxShadow: '0 25px 60px rgba(0,0,0,0.3)',
-    overflow: 'hidden',
-    position: 'relative',
+    position: 'fixed', top: 0, left: 0, width: '100%', height: '85%',
+    background: '#fff', borderBottomLeftRadius: 24, borderBottomRightRadius: 24,
+    display: 'flex', flexDirection: 'column', zIndex: 10000, overflow: 'hidden',
+    boxShadow: '0 10px 40px rgba(0,0,0,0.1)'
   },
-  header: { height: 52, borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', padding: '0 16px', justifyContent: 'space-between', flexShrink: 0 },
-  headerIconBtn: { background:'none', border:'none', color:'#64748b', cursor:'pointer', padding: 8 },
-  messageArea: { flex: 1, overflowY: 'auto', padding: '20px' },
-  messageRow: { display: 'flex', marginBottom: 24, flexDirection: 'column' },
+  header: {
+    height: 44, borderBottom: '1px solid #f1f5f9', display: 'flex', 
+    alignItems: 'center', padding: '0 12px', background: '#fff', flexShrink: 0
+  },
+  headerIconBtn: { background:'none', border:'none', color:'#64748b', padding:8, cursor:'pointer' },
+  
+  messageArea: { flex: 1, overflowY: 'auto', padding: '16px 20px', display:'flex', flexDirection:'column' },
+  emptyState: { marginTop:'40%', textAlign:'center' },
+  messageRow: { display: 'flex', marginBottom: 24, width: '100%', flexDirection: 'column' },
   bubbleWrapper: { display: 'flex', flexDirection: 'column', maxWidth: '100%' },
-  bubble: { fontSize: '0.96rem', padding: '12px 16px', borderRadius: '18px' },
-  msgActionBar: { display: 'flex', gap: 12, marginTop: 8, opacity: 0.6, alignItems: 'center', flexWrap: 'wrap' },
-  msgActionBtn: { background:'none', border:'none', color:'#64748b', cursor:'pointer', fontSize:'0.9rem' },
-  thinkingIndicator: { background: '#f1f5f9', borderRadius: '12px', padding: '12px 16px', display: 'inline-flex', gap: '5px', alignItems:'center' },
-  thinkingDot: { width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#94a3b8', animation: 'thinking-dot 1.4s infinite ease-in-out both' },
-  footer: { background: '#fff', borderTop: '1px solid #f1f5f9', paddingBottom: 10 },
-  scrollSuggestionContainer: { display: 'flex', gap: 8, padding: '12px 16px 0 16px', overflowX: 'auto', scrollbarWidth: 'none' },
-  scrollSuggestionBtn: { flexShrink: 0, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 20, padding: '6px 14px', fontSize: '0.8rem', color: '#475569', cursor: 'pointer', display:'flex', alignItems:'center', gap: 6 },
-  inputContainer: { padding: '12px 16px' },
-  inputBox: { display: 'flex', alignItems: 'center', gap: 10, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 24, padding: '4px 6px 4px 16px' },
-  textarea: { flex: 1, border: 'none', background: 'transparent', resize: 'none', fontSize: '1rem', outline: 'none', height: '24px', lineHeight: '24px', paddingTop: 6 },
-  sendBtn: { width: 34, height: 34, borderRadius: '50%', background: '#4f46e5', color: '#fff', border: 'none', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' },
-  micBtn: { width: 34, height: 34, borderRadius: '50%', border: 'none', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', transition: 'background 0.2s' },
-  sidebar: { position: 'absolute', top: 0, left: 0, width: '280px', height: '100%', background: '#fff', borderRight: '1px solid #e2e8f0', zIndex: 10002, transition: 'transform 0.3s ease', display: 'flex', flexDirection: 'column' },
-  sidebarOverlay: { position:'absolute', inset:0, background:'rgba(0,0,0,0.4)', zIndex:10001 },
-  sidebarHeader: { padding: '16px', borderBottom: '1px solid #e2e8f0', display:'flex', justifyContent:'space-between', alignItems:'center' },
-  newChatBtn: { background:'#fff', border:'1px solid #cbd5e1', borderRadius:6, padding:'4px 10px', fontSize:'0.8rem', cursor:'pointer', display:'flex', alignItems:'center', gap:4 },
-  sessionList: { flex: 1, overflowY: 'auto', padding: '10px' },
-  sessionItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', borderRadius: 10, cursor: 'pointer', marginBottom: 4 },
-  sessionTitle: { flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.9rem' },
-  sessionActions: { display: 'flex', gap: 4 },
-  sessionActionBtn: { background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' },
-  bookmarkItem: { background: '#f8fafc', padding: '8px 12px', borderRadius: 6, marginBottom: 4, fontSize: '0.85rem', color: '#334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  bookmarkActionBtn: { background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' },
-  popover: { position: 'fixed', transform: 'translateX(-50%)', background: '#1e293b', borderRadius: 10, padding: '10px 15px', display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 10px 25px rgba(0,0,0,0.4)', zIndex: 11000, color: '#fff' },
-  popBtn: { background:'transparent', border:'none', color:'#fff', cursor:'pointer', display:'flex', alignItems:'center', gap:8, fontSize:'0.85rem' },
-  popDivider: { width: 1, height: 18, background: 'rgba(255,255,255,0.2)' },
-  popArrow: { position: 'absolute', bottom: -5, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '6px solid #1e293b' },
+  bubble: { fontSize: '0.95rem', width: 'fit-content', maxWidth: '100%' },
+  
+  msgActionBar: { display: 'flex', gap: 12, marginTop: 4, paddingLeft: 2, opacity: 0.6 },
+  msgActionBtn: { background:'none', border:'none', color:'#94a3b8', cursor:'pointer', padding:'2px 4px', fontSize:'0.85rem' },
+
+  // Markdown 样式
+  h1: { fontSize: '1.4em', fontWeight: 700, margin: '1em 0 0.5em 0', color:'#111', lineHeight:1.3 },
+  h2: { fontSize: '1.2em', fontWeight: 600, margin: '0.8em 0 0.4em 0', borderBottom:'1px solid #f1f5f9', paddingBottom:4, color:'#333' },
+  h3: { fontSize: '1.05em', fontWeight: 600, margin: '0.6em 0 0.3em 0', color:'#444' },
+  p: { margin: '0 0 8px 0', color: '#333' },
+  strong: { fontWeight: 700, color: '#000' },
+  ul: { paddingLeft: '1.2em' }, 
+  li: { marginBottom: '4px' },
+  del: { textDecoration: 'line-through', color: '#ef4444', opacity: 0.7 },
+  table: { width: '100%', borderCollapse: 'collapse', margin: '10px 0', fontSize: '0.9em' },
+  th: { border: '1px solid #e2e8f0', padding: '6px 10px', background: '#f8fafc', fontWeight: '600', textAlign: 'left' },
+  td: { border: '1px solid #e2e8f0', padding: '6px 10px', verticalAlign: 'top' },
+
+  // 底部区域
+  footer: { background: '#fff', borderTop: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column' },
+
+  scrollSuggestionContainer: { 
+      display: 'flex', gap: 8, padding: '10px 16px 0 16px', overflowX: 'auto', 
+      whiteSpace: 'nowrap', scrollbarWidth: 'none' 
+  },
+  scrollSuggestionBtn: { 
+      flexShrink: 0, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 20, 
+      padding: '6px 12px', fontSize: '0.85rem', color: '#475569', cursor: 'pointer',
+      display:'flex', alignItems:'center', boxShadow:'0 1px 2px rgba(0,0,0,0.05)'
+  },
+
+  inputContainer: { 
+      padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 
+  },
+  ttsBar: { 
+      background:'#eff6ff', color:'#2563eb', fontSize:'0.75rem', padding:'4px 10px', 
+      borderRadius:4, display:'flex', alignItems:'center', gap:8, cursor:'pointer', alignSelf:'flex-start'
+  },
+  inputBox: {
+      display: 'flex', alignItems: 'center', gap: 8,
+      background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 24, padding: '4px 6px 4px 16px'
+  },
+  textarea: {
+      flex: 1, border: 'none', background: 'transparent', resize: 'none',
+      fontSize: '1rem', outline: 'none', fontFamily: 'inherit', height: '36px', lineHeight: '36px'
+  },
+  sendBtn: {
+      width: 32, height: 32, borderRadius: '50%', background: '#4f46e5', color: '#fff',
+      border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink:0
+  },
+  micBtn: {
+      width: 32, height: 32, borderRadius: '50%', border: 'none', 
+      display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink:0, transition: 'background 0.2s'
+  },
+
+  // 侧边栏
+  sidebar: {
+      position: 'fixed', top: 0, left: 0, width: '75%', maxWidth: 280, height: '85%',
+      background: '#f8fafc', borderRight: '1px solid #e2e8f0', zIndex: 10002,
+      transition: 'transform 0.3s ease', display: 'flex', flexDirection: 'column'
+  },
+  sidebarOverlay: { position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', zIndex:10001 },
+  sidebarHeader: { padding: 20, borderBottom: '1px solid #e2e8f0', display:'flex', justifyContent:'space-between', alignItems:'center' },
+  newChatBtn: { background:'#fff', border:'1px solid #cbd5e1', borderRadius:6, padding:'4px 8px', fontSize:'0.8rem', display:'flex', alignItems:'center', gap:4, cursor:'pointer' },
+  sessionList: { flex: 1, overflowY: 'auto', padding: 10 },
+  sessionItem: { padding: '12px', borderRadius: 8, marginBottom: 4, fontSize: '0.9rem', cursor: 'pointer', display:'flex', justifyContent:'space-between', alignItems:'center' },
+
+  closeArea: {
+      position: 'fixed', bottom: 0, left: 0, width: '100%', height: '15%',
+      background: 'linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.6))',
+      backdropFilter: 'blur(3px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      cursor: 'pointer'
+  },
+
+  // Popover 菜单
+  popover: {
+      position: 'fixed', transform: 'translateX(-50%)', background: '#1e293b', 
+      borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 12,
+      boxShadow: '0 4px 15px rgba(0,0,0,0.3)', zIndex: 11000, color: '#fff'
+  },
+  popArrow: {
+      position: 'absolute', bottom: -6, left: '50%', marginLeft: -6,
+      borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '6px solid #1e293b'
+  },
+  popBtn: { background:'transparent', border:'none', color:'#fff', cursor:'pointer', display:'flex', alignItems:'center', gap:6, fontSize:'0.85rem' },
+  popDivider: { width: 1, height: 16, background: 'rgba(255,255,255,0.3)' },
+
+  // 设置
   settingsOverlay: { position:'fixed', inset:0, zIndex:12000, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center' },
-  settingsModal: { width: '85%', maxWidth: '360px', background: '#fff', borderRadius: 20, padding: 20 },
-  explainButton: { display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 18px', borderRadius: '22px', border: '1px solid #dbeafe', background: '#eff6ff', color: '#3b82f6', fontWeight: 'bold', cursor: 'pointer', marginTop: '16px', fontSize:'0.9rem' },
-  h1: { fontSize: '1.4rem', margin: '15px 0' },
-  h2: { fontSize: '1.2rem', margin: '12px 0', borderBottom: '1px solid #eee' },
-  strong: { color: '#000', fontWeight: 'bold' },
-  td: { verticalAlign: 'top' },
-  th: { background: '#f8fafc' },
-  modalBody: { padding: '10px 0' },
-  closeBtn: { background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' },
-  settingRow: { display: 'flex', flexDirection: 'column', marginBottom: 12 },
-  switchRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  input: { width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0', marginTop: 4 },
-  saveBtn: { width: '100%', padding: '10px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', marginTop: 10 },
-  ttsBar: { position: 'absolute', top: -30, left: 16, background: '#3b82f6', color: 'white', padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', animation: 'fadeIn 0.3s' },
-  modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }
+  settingsModal: { width: '85%', maxWidth: 340, background: '#fff', borderRadius: 16, overflow:'hidden', boxShadow:'0 20px 60px rgba(0,0,0,0.3)' },
+  modalHeader: { padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display:'flex', justifyContent:'space-between', alignItems:'center', background:'#f8fafc' },
+  closeBtn: { background:'none', border:'none', fontSize:'1.2rem', color:'#64748b', cursor:'pointer' },
+  modalBody: { padding: 20, display:'flex', flexDirection:'column', gap: 16 },
+  settingRow: { display:'flex', flexDirection:'column', gap:6, fontSize:'0.9rem', fontWeight:600, color:'#475569' },
+  switchRow: { display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:'0.9rem', color:'#334155' },
+  input: { padding: 10, borderRadius: 8, border: '1px solid #cbd5e1', fontSize: '1rem' },
+  select: { padding: 10, borderRadius: 8, border: '1px solid #cbd5e1', fontSize: '1rem', background:'#fff' },
+  saveBtn: { background: '#4f46e5', color: '#fff', border: 'none', padding: 12, borderRadius: 8, fontSize: '1rem', fontWeight: 'bold', marginTop: 10, cursor:'pointer' }
 };
