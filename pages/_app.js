@@ -19,6 +19,14 @@ import ExternalPlugins from '@/components/ExternalPlugins'
 import SEO from '@/components/SEO'
 import { zhCN } from '@clerk/localizations'
 import dynamic from 'next/dynamic'
+
+// ==================================================================
+// ======================  AI 功能集成开始  =========================
+// ==================================================================
+import { AIProvider } from '@/components/AIConfigContext' // 确保路径正确
+import AIChatDock from '@/components/AIChatDock'       // 确保路径正确
+// ======================  AI 功能集成结束  =========================
+
 // import { ClerkProvider } from '@clerk/nextjs'
 const ClerkProvider = dynamic(() =>
   import('@clerk/nextjs').then(m => m.ClerkProvider)
@@ -45,22 +53,31 @@ const MyApp = ({ Component, pageProps }) => {
   // 整体布局
   const GLayout = useCallback(
     props => {
-      const Layout = getBaseLayoutByTheme(theme)
+      // 这里的 Layout 就是你之前给我的那个包含 LayoutIndex 的文件
+      const Layout = getBaseLayoutByTheme(theme) 
       return <Layout {...props} />
     },
     [theme]
   )
 
   const enableClerk = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+  
+  // 将所有内容包裹在 AIProvider 中
   const content = (
-    <GlobalContextProvider {...pageProps}>
-      <GLayout {...pageProps}>
-        <SEO {...pageProps} />
-        <Component {...pageProps} />
-      </GLayout>
-      <ExternalPlugins {...pageProps} />
-    </GlobalContextProvider>
+    <AIProvider>
+      <GlobalContextProvider {...pageProps}>
+        <GLayout {...pageProps}>
+          <SEO {...pageProps} />
+          <Component {...pageProps} />
+        </GLayout>
+        <ExternalPlugins {...pageProps} />
+      </GlobalContextProvider>
+      
+      {/* 将 AIChatDock 作为全局悬浮组件放在这里 */}
+      <AIChatDock />
+    </AIProvider>
   )
+
   return (
     <>
       {enableClerk ? (
