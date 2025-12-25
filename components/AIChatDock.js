@@ -3,7 +3,7 @@ import {
   FaPaperPlane, FaChevronUp, FaRobot, FaCog, FaTimes,
   FaVolumeUp, FaStop, FaCopy, FaMicrophone, FaEraser,
   FaList, FaEdit, FaTrashAlt, FaPlus, FaLightbulb, FaFeatherAlt,
-  FaLanguage, FaCheck, FaFont
+  FaLanguage, FaCheck, FaFont, FaLock, FaRocket, FaGoogle
 } from 'react-icons/fa';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm'; 
@@ -79,6 +79,7 @@ export default function AIChatDock() {
   // --- 接入 Context ---
   const {
     user, // 必须获取 user，用于传 email 和判断登录状态
+    login, // 假设 Context 提供了 login 方法用于调起谷歌登录
     config, setConfig,
     sessions, setSessions,
     currentSessionId, setCurrentSessionId,
@@ -94,6 +95,8 @@ export default function AIChatDock() {
   // --- 本地 UI 状态 ---
   const [showSettings, setShowSettings] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false); // 新增：付费墙弹窗状态
+
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState([]); 
@@ -327,14 +330,18 @@ export default function AIChatDock() {
     } catch (e) { alert('无法启动语音识别: ' + e.message); }
   };
 
-  // --- 发送逻辑 (修复与增强版) ---
+  // --- 发送逻辑 (核心修改) ---
   const handleSend = async (textToSend = input, isSystemTrigger = false) => {
     if (!textToSend.trim() || loading) return;
 
     // --- 1. 新增：未登录拦截 ---
-    // 如果不是系统自动触发（如解析题目），且用户对象为空（未登录）
     if (!isSystemTrigger && !user) {
-        alert("请先登录 Google 账号，即可使用 AI 助教。");
+        // 如果有 login 方法则调用，否则提示
+        if (login) {
+            login();
+        } else {
+            alert("请先登录 Google 账号。");
+        }
         return;
     }
 
@@ -352,7 +359,8 @@ export default function AIChatDock() {
             const canUse = (auth && typeof auth === 'object') ? auth.canUse : auth;
             
             if (!canUse) {
-                alert(`免费提问次数已用完 (${remainingQuota}/${TOTAL_FREE_QUOTA})，请激活课程以获得无限次 AI 解析。`);
+                // 修改：此处不再 Alert，而是显示付费墙弹窗
+                setShowPaywall(true);
                 return;
             }
         } catch (e) {
@@ -524,6 +532,17 @@ export default function AIChatDock() {
     setTimeout(() => setSelectionMenu(prev => ({...prev, show: false})), 800);
   };
 
+  // 处理激活跳转（示例）
+  const handleActivate = () => {
+      // 这里填写跳转到购买页面的逻辑
+      window.location.href = '/pricing'; 
+  };
+  
+  const handlePreviewCourse = () => {
+      // 这里填写跳转到课程介绍的逻辑
+      window.location.href = '/course-intro';
+  };
+
   return (
     <>
       {/* 划词菜单 */}
@@ -655,7 +674,7 @@ export default function AIChatDock() {
                                     )}
                                 </div>
 
-                                {/* 底部操作栏 - 修复：添加拼音开关 */}
+                                {/* 底部操作栏 */}
                                 <div style={styles.msgActionBar}>
                                     {m.role === 'assistant' && !loading && (
                                         <>
@@ -665,7 +684,6 @@ export default function AIChatDock() {
                                             <button onClick={() => copyText(m.content)} style={styles.msgActionBtn} title="复制">
                                                 <FaCopy/>
                                             </button>
-                                            {/* 修复：这里加回了快捷拼音开关 */}
                                             <button 
                                                 onClick={() => setConfig({...config, showPinyin: !config.showPinyin})} 
                                                 style={{...styles.msgActionBtn, color: config.showPinyin ? '#4f46e5' : '#94a3b8'}} 
@@ -686,7 +704,7 @@ export default function AIChatDock() {
 
                 {/* 底部功能区 */}
                 <div style={styles.footer}>
-                    {/* 横向滚动建议 (修复：滑动与样式) */}
+                    {/* 横向滚动建议 */}
                     {!loading && suggestions.length > 0 && (
                         <div style={styles.scrollSuggestionContainer}>
                             {suggestions.map((s, idx) => (
@@ -740,6 +758,32 @@ export default function AIChatDock() {
         </>
       )}
 
+      {/* 付费墙弹窗 (新增) */}
+      {showPaywall && (
+        <div style={styles.paywallOverlay}>
+            <div style={styles.paywallModal}>
+                <div style={styles.paywallHeader}>
+                   🎉 你已经用 AI 学习了 {TOTAL_FREE_QUOTA} 次
+                </div>
+                <div style={styles.paywallBody}>
+                    <div style={styles.paywallTitle}>接下来解锁完整课程，你可以：</div>
+                    <ul style={styles.featureList}>
+                        <li><FaCheck color="#4ade80" style={{marginRight:8}}/> 无限提问</li>
+                        <li><FaCheck color="#4ade80" style={{marginRight:8}}/> 所有语法 AI 解析</li>
+                        <li><FaCheck color="#4ade80" style={{marginRight:8}}/> 错题专属讲解</li>
+                    </ul>
+                    <button onClick={handleActivate} style={styles.activateBtn}>
+                        【激活课程】
+                    </button>
+                    <button onClick={handlePreviewCourse} style={styles.previewBtn}>
+                        【先看看课程介绍】
+                    </button>
+                </div>
+                <button onClick={() => setShowPaywall(false)} style={styles.closePaywallBtn}><FaTimes/></button>
+            </div>
+        </div>
+      )}
+
       {/* 设置弹窗 */}
       {showSettings && (
         <div style={styles.settingsOverlay} onClick={(e) => e.target === e.currentTarget && setShowSettings(false)}>
@@ -765,6 +809,13 @@ export default function AIChatDock() {
                     <label style={styles.settingRow}>
                         <span>API Key</span>
                         <input type="password" value={config.apiKey} onChange={e=>setConfig({...config, apiKey:e.target.value})} style={styles.input}/>
+                        {/* 新增：NVIDIA 教程链接 */}
+                        <div 
+                            style={{fontSize: '0.8rem', color: '#6366f1', marginTop: 4, cursor: 'pointer', textDecoration: 'underline'}}
+                            onClick={() => window.open('https://build.nvidia.com/explore/discover', '_blank')}
+                        >
+                           👉 教程：如何免费获取 NVIDIA 大模型 API Key？
+                        </div>
                     </label>
                     <div style={styles.switchRow}>
                         <span>显示拼音</span>
@@ -865,25 +916,25 @@ const styles = {
   // 底部区域
   footer: { background: '#fff', borderTop: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column' },
 
-  // 修复：滑动手感优化
+  // 滑动建议
   scrollSuggestionContainer: { 
       display: 'flex', gap: 10, padding: '12px 16px 4px 16px', overflowX: 'auto', 
       whiteSpace: 'nowrap', scrollbarWidth: 'none',
-      WebkitOverflowScrolling: 'touch', // iOS 关键优化
+      WebkitOverflowScrolling: 'touch', 
       msOverflowStyle: 'none'
   },
   scrollSuggestionBtn: { 
       flexShrink: 0, 
       background: '#ffffff', 
-      border: '1px solid #e0e7ff', // 浅紫边框
+      border: '1px solid #e0e7ff', 
       borderRadius: '20px', 
       padding: '8px 16px', 
       fontSize: '0.88rem', 
-      color: '#4f46e5', // 品牌色
+      color: '#4f46e5', 
       cursor: 'pointer',
       display: 'flex', 
       alignItems: 'center', 
-      boxShadow: '0 4px 12px rgba(79, 70, 229, 0.08)', // 柔和阴影
+      boxShadow: '0 4px 12px rgba(79, 70, 229, 0.08)',
       transition: 'transform 0.1s',
       fontWeight: '500'
   },
@@ -954,5 +1005,45 @@ const styles = {
   switchRow: { display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:'0.9rem', color:'#334155' },
   input: { padding: 10, borderRadius: 8, border: '1px solid #cbd5e1', fontSize: '1rem' },
   select: { padding: 10, borderRadius: 8, border: '1px solid #cbd5e1', fontSize: '1rem', background:'#fff' },
-  saveBtn: { background: '#4f46e5', color: '#fff', border: 'none', padding: 12, borderRadius: 8, fontSize: '1rem', fontWeight: 'bold', marginTop: 10, cursor:'pointer' }
+  saveBtn: { background: '#4f46e5', color: '#fff', border: 'none', padding: 12, borderRadius: 8, fontSize: '1rem', fontWeight: 'bold', marginTop: 10, cursor:'pointer' },
+
+  // --- 新增：付费墙样式 ---
+  paywallOverlay: {
+    position: 'fixed', inset: 0, zIndex: 13000, background: 'rgba(0,0,0,0.7)',
+    backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center'
+  },
+  paywallModal: {
+    width: '85%', maxWidth: 360, background: '#fff', borderRadius: 24,
+    padding: '0', position: 'relative', overflow: 'hidden',
+    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+  },
+  paywallHeader: {
+    background: 'linear-gradient(135deg, #4f46e5, #ec4899)',
+    padding: '24px 20px', color: '#fff', fontSize: '1.2rem', fontWeight: 'bold',
+    textAlign: 'center'
+  },
+  paywallBody: {
+    padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: 16
+  },
+  paywallTitle: {
+    fontSize: '1rem', fontWeight: 600, color: '#334155', textAlign: 'center', marginBottom: 8
+  },
+  featureList: {
+    listStyle: 'none', padding: 0, margin: '0 0 16px 0',
+    display: 'flex', flexDirection: 'column', gap: 10, fontSize: '0.95rem', color: '#475569'
+  },
+  activateBtn: {
+    width: '100%', padding: '14px', borderRadius: 12, background: '#4f46e5',
+    color: '#fff', fontSize: '1rem', fontWeight: 'bold', border: 'none', cursor: 'pointer',
+    boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)'
+  },
+  previewBtn: {
+    width: '100%', padding: '14px', borderRadius: 12, background: '#f1f5f9',
+    color: '#475569', fontSize: '0.95rem', fontWeight: '600', border: 'none', cursor: 'pointer'
+  },
+  closePaywallBtn: {
+    position: 'absolute', top: 10, right: 10, background: 'rgba(255,255,255,0.2)',
+    border: 'none', borderRadius: '50%', width: 30, height: 30, color: '#fff',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+  }
 };
