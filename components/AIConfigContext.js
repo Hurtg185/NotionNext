@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect, useMemo } from 'react';
 import Script from 'next/script';
 
+// --- 常量定义 ---
 const CONFIG_KEY = 'ai_global_config_v14';
 const SESSIONS_KEY = 'ai_global_sessions_v14';
 const BOOKMARKS_KEY = 'ai_global_bookmarks_v14';
@@ -8,9 +9,7 @@ const USER_KEY = 'hsk_user';
 
 const AIContext = createContext();
 
-/* ======================
-   激活码校验（不动）
-====================== */
+// --- 辅助函数：激活码校验 ---
 const validateActivationCode = (code) => {
   if (!code) return { isValid: false, error: '请输入激活码' };
   const c = code.trim().toUpperCase();
@@ -23,19 +22,21 @@ const validateActivationCode = (code) => {
 
 export const AIProvider = ({ children }) => {
   /* ======================
-     用户 / 激活
+     1. 用户 / 激活 / 谷歌状态
   ====================== */
   const [user, setUser] = useState(null);
   const [isActivated, setIsActivated] = useState(false);
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
 
   /* ======================
-     AI 配置
+     2. AI 配置 (核心 Prompt 修正版)
   ====================== */
   const [config, setConfig] = useState({
     apiKey: '',
     modelId: 'deepseek-ai/deepseek-v3.2',
     userLevel: 'H1',
+    showPinyin: true, // UI组件需要此字段
+    autoSendStt: false, // UI组件需要此字段
     systemPrompt: `
 你是一位专门教【缅甸学生】学习汉语的老师。
 
@@ -73,48 +74,61 @@ export const AIProvider = ({ children }) => {
   });
 
   /* ======================
-     AI UI / 上下文
+     3. AI UI / 上下文 / 历史记录
   ====================== */
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [activeTask, setActiveTask] = useState(null);
-
-  /* ======================
-     聊天 / 收藏
-  ====================== */
   const [sessions, setSessions] = useState([]);
   const [bookmarks, setBookmarks] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
 
   /* ======================
-     免费次数（仅展示）
+     4. 配额管理
   ====================== */
+  const TOTAL_FREE_QUOTA = 60; // 与 UI 文案保持一致
   const [remainingQuota, setRemainingQuota] = useState(0);
-  const [totalQuota, setTotalQuota] = useState(0);
 
   /* ======================
-     初始化
+     5. 初始化与本地存储
   ====================== */
   useEffect(() => {
+    // 加载用户
     const cachedUser = localStorage.getItem(USER_KEY);
     if (cachedUser) {
-      const u = JSON.parse(cachedUser);
-      setUser(u);
-      if (u.unlocked_levels) setIsActivated(true);
+      try {
+        const u = JSON.parse(cachedUser);
+        setUser(u);
+        if (u.unlocked_levels) setIsActivated(true);
+      } catch (e) {}
     }
 
+    // 加载配置
     const savedConfig = localStorage.getItem(CONFIG_KEY);
     if (savedConfig) {
-      setConfig((c) => ({ ...c, ...JSON.parse(savedConfig) }));
+      try { setConfig((c) => ({ ...c, ...JSON.parse(savedConfig) })); } catch (e) {}
+    }
+
+    // 加载会话
+    const savedSessions = localStorage.getItem(SESSIONS_KEY);
+    let initialSessions = [];
+    if (savedSessions) {
+        try { initialSessions = JSON.parse(savedSessions); } catch(e) {}
+    }
+    if (initialSessions.length === 0) {
+        const newSession = { id: Date.now(), title: '新对话', messages: [], date: new Date().toISOString() };
+        initialSessions = [newSession];
+    }
+    setSessions(initialSessions);
+    if (!currentSessionId && initialSessions.length > 0) {
+        setCurrentSessionId(initialSessions[0].id);
     }
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-  }, [config]);
+  // 监听持久化
+  useEffect(() => { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); }, [config]);
+  useEffect(() => { if(sessions.length > 0) localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions)); }, [sessions]);
 
-  /* ======================
-     等级自动同步（修复点）
-  ====================== */
+  // 自动同步等级
   useEffect(() => {
     if (user?.unlocked_levels) {
       const levels = user.unlocked_levels.split(',');
@@ -124,7 +138,7 @@ export const AIProvider = ({ children }) => {
   }, [user]);
 
   /* ======================
-     Prompt 注入（核心修复）
+     6. Prompt 动态注入 (核心逻辑)
   ====================== */
   const finalSystemPrompt = useMemo(() => {
     let p = config.systemPrompt;
@@ -133,83 +147,179 @@ export const AIProvider = ({ children }) => {
       '{{CONTEXT}}',
       activeTask?.content
         ? activeTask.content
-        : '（当前未提供具体语法页面内容）'
+        : '（当前未提供具体语法页面内容，请基于通用语法知识回答）'
     );
     return p;
   }, [config.systemPrompt, config.userLevel, activeTask]);
 
   /* ======================
-     Google 登录
+     7. Google 登录逻辑 (已修复)
   ====================== */
+  
+  // 初始化 Google SDK
+  useEffect(() => {
+    if (isGoogleLoaded && window.google) {
+        window.google.accounts.id.initialize({
+            client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID, // 请确保 .env 中有此变量
+            callback: handleGoogleCallback,
+            auto_select: false
+        });
+    }
+  }, [isGoogleLoaded]);
+
+  // 回调处理
   const handleGoogleCallback = async (response) => {
-    const res = await fetch('/api/verify-google', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: response.credential }),
-    });
-    const data = await res.json();
-    setUser(data);
-    localStorage.setItem(USER_KEY, JSON.stringify(data));
-    if (data.unlocked_levels) setIsActivated(true);
-    syncQuota(data.email);
+    try {
+        const res = await fetch('/api/verify-google', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: response.credential }),
+        });
+        const data = await res.json();
+        setUser(data);
+        localStorage.setItem(USER_KEY, JSON.stringify(data));
+        if (data.unlocked_levels) setIsActivated(true);
+        syncQuota(data.email);
+    } catch (e) {
+        console.error("Google login failed", e);
+        alert("登录失败，请重试");
+    }
   };
 
-  const syncQuota = async (email) => {
-    const res = await fetch('/api/can-use-ai', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    });
-    const data = await res.json();
-    setRemainingQuota(data.remaining);
-    setTotalQuota(data.total);
+  // 手动触发登录 (UI 组件调用此方法)
+  const login = () => {
+      if (window.google) {
+          window.google.accounts.id.prompt();
+      } else {
+          alert("Google 服务正在加载中，请稍后...");
+      }
+  };
+
+  const logout = () => {
+      localStorage.removeItem(USER_KEY);
+      setUser(null);
+      setIsActivated(false);
   };
 
   /* ======================
-     激活
+     8. 权限与 API 交互
   ====================== */
+  const syncQuota = async (email) => {
+    try {
+        const res = await fetch('/api/can-use-ai', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+        });
+        const data = await res.json();
+        setRemainingQuota(data.remaining);
+    } catch (e) {}
+  };
+
+  // 检查是否可用 (UI 组件调用)
+  const canUseAI = async () => {
+      if (isActivated) return true;
+      if (!user || !user.email) return false;
+      
+      try {
+          const res = await fetch('/api/can-use-ai', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: user.email })
+          });
+          const data = await res.json();
+          if (data.remaining !== undefined) setRemainingQuota(data.remaining);
+          return data.canUse;
+      } catch (e) {
+          return remainingQuota > 0;
+      }
+  };
+
+  // 记录使用 (UI 组件调用)
+  const recordUsage = async () => {
+      if (isActivated) return;
+      if (!user || !user.email) return;
+      try {
+          await fetch('/api/record-ai-usage', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: user.email })
+          });
+          setRemainingQuota(prev => Math.max(0, prev - 1));
+      } catch (e) {}
+  };
+
+  // 激活课程
   const handleActivate = async (code) => {
+    if (!user) return { success: false, error: '请先登录' };
     const check = validateActivationCode(code);
     if (!check.isValid) return check;
-    const res = await fetch('/api/activate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: user.email, code }),
-    });
-    const data = await res.json();
-    const newUser = { ...user, unlocked_levels: data.new_unlocked_levels };
-    setUser(newUser);
-    localStorage.setItem(USER_KEY, JSON.stringify(newUser));
-    setIsActivated(true);
-    return { success: true };
+    
+    try {
+        const res = await fetch('/api/activate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: user.email, code }),
+        });
+        const data = await res.json();
+        if (!res.ok) return { success: false, error: data.error };
+
+        const newUser = { ...user, unlocked_levels: data.new_unlocked_levels };
+        setUser(newUser);
+        localStorage.setItem(USER_KEY, JSON.stringify(newUser));
+        setIsActivated(true);
+        return { success: true };
+    } catch(e) {
+        return { success: false, error: '网络错误' };
+    }
   };
 
   /* ======================
-     AI 入口（修复点）
+     9. AI 入口
   ====================== */
   const triggerAI = (title, content) => {
     setActiveTask({
       title,
       content,
-      at: Date.now(),
+      timestamp: Date.now(), // 时间戳用于触发 useEffect
     });
     setIsAiOpen(true);
   };
 
+  /* ======================
+     10. Provider 值
+  ====================== */
   const value = {
     user,
+    login, // 新增：UI需要调用的登录方法
+    logout,
     isActivated,
     config,
     setConfig,
+    sessions,
+    setSessions,
+    currentSessionId,
+    setCurrentSessionId,
+    bookmarks,
+    setBookmarks,
     isAiOpen,
     setIsAiOpen,
-    triggerAI,
     activeTask,
-    systemPrompt: finalSystemPrompt, // 🔥 AI 真正用的 Prompt
+    triggerAI,
+    // 覆盖 systemPrompt 以供 fetch 使用
+    // 注意：UI 组件里 config.systemPrompt 会取到旧的 string，
+    // 你需要在 UI 组件 handleSend 时优先使用这里的 config.systemPrompt 或者下面这个 derivedPrompt
+    // 但为了兼容，我们直接在 Context 层面处理好，UI 组件读取 config 时依然是对象，
+    // 建议 UI 组件 handleSend 里构建 messages 时使用 systemPrompt (变量) 而不是 config.systemPrompt
+    // 或者我们这里 Hack 一下：
+    ...{ systemPrompt: finalSystemPrompt }, // 这是一个单独导出的属性，供 hooks 读取
+    
+    canUseAI,
+    recordUsage,
     remainingQuota,
-    totalQuota,
-    handleGoogleCallback,
+    TOTAL_FREE_QUOTA,
     handleActivate,
+    handleGoogleCallback
   };
 
   return (
