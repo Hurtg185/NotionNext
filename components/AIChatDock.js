@@ -6,7 +6,7 @@ import {
   FaLanguage, FaCheck
 } from 'react-icons/fa';
 import ReactMarkdown from 'react-markdown';
-// import remarkGfm from 'remark-gfm'; // 建议安装: npm install remark-gfm 以支持表格
+import remarkGfm from 'remark-gfm'; // 建议安装: npm install remark-gfm 以支持表格
 import { pinyin } from 'pinyin-pro'; 
 
 // --- 配置与常量 ---
