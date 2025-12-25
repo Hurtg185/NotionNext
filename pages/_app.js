@@ -74,7 +74,7 @@ const MyApp = ({ Component, pageProps }) => {
       </GlobalContextProvider>
       
       {/* 将 AIChatDock 作为全局悬浮组件放在这里 */}
-      <AIChatDock />
+      
     </AIProvider>
   )
 
