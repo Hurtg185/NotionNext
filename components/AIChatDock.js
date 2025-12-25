@@ -250,9 +250,8 @@ export default function AIChatDock() {
             if (!selection || selection.rangeCount === 0) return;
             const text = selection.toString().trim();
             
-            // 确保不是在输入框里选中的
             if (text.length > 0 && isAiOpen && !e.target.matches('textarea, input')) {
-                e.preventDefault(); // 阻止浏览器默认菜单
+                e.preventDefault(); 
                 const range = selection.getRangeAt(0);
                 const rect = range.getBoundingClientRect();
                 let top = rect.top - 60;
@@ -286,9 +285,31 @@ export default function AIChatDock() {
       window.getSelection().removeAllRanges();
   };
 
-  const handleTouchStart = (e) => { /* ... */ };
-  const handleTouchMove = (e) => { /* ... */ };
-  const handleTouchEnd = () => { /* ... */ };
+  const handleTouchStart = (e) => {
+    draggingRef.current = false;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    dragStartPos.current = { x: clientX, y: clientY };
+    btnStartPos.current = { ...btnPos };
+  };
+
+  const handleTouchMove = (e) => {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const dx = dragStartPos.current.x - clientX;
+    const dy = dragStartPos.current.y - clientY;
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+        draggingRef.current = true;
+        setBtnPos({ right: btnStartPos.current.right + dx, bottom: btnStartPos.current.bottom + dy });
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!draggingRef.current) {
+        setIsAiOpen(true);
+    }
+    draggingRef.current = false;
+  };
 
   const createNewSession = () => {
       const newSession = { id: Date.now(), title: '新对话', messages: [], date: new Date().toISOString(), pinned: false };
@@ -364,7 +385,6 @@ export default function AIChatDock() {
               <button onClick={() => copyText(selectionMenu.text)} style={styles.popBtn}>
                   {isCopied ? <><FaCheck size={14} color="#4ade80"/> 已复制</> : <><FaCopy size={14}/> 复制</>}
               </button>
-              <div style={styles.popArrow}></div>
           </div>
       )}
 
@@ -446,7 +466,6 @@ export default function AIChatDock() {
                             p: ({children}) => <p style={styles.p}>{React.Children.map(children, c => <PinyinRenderer text={c.toString()} show={showPinyinForThisMessage}/>)}</p>,
                             li: ({children}) => <li style={styles.li}>{React.Children.map(children, c => <PinyinRenderer text={c.toString()} show={showPinyinForThisMessage}/>)}</li>,
                             td: ({children}) => <td style={styles.td}>{React.Children.map(children, c => <PinyinRenderer text={c.toString()} show={showPinyinForThisMessage}/>)}</td>,
-                            // 其他渲染器保持不变
                             h1: ({children}) => <h1 style={styles.h1}>{children}</h1>,
                             h2: ({children}) => <h2 style={styles.h2}>{children}</h2>,
                             table: ({children}) => <div style={{overflowX:'auto'}}><table style={styles.table}>{children}</table></div>,
