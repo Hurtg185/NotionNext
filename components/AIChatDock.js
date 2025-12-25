@@ -30,7 +30,7 @@ const playTickSound = () => {
   } catch (e) {}
 };
 
-// 拼音渲染组件 (正则已修复)
+// 拼音渲染组件
 const PinyinRenderer = ({ text, show }) => {
   const cleanText = typeof text === 'string' ? text.replace(/<[^>]+>/g, '') : text;
   if (!show || !cleanText) return <span style={{userSelect: 'text'}}>{cleanText}</span>;
@@ -69,9 +69,17 @@ const ThinkingIndicator = () => (
   </div>
 );
 
-// --- 2. 外部触发解析按钮 (导出给题目组件使用) ---
-export const AIExplainButton = ({ title, content }) => {
-  const { isActivated, canUseAI, remainingQuota, triggerAI } = useAI();
+// --- 2. 外部触发解析按钮 (已升级支持 grammarContext) ---
+/**
+ * grammarContext 结构示例:
+ * {
+ *   grammarName: "把字句",
+ *   level: "HSK2",
+ *   explanation: "主语 + 把 + 宾语 + 动词..."
+ * }
+ */
+export const AIExplainButton = ({ title, content, grammarContext }) => {
+  const { isActivated, canUseAI, triggerAI } = useAI();
   const [showExplanation, setShowExplanation] = useState(false);
 
   const handleClick = (e) => {
@@ -80,8 +88,8 @@ export const AIExplainButton = ({ title, content }) => {
       alert(`今日免费提问次数已用完，请激活课程以获得无限次 AI 解析。`);
       return;
     }
-    // 触发全局 AI 状态
-    triggerAI(title, content);
+    // 这里触发只是为了可能的全局状态同步，实际上主要靠渲染 AIChatDock
+    triggerAI(title, content); 
     setShowExplanation(true);
   };
 
@@ -90,10 +98,11 @@ export const AIExplainButton = ({ title, content }) => {
         <button onClick={handleClick} style={styles.explainButton}>
         <FaLightbulb /> AI 解析题目
         </button>
-        {/* 当点击按钮时，才渲染并显示 AIChatDock */}
+        {/* 将 grammarContext 传递给 AI 窗口 */}
         {showExplanation && (
             <AIChatDock 
             initialTask={{ title, content }} 
+            grammarContext={grammarContext}
             onClose={() => setShowExplanation(false)} 
             />
         )}
@@ -103,11 +112,10 @@ export const AIExplainButton = ({ title, content }) => {
 
 // --- 3. 主组件 AIChatDock ---
 
-export default function AIChatDock({ initialTask, onClose }) {
+export default function AIChatDock({ initialTask, grammarContext, onClose }) {
   const {
     config, setConfig,
     isActivated,
-    isAiOpen, setIsAiOpen,
     activeTask,
     sessions, setSessions,
     bookmarks, setBookmarks,
@@ -123,28 +131,24 @@ export default function AIChatDock({ initialTask, onClose }) {
   const [suggestions, setSuggestions] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  
+  // 划词菜单状态
   const [selectionMenu, setSelectionMenu] = useState({ show: false, x: 0, y: 0, text: '' });
   const [isCopied, setIsCopied] = useState(false);
   const [pinyinToggles, setPinyinToggles] = useState({});
 
-  // 悬浮按钮位置状态
-  const [btnPos, setBtnPos] = useState({ right: 20, bottom: 40 });
-  
   // Refs
-  const draggingRef = useRef(false);
-  const dragStartPos = useRef({ x: 0, y: 0 });
-  const btnStartPos = useRef({ right: 0, bottom: 0 });
   const audioRef = useRef(null);
   const historyRef = useRef(null);
   const abortControllerRef = useRef(null);
   const recognitionRef = useRef(null);
-  const selectionTimeoutRef = useRef(null);
   const prevTaskRef = useRef(null);
+  const selectionTimeoutRef = useRef(null);
 
   // 获取当前会话的消息
   const messages = sessions.find(s => s.id === currentSessionId)?.messages || [];
 
-  // 更新当前会话消息的帮助函数
+  // 更新当前会话消息
   const updateCurrentSessionMessages = useCallback((updater) => {
     if (!currentSessionId) return;
     setSessions(prevSessions =>
@@ -184,17 +188,13 @@ export default function AIChatDock({ initialTask, onClose }) {
     setSuggestions([]);
     setLoading(true);
     
-    // 中止上一次请求
     if (abortControllerRef.current) abortControllerRef.current.abort();
     abortControllerRef.current = new AbortController();
 
     const currentUserMessage = { role: 'user', content: textToSend };
     
-    // 立即在UI上显示用户消息和空的AI消息
     updateCurrentSessionMessages(prev => [...prev, currentUserMessage, { role: 'assistant', content: '' }]);
 
-    // **关键修复：构建正确的消息历史**
-    // 之前这里可能传递了错误的格式导致 [Object Object]
     const historyMessages = messages.slice(-6).map(m => ({
         role: m.role,
         content: m.content
@@ -212,7 +212,7 @@ export default function AIChatDock({ initialTask, onClose }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
             messages: apiMessages, 
-            config: { apiKey: config.apiKey, modelId: config.modelId } // 确保 config 结构正确
+            config: { apiKey: config.apiKey, modelId: config.modelId }
         }),
         signal: abortControllerRef.current.signal
       });
@@ -225,7 +225,6 @@ export default function AIChatDock({ initialTask, onClose }) {
       let buffer = '';
       let soundThrottler = 0;
       
-      // 流式读取回复
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -242,7 +241,6 @@ export default function AIChatDock({ initialTask, onClose }) {
                         fullContent += delta;
                         if (config.soundEnabled && ++soundThrottler % 3 === 0) playTickSound();
                         
-                        // 更新最后一条AI消息的内容 (流式更新)
                         updateCurrentSessionMessages(prev => {
                             const newMsgs = [...prev];
                             if (newMsgs.length > 0) {
@@ -256,7 +254,6 @@ export default function AIChatDock({ initialTask, onClose }) {
         }
       }
       
-      // 提取建议内容 (格式: [建议]: A | B)
       let finalContent = fullContent;
       if (fullContent.includes('[建议]:')) {
           const parts = fullContent.split('[建议]:');
@@ -266,7 +263,6 @@ export default function AIChatDock({ initialTask, onClose }) {
           }
       }
 
-      // 更新最终消息内容（去除建议部分）
       updateCurrentSessionMessages(prev => {
           const newMsgs = [...prev];
           if (newMsgs.length > 0) {
@@ -275,7 +271,6 @@ export default function AIChatDock({ initialTask, onClose }) {
           return newMsgs;
       });
 
-      // 扣除次数并自动朗读
       if (!isSystemMessage) recordUsage();
       if (config.autoTTS) playInternalTTS(finalContent);
 
@@ -295,13 +290,11 @@ export default function AIChatDock({ initialTask, onClose }) {
     }
   }, [messages, config, loading, input, updateCurrentSessionMessages, isActivated, canUseAI, remainingQuota, TOTAL_FREE_QUOTA, recordUsage]);
 
-  // 监听任务变化，自动触发解析
+  // --- 关键逻辑：监听任务变化，自动触发解析（注入 grammarContext） ---
   useEffect(() => {
-    // 只有当 initialTask 存在，且是一个新任务时才触发
     if (initialTask && (!prevTaskRef.current || prevTaskRef.current.title !== initialTask.title)) {
         prevTaskRef.current = initialTask;
         
-        // 创建一个新的解析会话，不与之前的混淆
         const newId = Date.now();
         const newSession = { 
             id: newId, 
@@ -313,22 +306,51 @@ export default function AIChatDock({ initialTask, onClose }) {
         setSessions(prev => [newSession, ...prev]);
         setCurrentSessionId(newId);
 
-        // 延时一点点确保会话已建立
+        // 核心改造：构建“助教级”上下文
+        let contextMsg = '';
+        
+        if (grammarContext) {
+            contextMsg = `
+你是一位【汉语-缅语】助教老师，学生是【${grammarContext.level || '初学者'}】。
+
+【当前学习语法】
+语法点：${grammarContext.grammarName}
+${grammarContext.explanation ? `【教材解释】：\n${grammarContext.explanation}` : ''}
+
+⚠️ 你的教学原则：
+1. 不要重复教材已经讲过的内容，重点解释学生为什么会做错。
+2. 用【缅文为主 + 简单中文】回答。
+3. 必须结合下面的具体题目进行拆解。
+
+【学生遇到的题目】
+# 题目: ${initialTask.title}
+${initialTask.content}
+`;
+        } else {
+            // 回退到普通解析模式
+            contextMsg = `
+请作为老师，详细解析这道题目：
+# 题目: ${initialTask.title}
+${initialTask.content}
+
+请分析考点、解题思路和正确答案（使用缅语辅助解释）。
+`;
+        }
+
         setTimeout(() => {
-            const contextMsg = `请作为老师，详细解析这道题目：\n\n# 题目: ${initialTask.title}\n\n${initialTask.content}\n\n请分析考点、解题思路和正确答案。`;
             handleSend(contextMsg, true);
         }, 100);
     }
-  }, [initialTask, setSessions, setCurrentSessionId, handleSend]);
+  }, [initialTask, grammarContext, setSessions, setCurrentSessionId, handleSend]);
 
-  // 自动滚动到底部
+  // 自动滚动
   useEffect(() => {
     if (historyRef.current) {
       historyRef.current.scrollTop = historyRef.current.scrollHeight;
     }
   }, [messages, loading]);
 
-  // TTS 朗读函数
+  // TTS
   const playInternalTTS = async (text) => {
     if (typeof window === 'undefined') return;
     if (audioRef.current) audioRef.current.pause();
@@ -346,7 +368,7 @@ export default function AIChatDock({ initialTask, onClose }) {
     } catch (e) { setIsPlaying(false); }
   };
 
-  // 语音识别函数
+  // STT
   const toggleListening = () => {
     if (isListening) {
       if (recognitionRef.current) recognitionRef.current.stop();
@@ -371,35 +393,66 @@ export default function AIChatDock({ initialTask, onClose }) {
     rec.start();
   };
 
-  // 划词菜单逻辑
+  // --- 关键逻辑：划词菜单修复 (selectionchange + pointerdown) ---
   useEffect(() => {
-    const handleMouseUp = (e) => {
+    const onSelectionChange = () => {
+        // 使用 debounce 避免拖拽时频繁闪烁
         if (selectionTimeoutRef.current) clearTimeout(selectionTimeoutRef.current);
+        
         selectionTimeoutRef.current = setTimeout(() => {
-            const selection = window.getSelection();
-            if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
-            const text = selection.toString().trim();
-            
-            // 排除输入框内的选词
-            if (text.length > 0 && !e.target.matches('textarea, input')) {
-                const range = selection.getRangeAt(0);
-                const rect = range.getBoundingClientRect();
-                setSelectionMenu({ show: true, x: rect.left + rect.width / 2, y: rect.top - 60, text: text });
-                setIsCopied(false);
+            const sel = window.getSelection();
+            if (!sel || sel.isCollapsed) {
+                // 如果没有选区，且菜单当前是显示的，才关闭（防止点击菜单本身时误关）
+                // 但为了严谨，点击外部的关闭由 handleOutsideClick 处理
+                return;
             }
-        }, 100);
+
+            const text = sel.toString().trim();
+            if (!text) return;
+
+            // 限制：只在 Markdown 内容区域生效，避免选输入框文字跳出菜单
+            if (sel.anchorNode && sel.anchorNode.parentElement) {
+                const wrapper = sel.anchorNode.parentElement.closest('.notion-md');
+                if (!wrapper) return; 
+            }
+
+            const range = sel.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+
+            // 确保菜单位置正确（居中显示在选区上方）
+            setSelectionMenu({
+                show: true,
+                x: rect.left + rect.width / 2,
+                y: rect.top - 60, 
+                text
+            });
+            setIsCopied(false);
+        }, 300); // 300ms 延迟，等待用户选完
     };
+
     const handleOutsideClick = (e) => {
-      const menu = document.getElementById('selection-popover');
-      if (menu && !menu.contains(e.target)) setSelectionMenu(prev => ({ ...prev, show: false }));
+        // 使用 pointerdown 兼容移动端和 PC
+        const menu = document.getElementById('selection-popover');
+        // 如果点击的是菜单内部，不关闭
+        if (menu && menu.contains(e.target)) return;
+        
+        // 否则关闭菜单
+        setSelectionMenu(prev => {
+            if (prev.show) {
+                window.getSelection().removeAllRanges(); // 同时清除选区
+                return { ...prev, show: false };
+            }
+            return prev;
+        });
     };
-    document.addEventListener('mouseup', handleMouseUp);
-    document.addEventListener('touchend', handleMouseUp);
-    document.addEventListener('mousedown', handleOutsideClick);
+
+    document.addEventListener('selectionchange', onSelectionChange);
+    document.addEventListener('pointerdown', handleOutsideClick, true); // 使用 pointerdown 且捕获阶段
+
     return () => {
-        document.removeEventListener('mouseup', handleMouseUp);
-        document.removeEventListener('touchend', handleMouseUp);
-        document.removeEventListener('mousedown', handleOutsideClick);
+        document.removeEventListener('selectionchange', onSelectionChange);
+        document.removeEventListener('pointerdown', handleOutsideClick, true);
+        if (selectionTimeoutRef.current) clearTimeout(selectionTimeoutRef.current);
     };
   }, []);
 
@@ -452,19 +505,19 @@ export default function AIChatDock({ initialTask, onClose }) {
   const pinnedSessions = sessions.filter(s => s.pinned);
   const historySessions = sessions.filter(s => !s.pinned);
 
-  // --- 界面渲染 (弹窗模式) ---
+  // --- 界面渲染 ---
 
   return (
     <div style={styles.modalOverlay}>
       
-      {/* 划词菜单 */}
+      {/* 划词菜单 (修复了点击穿透和消失问题) */}
       {selectionMenu.show && (
           <div id="selection-popover" style={{...styles.popover, left: selectionMenu.x, top: selectionMenu.y}}>
-              <button onClick={handleTranslateSelection} style={styles.popBtn}><FaLanguage size={14}/> 解释</button>
+              <button onPointerDown={handleTranslateSelection} style={styles.popBtn}><FaLanguage size={14}/> 解释</button>
               <div style={styles.popDivider}></div>
-              <button onClick={() => playInternalTTS(selectionMenu.text)} style={styles.popBtn}><FaVolumeUp size={14}/> 朗读</button>
+              <button onPointerDown={() => playInternalTTS(selectionMenu.text)} style={styles.popBtn}><FaVolumeUp size={14}/> 朗读</button>
               <div style={styles.popDivider}></div>
-              <button onClick={() => copyText(selectionMenu.text)} style={styles.popBtn}>
+              <button onPointerDown={() => copyText(selectionMenu.text)} style={styles.popBtn}>
                   {isCopied ? <><FaCheck size={14} color="#4ade80"/> 已复制</> : <><FaCopy size={14}/> 复制</>}
               </button>
               <div style={styles.popArrow}></div>
@@ -533,7 +586,6 @@ export default function AIChatDock({ initialTask, onClose }) {
 
           <div ref={historyRef} style={styles.messageArea}>
               {messages.map((m, i) => {
-                  // **卡顿优化**：如果是正在生成的最后一条消息(loading态)，强制关闭拼音，只显示纯文本
                   const isStreaming = loading && i === messages.length - 1;
                   const showPinyinForThisMessage = !isStreaming && (pinyinToggles[i] ?? config.showPinyin);
                   
@@ -702,10 +754,10 @@ const styles = {
   sessionActionBtn: { background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' },
   bookmarkItem: { background: '#f8fafc', padding: '8px 12px', borderRadius: 6, marginBottom: 4, fontSize: '0.85rem', color: '#334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   bookmarkActionBtn: { background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' },
-  closeArea: { position: 'fixed', bottom: 0, left: 0, width: '100%', height: '15%', background: 'linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.6))', backdropFilter: 'blur(3px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
   popover: { position: 'fixed', transform: 'translateX(-50%)', background: '#1e293b', borderRadius: 10, padding: '10px 15px', display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 10px 25px rgba(0,0,0,0.4)', zIndex: 11000, color: '#fff' },
   popBtn: { background:'transparent', border:'none', color:'#fff', cursor:'pointer', display:'flex', alignItems:'center', gap:8, fontSize:'0.85rem' },
   popDivider: { width: 1, height: 18, background: 'rgba(255,255,255,0.2)' },
+  popArrow: { position: 'absolute', bottom: -5, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '6px solid #1e293b' },
   settingsOverlay: { position:'fixed', inset:0, zIndex:12000, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center' },
   settingsModal: { width: '85%', maxWidth: '360px', background: '#fff', borderRadius: 20, padding: 20 },
   explainButton: { display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 18px', borderRadius: '22px', border: '1px solid #dbeafe', background: '#eff6ff', color: '#3b82f6', fontWeight: 'bold', cursor: 'pointer', marginTop: '16px', fontSize:'0.9rem' },
@@ -719,5 +771,7 @@ const styles = {
   settingRow: { display: 'flex', flexDirection: 'column', marginBottom: 12 },
   switchRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   input: { width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0', marginTop: 4 },
-  saveBtn: { width: '100%', padding: '10px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', marginTop: 10 }
+  saveBtn: { width: '100%', padding: '10px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', marginTop: 10 },
+  ttsBar: { position: 'absolute', top: -30, left: 16, background: '#3b82f6', color: 'white', padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', animation: 'fadeIn 0.3s' },
+  modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }
 };
