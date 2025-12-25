@@ -26,7 +26,7 @@ export const AIProvider = ({ children }) => {
   ====================== */
   const [user, setUser] = useState(null);
   const [isActivated, setIsActivated] = useState(false);
-  const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
+  const [isGoogleLoaded, setIsGoogleLoaded] = useState(false); // 状态已定义
 
   /* ======================
      2. AI 配置 (核心 Prompt 修正版)
@@ -153,17 +153,18 @@ export const AIProvider = ({ children }) => {
   }, [config.systemPrompt, config.userLevel, activeTask]);
 
   /* ======================
-     7. Google 登录逻辑 (已修复)
+     7. Google 登录逻辑 (修复版)
   ====================== */
   
   // 初始化 Google SDK
   useEffect(() => {
     if (isGoogleLoaded && window.google) {
         window.google.accounts.id.initialize({
-            client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID, // 请确保 .env 中有此变量
+            client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID, // 确保环境变量存在
             callback: handleGoogleCallback,
             auto_select: false
         });
+        // 这里不自动 render Button，由 UI 组件（侧边栏）自己渲染
     }
   }, [isGoogleLoaded]);
 
@@ -186,7 +187,7 @@ export const AIProvider = ({ children }) => {
     }
   };
 
-  // 手动触发登录 (UI 组件调用此方法)
+  // 手动触发登录 (弹窗模式)
   const login = () => {
       if (window.google) {
           window.google.accounts.id.prompt();
@@ -287,13 +288,14 @@ export const AIProvider = ({ children }) => {
   };
 
   /* ======================
-     10. Provider 值
+     10. Provider 值 (这里加回了 isGoogleLoaded)
   ====================== */
   const value = {
     user,
-    login, // 新增：UI需要调用的登录方法
+    login,
     logout,
     isActivated,
+    isGoogleLoaded, // 🔥 修复关键：加回这个，侧边栏按钮就会出来了！
     config,
     setConfig,
     sessions,
@@ -306,14 +308,7 @@ export const AIProvider = ({ children }) => {
     setIsAiOpen,
     activeTask,
     triggerAI,
-    // 覆盖 systemPrompt 以供 fetch 使用
-    // 注意：UI 组件里 config.systemPrompt 会取到旧的 string，
-    // 你需要在 UI 组件 handleSend 时优先使用这里的 config.systemPrompt 或者下面这个 derivedPrompt
-    // 但为了兼容，我们直接在 Context 层面处理好，UI 组件读取 config 时依然是对象，
-    // 建议 UI 组件 handleSend 里构建 messages 时使用 systemPrompt (变量) 而不是 config.systemPrompt
-    // 或者我们这里 Hack 一下：
-    ...{ systemPrompt: finalSystemPrompt }, // 这是一个单独导出的属性，供 hooks 读取
-    
+    systemPrompt: finalSystemPrompt,
     canUseAI,
     recordUsage,
     remainingQuota,
