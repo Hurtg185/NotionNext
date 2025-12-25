@@ -1,4 +1,4 @@
-// functions/api/ai/check-limit.js
+// functions/api/can-use-ai.js
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -16,16 +16,21 @@ export async function onRequestPost(context) {
                         .bind(email)
                         .first();
 
-    // 如果用户还没登录过或者没记录，默认给 0 次（或者根据你的逻辑给初始值）
+    // --- 核心修复：如果用户没记录，说明是刚注册的新用户，默认给他 3 次 ---
     if (!usage) {
-      return new Response(JSON.stringify({ canUse: false, remaining: 0 }));
+      return new Response(JSON.stringify({ 
+        canUse: true, 
+        remaining: 3 
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     const remaining = usage.total_free - usage.used_count;
     
     return new Response(JSON.stringify({
       canUse: remaining > 0,
-      remaining: Math.max(0, remaining) // 确保不会出现负数
+      remaining: Math.max(0, remaining)
     }), {
       headers: { 'Content-Type': 'application/json' }
     });
