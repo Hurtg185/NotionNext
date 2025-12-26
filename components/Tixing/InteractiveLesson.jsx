@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/router';
 import { FaPlay, FaHome, FaRedo, FaStar, FaRegStar, FaClock, FaMedal, FaExpand, FaCompress } from "react-icons/fa";
 import confetti from 'canvas-confetti';
-import { useAI } from './AIConfigContext'; // ✅ 修改1：引入 AI Context
+import { useAI } from '../AIConfigContext'; // ✅ 修改1：引入 AI Context
 
 // --- 核心全屏播放器组件 ---
 import WordStudyPlayer from './WordStudyPlayer';
