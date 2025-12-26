@@ -8,7 +8,7 @@ import {
   ChevronDown, ChevronUp, GraduationCap,
   MessageSquareText, Headphones, Volume2, 
   Mic, Send, Copy, X, Loader2, Settings,
-  Lock, KeyRound, BrainCircuit, Globe, Zap, ShieldCheck, ShieldAlert
+  Lock, KeyRound, BrainCircuit, Globe, Zap, ShieldCheck, ShieldAlert, ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
@@ -105,12 +105,15 @@ const FullScreenTranslator = ({ isOpen, onClose }) => {
     const [loading, setLoading] = useState(false);
     const [results, setResults] = useState([]);
     const [quickReplies, setQuickReplies] = useState([]); // 快捷回复
-    const [targetLang, setTargetLang] = useState('my');
     
     // 设置状态
+    const [sourceLang, setSourceLang] = useState('auto'); // 源语言
+    const [targetLang, setTargetLang] = useState('my');   // 目标语言
     const [customApiUrl, setCustomApiUrl] = useState('');
     const [customApiKey, setCustomApiKey] = useState('');
     const [autoSend, setAutoSend] = useState(false);
+    const [speedMode, setSpeedMode] = useState(false); // 极速模式
+    
     const recognitionRef = useRef(null);
 
     // 初始化
@@ -122,6 +125,9 @@ const FullScreenTranslator = ({ isOpen, onClose }) => {
             setCustomApiUrl(localStorage.getItem('ai_api_url') || '');
             setCustomApiKey(localStorage.getItem('ai_api_key') || '');
             setAutoSend(localStorage.getItem('ai_auto_send') === 'true');
+            setSpeedMode(localStorage.getItem('ai_speed_mode') === 'true');
+            setSourceLang(localStorage.getItem('ai_source_lang') || 'auto');
+            setTargetLang(localStorage.getItem('ai_target_lang') || 'my');
         }
     }, [isOpen]);
 
@@ -142,6 +148,9 @@ const FullScreenTranslator = ({ isOpen, onClose }) => {
         if (key === 'ai_api_url') setCustomApiUrl(value);
         if (key === 'ai_api_key') setCustomApiKey(value);
         if (key === 'ai_auto_send') setAutoSend(value === 'true');
+        if (key === 'ai_speed_mode') setSpeedMode(value === 'true');
+        if (key === 'ai_source_lang') setSourceLang(value);
+        if (key === 'ai_target_lang') setTargetLang(value);
     };
 
     // 语音识别
@@ -152,8 +161,12 @@ const FullScreenTranslator = ({ isOpen, onClose }) => {
                 const recognition = new SR();
                 recognition.continuous = false;
                 recognition.interimResults = true;
-                recognition.lang = 'zh-CN'; 
-                recognition.onresult = (e) => setInput(Array.from(e.results).map(r => r[0].transcript).join(''));
+                
+                recognition.onresult = (e) => {
+                    const text = Array.from(e.results).map(r => r[0].transcript).join('');
+                    setInput(text);
+                };
+                
                 recognition.onend = () => {
                     setIsListening(false);
                 };
@@ -174,9 +187,15 @@ const FullScreenTranslator = ({ isOpen, onClose }) => {
         if (isListening) {
             recognitionRef.current.stop();
         } else {
-            setInput('');
+            // 根据源语言自动切换听写语言
+            let langCode = 'zh-CN';
+            if (sourceLang === 'en') langCode = 'en-US';
+            if (sourceLang === 'my') langCode = 'my-MM'; 
+            
+            recognitionRef.current.lang = langCode;
             recognitionRef.current.start();
             setIsListening(true);
+            setInput('');
         }
     };
 
@@ -193,7 +212,9 @@ const FullScreenTranslator = ({ isOpen, onClose }) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     text: input,
+                    sourceLang,
                     targetLang,
+                    speedMode,
                     customConfig: {
                         apiUrl: customApiUrl, 
                         apiKey: customApiKey
@@ -215,15 +236,16 @@ const FullScreenTranslator = ({ isOpen, onClose }) => {
     };
 
     const speak = (text) => {
-        const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=my-MM-NilarNeural&r=-10`;
+        // 简单映射 TTS
+        const voiceMap = { 'my': 'my-MM-NilarNeural', 'zh': 'zh-CN-XiaoxiaoNeural', 'en': 'en-US-JennyNeural' };
+        const v = voiceMap[targetLang] || 'en-US-JennyNeural';
+        const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${v}&r=-10`;
         new Audio(url).play().catch(e => console.error(e));
     };
 
     // 点击快捷回复
     const handleQuickReply = (reply) => {
         setInput(reply);
-        // 如果想点击后直接翻译，可以在这里调用 handleTranslate (需处理 state 异步)
-        // 简单起见，这里只填充输入框，让用户确认
     };
 
     if (!isOpen) return null;
@@ -235,17 +257,9 @@ const FullScreenTranslator = ({ isOpen, onClose }) => {
                 <button onClick={onClose} className="p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-full">
                     <X size={24} />
                 </button>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                      <span className="font-black text-slate-800 text-lg">AI 翻译官</span>
-                     <select 
-                        value={targetLang} 
-                        onChange={(e) => setTargetLang(e.target.value)}
-                        className="bg-slate-100 text-xs font-bold text-slate-600 rounded-lg py-1 px-2 outline-none"
-                    >
-                        <option value="my">🇲🇲 缅文</option>
-                        <option value="zh">🇨🇳 中文</option>
-                        <option value="en">🇺🇸 英文</option>
-                    </select>
+                     {speedMode && <Zap size={14} className="text-amber-500" fill="currentColor"/>}
                 </div>
                 <button onClick={() => setShowSettings(true)} className="p-2 -mr-2 text-slate-500 hover:bg-slate-100 rounded-full">
                     <Settings size={24} />
@@ -269,7 +283,7 @@ const FullScreenTranslator = ({ isOpen, onClose }) => {
                                 type="password" 
                                 value={passwordInput}
                                 onChange={(e) => setPasswordInput(e.target.value)}
-                                placeholder="Password"
+                                placeholder="输入密码 (默认为 fanyi)"
                                 className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-center tracking-widest text-lg"
                             />
                         </div>
@@ -286,7 +300,9 @@ const FullScreenTranslator = ({ isOpen, onClose }) => {
                         {/* 快捷回复区域 */}
                         {quickReplies.length > 0 && (
                             <div className="mb-4">
-                                <p className="text-xs font-bold text-slate-400 uppercase mb-2 ml-1">💡 快捷回复 (Quick Replies)</p>
+                                <p className="text-xs font-bold text-slate-400 uppercase mb-2 ml-1 flex items-center gap-1">
+                                    <Sparkles size={12}/> 智能回复建议
+                                </p>
                                 <div className="flex flex-wrap gap-2">
                                     {quickReplies.map((reply, idx) => (
                                         <button 
@@ -314,8 +330,9 @@ const FullScreenTranslator = ({ isOpen, onClose }) => {
                         )}
                         
                         {loading && (
-                            <div className="flex justify-center py-10">
+                            <div className="flex flex-col items-center justify-center py-10 gap-2">
                                 <Loader2 size={32} className="animate-spin text-blue-500" />
+                                <p className="text-xs font-bold text-slate-400">AI 正在思考...</p>
                             </div>
                         )}
                     </div>
@@ -329,8 +346,8 @@ const FullScreenTranslator = ({ isOpen, onClose }) => {
                         <textarea 
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            placeholder="输入内容..."
-                            className="w-full bg-slate-50 rounded-2xl p-4 pr-12 resize-none h-24 text-lg focus:ring-2 focus:ring-blue-100 outline-none"
+                            placeholder={isListening ? "正在聆听..." : "输入内容..."}
+                            className={`w-full bg-slate-50 rounded-2xl p-4 pr-12 resize-none h-24 text-lg focus:ring-2 focus:ring-blue-100 outline-none transition-all ${isListening ? 'ring-2 ring-rose-500 bg-rose-50' : ''}`}
                         />
                         {input && (
                             <button onClick={() => setInput('')} className="absolute top-3 right-3 p-1 text-slate-400 bg-white rounded-full shadow-sm">
@@ -339,6 +356,7 @@ const FullScreenTranslator = ({ isOpen, onClose }) => {
                         )}
                     </div>
                     
+                    {/* 按钮合并：有字发送，无字语音 */}
                     <button 
                         onClick={input.trim() ? handleTranslate : toggleListening}
                         disabled={loading}
@@ -356,42 +374,73 @@ const FullScreenTranslator = ({ isOpen, onClose }) => {
             {/* 设置弹窗 */}
             <AnimatePresence>
                 {showSettings && (
-                    <div className="absolute inset-0 z-50 bg-black/20 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+                    <div className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
                         <motion.div 
                             initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
                             className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl"
                         >
                             <div className="flex justify-between items-center mb-6">
-                                <h3 className="font-bold text-lg">设置</h3>
+                                <h3 className="font-bold text-lg">全局设置</h3>
                                 <button onClick={() => setShowSettings(false)} className="p-2 bg-slate-100 rounded-full"><X size={18}/></button>
                             </div>
                             
-                            <div className="space-y-4">
+                            <div className="space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                                {/* 极速模式 */}
+                                <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-100 rounded-xl">
+                                    <div>
+                                        <span className="font-bold text-amber-900 text-sm flex items-center gap-1">
+                                            <Zap size={14} fill="currentColor"/> 极速模式
+                                        </span>
+                                        <p className="text-[10px] text-amber-700/70">仅3种结果，响应更快</p>
+                                    </div>
+                                    <input type="checkbox" checked={speedMode} onChange={(e) => saveSetting('ai_speed_mode', e.target.checked ? 'true' : 'false')} className="w-5 h-5 accent-amber-500" />
+                                </div>
+
+                                {/* 语言选择 */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-400 mb-1">源语言</label>
+                                        <select value={sourceLang} onChange={(e) => saveSetting('ai_source_lang', e.target.value)} className="w-full p-2 bg-slate-50 rounded-lg text-sm font-bold">
+                                            <option value="auto">自动识别</option>
+                                            <option value="zh">中文</option>
+                                            <option value="en">English</option>
+                                            <option value="my">缅甸语</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-400 mb-1">目标语言</label>
+                                        <select value={targetLang} onChange={(e) => saveSetting('ai_target_lang', e.target.value)} className="w-full p-2 bg-slate-50 rounded-lg text-sm font-bold">
+                                            <option value="my">缅甸语</option>
+                                            <option value="zh">中文</option>
+                                            <option value="en">English</option>
+                                            <option value="th">泰语</option>
+                                            <option value="vi">越南语</option>
+                                            <option value="jp">日语</option>
+                                        </select>
+                                    </div>
+                                </div>
+
                                 <label className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                                    <span className="font-medium text-sm text-slate-700">语音自动发送</span>
-                                    <input type="checkbox" checked={autoSend} onChange={(e) => saveSetting('ai_auto_send', e.target.checked ? 'true' : 'false')} className="w-5 h-5" />
+                                    <span className="font-medium text-sm text-slate-700">语音结束自动发送</span>
+                                    <input type="checkbox" checked={autoSend} onChange={(e) => saveSetting('ai_auto_send', e.target.checked ? 'true' : 'false')} className="w-5 h-5 accent-blue-600" />
                                 </label>
                                 
-                                <div className="space-y-2">
-                                    <p className="text-xs font-bold text-slate-400 uppercase">API 配置 (可选)</p>
-                                    <input 
-                                        type="text" 
-                                        value={customApiUrl} 
-                                        onChange={(e) => saveSetting('ai_api_url', e.target.value)}
-                                        placeholder="API URL" 
-                                        className="w-full p-3 bg-slate-50 rounded-xl text-sm outline-none border border-transparent focus:border-blue-200"
-                                    />
+                                <div className="space-y-2 pt-2 border-t border-slate-100">
+                                    <p className="text-xs font-bold text-slate-400 uppercase">自定义 API (心流)</p>
                                     <input 
                                         type="password" 
                                         value={customApiKey} 
                                         onChange={(e) => saveSetting('ai_api_key', e.target.value)}
-                                        placeholder="API Key" 
-                                        className="w-full p-3 bg-slate-50 rounded-xl text-sm outline-none border border-transparent focus:border-blue-200"
+                                        placeholder="sk-xxxxxxxx" 
+                                        className="w-full p-3 bg-slate-50 rounded-xl text-sm outline-none border border-transparent focus:border-blue-200 font-mono"
                                     />
+                                    <a href="https://cloud.siliconflow.cn/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[10px] text-blue-500 font-bold mt-1">
+                                        <ExternalLink size={12}/> 申请 SiliconFlow API Key
+                                    </a>
                                 </div>
 
                                 <button onClick={() => setShowSettings(false)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold mt-2">
-                                    保存
+                                    保存设置
                                 </button>
                             </div>
                         </motion.div>
@@ -403,7 +452,7 @@ const FullScreenTranslator = ({ isOpen, onClose }) => {
 };
 
 // ==========================================
-// 组件: 结果展示 (增强版 - 显示评分和风险)
+// 组件: 结果展示 (增强版 - 回译字体加大)
 // ==========================================
 const ResultItem = ({ item, onSpeak }) => {
     // 相似度颜色
@@ -448,18 +497,22 @@ const ResultItem = ({ item, onSpeak }) => {
             </div>
             
             {/* 内容直接显示 */}
-            <p className="text-base font-medium text-slate-800 leading-relaxed mb-3 select-all">
+            <p className="text-lg font-bold text-slate-800 leading-relaxed mb-3 select-all">
                 {item.translation}
             </p>
             
-            <div className="flex items-center justify-between pt-2 border-t border-slate-50">
-                <p className="text-xs text-slate-400 italic">↩ {item.back_translation}</p>
-                <div className="flex gap-2">
+            {/* 回译 (字体加大 text-sm -> text-base, text-slate-500 -> text-slate-600) */}
+            <div className="pt-3 border-t border-slate-50/80">
+                <p className="text-sm font-medium text-slate-600 italic">
+                    <span className="text-[10px] text-slate-400 not-italic uppercase mr-1">Back:</span>
+                    {item.back_translation}
+                </p>
+                <div className="flex justify-end gap-2 mt-2">
                     <button onClick={onSpeak} className="p-1.5 hover:bg-slate-50 rounded-lg text-slate-400">
-                        <Volume2 size={16} />
+                        <Volume2 size={18} />
                     </button>
                     <button onClick={() => navigator.clipboard.writeText(item.translation)} className="p-1.5 hover:bg-slate-50 rounded-lg text-slate-400">
-                        <Copy size={16} />
+                        <Copy size={18} />
                     </button>
                 </div>
             </div>
@@ -717,9 +770,11 @@ export default function HskPageClient() {
             <Sparkles size={12} className="text-blue-500" />
             <span className="text-[10px] font-bold text-blue-800 uppercase">Premium Class</span>
           </div>
-          <a href={FB_CHAT_LINK} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white rounded-full shadow-sm border border-slate-100 active:scale-95 transition-all">
-             <MessengerIcon size={18} />
-             <span className="text-xs font-bold text-slate-700">Messenger</span>
+          <a href={FB_CHAT_LINK} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white rounded-full shadow-sm border border-slate-100 active:scale-95 transition-all"
+          >
+            <MessengerIcon size={18} />
+            <span className="text-xs font-bold text-slate-700">Messenger</span>
           </a>
         </div>
         
@@ -731,7 +786,7 @@ export default function HskPageClient() {
         </div>
       </header>
 
-      {/* 🚀 新入口：全屏翻译官 (双语标题) */}
+      {/* 🚀 唯一翻译入口：全屏翻译官 (双语标题) */}
       <div className="px-4">
         <button 
           onClick={() => setIsTranslatorOpen(true)}
