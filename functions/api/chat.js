@@ -76,7 +76,7 @@ export async function onRequestPost(context) {
     };
 
     const aiRes = await fetch(
-      'https://integrate.api.nvidia.com/v1/chat/completions',
+      'https://apis.iflow.cn/v1/chat/completions',
       {
         method: 'POST',
         headers: {
