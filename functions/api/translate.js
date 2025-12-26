@@ -1,7 +1,7 @@
 /**
  * Cloudflare Pages Function
  * Path: /api/translate
- * Version: FINAL / PRODUCTION
+ * Version: FINAL / FAST / STABLE
  */
 
 export async function onRequestPost({ request, env }) {
@@ -14,7 +14,6 @@ export async function onRequestPost({ request, env }) {
       sourceLang = "auto",
       targetLang = "my",
       context = [],
-      speedMode = false,
       customConfig = {}
     } = await request.json();
 
@@ -56,67 +55,24 @@ export async function onRequestPost({ request, env }) {
     const tName = langMap[targetLang] || targetLang;
 
     // =========================
-    // 3. SYSTEM PROMPT（核心）
+    // 3. SYSTEM PROMPT（极简 · 高保真）
     // =========================
-    const SYSTEM_PROMPT = speedMode
-      ? `
-You are a HIGH-FIDELITY literal chat translator.
+    const SYSTEM_PROMPT = `
+You are a multilingual CHAT TRANSLATION ENGINE.
 
-Translate from ${sName} to ${tName}.
+Task:
+Translate the user's message from ${sName} to ${tName}.
 
-GOAL:
-Produce the closest possible translation to the original meaning.
-Accuracy has absolute priority over fluency.
+ABSOLUTE RULES:
+- Do NOT add, remove, merge, or weaken any meaning.
+- Preserve original structure and sentence mapping.
+- Accuracy has priority over fluency.
+- Do NOT use English as an intermediate language.
+- Output JSON ONLY. No explanations.
 
-STRICT RULES:
-- Output JSON ONLY.
-- EXACTLY ONE translation result.
-- Translation MUST be a natural literal translation.
-- NO paraphrasing.
-- NO interpretation.
-- NO emotional rewriting.
-- NO English as intermediate language.
+Output EXACTLY the following structure:
 
-BACK-TRANSLATION (MANDATORY):
-- Back-translate the translation into ${sName}.
-- Back-translation MUST preserve original structure and meaning.
-- This is a semantic equivalence check, NOT intent explanation.
-
-JSON FORMAT (must follow exactly):
 {
-  "mode": "speed",
-  "result": {
-    "label": "Literal | 直译",
-    "translation": "",
-    "back_translation": "",
-    "recommended": true
-  }
-}
-`
-      : `
-You are a PROFESSIONAL chat translation engine (Chinese ↔ Burmese).
-
-Translate from ${sName} to ${tName} for real chat usage.
-
-GLOBAL RULES:
-- Output JSON ONLY.
-- No added or omitted meaning.
-- No emotional amplification.
-- No English as intermediate language.
-
-TRANSLATION LAYERS:
-1. Literal (semantic ground truth)
-2. Free (natural but same meaning)
-3. Spoken (native chat style)
-
-BACK-TRANSLATION RULE:
-- ALL layers MUST include back_translation in ${sName}.
-- Back-translation MUST be literal and semantic.
-- NO intent explanation.
-
-JSON FORMAT (must follow exactly):
-{
-  "mode": "normal",
   "results": [
     {
       "label": "Literal | 直译",
@@ -138,6 +94,10 @@ JSON FORMAT (must follow exactly):
     }
   ]
 }
+
+Back-translation rules:
+- back_translation MUST be in ${sName}.
+- back_translation must reflect actual meaning, not explanation.
 `;
 
     // =========================
@@ -145,12 +105,12 @@ JSON FORMAT (must follow exactly):
     // =========================
     const messages = [
       { role: "system", content: SYSTEM_PROMPT },
-      ...(Array.isArray(context) ? context.slice(-20) : []),
+      ...(Array.isArray(context) ? context.slice(-10) : []),
       { role: "user", content: text }
     ];
 
     // =========================
-    // 5. 调用 AI
+    // 5. 调用 AI（提速关键）
     // =========================
     const upstream = await fetch(API_URL, {
       method: "POST",
@@ -161,8 +121,8 @@ JSON FORMAT (must follow exactly):
       body: JSON.stringify({
         model: MODEL,
         messages,
-        temperature: speedMode ? 0.1 : 0.22,
-        top_p: 0.9,
+        temperature: 0.15,   // 更低 = 更快更稳
+        top_p: 0.85,
         stream: false,
         response_format: { type: "json_object" }
       })
