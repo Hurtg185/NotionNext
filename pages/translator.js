@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+import dynamic from 'next/dynamic'; // 引入 dynamic
 import { 
   Mic, Send, Settings, Lock, KeyRound, X, 
   Volume2, Copy, BrainCircuit, ChevronLeft,
@@ -11,7 +12,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const ACCESS_CODE = "fanyi"; // 默认密码
 
-export default function TranslatorPage() {
+// 将原本的 TranslatorPage 改名为 TranslatorComponent
+function TranslatorComponent() {
   const [mounted, setMounted] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
   const [password, setPassword] = useState('');
@@ -34,14 +36,15 @@ export default function TranslatorPage() {
   // 1. 初始化客户端状态
   useEffect(() => {
     setMounted(true);
-    if (localStorage.getItem('tr_verified') === 'true') setIsVerified(true);
-    setApiKey(localStorage.getItem('tr_api_key') || '');
-    setAutoSend(localStorage.getItem('tr_auto_send') !== 'false');
-    setSpeedMode(localStorage.getItem('tr_speed') === 'true');
-    setSourceLang(localStorage.getItem('tr_src') || 'zh');
-    setTargetLang(localStorage.getItem('tr_tar') || 'my');
-
+    // 确保只在浏览器端运行 localStorage
     if (typeof window !== 'undefined') {
+      if (localStorage.getItem('tr_verified') === 'true') setIsVerified(true);
+      setApiKey(localStorage.getItem('tr_api_key') || '');
+      setAutoSend(localStorage.getItem('tr_auto_send') !== 'false');
+      setSpeedMode(localStorage.getItem('tr_speed') === 'true');
+      setSourceLang(localStorage.getItem('tr_src') || 'zh');
+      setTargetLang(localStorage.getItem('tr_tar') || 'my');
+
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (SR) {
         const rec = new SR();
@@ -116,6 +119,7 @@ export default function TranslatorPage() {
   };
 
   const speak = (text) => {
+    if (typeof window === 'undefined') return;
     const voiceMap = { my: 'my-MM-NilarNeural', zh: 'zh-CN-XiaoxiaoNeural', en: 'en-US-JennyNeural' };
     const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${voiceMap[targetLang] || 'my-MM-NilarNeural'}&r=-10`;
     const audio = new Audio(url);
@@ -276,3 +280,10 @@ export default function TranslatorPage() {
     </div>
   );
 }
+
+// 核心修复：使用 dynamic 包装组件并禁用服务端渲染 (SSR)
+const TranslatorPage = dynamic(() => Promise.resolve(TranslatorComponent), {
+  ssr: false,
+});
+
+export default TranslatorPage;
