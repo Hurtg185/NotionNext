@@ -67,7 +67,7 @@ export async function onRequestPost(context) {
 
     // 3. 请求 NVIDIA AI
     const payload = {
-      model: config?.modelId || 'deepseek-ai/deepseek-v3.2',
+      model: config?.modelId || 'deepseek-v3.2',
       messages,
       temperature: 0.7,
       top_p: 0.9,
