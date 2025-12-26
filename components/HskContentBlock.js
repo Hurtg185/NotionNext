@@ -6,12 +6,12 @@ import {
   Sparkles, PlayCircle, Gem, MessageCircle,
   Crown, Heart, ChevronRight, Star, BookOpen,
   ChevronDown, ChevronUp, GraduationCap,
-  MessageSquareText, Headphones, Volume2, BrainCircuit
+  MessageSquareText, Headphones, Volume2, Languages // 引入 Languages 图标用于翻译
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
 
-// 动态导入 WordCard 组件，禁用服务器端渲染（SSR）
+// 动态导入 WordCard 组件
 const WordCard = dynamic(
   () => import('@/components/WordCard'),
   { ssr: false }
@@ -206,7 +206,7 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
   );
 };
 
-// 拼音面板组件 (移除了 AI 助教)
+// 拼音面板组件
 const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection }) => {
   const router = useRouter();
 
@@ -244,8 +244,28 @@ const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection }) => {
         </div>
         <ChevronRight size={16} className="text-orange-300" />
       </button>
+
+      {/* ==================================================== */}
+      {/* 新增：翻译器入口 (替换原来的 AI 助教) */}
+      {/* ==================================================== */}
+      <button 
+        onClick={() => router.push('/translator')} 
+        className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-indigo-50 to-violet-50 rounded-2xl border border-indigo-100/50 active:scale-95 transition-transform group"
+      >
+        <div className="flex items-center gap-3">
+          <div className="p-1.5 bg-white rounded-full text-indigo-500 shadow-sm shrink-0">
+            <Languages size={16} />
+          </div>
+          <div className="text-left">
+            <span className="block text-xs font-black text-slate-700">在线翻译 (Translator)</span>
+            <span className="block text-[10px] text-slate-500 font-medium">ဘာသာပြန်ဆိုရန်</span>
+          </div>
+        </div>
+        <ChevronRight size={16} className="text-indigo-300" />
+      </button>
+      {/* ==================================================== */}
       
-      {/* 第三行：双收藏按钮 */}
+      {/* 第四行：双收藏按钮 */}
       <div className="grid grid-cols-2 gap-3">
         {/* 单词收藏 */}
         <button 
@@ -281,30 +301,19 @@ const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection }) => {
 
 export default function HskPageClient() {
   const router = useRouter();
-  const [mounted, setMounted] = useState(false); // 关键：解决 SSR 部署报错
   const [activeHskWords, setActiveHskWords] = useState(null);
   const [activeLevelTag, setActiveLevelTag] = useState(null);
   const [membership, setMembership] = useState({ open: false, level: null });
 
-  // 关键修复：仅在挂载后执行浏览器端逻辑
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const isCardViewOpen = router.asPath.includes('#hsk-vocabulary');
 
-  // 安全获取 Hash，防止 SSR 阶段访问 router 出错
-  const isCardViewOpen = mounted && router.asPath?.includes('#hsk-vocabulary');
-
-  // ====================================================
-  // 跳转逻辑
-  // ====================================================
-
-  // 1. 普通跳转：进入口语首页 (点击 Banner)
+  // 普通跳转：进入口语首页
   const handleSpokenGeneralClick = useCallback((e) => {
     if(e) e.preventDefault();
     router.push('/spoken');
   }, [router]);
 
-  // 2. 收藏跳转：进入口语收藏 (点击按钮)
+  // 收藏跳转：进入口语收藏
   const handleSpokenCollectionClick = useCallback((e) => {
     if(e) e.preventDefault();
     router.push({
@@ -324,7 +333,6 @@ export default function HskPageClient() {
 
   // 处理生词收藏点击
   const handleCollectionClick = useCallback(() => {
-    if (typeof window === 'undefined') return;
     const savedIds = JSON.parse(localStorage.getItem(FAVORITES_STORAGE_KEY) || '[]');
     const allWords = [ ...(hskWordsData[1] || []), ...(hskWordsData[2] || []) ];
     const favoriteWords = allWords.filter(word => 
@@ -341,11 +349,6 @@ export default function HskPageClient() {
     router.push({ pathname: router.pathname, hash: 'hsk-vocabulary' }, undefined, { shallow: true });
   }, [router]);
 
-  // 如果没有挂载，返回一个空的结构，防止 SSR 阶段执行 Node.js 无法识别的浏览器逻辑
-  if (!mounted) {
-    return <div className="min-h-screen bg-[#f8fafc]" />;
-  }
-
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans text-slate-900 pb-20 relative overflow-x-hidden max-w-md mx-auto shadow-2xl shadow-slate-200">
       
@@ -358,7 +361,6 @@ export default function HskPageClient() {
             <span className="text-[10px] font-bold text-blue-800 uppercase">Premium Class</span>
           </div>
           
-          {/* Messenger 风格按钮 */}
           <a href={FB_CHAT_LINK} target="_blank" rel="noopener noreferrer"
             className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white rounded-full shadow-sm border border-slate-100 active:scale-95 transition-all"
           >
@@ -375,30 +377,7 @@ export default function HskPageClient() {
         </div>
       </header>
 
-      {/* 🚀 新增：全屏翻译官入口 (双语标题) */}
-      <div className="px-4 mt-4">
-        <Link href="/translator" passHref>
-          <a className="w-full relative h-24 bg-gradient-to-r from-violet-600 to-indigo-600 rounded-3xl overflow-hidden shadow-lg shadow-indigo-200 active:scale-[0.98] transition-all flex items-center justify-between px-6 group">
-            <div className="z-10 text-left">
-              <div className="flex items-center gap-1.5 mb-1 text-indigo-100">
-                  <BrainCircuit size={16} />
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-200">AI Translator Pro</span>
-              </div>
-              <h3 className="text-xl font-black text-white flex flex-col leading-tight">
-                  <span>智能翻译官</span>
-                  <span className="text-xs font-normal opacity-80 mt-0.5">(AI ဘာသာပြန်)</span>
-              </h3>
-              <p className="text-indigo-100 text-[10px] mt-1 opacity-80">精准直译 · 地道口语 · 文化解析</p>
-            </div>
-            <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white group-hover:scale-110 transition-transform">
-              <ChevronRight size={24} />
-            </div>
-            <div className="absolute right-0 top-0 bottom-0 w-32 bg-white/5 skew-x-12 -mr-4"></div>
-          </a>
-        </Link>
-      </div>
-
-      {/* 口语练习横图入口 (缅语化) - 使用普通跳转 */}
+      {/* 口语练习横图入口 */}
       <div className="px-4 mt-4">
         <div 
           onClick={handleSpokenGeneralClick}
