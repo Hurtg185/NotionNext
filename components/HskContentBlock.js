@@ -6,7 +6,8 @@ import {
   Sparkles, PlayCircle, Gem, MessageCircle,
   Crown, Heart, ChevronRight, Star, BookOpen,
   ChevronDown, ChevronUp, GraduationCap,
-  MessageSquareText, Headphones, Volume2, BrainCircuit // 引入新图标
+  MessageSquareText, Headphones, Volume2, 
+  Mic, Send, Copy, X, Loader2, Settings // 新增翻译所需图标
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
@@ -87,7 +88,168 @@ const checkIsFree = (level, lessonId) => {
 };
 
 // ==========================================
-// 2. 核心子组件
+// 2. 新增组件: AI 翻译器 (适配 HSK 风格)
+// ==========================================
+const AITranslator = () => {
+    const [input, setInput] = useState('');
+    const [isListening, setIsListening] = useState(false);
+    const [targetLang, setTargetLang] = useState('my'); // 默认译成缅文
+    const [results, setResults] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
+    const recognitionRef = useRef(null);
+
+    // 语音识别初始化
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (SR) {
+                const recognition = new SR();
+                recognition.continuous = false;
+                recognition.interimResults = true;
+                recognition.lang = 'zh-CN'; // 默认听中文
+                recognition.onresult = (e) => {
+                    const text = Array.from(e.results)
+                        .map(result => result[0].transcript)
+                        .join('');
+                    setInput(text);
+                };
+                recognition.onend = () => setIsListening(false);
+                recognition.onerror = () => setIsListening(false);
+                recognitionRef.current = recognition;
+            }
+        }
+    }, []);
+
+    const toggleListening = () => {
+        if (!recognitionRef.current) return alert('Browser not support speech recognition');
+        if (isListening) {
+            recognitionRef.current.stop();
+        } else {
+            recognitionRef.current.start();
+            setIsListening(true);
+        }
+    };
+
+    const handleSend = async () => {
+        if (!input.trim()) return;
+        setLoading(true);
+        setResults([]);
+        
+        try {
+            const res = await fetch('/api/translate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: input, targetLang })
+            });
+            const data = await res.json();
+            if (data.results) setResults(data.results);
+        } catch (e) {
+            console.error(e);
+            alert('Error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const speak = (text, lang) => {
+        const voice = lang === 'my' ? 'my-MM-NilarNeural' : 'zh-CN-XiaoxiaoNeural';
+        const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${voice}&r=-10`;
+        new Audio(url).play().catch(e => console.error(e));
+    };
+
+    return (
+        <div className="bg-white rounded-[1.8rem] p-4 shadow-xl shadow-slate-200/60 border border-slate-50 relative overflow-hidden">
+            {/* 标题栏 */}
+            <div className="flex justify-between items-center mb-3 px-1">
+                <div className="flex items-center gap-2">
+                   <div className="p-1.5 bg-blue-50 rounded-full text-blue-500">
+                      <Sparkles size={14} fill="currentColor" />
+                   </div>
+                   <span className="text-sm font-black text-slate-700">AI 智能翻译</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <select 
+                        value={targetLang} 
+                        onChange={(e) => setTargetLang(e.target.value)}
+                        className="bg-slate-50 border-none text-[10px] font-bold text-slate-600 rounded-lg py-1 px-2 focus:ring-1 focus:ring-blue-200 outline-none"
+                    >
+                        <option value="my">译成缅文 (Myanmar)</option>
+                        <option value="zh">译成中文 (Chinese)</option>
+                        <option value="en">译成英文 (English)</option>
+                    </select>
+                </div>
+            </div>
+
+            {/* 输入框 */}
+            <div className="relative mb-3">
+                <textarea 
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="请输入内容或语音输入..."
+                    className="w-full min-h-[70px] bg-slate-50 border-0 rounded-2xl p-3 pr-10 resize-none text-sm text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSend();
+                        }
+                    }}
+                />
+                <div className="absolute bottom-2 right-2 flex items-center gap-1.5">
+                    {input && (
+                        <button onClick={() => setInput('')} className="p-1.5 text-slate-300 hover:text-slate-500 bg-white rounded-full shadow-sm">
+                            <X size={12} />
+                        </button>
+                    )}
+                    <button 
+                        onClick={toggleListening}
+                        className={`p-2 rounded-full transition-all ${isListening ? 'bg-rose-500 text-white animate-pulse shadow-lg shadow-rose-200' : 'bg-white text-slate-400 border border-slate-100 shadow-sm'}`}
+                    >
+                        <Mic size={16} />
+                    </button>
+                    <button 
+                        onClick={handleSend}
+                        disabled={!input || loading}
+                        className={`p-2 rounded-full transition-all ${input ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-slate-100 text-slate-300'}`}
+                    >
+                       {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                    </button>
+                </div>
+            </div>
+
+            {/* 结果显示 */}
+            {results.length > 0 && (
+                <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    {results.map((item, idx) => (
+                        <div key={idx} className={`p-3 rounded-2xl border ${item.recommended ? 'bg-blue-50/50 border-blue-100' : 'bg-slate-50/50 border-slate-100'}`}>
+                            <div className="flex justify-between items-start mb-1">
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${item.recommended ? 'bg-blue-100 text-blue-600' : 'bg-slate-200 text-slate-500'}`}>
+                                    {item.label}
+                                </span>
+                                {item.recommended && <Star size={10} className="text-amber-400 fill-amber-400" />}
+                            </div>
+                            <p className="text-sm font-bold text-slate-800 leading-relaxed my-1.5">{item.translation}</p>
+                            <div className="flex items-center justify-between pt-2 border-t border-slate-200/50">
+                                <p className="text-[10px] text-slate-400 truncate max-w-[70%]">↩ {item.back_translation}</p>
+                                <div className="flex gap-1">
+                                    <button onClick={() => speak(item.translation, targetLang)} className="p-1.5 rounded-lg hover:bg-white text-slate-400 hover:text-blue-500 transition-colors">
+                                        <Volume2 size={14} />
+                                    </button>
+                                    <button onClick={() => navigator.clipboard.writeText(item.translation)} className="p-1.5 rounded-lg hover:bg-white text-slate-400 hover:text-emerald-500 transition-colors">
+                                        <Copy size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ==========================================
+// 3. 核心子组件
 // ==========================================
 
 // 会员弹窗
@@ -206,7 +368,7 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
   );
 };
 
-// 拼音面板组件 (布局调整)
+// 拼音面板组件 (保持不变)
 const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection }) => {
   const router = useRouter();
 
@@ -244,26 +406,6 @@ const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection }) => {
         </div>
         <ChevronRight size={16} className="text-orange-300" />
       </button>
-
-      {/* ==================================================== */}
-      {/* 新增：AI 助手入口 */}
-      {/* ==================================================== */}
-      <button 
-        onClick={() => router.push('@/components/AIChatDrawer')} // 点击跳转到 /ai-assistant 页面
-        className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100/50 active:scale-95 transition-transform group"
-      >
-        <div className="flex items-center gap-3">
-          <div className="p-1.5 bg-white rounded-full text-blue-500 shadow-sm shrink-0">
-            <BrainCircuit size={16} />
-          </div>
-          <div className="text-left">
-            <span className="block text-xs font-black text-slate-700">AI 助教 (Assistant)</span>
-            <span className="block text-[10px] text-slate-500 font-medium">AI အကူဖြင့် လေ့ကျင့်ပါ</span>
-          </div>
-        </div>
-        <ChevronRight size={16} className="text-blue-300" />
-      </button>
-      {/* ==================================================== */}
       
       {/* 第四行：双收藏按钮 */}
       <div className="grid grid-cols-2 gap-3">
@@ -296,7 +438,7 @@ const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection }) => {
 };
 
 // ==========================================
-// 3. 主页面入口
+// 4. 主页面入口
 // ==========================================
 
 export default function HskPageClient() {
@@ -307,27 +449,16 @@ export default function HskPageClient() {
 
   const isCardViewOpen = router.asPath.includes('#hsk-vocabulary');
 
-  // ====================================================
-  // 修改处：将口语跳转拆分为两个函数
-  // ====================================================
-
-  // 1. 普通跳转：进入口语首页 (点击 Banner)
+  // 口语跳转逻辑
   const handleSpokenGeneralClick = useCallback((e) => {
     if(e) e.preventDefault();
     router.push('/spoken');
   }, [router]);
 
-  // 2. 收藏跳转：进入口语收藏 (点击按钮)
-  // 通过 query 参数 filter=favorites 告诉目标页面显示收藏
   const handleSpokenCollectionClick = useCallback((e) => {
     if(e) e.preventDefault();
-    router.push({
-      pathname: '/spoken',
-      query: { filter: 'favorites' }
-    });
+    router.push({ pathname: '/spoken', query: { filter: 'favorites' } });
   }, [router]);
-
-  // ====================================================
 
   // 处理生词本点击逻辑
   const handleVocabularyClick = useCallback((level) => {
@@ -368,7 +499,6 @@ export default function HskPageClient() {
             <span className="text-[10px] font-bold text-blue-800 uppercase">Premium Class</span>
           </div>
           
-          {/* Messenger 风格按钮 */}
           <a href={FB_CHAT_LINK} target="_blank" rel="noopener noreferrer"
             className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white rounded-full shadow-sm border border-slate-100 active:scale-95 transition-all"
           >
@@ -380,13 +510,20 @@ export default function HskPageClient() {
         <div className="bg-white rounded-[1.8rem] p-4 shadow-xl shadow-slate-200/60 border border-slate-50">
           <PinyinSection 
             onOpenCollection={handleCollectionClick} 
-            // 传递新的收藏跳转函数
             onOpenSpokenCollection={handleSpokenCollectionClick}
           />
         </div>
       </header>
 
-      {/* 口语练习横图入口 (缅语化) - 使用普通跳转 */}
+      {/* ================================================== */}
+      {/* 🚀 插入点：AI 翻译器 (AITranslator) */}
+      {/* ================================================== */}
+      <div className="px-4 mt-4">
+        <AITranslator />
+      </div>
+      {/* ================================================== */}
+
+      {/* 口语练习横图入口 */}
       <div className="px-4 mt-4">
         <div 
           onClick={handleSpokenGeneralClick}
