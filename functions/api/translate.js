@@ -1,22 +1,9 @@
-/**
- * Cloudflare Pages Function
- * Path: /api/translate
- * FAST MODE – LITERAL + BACK
- */
-
 export async function onRequestPost({ request, env }) {
   try {
-    const {
-      text,
-      sourceLang = "auto",
-      targetLang = "my"
-    } = await request.json();
+    const { text, sourceLang = "auto", targetLang = "my" } = await request.json();
 
     if (!text || !text.trim()) {
-      return new Response(
-        JSON.stringify({ error: "EMPTY_TEXT" }),
-        { status: 400 }
-      );
+      return new Response(JSON.stringify({ error: "EMPTY_TEXT" }), { status: 400 });
     }
 
     const API_KEY = env.IFLOW_API_KEY;
@@ -68,20 +55,31 @@ Output JSON ONLY:
       })
     });
 
-    const data = await upstream.json();
-    let content = data.choices?.[0]?.message?.content || "{}";
+    if (!upstream.ok) {
+      throw new Error(`Upstream error ${upstream.status}`);
+    }
 
+    const data = await upstream.json();
+    let content = data?.choices?.[0]?.message?.content || "{}";
     content = content.replace(/```json|```/g, "").trim();
 
-    const parsed = JSON.parse(content);
+    const parsed = (() => {
+      try {
+        return JSON.parse(content);
+      } catch {
+        const m = content.match(/\{[\s\S]*\}/);
+        if (!m) throw new Error("INVALID_JSON");
+        return JSON.parse(m[0]);
+      }
+    })();
 
     return new Response(
       JSON.stringify({
         results: [
           {
             label: "Literal | 直译",
-            translation: parsed.translation,
-            back_translation: parsed.back_translation,
+            translation: parsed.translation || "",
+            back_translation: parsed.back_translation || "",
             recommended: true
           }
         ]
