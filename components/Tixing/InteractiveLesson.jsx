@@ -307,12 +307,6 @@ export default function InteractiveLesson({ lesson }) {
     };
   }, [hasMounted, isFinished, type]);
 
-  // 进度条计算
-  const progressPercent = useMemo(() => {
-    if (!dynamicBlocks.length) return 0;
-    return ((currentIndex + 1) / dynamicBlocks.length) * 100;
-  }, [currentIndex, dynamicBlocks.length]);
-
 
   // --- 核心动作 ---
   
@@ -352,19 +346,11 @@ export default function InteractiveLesson({ lesson }) {
     setIsFinished(false);
   };
 
-  // 4. 错题处理 (Append to end)
+  // 4. 错题处理 (仅记录分数，取消沉底逻辑)
   const handleWrong = useCallback(() => {
     setMistakeCount(prev => prev + 1);
-    setDynamicBlocks(prev => {
-      const currentBlockData = prev[currentIndex];
-      // 防止重复添加已经是 retry 的题目
-      if (currentBlockData._isRetry) return prev;
-      
-      const retryBlock = { ...currentBlockData, _isRetry: true };
-      console.log("错题已加入重做队列:", retryBlock);
-      return [...prev, retryBlock];
-    });
-  }, [currentIndex]);
+    // 这里取消了之前 setDynamicBlocks 添加错题的代码
+  }, []);
 
 
   // --- 渲染逻辑 ---
@@ -388,7 +374,7 @@ export default function InteractiveLesson({ lesson }) {
       key: `${currentIndex}-${currentBlock.id || 'idx'}`, // 确保 Key 变化以重置组件状态
       data: currentBlock.content,
       settings: { playTTS: audioManager?.playTTS },
-      isRetry: currentBlock._isRetry
+      isRetry: false // 强制关闭 Retry 标识
     };
 
     switch (type) {
@@ -401,8 +387,7 @@ export default function InteractiveLesson({ lesson }) {
       case 'sentences': return <CardListRenderer {...commonProps} type={type} onComplete={goNext} />;
       case 'grammar_study': return <GrammarPointPlayer grammarPoints={commonProps.data.grammarPoints} onComplete={goNext} />;
       
-      // ✅ 关键修改：在这里完全控制 Choice 和 PaiXu 的流程
-      // 子组件不再拥有 onNext 权限，只能通过 onCorrect / onWrong 触发
+      // 在这里控制 Choice 和 PaiXu 的流程，错题后直接下一题
       case 'choice': 
         return (
           <XuanZeTi 
@@ -411,8 +396,8 @@ export default function InteractiveLesson({ lesson }) {
               goNext();
             }}
             onWrong={() => {
-              handleWrong(); // 先记错 + 沉底
-              goNext();      // 再下一题
+              handleWrong(); // 仅记错
+              goNext();      // 直接下一题
             }}
           />
         );
@@ -444,8 +429,6 @@ export default function InteractiveLesson({ lesson }) {
     }
   };
 
-  const hideTopProgressBar = ['cover', 'start_page', 'complete', 'end'].includes(type);
-
   return (
     <div ref={lessonContainerRef} className="fixed inset-0 w-screen h-screen bg-slate-50 flex flex-col overflow-hidden font-sans" style={{ touchAction: 'none' }}>
       <style>{`
@@ -455,31 +438,7 @@ export default function InteractiveLesson({ lesson }) {
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
       
-      {!hideTopProgressBar && (
-        <div className="absolute top-0 left-0 right-0 pt-[env(safe-area-inset-top)] px-4 py-3 z-50 pointer-events-none flex items-center justify-center gap-3 bg-slate-50/80 backdrop-blur-sm">
-           <div className="flex-1 max-w-lg h-1.5 bg-slate-200 rounded-full overflow-hidden">
-             <div 
-                 className="h-full bg-green-500 rounded-full transition-all duration-500 ease-out" 
-                 style={{ width: `${progressPercent}%` }} 
-             />
-           </div>
-
-           {currentBlock._isRetry && (
-             <div className="text-orange-500 font-bold text-[10px] flex items-center gap-1 bg-orange-50 px-2 py-0.5 rounded-full animate-pulse border border-orange-100">
-               <FaRedo size={10} /> <span>ပြန်ဖြေ</span>
-             </div>
-           )}
-
-           {/* 全屏按钮 */}
-           <button 
-             onClick={isFullscreen ? exitFullscreen : enterFullscreen}
-             className="absolute right-4 top-1/2 -translate-y-1/2 -mt-px text-slate-400 p-2 rounded-full hover:bg-slate-200 pointer-events-auto transition-colors"
-             aria-label={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
-           >
-             {isFullscreen ? <FaCompress size={14} /> : <FaExpand size={14} />}
-           </button>
-        </div>
-      )}
+      {/* 移除了顶部进度条面板 (hideTopProgressBar 逻辑已全部删除) */}
 
       <main className="relative w-full h-full z-10">
         {renderContent()}
