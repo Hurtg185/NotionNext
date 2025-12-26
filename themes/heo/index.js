@@ -538,7 +538,7 @@ const LayoutPostList = (props) => { return <LayoutBase {...props}><div>PostList 
 const LayoutSearch = (props) => { return <LayoutBase {...props}><div>Search Placeholder</div></LayoutBase> };
 const LayoutArchive = (props) => { return <LayoutBase {...props}><div>Archive Placeholder</div></LayoutBase> };
 const LayoutSlug = (props) => { return <LayoutBase {...props}><div>Slug Placeholder</div></LayoutBase> };
-const Layout404 = () => { return <LayoutBase {...props}><div>404 Not Found</div></LayoutBase> };
+const Layout404 = (props) => { return <LayoutBase {...props}><div>404 Not Found</div></LayoutBase> };
 const LayoutCategoryIndex = (props) => { return <LayoutBase {...props}><div>Category Placeholder</div></LayoutBase> };
 const LayoutTagIndex = (props) => { return <LayoutBase {...props}><div>Tag Placeholder</div></LayoutBase> };
 
