@@ -26,7 +26,7 @@ import {
   FaLightbulb, 
   FaSpinner, 
   FaRedo,
-  FaTachometerAlt 
+  FaRobot 
 } from 'react-icons/fa';
 import { pinyin } from 'pinyin-pro';
 
@@ -314,9 +314,10 @@ const styles = `
 }
 .pinyin-sub { font-size: 0.75rem; color: #94a3b8; font-weight: 500; margin-bottom: 0px; line-height: 1.2; }
 
+/* ✅ 修改: 提交按钮上移，padding-bottom 增加到 50px */
 .footer-bar {
   position: absolute; bottom: 0; left: 0; right: 0;
-  padding: 20px 20px calc(30px + env(safe-area-inset-bottom));
+  padding: 20px 20px calc(50px + env(safe-area-inset-bottom));
   background: #fff;
   border-top: 1px solid #f1f5f9;
   display: flex; justify-content: center;
@@ -346,6 +347,7 @@ const styles = `
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   z-index: 100;
   max-height: 85vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 12px;
 }
 .result-sheet.correct { background: #dcfce7; color: #166534; }
 .result-sheet.wrong { background: #fee2e2; color: #991b1b; }
@@ -353,17 +355,17 @@ const styles = `
 
 .sheet-header {
   display: flex; align-items: center; gap: 10px;
-  font-size: 1.4rem; font-weight: 800; margin-bottom: 16px;
+  font-size: 1.4rem; font-weight: 800; margin-bottom: 8px;
 }
 .correct-answer-box {
   background: #fff; padding: 14px; border-radius: 12px;
-  margin-bottom: 20px; color: #475569; font-size: 1.1rem; font-weight: 600;
+  margin-bottom: 12px; color: #475569; font-size: 1.1rem; font-weight: 600;
   border: 1px solid rgba(0,0,0,0.05);
 }
 .explanation-box {
   background: #fffbeb; border: 1px solid #fcd34d;
   padding: 14px; border-radius: 12px;
-  margin-bottom: 20px; font-size: 0.95rem; color: #92400e;
+  margin-bottom: 12px; font-size: 0.95rem; color: #92400e;
   line-height: 1.6;
 }
 .next-action-btn {
@@ -375,6 +377,22 @@ const styles = `
 .next-action-btn:active { transform: translateY(4px); border-bottom-width: 0; }
 .btn-correct { background: #58cc02; }
 .btn-wrong { background: #ef4444; }
+
+/* ✅ 新增: AI 按钮样式 */
+.ai-btn {
+  background: #fff;
+  border: 2px solid #e5e7eb;
+  color: #4f46e5;
+  padding: 12px;
+  border-radius: 14px;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  transition: all 0.1s;
+}
+.ai-btn:active { background: #f9fafb; transform: scale(0.98); }
 `;
 
 // =================================================================================
@@ -439,7 +457,8 @@ const PaiXuTi = ({
   data, 
   onCorrect, 
   onNext, 
-  onWrong 
+  onWrong,
+  triggerAI // ✅ 接收 AI 触发器
 }) => {
   const { 
     title,       
@@ -457,16 +476,21 @@ const PaiXuTi = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState(1.0); 
 
-  // 初始化
+  // 初始化：加入干扰项逻辑
   useEffect(() => {
     if (!items) return;
     
-    const ids = items.map(i => i.id);
-    for (let i = ids.length - 1; i > 0; i--) {
+    // items 数组包含了所有卡片（包括干扰项）
+    // correctOrder 数组只包含正确答案的 ID
+    const allIds = items.map(i => i.id);
+    
+    // 打乱所有卡片
+    for (let i = allIds.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [ids[i], ids[j]] = [ids[j], ids[i]];
+      [allIds[i], allIds[j]] = [allIds[j], allIds[i]];
     }
-    setPoolIds(ids);
+
+    setPoolIds(allIds);
     setAnswerIds([]);
     setGameStatus('idle');
     
@@ -529,7 +553,7 @@ const PaiXuTi = ({
     vibrate(15);
   };
 
-  // 提交检查 (只更新状态，不调用 Next)
+  // 提交检查
   const handleCheck = () => {
     playSfx('click'); 
 
@@ -554,7 +578,7 @@ const PaiXuTi = ({
     }, 150);
   };
 
-  // 点击 Next (真正通知父组件)
+  // 点击 Next
   const handleContinue = () => {
     playSfx('switch'); 
     audioController.stop();
@@ -563,6 +587,22 @@ const PaiXuTi = ({
         onCorrect?.();
     } else {
         onWrong?.();
+    }
+  };
+
+  // ✅ 新增：AI 解析触发器
+  const handleAskAI = () => {
+    if (triggerAI) {
+      const userSentence = answerIds.map(id => findItem(id)?.text).join('');
+      const correctSentence = correctOrder.map(id => findItem(id)?.text).join('');
+
+      triggerAI({
+        grammarPoint: "连词成句/排序",
+        question: `请将这些词排成正确的句子：${items.map(i=>i.text).join(' / ')}`,
+        userChoice: userSentence,
+        // 这里可以附带正确答案给 AI 做参考
+        correctAnswer: correctSentence 
+      });
     }
   };
 
@@ -696,6 +736,12 @@ const PaiXuTi = ({
                    {explanation}
                  </div>
                )}
+
+               {/* ✅ 只有做错时才显示 AI 按钮 */}
+               <button className="ai-btn" onClick={handleAskAI}>
+                   <FaRobot size={18} />
+                   <span>AI 老师解析</span>
+               </button>
 
                <button className="next-action-btn btn-wrong" onClick={handleContinue}>
                  GOT IT <FaRedo style={{marginLeft:8, fontSize: '0.9em'}} />
