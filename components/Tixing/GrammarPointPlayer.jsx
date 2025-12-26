@@ -7,7 +7,7 @@ import {
   FaExclamationTriangle, FaBookReader, FaVolumeUp
 } from 'react-icons/fa';
 import AIChatDock from '../AIChatDock';
-import { useAI } from './AIConfigContext'; // ✅ 修改 1：引入 Context Hook
+import { useAI } from '../AIConfigContext'; // ✅ 修改 1：引入 Context Hook
 
 // =================================================================================
 // ===== 0. 音效工具 =====
