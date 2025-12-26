@@ -8,7 +8,7 @@ import {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm'; 
 import { pinyin } from 'pinyin-pro'; 
-import { useAI } from './AIConfigContext'; // 引入拆分后的 Context
+import { useAI } from './AIConfigContext'; 
 
 // --- 常量定义 ---
 const VOICES = [
@@ -78,16 +78,19 @@ const PinyinRenderer = ({ text, show }) => {
 export default function AIChatDock() {
   // --- 接入 Context ---
   const {
-    user, // 必须获取 user，用于传 email 和判断登录状态
-    login, // 假设 Context 提供了 login 方法用于调起谷歌登录
+    user, 
+    login, 
     config, setConfig,
     sessions, setSessions,
     currentSessionId, setCurrentSessionId,
     isAiOpen, setIsAiOpen,
-    activeTask, 
+    activeTask, // 互动题任务数据
+    aiMode,     // 'CHAT' | 'INTERACTIVE'
+    resetToChatMode, // 重置模式函数
+    systemPrompt,    // Context 计算好的 Prompt
     isActivated, 
-    canUseAI,     // 必须是 async 函数
-    recordUsage,  // 必须是 async 函数
+    canUseAI,     
+    recordUsage,  
     remainingQuota, 
     TOTAL_FREE_QUOTA
   } = useAI();
@@ -95,7 +98,8 @@ export default function AIChatDock() {
   // --- 本地 UI 状态 ---
   const [showSettings, setShowSettings] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
-  const [showPaywall, setShowPaywall] = useState(false); // 新增：付费墙弹窗状态
+  const [showPaywall, setShowPaywall] = useState(false); 
+  const [showLoginTip, setShowLoginTip] = useState(false); // ✅ 新增：登录提示弹窗状态
 
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -118,7 +122,6 @@ export default function AIChatDock() {
   const historyRef = useRef(null);
   const abortControllerRef = useRef(null);
   const recognitionRef = useRef(null);
-  const prevTaskRef = useRef(null);
 
   // --- 核心：从 Sessions 中派生当前 Messages ---
   const messages = useMemo(() => {
@@ -134,7 +137,8 @@ export default function AIChatDock() {
         if (s.id === currentSessionId) {
             const newMsgs = typeof updater === 'function' ? updater(s.messages) : updater;
             let newTitle = s.title;
-            if (s.title === '新对话' && newMsgs.length > 0) {
+            // 只有普通模式才自动改标题
+            if (aiMode === 'CHAT' && s.title === '新对话' && newMsgs.length > 0) {
                 const firstUserMsg = newMsgs.find(m => m.role === 'user');
                 if(firstUserMsg) newTitle = firstUserMsg.content.substring(0, 15);
             }
@@ -166,30 +170,26 @@ export default function AIChatDock() {
     }
   }, [messages, isAiOpen, loading]);
 
-  // --- 监听外部触发 (ActiveTask) ---
+  // --- ✅ 核心：监听互动题任务触发 (自动发送) ---
   useEffect(() => {
-      if (activeTask && (!prevTaskRef.current || prevTaskRef.current.timestamp !== activeTask.timestamp)) {
-          prevTaskRef.current = activeTask;
-          
-          setIsAiOpen(true);
-          
-          const newSessionId = Date.now();
-          const newSession = { 
-              id: newSessionId, 
-              title: `解析: ${activeTask.title.substring(0,10)}`, 
-              messages: [], 
-              date: new Date().toISOString() 
-          };
-          setSessions(prev => [newSession, ...prev]);
-          setCurrentSessionId(newSessionId);
+      // 只有在互动模式，且有任务，且未处理过
+      if (aiMode === 'INTERACTIVE' && activeTask && activeTask.timestamp) {
+          const lastProcessed = sessionStorage.getItem('last_ai_task_ts');
+          if (lastProcessed !== String(activeTask.timestamp)) {
+              
+              // 1. 如果需要，可以这里创建新 Session，这里简化为直接在当前会话追加
+              // 2. 构造一个用户侧的“隐形”触发文本 (或者显示出来)
+              // 为了让用户知道发生了什么，我们显示一个引导语
+              const displayMsg = `(自动提交) 我做错了这道题，请帮我分析：\n"${activeTask.question}"`;
+              
+              // 3. 触发发送 (true = 系统触发，跳过登录检查)
+              handleSend(displayMsg, true); 
 
-          const prompt = `请作为老师，详细解析这道题目：\n\n# 题目: ${activeTask.title}\n\n${activeTask.content}\n\n请结合语法点进行分析。`;
-          
-          setTimeout(() => {
-              handleSend(prompt, true); // true = 系统触发
-          }, 200);
+              // 4. 标记已处理
+              sessionStorage.setItem('last_ai_task_ts', String(activeTask.timestamp));
+          }
       }
-  }, [activeTask, setIsAiOpen, setSessions, setCurrentSessionId]);
+  }, [activeTask, aiMode]); // 依赖项
 
   // --- 选文菜单逻辑 ---
   const handleSelectionChange = () => {
@@ -271,6 +271,7 @@ export default function AIChatDock() {
       setSessions(prev => [newSession, ...prev]);
       setCurrentSessionId(newSession.id);
       setShowSidebar(false);
+      resetToChatMode(); // 新对话默认切回普通模式
   };
 
   const switchSession = (id) => {
@@ -330,18 +331,23 @@ export default function AIChatDock() {
     } catch (e) { alert('无法启动语音识别: ' + e.message); }
   };
 
+  // --- 处理“确认登录”逻辑 (新增) ---
+  const handleConfirmLogin = () => {
+      // 1. 设置标记，告诉 Context 登录后如果成功，记得弹个 API 指引页
+      sessionStorage.setItem('need_open_api_guide', 'true');
+      // 2. 关闭提示框
+      setShowLoginTip(false);
+      // 3. 调起 Context 里的登录
+      login();
+  };
+
   // --- 发送逻辑 (核心修改) ---
   const handleSend = async (textToSend = input, isSystemTrigger = false) => {
     if (!textToSend.trim() || loading) return;
 
-    // --- 1. 新增：未登录拦截 ---
+    // --- 1. 登录拦截 (新增) ---
     if (!isSystemTrigger && !user) {
-        // 如果有 login 方法则调用，否则提示
-        if (login) {
-            login();
-        } else {
-            alert("请先登录 Google 账号。");
-        }
+        setShowLoginTip(true); // 显示登录提示弹窗
         return;
     }
 
@@ -351,15 +357,13 @@ export default function AIChatDock() {
       return;
     }
 
-    // 2. 权限校验 (后端 API)
+    // 2. 权限校验
     if (!isSystemTrigger && !isActivated) {
         try {
             const auth = await canUseAI(); 
-            // 兼容不同的返回值结构
             const canUse = (auth && typeof auth === 'object') ? auth.canUse : auth;
             
             if (!canUse) {
-                // 修改：此处不再 Alert，而是显示付费墙弹窗
                 setShowPaywall(true);
                 return;
             }
@@ -378,27 +382,41 @@ export default function AIChatDock() {
     if (abortControllerRef.current) abortControllerRef.current.abort();  
     abortControllerRef.current = new AbortController();  
 
-    // 3. 动态 Prompt (H1/H2 vs H3+)
-    const currentLevel = config.userLevel || 'H1';
-    let dynamicSystemPrompt = config.systemPrompt || '你是一位专业的缅甸汉语助教。';
-    
-    if (['H1', 'H2'].includes(currentLevel)) {
-        dynamicSystemPrompt += `\n【当前等级】：${currentLevel} (初学者)\n【要求】：请使用【缅甸语】解释，中文仅用于例句。`;
-    } else {
-        dynamicSystemPrompt += `\n【当前等级】：${currentLevel} (进阶)\n【要求】：以中文讲解为主，难点辅以缅甸语。`;
-    }
-    // 强制 AI 使用特定格式方便解析
-    dynamicSystemPrompt += `\n【追问建议】：请在最后一行，严格以 "SUGGESTIONS: 建议1|||建议2|||..." 的格式给出 3-5 个追问建议。`;
-
+    // 更新界面消息 (Optimistic UI)
     const userMsg = { role: 'user', content: userText };
     updateMessages(prev => [...prev, userMsg, { role: 'assistant', content: '' }]);
 
-    const historyMsgs = messages.slice(-6).map(m => ({role: m.role, content: m.content}));
-    const apiMessages = [  
-        { role: 'system', content: dynamicSystemPrompt },  
-        ...historyMsgs, 
-        userMsg
-    ];  
+    // --- 3. 构造 API 消息列表 (关键分支) ---
+    let apiMessages = [];
+
+    // 分支 A: 互动题补课模式
+    if (aiMode === 'INTERACTIVE' && activeTask) {
+        // 按照“工程级”要求：不带历史记录，只带特定的 Payload
+        // System Prompt 已经在 Context 里被设置为 INTERACTIVE 模式了
+        
+        const interactivePayload = `
+【学生等级】${config.userLevel || 'H1'}
+【语法点】${activeTask.grammarPoint}
+【题目】${activeTask.question}
+【学生选择】${activeTask.userChoice}
+
+请按你的“互动题补课规则”进行提示。
+        `;
+
+        apiMessages = [
+            { role: 'system', content: systemPrompt }, // Context 提供的互动模式 System Prompt
+            { role: 'user', content: interactivePayload } // 专门构造的 User Message
+        ];
+    } 
+    // 分支 B: 普通聊天模式
+    else {
+        const historyMsgs = messages.slice(-6).map(m => ({role: m.role, content: m.content}));
+        apiMessages = [  
+            { role: 'system', content: systemPrompt }, // Context 提供的普通模式 System Prompt
+            ...historyMsgs, 
+            userMsg
+        ];  
+    }
 
     try {  
       const response = await fetch('/api/chat', {  
@@ -406,7 +424,6 @@ export default function AIChatDock() {
         headers: { 'Content-Type': 'application/json' },  
         body: JSON.stringify({  
           messages: apiMessages,
-          // --- 关键修复：必须带上 email，否则后端报错 401 ---
           email: user?.email, 
           config: { apiKey: config.apiKey, modelId: config.modelId }  
         }),  
@@ -455,7 +472,7 @@ export default function AIChatDock() {
         }  
       } 
       
-      // 4. 解析建议 (强化正则逻辑)
+      // 4. 解析建议
       let cleanContent = fullContent;
       let rawSuggestionsStr = '';
 
@@ -469,15 +486,13 @@ export default function AIChatDock() {
           rawSuggestionsStr = parts[1];
       }
 
-      // 更新消息去除标记
       updateMessages(prev => [...prev.slice(0, -1), { role: 'assistant', content: cleanContent }]);
 
-      // 提取气泡，兼容 ||| 和 | 以及换行
       if (rawSuggestionsStr) {
-          const splitRegex = /\|\|\||\||\n/; // 兼容多种分隔符
+          const splitRegex = /\|\|\||\||\n/; 
           const finalSuggestions = rawSuggestionsStr
               .split(splitRegex)
-              .map(s => s.trim().replace(/^(\d+[\.、\s]+)/, '')) // 关键：正则去序号
+              .map(s => s.trim().replace(/^(\d+[\.、\s]+)/, '')) 
               .filter(s => s && s.length > 1)
               .slice(0, 10);
           setSuggestions(finalSuggestions);
@@ -489,13 +504,16 @@ export default function AIChatDock() {
       }
 
       if (config.autoTTS) playInternalTTS(cleanContent);
+      
+      // 6. 任务后处理：如果是互动模式，这轮对话结束后，是否要切回普通模式？
+      // 建议：保持在互动模式，允许用户对错题进行追问。
+      // 用户可以通过点击“新对话”或关闭窗口来重置。
 
     } catch (err) {  
       if (err.name !== 'AbortError') {  
           console.error("Chat Error:", err);
           updateMessages(prev => {
               const last = prev[prev.length - 1];
-              // 避免重复追加错误信息
               if (!last.content.includes('[系统]:')) {
                   return [...prev.slice(0, -1), { ...last, content: last.content + `\n\n[系统]: 生成中断，请重试。(${err.message})` }];
               }
@@ -532,14 +550,11 @@ export default function AIChatDock() {
     setTimeout(() => setSelectionMenu(prev => ({...prev, show: false})), 800);
   };
 
-  // 处理激活跳转（示例）
   const handleActivate = () => {
-      // 这里填写跳转到购买页面的逻辑
       window.location.href = '/pricing'; 
   };
   
   const handlePreviewCourse = () => {
-      // 这里填写跳转到课程介绍的逻辑
       window.location.href = '/course-intro';
   };
 
@@ -614,11 +629,15 @@ export default function AIChatDock() {
             {/* 主聊天界面 */}
             <div style={styles.chatWindow}>
                 {/* 顶部 */}
-                <div style={styles.header}>
+                <div style={{...styles.header, background: aiMode === 'INTERACTIVE' ? '#eff6ff' : '#fff'}}>
                     <button onClick={() => setShowSidebar(true)} style={styles.headerIconBtn}><FaList size={16}/></button>
                     <div style={{flex:1, textAlign:'center', fontWeight:'bold', color:'#334155', fontSize:'0.9rem'}}>
-                        AI 助教 {isActivated ? '(已激活)' : `(免费: ${remainingQuota})`}
+                        {aiMode === 'INTERACTIVE' ? 'AI 互动辅导中' : `AI 助教 ${isActivated ? '(已激活)' : `(免费: ${remainingQuota})`}`}
                     </div>
+                    {/* 如果在互动模式，显示退出按钮 */}
+                    {aiMode === 'INTERACTIVE' && (
+                        <button onClick={resetToChatMode} style={{marginRight:8, fontSize:'0.8rem', color:'#4f46e5', border:'none', background:'transparent'}}>退出</button>
+                    )}
                     <button onClick={() => setShowSettings(true)} style={styles.headerIconBtn}><FaCog size={16}/></button>
                 </div>
 
@@ -649,7 +668,7 @@ export default function AIChatDock() {
                                     textAlign: m.role === 'user' ? 'right' : 'left'
                                 }}>
                                     {m.role === 'user' ? (
-                                        <div style={{fontSize:'0.95rem', color:'#1e293b', fontWeight:500}}>{m.content}</div>
+                                        <div style={{fontSize:'0.95rem', color:'#1e293b', fontWeight:500, whiteSpace: 'pre-wrap'}}>{m.content}</div>
                                     ) : (
                                         <div className="notion-md">
                                             <ReactMarkdown
@@ -758,7 +777,32 @@ export default function AIChatDock() {
         </>
       )}
 
-      {/* 付费墙弹窗 (新增) */}
+      {/* ✅ 新增：登录温馨提示弹窗 */}
+      {showLoginTip && (
+        <div style={styles.paywallOverlay}>
+            <div style={{...styles.paywallModal, maxWidth: 300}}>
+                <div style={{...styles.paywallHeader, background: '#4f46e5'}}>
+                   👋 温馨提示
+                </div>
+                <div style={styles.paywallBody}>
+                    <p style={{color: '#334155', fontSize: '0.95rem', lineHeight: '1.6'}}>
+                        为了给您提供更准确的 AI 教学服务，并保存您的学习记录，请先登录账号。
+                    </p>
+                    <button onClick={handleConfirmLogin} style={styles.activateBtn}>
+                        <FaGoogle style={{marginRight:8}}/> 立即登录
+                    </button>
+                    <button 
+                        onClick={() => setShowLoginTip(false)} 
+                        style={{...styles.previewBtn, marginTop: 8}}
+                    >
+                        暂不登录
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* 付费墙弹窗 */}
       {showPaywall && (
         <div style={styles.paywallOverlay}>
             <div style={styles.paywallModal}>
@@ -809,7 +853,6 @@ export default function AIChatDock() {
                     <label style={styles.settingRow}>
                         <span>API Key</span>
                         <input type="password" value={config.apiKey} onChange={e=>setConfig({...config, apiKey:e.target.value})} style={styles.input}/>
-                        {/* 新增：NVIDIA 教程链接 */}
                         <div 
                             style={{fontSize: '0.8rem', color: '#6366f1', marginTop: 4, cursor: 'pointer', textDecoration: 'underline'}}
                             onClick={() => window.open('https://build.nvidia.com/explore/discover', '_blank')}
@@ -1007,7 +1050,7 @@ const styles = {
   select: { padding: 10, borderRadius: 8, border: '1px solid #cbd5e1', fontSize: '1rem', background:'#fff' },
   saveBtn: { background: '#4f46e5', color: '#fff', border: 'none', padding: 12, borderRadius: 8, fontSize: '1rem', fontWeight: 'bold', marginTop: 10, cursor:'pointer' },
 
-  // --- 新增：付费墙样式 ---
+  // --- 付费墙/提示弹窗样式 ---
   paywallOverlay: {
     position: 'fixed', inset: 0, zIndex: 13000, background: 'rgba(0,0,0,0.7)',
     backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center'
@@ -1035,7 +1078,7 @@ const styles = {
   activateBtn: {
     width: '100%', padding: '14px', borderRadius: 12, background: '#4f46e5',
     color: '#fff', fontSize: '1rem', fontWeight: 'bold', border: 'none', cursor: 'pointer',
-    boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)'
+    boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center'
   },
   previewBtn: {
     width: '100%', padding: '14px', borderRadius: 12, background: '#f1f5f9',
