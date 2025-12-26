@@ -33,7 +33,7 @@ export const AIProvider = ({ children }) => {
   ====================== */
   const [config, setConfig] = useState({
     apiKey: '',
-    modelId: 'deepseek-ai/deepseek-v3.2',
+    modelId: 'deepseek-v3.2',
     userLevel: 'H1',
     showPinyin: true, 
     autoSendStt: false, 
