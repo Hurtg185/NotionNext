@@ -7,7 +7,8 @@ import {
   Crown, Heart, ChevronRight, Star, BookOpen,
   ChevronDown, ChevronUp, GraduationCap,
   MessageSquareText, Headphones, Volume2, 
-  Mic, Send, Copy, X, Loader2, Settings // 新增翻译所需图标
+  Mic, Send, Copy, X, Loader2, Settings,
+  Lock, KeyRound, BrainCircuit, Globe, Zap, ShieldCheck, ShieldAlert
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
@@ -33,6 +34,7 @@ const MessengerIcon = ({ size = 24 }) => (
 
 const FB_CHAT_LINK = "https://m.me/61575187883357";
 const FAVORITES_STORAGE_KEY = 'framer-pinyin-favorites';
+const CORRECT_ACCESS_CODE = "fanyi"; // 🔐 密码设置
 
 const getLevelPrice = (level) => {
   const prices = { 
@@ -88,18 +90,61 @@ const checkIsFree = (level, lessonId) => {
 };
 
 // ==========================================
-// 2. 新增组件: AI 翻译器 (适配 HSK 风格)
+// 2. 组件: 全屏 AI 翻译器 (Pro - 整合版)
 // ==========================================
-const AITranslator = () => {
+
+const FullScreenTranslator = ({ isOpen, onClose }) => {
+    // 状态管理
+    const [isVerified, setIsVerified] = useState(false);
+    const [passwordInput, setPasswordInput] = useState('');
+    const [showSettings, setShowSettings] = useState(false);
+    
+    // 翻译相关状态
     const [input, setInput] = useState('');
     const [isListening, setIsListening] = useState(false);
-    const [targetLang, setTargetLang] = useState('my'); // 默认译成缅文
-    const [results, setResults] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [showSettings, setShowSettings] = useState(false);
+    const [results, setResults] = useState([]);
+    const [quickReplies, setQuickReplies] = useState([]); // 快捷回复
+    const [targetLang, setTargetLang] = useState('my');
+    
+    // 设置状态
+    const [customApiUrl, setCustomApiUrl] = useState('');
+    const [customApiKey, setCustomApiKey] = useState('');
+    const [autoSend, setAutoSend] = useState(false);
     const recognitionRef = useRef(null);
 
-    // 语音识别初始化
+    // 初始化
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const verified = localStorage.getItem('ai_translator_verified');
+            if (verified === 'true') setIsVerified(true);
+
+            setCustomApiUrl(localStorage.getItem('ai_api_url') || '');
+            setCustomApiKey(localStorage.getItem('ai_api_key') || '');
+            setAutoSend(localStorage.getItem('ai_auto_send') === 'true');
+        }
+    }, [isOpen]);
+
+    // 验证逻辑
+    const handleVerify = () => {
+        if (passwordInput === CORRECT_ACCESS_CODE) {
+            setIsVerified(true);
+            localStorage.setItem('ai_translator_verified', 'true');
+        } else {
+            alert('密码错误 / Password Incorrect');
+            setPasswordInput('');
+        }
+    };
+
+    // 保存设置
+    const saveSetting = (key, value) => {
+        localStorage.setItem(key, value);
+        if (key === 'ai_api_url') setCustomApiUrl(value);
+        if (key === 'ai_api_key') setCustomApiKey(value);
+        if (key === 'ai_auto_send') setAutoSend(value === 'true');
+    };
+
+    // 语音识别
     useEffect(() => {
         if (typeof window !== 'undefined') {
             const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -107,149 +152,324 @@ const AITranslator = () => {
                 const recognition = new SR();
                 recognition.continuous = false;
                 recognition.interimResults = true;
-                recognition.lang = 'zh-CN'; // 默认听中文
-                recognition.onresult = (e) => {
-                    const text = Array.from(e.results)
-                        .map(result => result[0].transcript)
-                        .join('');
-                    setInput(text);
+                recognition.lang = 'zh-CN'; 
+                recognition.onresult = (e) => setInput(Array.from(e.results).map(r => r[0].transcript).join(''));
+                recognition.onend = () => {
+                    setIsListening(false);
                 };
-                recognition.onend = () => setIsListening(false);
-                recognition.onerror = () => setIsListening(false);
                 recognitionRef.current = recognition;
             }
         }
     }, []);
 
+    // 自动发送监听
+    useEffect(() => {
+        if (!isListening && autoSend && input.trim().length > 1 && !loading) {
+            handleTranslate();
+        }
+    }, [isListening]);
+
     const toggleListening = () => {
-        if (!recognitionRef.current) return alert('Browser not support speech recognition');
+        if (!recognitionRef.current) return alert('Browser not support speech');
         if (isListening) {
             recognitionRef.current.stop();
         } else {
+            setInput('');
             recognitionRef.current.start();
             setIsListening(true);
         }
     };
 
-    const handleSend = async () => {
-        if (!input.trim()) return;
+    // 翻译请求
+    const handleTranslate = async () => {
+        if (!input.trim() || loading) return;
         setLoading(true);
         setResults([]);
+        setQuickReplies([]);
         
         try {
             const res = await fetch('/api/translate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: input, targetLang })
+                body: JSON.stringify({
+                    text: input,
+                    targetLang,
+                    customConfig: {
+                        apiUrl: customApiUrl, 
+                        apiKey: customApiKey
+                    }
+                })
             });
             const data = await res.json();
-            if (data.results) setResults(data.results);
+            if (data.results) {
+                setResults(data.results);
+                if (data.quick_replies) setQuickReplies(data.quick_replies);
+            } else if (data.error) {
+                alert(`API Error: ${data.error}`);
+            }
         } catch (e) {
-            console.error(e);
-            alert('Error');
+            alert('Request Failed: ' + e.message);
         } finally {
             setLoading(false);
         }
     };
 
-    const speak = (text, lang) => {
-        const voice = lang === 'my' ? 'my-MM-NilarNeural' : 'zh-CN-XiaoxiaoNeural';
-        const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${voice}&r=-10`;
+    const speak = (text) => {
+        const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=my-MM-NilarNeural&r=-10`;
         new Audio(url).play().catch(e => console.error(e));
     };
 
+    // 点击快捷回复
+    const handleQuickReply = (reply) => {
+        setInput(reply);
+        // 如果想点击后直接翻译，可以在这里调用 handleTranslate (需处理 state 异步)
+        // 简单起见，这里只填充输入框，让用户确认
+    };
+
+    if (!isOpen) return null;
+
     return (
-        <div className="bg-white rounded-[1.8rem] p-4 shadow-xl shadow-slate-200/60 border border-slate-50 relative overflow-hidden">
-            {/* 标题栏 */}
-            <div className="flex justify-between items-center mb-3 px-1">
+        <div className="fixed inset-0 z-50 bg-[#f8fafc] flex flex-col overflow-hidden">
+            {/* 顶栏 */}
+            <div className="px-4 py-3 bg-white shadow-sm flex justify-between items-center z-10">
+                <button onClick={onClose} className="p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-full">
+                    <X size={24} />
+                </button>
                 <div className="flex items-center gap-2">
-                   <div className="p-1.5 bg-blue-50 rounded-full text-blue-500">
-                      <Sparkles size={14} fill="currentColor" />
-                   </div>
-                   <span className="text-sm font-black text-slate-700">AI 智能翻译</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <select 
+                     <span className="font-black text-slate-800 text-lg">AI 翻译官</span>
+                     <select 
                         value={targetLang} 
                         onChange={(e) => setTargetLang(e.target.value)}
-                        className="bg-slate-50 border-none text-[10px] font-bold text-slate-600 rounded-lg py-1 px-2 focus:ring-1 focus:ring-blue-200 outline-none"
+                        className="bg-slate-100 text-xs font-bold text-slate-600 rounded-lg py-1 px-2 outline-none"
                     >
-                        <option value="my">译成缅文 (Myanmar)</option>
-                        <option value="zh">译成中文 (Chinese)</option>
-                        <option value="en">译成英文 (English)</option>
+                        <option value="my">🇲🇲 缅文</option>
+                        <option value="zh">🇨🇳 中文</option>
+                        <option value="en">🇺🇸 英文</option>
                     </select>
                 </div>
+                <button onClick={() => setShowSettings(true)} className="p-2 -mr-2 text-slate-500 hover:bg-slate-100 rounded-full">
+                    <Settings size={24} />
+                </button>
             </div>
 
-            {/* 输入框 */}
-            <div className="relative mb-3">
-                <textarea 
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder="请输入内容或语音输入..."
-                    className="w-full min-h-[70px] bg-slate-50 border-0 rounded-2xl p-3 pr-10 resize-none text-sm text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSend();
-                        }
-                    }}
-                />
-                <div className="absolute bottom-2 right-2 flex items-center gap-1.5">
-                    {input && (
-                        <button onClick={() => setInput('')} className="p-1.5 text-slate-300 hover:text-slate-500 bg-white rounded-full shadow-sm">
-                            <X size={12} />
+            {/* 内容区 */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar relative">
+                {!isVerified ? (
+                    // 🔒 锁屏界面
+                    <div className="absolute inset-0 flex flex-col items-center justify-center p-8 bg-white/50 backdrop-blur-sm">
+                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-6 text-blue-600 animate-bounce">
+                            <Lock size={32} />
+                        </div>
+                        <h2 className="text-xl font-bold text-slate-800 mb-2">访问受限 (Access Denied)</h2>
+                        <p className="text-slate-500 text-sm mb-6 text-center">请输入密码以使用高级翻译功能</p>
+                        
+                        <div className="w-full max-w-xs relative mb-4">
+                            <KeyRound size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input 
+                                type="password" 
+                                value={passwordInput}
+                                onChange={(e) => setPasswordInput(e.target.value)}
+                                placeholder="Password"
+                                className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-center tracking-widest text-lg"
+                            />
+                        </div>
+                        <button 
+                            onClick={handleVerify}
+                            className="w-full max-w-xs py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-all"
+                        >
+                            解锁 (Unlock)
                         </button>
-                    )}
-                    <button 
-                        onClick={toggleListening}
-                        className={`p-2 rounded-full transition-all ${isListening ? 'bg-rose-500 text-white animate-pulse shadow-lg shadow-rose-200' : 'bg-white text-slate-400 border border-slate-100 shadow-sm'}`}
-                    >
-                        <Mic size={16} />
-                    </button>
-                    <button 
-                        onClick={handleSend}
-                        disabled={!input || loading}
-                        className={`p-2 rounded-full transition-all ${input ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-slate-100 text-slate-300'}`}
-                    >
-                       {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                    </button>
-                </div>
-            </div>
-
-            {/* 结果显示 */}
-            {results.length > 0 && (
-                <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                    {results.map((item, idx) => (
-                        <div key={idx} className={`p-3 rounded-2xl border ${item.recommended ? 'bg-blue-50/50 border-blue-100' : 'bg-slate-50/50 border-slate-100'}`}>
-                            <div className="flex justify-between items-start mb-1">
-                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${item.recommended ? 'bg-blue-100 text-blue-600' : 'bg-slate-200 text-slate-500'}`}>
-                                    {item.label}
-                                </span>
-                                {item.recommended && <Star size={10} className="text-amber-400 fill-amber-400" />}
-                            </div>
-                            <p className="text-sm font-bold text-slate-800 leading-relaxed my-1.5">{item.translation}</p>
-                            <div className="flex items-center justify-between pt-2 border-t border-slate-200/50">
-                                <p className="text-[10px] text-slate-400 truncate max-w-[70%]">↩ {item.back_translation}</p>
-                                <div className="flex gap-1">
-                                    <button onClick={() => speak(item.translation, targetLang)} className="p-1.5 rounded-lg hover:bg-white text-slate-400 hover:text-blue-500 transition-colors">
-                                        <Volume2 size={14} />
-                                    </button>
-                                    <button onClick={() => navigator.clipboard.writeText(item.translation)} className="p-1.5 rounded-lg hover:bg-white text-slate-400 hover:text-emerald-500 transition-colors">
-                                        <Copy size={14} />
-                                    </button>
+                    </div>
+                ) : (
+                    // ✅ 翻译主界面
+                    <div className="p-4 pb-32 space-y-4">
+                        {/* 快捷回复区域 */}
+                        {quickReplies.length > 0 && (
+                            <div className="mb-4">
+                                <p className="text-xs font-bold text-slate-400 uppercase mb-2 ml-1">💡 快捷回复 (Quick Replies)</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {quickReplies.map((reply, idx) => (
+                                        <button 
+                                            key={idx}
+                                            onClick={() => handleQuickReply(reply)}
+                                            className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-full text-xs font-bold active:scale-95 transition-transform border border-blue-100"
+                                        >
+                                            {reply}
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
-                        </div>
-                    ))}
+                        )}
+
+                        {/* 结果显示 - 直接展示内容，不折叠 */}
+                        {results.map((item, idx) => (
+                            <ResultItem key={idx} item={item} onSpeak={() => speak(item.translation)} />
+                        ))}
+                        
+                        {results.length === 0 && !loading && (
+                            <div className="text-center mt-20 opacity-30">
+                                <BrainCircuit size={64} className="mx-auto mb-4 text-slate-400" />
+                                <p className="text-sm font-bold">准备就绪，请说话或输入</p>
+                            </div>
+                        )}
+                        
+                        {loading && (
+                            <div className="flex justify-center py-10">
+                                <Loader2 size={32} className="animate-spin text-blue-500" />
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* 底部输入区 */}
+            {isVerified && (
+                <div className="bg-white border-t border-slate-100 p-4 pb-8 shadow-[0_-5px_20px_rgba(0,0,0,0.05)]">
+                    <div className="relative mb-3">
+                        <textarea 
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            placeholder="输入内容..."
+                            className="w-full bg-slate-50 rounded-2xl p-4 pr-12 resize-none h-24 text-lg focus:ring-2 focus:ring-blue-100 outline-none"
+                        />
+                        {input && (
+                            <button onClick={() => setInput('')} className="absolute top-3 right-3 p-1 text-slate-400 bg-white rounded-full shadow-sm">
+                                <X size={16} />
+                            </button>
+                        )}
+                    </div>
+                    
+                    <button 
+                        onClick={input.trim() ? handleTranslate : toggleListening}
+                        disabled={loading}
+                        className={`w-full py-4 rounded-2xl flex items-center justify-center gap-2 font-bold text-white shadow-xl transition-all active:scale-95 ${
+                            input.trim() 
+                                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 shadow-blue-200' 
+                                : (isListening ? 'bg-rose-500 shadow-rose-200 animate-pulse' : 'bg-slate-800 shadow-slate-300')
+                        }`}
+                    >
+                        {loading ? '翻译中...' : (input.trim() ? <><Send size={20}/> 发送翻译</> : <><Mic size={24}/> 长按或点击说话</>)}
+                    </button>
                 </div>
             )}
+
+            {/* 设置弹窗 */}
+            <AnimatePresence>
+                {showSettings && (
+                    <div className="absolute inset-0 z-50 bg-black/20 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+                        <motion.div 
+                            initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+                            className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl"
+                        >
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="font-bold text-lg">设置</h3>
+                                <button onClick={() => setShowSettings(false)} className="p-2 bg-slate-100 rounded-full"><X size={18}/></button>
+                            </div>
+                            
+                            <div className="space-y-4">
+                                <label className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                                    <span className="font-medium text-sm text-slate-700">语音自动发送</span>
+                                    <input type="checkbox" checked={autoSend} onChange={(e) => saveSetting('ai_auto_send', e.target.checked ? 'true' : 'false')} className="w-5 h-5" />
+                                </label>
+                                
+                                <div className="space-y-2">
+                                    <p className="text-xs font-bold text-slate-400 uppercase">API 配置 (可选)</p>
+                                    <input 
+                                        type="text" 
+                                        value={customApiUrl} 
+                                        onChange={(e) => saveSetting('ai_api_url', e.target.value)}
+                                        placeholder="API URL" 
+                                        className="w-full p-3 bg-slate-50 rounded-xl text-sm outline-none border border-transparent focus:border-blue-200"
+                                    />
+                                    <input 
+                                        type="password" 
+                                        value={customApiKey} 
+                                        onChange={(e) => saveSetting('ai_api_key', e.target.value)}
+                                        placeholder="API Key" 
+                                        className="w-full p-3 bg-slate-50 rounded-xl text-sm outline-none border border-transparent focus:border-blue-200"
+                                    />
+                                </div>
+
+                                <button onClick={() => setShowSettings(false)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold mt-2">
+                                    保存
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };
 
 // ==========================================
-// 3. 核心子组件
+// 组件: 结果展示 (增强版 - 显示评分和风险)
+// ==========================================
+const ResultItem = ({ item, onSpeak }) => {
+    // 相似度颜色
+    const scoreColor = (score) => {
+        if (score >= 0.9) return 'text-green-500';
+        if (score >= 0.7) return 'text-amber-500';
+        return 'text-red-500';
+    };
+
+    // 风险等级图标
+    const RiskIcon = ({ level }) => {
+        if (level === 'high') return <ShieldAlert size={12} className="text-red-500" />;
+        if (level === 'medium') return <ShieldCheck size={12} className="text-amber-500" />;
+        return <ShieldCheck size={12} className="text-green-500" />;
+    };
+
+    return (
+        <div className={`p-4 rounded-2xl border bg-white ${item.recommended ? 'border-blue-200 shadow-md shadow-blue-50' : 'border-slate-100 shadow-sm'}`}>
+            {/* 顶部标签栏 */}
+            <div className="flex items-center justify-between mb-3">
+                 <div className="flex items-center gap-2">
+                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${item.recommended ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
+                        {item.type || item.label}
+                     </span>
+                     {item.recommended && <Star size={12} className="text-amber-400 fill-amber-400" />}
+                 </div>
+                 
+                 {/* 评分和风险展示 */}
+                 {item.similarity_score !== undefined && (
+                     <div className="flex items-center gap-2">
+                         <div className="flex items-center gap-1 text-[10px] bg-slate-50 px-1.5 py-0.5 rounded">
+                             <Zap size={10} className={scoreColor(item.similarity_score)} fill="currentColor"/>
+                             <span className="font-bold text-slate-600">{Math.round(item.similarity_score * 100)}%</span>
+                         </div>
+                         {item.risk_level && (
+                            <div className="flex items-center gap-1 text-[10px] bg-slate-50 px-1.5 py-0.5 rounded" title={`Risk: ${item.risk_level}`}>
+                                <RiskIcon level={item.risk_level} />
+                            </div>
+                         )}
+                     </div>
+                 )}
+            </div>
+            
+            {/* 内容直接显示 */}
+            <p className="text-base font-medium text-slate-800 leading-relaxed mb-3 select-all">
+                {item.translation}
+            </p>
+            
+            <div className="flex items-center justify-between pt-2 border-t border-slate-50">
+                <p className="text-xs text-slate-400 italic">↩ {item.back_translation}</p>
+                <div className="flex gap-2">
+                    <button onClick={onSpeak} className="p-1.5 hover:bg-slate-50 rounded-lg text-slate-400">
+                        <Volume2 size={16} />
+                    </button>
+                    <button onClick={() => navigator.clipboard.writeText(item.translation)} className="p-1.5 hover:bg-slate-50 rounded-lg text-slate-400">
+                        <Copy size={16} />
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+// ==========================================
+// 3. 核心子组件 (HSK, Pinyin - 复用标准逻辑)
 // ==========================================
 
 // 会员弹窗
@@ -368,7 +588,7 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
   );
 };
 
-// 拼音面板组件 (保持不变)
+// 拼音面板组件
 const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection }) => {
   const router = useRouter();
 
@@ -443,13 +663,14 @@ const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection }) => {
 
 export default function HskPageClient() {
   const router = useRouter();
+  const [isTranslatorOpen, setIsTranslatorOpen] = useState(false);
   const [activeHskWords, setActiveHskWords] = useState(null);
   const [activeLevelTag, setActiveLevelTag] = useState(null);
   const [membership, setMembership] = useState({ open: false, level: null });
 
   const isCardViewOpen = router.asPath.includes('#hsk-vocabulary');
 
-  // 口语跳转逻辑
+  // 事件处理函数
   const handleSpokenGeneralClick = useCallback((e) => {
     if(e) e.preventDefault();
     router.push('/spoken');
@@ -460,7 +681,6 @@ export default function HskPageClient() {
     router.push({ pathname: '/spoken', query: { filter: 'favorites' } });
   }, [router]);
 
-  // 处理生词本点击逻辑
   const handleVocabularyClick = useCallback((level) => {
     const levelNum = level?.level || 1;
     const words = hskWordsData[levelNum] || [];
@@ -469,7 +689,6 @@ export default function HskPageClient() {
     router.push({ pathname: router.pathname, query: { ...router.query, level: levelNum }, hash: 'hsk-vocabulary' }, undefined, { shallow: true });
   }, [router]);
 
-  // 处理生词收藏点击
   const handleCollectionClick = useCallback(() => {
     const savedIds = JSON.parse(localStorage.getItem(FAVORITES_STORAGE_KEY) || '[]');
     const allWords = [ ...(hskWordsData[1] || []), ...(hskWordsData[2] || []) ];
@@ -478,7 +697,7 @@ export default function HskPageClient() {
     );
 
     if (favoriteWords.length === 0) {
-      alert("No saved words yet!\nမှတ်ထားသော စာလုံး မရှိသေးပါ");
+      alert("No saved words yet!");
       return;
     }
 
@@ -498,32 +717,45 @@ export default function HskPageClient() {
             <Sparkles size={12} className="text-blue-500" />
             <span className="text-[10px] font-bold text-blue-800 uppercase">Premium Class</span>
           </div>
-          
-          <a href={FB_CHAT_LINK} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white rounded-full shadow-sm border border-slate-100 active:scale-95 transition-all"
-          >
-            <MessengerIcon size={18} />
-            <span className="text-xs font-bold text-slate-700">Messenger</span>
+          <a href={FB_CHAT_LINK} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white rounded-full shadow-sm border border-slate-100 active:scale-95 transition-all">
+             <MessengerIcon size={18} />
+             <span className="text-xs font-bold text-slate-700">Messenger</span>
           </a>
         </div>
-
-        <div className="bg-white rounded-[1.8rem] p-4 shadow-xl shadow-slate-200/60 border border-slate-50">
-          <PinyinSection 
-            onOpenCollection={handleCollectionClick} 
-            onOpenSpokenCollection={handleSpokenCollectionClick}
-          />
+        
+        <div className="bg-white rounded-[1.8rem] p-4 shadow-xl shadow-slate-200/60 border border-slate-50 mb-4">
+             <PinyinSection 
+                onOpenCollection={handleCollectionClick} 
+                onOpenSpokenCollection={handleSpokenCollectionClick}
+             />
         </div>
       </header>
 
-      {/* ================================================== */}
-      {/* 🚀 插入点：AI 翻译器 (AITranslator) */}
-      {/* ================================================== */}
-      <div className="px-4 mt-4">
-        <AITranslator />
+      {/* 🚀 新入口：全屏翻译官 (双语标题) */}
+      <div className="px-4">
+        <button 
+          onClick={() => setIsTranslatorOpen(true)}
+          className="w-full relative h-24 bg-gradient-to-r from-violet-600 to-indigo-600 rounded-3xl overflow-hidden shadow-lg shadow-indigo-200 active:scale-[0.98] transition-all flex items-center justify-between px-6 group"
+        >
+          <div className="z-10 text-left">
+            <div className="flex items-center gap-1.5 mb-1 text-indigo-100">
+                <BrainCircuit size={16} />
+                <span className="text-[10px] font-bold uppercase tracking-widest">AI Translator Pro</span>
+            </div>
+            <h3 className="text-xl font-black text-white flex flex-col leading-tight">
+                <span>智能翻译官</span>
+                <span className="text-xs font-normal opacity-80 mt-0.5">(AI ဘာသာပြန်)</span>
+            </h3>
+            <p className="text-indigo-100 text-[10px] mt-1 opacity-80">精准直译 · 地道口语 · 文化解析</p>
+          </div>
+          <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white group-hover:scale-110 transition-transform">
+            <ChevronRight size={24} />
+          </div>
+          <div className="absolute right-0 top-0 bottom-0 w-32 bg-white/5 skew-x-12 -mr-4"></div>
+        </button>
       </div>
-      {/* ================================================== */}
 
-      {/* 口语练习横图入口 */}
+      {/* 口语练习横图 */}
       <div className="px-4 mt-4">
         <div 
           onClick={handleSpokenGeneralClick}
@@ -565,6 +797,19 @@ export default function HskPageClient() {
           ))}
         </div>
       </div>
+
+      <AnimatePresence>
+        {isTranslatorOpen && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }} 
+            animate={{ opacity: 1, scale: 1 }} 
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="fixed inset-0 z-[100]"
+          >
+            <FullScreenTranslator isOpen={isTranslatorOpen} onClose={() => setIsTranslatorOpen(false)} />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {membership.open && (
