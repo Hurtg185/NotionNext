@@ -7,6 +7,7 @@ import {
   FaExclamationTriangle, FaBookReader, FaVolumeUp
 } from 'react-icons/fa';
 import AIChatDock from '../AIChatDock';
+import { useAI } from './AIConfigContext'; // ✅ 修改 1：引入 Context Hook
 
 // =================================================================================
 // ===== 0. 音效工具 =====
@@ -280,6 +281,9 @@ const TopPlayer = ({
 // ===== 4. 主组件 GrammarPointPlayer =====
 // =================================================================================
 const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
+  // ✅ 修改 2：获取 Context 方法
+  const { updatePageContext } = useAI();
+
   const normalizedPoints = useMemo(() => {
     if (!Array.isArray(grammarPoints)) return [];
     return grammarPoints.map((item, idx) => ({
@@ -305,6 +309,27 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const contentRef = useRef(null);
   
+  const currentPoint = normalizedPoints[currentIndex];
+
+  // ✅ 修改 3：核心逻辑 —— 翻页时告诉 AI 当前内容
+  useEffect(() => {
+    if (currentPoint) {
+      // 将当前页面内容打包成字符串
+      const contextString = `
+【当前 PPT 内容】
+- 标题：${currentPoint.title}
+- 核心句型：${currentPoint.pattern}
+- 语法详解：${currentPoint.explanationRaw}
+- 注意事项：${currentPoint.attention}
+- 场景例句：
+${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('\n')}
+      `.trim();
+      
+      // 更新全局上下文
+      updatePageContext(contextString);
+    }
+  }, [currentPoint, updatePageContext]);
+
   const { 
     play, stop, toggle, seek, setRate,
     isPlaying, isPaused, loadingId, activeId, currentTime, duration, playbackRate 
@@ -333,7 +358,6 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
 
   if (!normalizedPoints.length) return <div style={styles.center}>Data Loading...</div>;
 
-  const currentPoint = normalizedPoints[currentIndex];
   const narrationId = `narration_${currentPoint.id}`;
   const isControllingNarration = activeId === narrationId;
   
@@ -482,8 +506,8 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
         );
       })}
 
-      {/* AI 助教挂载点 */}
-      <AIChatDock contextData={currentPoint} />
+      {/* ✅ 修改 4：AI 助教挂载点 (移除 contextData 属性，因为已通过 Context 同步) */}
+      <AIChatDock />
       
     </div>
   );
