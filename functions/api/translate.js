@@ -7,75 +7,108 @@ export async function onRequestPost(context) {
   try {
     // 1. 解析请求体
     const { request, env } = context;
-    const { text, targetLang = 'my', context: chatContext = [] } = await request.json();
+    const { 
+      text, 
+      targetLang = 'my', 
+      context: chatContext = [],
+      customConfig = {} 
+    } = await request.json();
 
-    // 2. 配置参数 (建议在 CF 后台设置环境变量 IFLOW_API_KEY，或者临时硬编码)
-    // 注意：CF 环境变量通过 env.VARIABLE_NAME 获取
-    const API_KEY = env.IFLOW_API_KEY || "sk-d2881db63d572542cd7127ec08ffde9a"; // ⚠️ 请确保这里填入了你的 Key
-    const API_URL = "https://apis.iflow.cn/v1/chat/completions";
+    // 2. 配置参数 (Key 优先级：前端自定义 > 环境变量 > 硬编码)
+    // 建议在 Cloudflare 后台设置 IFLOW_API_KEY 环境变量
+    const API_KEY = customConfig.apiKey || env.IFLOW_API_KEY || "sk-d2881db63d572542cd7127ec08ffde9a"; 
+    const API_URL = customConfig.apiUrl || "https://apis.iflow.cn/v1/chat/completions";
     const MODEL = "deepseek-v3.2";
 
-    // 3. 定义语言名称和特定风格描述 (融合了你的要求)
+    // 3. 定义目标语言
     const langMap = {
-      'my': '缅甸语',
-      'zh': '中文',
-      'en': '英语'
+      'my': 'Burmese (Myanmar)',
+      'zh': 'Chinese (Simplified)',
+      'en': 'English'
     };
     const tName = langMap[targetLang] || targetLang;
-    
-    // 针对缅甸语/中文的特定风格描述
-    const spokenStyle = targetLang === 'my' ? '缅甸年轻人日常生活中' : (targetLang === 'zh' ? '中国年轻人日常生活中' : '当地人日常');
-    const nativeStyle = targetLang === 'my' ? '缅甸人' : (targetLang === 'zh' ? '中国人' : '母语者');
 
-    // 4. 构建融合版 System Prompt
+    // 4. 生产级 System Prompt (完全整合你的要求)
     const SYSTEM_PROMPT = `
-你是一个商业级多语言互译引擎。
-任务：将用户输入的内容翻译成【${tName}】。
+You are a professional multilingual chat-translation engine.
 
-【核心指令】
-请严格按照以下 JSON 格式输出翻译结果，不要包含任何 Markdown 代码块标记（如 \`\`\`json），直接输出 JSON 对象。
+TASK:
+Translate user input into the ${tName} for real-time chat usage.
 
-【必须包含的 3 个版本】
+GLOBAL RULES (strict):
+- No hallucination
+- No added or omitted information
+- Preserve intent, tone, politeness, and emotional strength
+- This is CHAT translation, not writing or explanation
+- Prefer accuracy and stability over elegance
 
-1. version: "A" (Label: "自然直译")
-   - 要求：保留原文结构，符合${tName}语法，读起来不生硬。
-   - 场景：正式、学习、准确理解原文结构。
+OUTPUT REQUIREMENTS:
+Generate AT LEAST 8 translation variants.
 
-2. version: "B" (Label: "地道口语")
-   - 要求：采用${spokenStyle}常说的自然表达方式，语气轻松，可以使用俚语或习惯用语，但必须保持原意准确。
-   - 场景：聊天、社交、生活对话。
+For EACH variant you MUST provide:
+- translation (target language)
+- back_translation (Chinese)
+- similarity_score (0.00–1.00)
+  → similarity is measured by semantic alignment between original and back_translation
+- tone_match (true/false)
+- risk_level ("low" | "medium" | "high")
+- type (e.g., "literal", "natural", "social", "formal", "casual")
 
-3. version: "C" (Label: "深度意译")
-   - 要求：遵循${nativeStyle}的思维方式，彻底脱离原文的字面束缚，怎么顺口怎么来，但绝不偏离核心语义。
-   - 场景：文学、高情商回复、文化适应。
+VARIANT TYPES (cover as many as possible):
+1. Literal structural
+2. Natural spoken chat
+3. Smooth paraphrase
+4. Emotion-preserving equivalent
+5. Politeness-adjusted (neutral-safe)
+6. Casual short chat
+7. Slightly formal (but still spoken)
+8. Culturally safest version
 
-【输出数据结构】
+RECOMMENDATION LOGIC:
+Select EXACTLY ONE recommended version based on:
+- Highest similarity_score
+- tone_match = true
+- risk_level = low
+If multiple qualify, choose the most commonly used spoken form.
+
+CONTEXT HANDLING:
+- Use previous messages ONLY to resolve ambiguity
+- Do NOT rewrite history
+- Max context length: last 30 messages
+
+QUICK REPLIES (IMPORTANT):
+If the input appears to be a RECEIVED message:
+- Generate 5 quick replies
+- Language = USER ORIGINAL LANGUAGE (NOT target language)
+- Replies must be: very short, conversational, suitable for fast tap selection
+- Do NOT translate quick replies unless user clicks them
+
+OUTPUT FORMAT (JSON ONLY):
 {
   "results": [
     {
-      "version": "A",
-      "label": "自然直译",
-      "translation": "此处填${tName}译文",
-      "back_translation": "此处填精准的中文回译，用于验证语义",
-      "recommended": true/false (根据哪个最符合原意且最自然来判断，只标记一个为 true)
-    },
-    { ... 版本 B ... },
-    { ... 版本 C ... }
-  ]
+      "id": 1,
+      "type": "Label describing style",
+      "translation": "Target language text",
+      "back_translation": "Back translation to Chinese",
+      "similarity_score": 0.95,
+      "tone_match": true,
+      "risk_level": "low",
+      "recommended": true
+    }
+  ],
+  "quick_replies": ["Reply1", "Reply2", "Reply3", "Reply4", "Reply5"]
 }
-
-【安全规则】
-若原文涉及法律、金钱交易或严肃承诺，请强制推荐 "自然直译" 版本。
 `;
 
     // 5. 组装消息链
     const messages = [
       { role: "system", content: SYSTEM_PROMPT },
-      ...chatContext, // 历史上下文
-      { role: "user", content: `请翻译：${text}` }
+      ...chatContext.slice(-30), // 限制上下文长度
+      { role: "user", content: text }
     ];
 
-    // 6. 请求阿里心流接口
+    // 6. 请求接口
     const upstreamResponse = await fetch(API_URL, {
       method: "POST",
       headers: {
@@ -85,7 +118,8 @@ export async function onRequestPost(context) {
       body: JSON.stringify({
         model: MODEL,
         messages: messages,
-        temperature: 0.4, // 稍微提高一点以获得更地道的口语
+        temperature: 0.25, // 锁定最佳参数
+        top_p: 0.9,
         stream: false,
         response_format: { type: "json_object" }
       })
@@ -93,7 +127,7 @@ export async function onRequestPost(context) {
 
     if (!upstreamResponse.ok) {
       const errText = await upstreamResponse.text();
-      return new Response(JSON.stringify({ error: `Upstream API Error: ${upstreamResponse.status}`, details: errText }), {
+      return new Response(JSON.stringify({ error: `API Error: ${upstreamResponse.status}`, details: errText }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
@@ -102,15 +136,15 @@ export async function onRequestPost(context) {
     const data = await upstreamResponse.json();
     let content = data.choices[0]?.message?.content || "{}";
 
-    // 7. 清洗数据 (防止模型偶尔加 Markdown)
+    // 7. 清洗可能存在的 Markdown
     content = content.replace(/```json/g, '').replace(/```/g, '').trim();
 
-    // 8. 返回给前端
+    // 8. 返回结果
     return new Response(content, {
       status: 200,
       headers: { 
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*' // 允许跨域调用
+        'Access-Control-Allow-Origin': '*' 
       }
     });
 
