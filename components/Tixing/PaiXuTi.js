@@ -314,7 +314,7 @@ const styles = `
 }
 .pinyin-sub { font-size: 0.75rem; color: #94a3b8; font-weight: 500; margin-bottom: 0px; line-height: 1.2; }
 
-/* ✅ 修改: 提交按钮上移，padding-bottom 增加到 50px */
+/* 提交按钮上移 */
 .footer-bar {
   position: absolute; bottom: 0; left: 0; right: 0;
   padding: 20px 20px calc(50px + env(safe-area-inset-bottom));
@@ -378,7 +378,7 @@ const styles = `
 .btn-correct { background: #58cc02; }
 .btn-wrong { background: #ef4444; }
 
-/* ✅ 新增: AI 按钮样式 */
+/* AI 按钮样式 */
 .ai-btn {
   background: #fff;
   border: 2px solid #e5e7eb;
@@ -453,18 +453,18 @@ const SortableItem = ({ id, content, isPool, onClick, isOverlay }) => {
 // =================================================================================
 // 6. 主逻辑组件
 // =================================================================================
+// ✅ 关键修改：接收 triggerAI 参数
 const PaiXuTi = ({ 
   data, 
   onCorrect, 
   onNext, 
   onWrong,
-  triggerAI // ✅ 接收 AI 触发器
+  triggerAI 
 }) => {
   const { 
     title,       
     items,       
     correctOrder,
-    explanation, 
     imageUrl     
   } = data || {};
 
@@ -481,7 +481,6 @@ const PaiXuTi = ({
     if (!items) return;
     
     // items 数组包含了所有卡片（包括干扰项）
-    // correctOrder 数组只包含正确答案的 ID
     const allIds = items.map(i => i.id);
     
     // 打乱所有卡片
@@ -590,8 +589,9 @@ const PaiXuTi = ({
     }
   };
 
-  // ✅ 新增：AI 解析触发器
-  const handleAskAI = () => {
+  // ✅ 关键修复：AI 解析触发器逻辑
+  const handleAskAI = (e) => {
+    e.stopPropagation();
     if (triggerAI) {
       const userSentence = answerIds.map(id => findItem(id)?.text).join('');
       const correctSentence = correctOrder.map(id => findItem(id)?.text).join('');
@@ -600,8 +600,7 @@ const PaiXuTi = ({
         grammarPoint: "连词成句/排序",
         question: `请将这些词排成正确的句子：${items.map(i=>i.text).join(' / ')}`,
         userChoice: userSentence,
-        // 这里可以附带正确答案给 AI 做参考
-        correctAnswer: correctSentence 
+        correctAnswer: correctSentence // 可以把正确答案带给 AI 做参考
       });
     }
   };
@@ -728,16 +727,9 @@ const PaiXuTi = ({
                   {correctOrder?.map(id => findItem(id)?.text).join('')}
                </div>
 
-               {explanation && (
-                 <div className="explanation-box animate-fade-in">
-                   <div className="flex items-center gap-2 mb-2 font-bold">
-                     <FaLightbulb /> Explanation:
-                   </div>
-                   {explanation}
-                 </div>
-               )}
+               {/* ✅ 已删除 explanation 显示块 */}
 
-               {/* ✅ 只有做错时才显示 AI 按钮 */}
+               {/* ✅ 修复: AI 按钮触发 */}
                <button className="ai-btn" onClick={handleAskAI}>
                    <FaRobot size={18} />
                    <span>AI 老师解析</span>
