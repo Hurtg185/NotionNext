@@ -1,7 +1,7 @@
 /**
  * Cloudflare Pages Function
  * Path: /api/translate
- * Version: FINAL / STABLE
+ * Version: FINAL / PRODUCTION
  */
 
 export async function onRequestPost({ request, env }) {
@@ -30,8 +30,7 @@ export async function onRequestPost({ request, env }) {
     // =========================
     const API_KEY =
       customConfig.apiKey ||
-      env.IFLOW_API_KEY ||
-      "sk-d2881db63d572542cd7127ec08ffde9a";
+      env.IFLOW_API_KEY;
 
     const API_URL =
       customConfig.apiUrl ||
@@ -43,9 +42,9 @@ export async function onRequestPost({ request, env }) {
     // 2. 语言映射
     // =========================
     const langMap = {
-      auto: "Auto Detect (Do not guess if ambiguous)",
-      zh: "Chinese (Simplified)",
-      my: "Burmese (Myanmar)",
+      auto: "Auto Detect (do not guess if ambiguous)",
+      zh: "Chinese",
+      my: "Burmese",
       en: "English",
       th: "Thai",
       vi: "Vietnamese",
@@ -57,26 +56,76 @@ export async function onRequestPost({ request, env }) {
     const tName = langMap[targetLang] || targetLang;
 
     // =========================
-    // 3. SYSTEM PROMPT（关键）
+    // 3. SYSTEM PROMPT（核心）
     // =========================
     const SYSTEM_PROMPT = speedMode
       ? `
-You are a FAST and ACCURATE chat translator.
+You are a HIGH-FIDELITY literal chat translator.
 
 Translate from ${sName} to ${tName}.
 
+GOAL:
+Produce the closest possible translation to the original meaning.
+Accuracy has absolute priority over fluency.
+
 STRICT RULES:
 - Output JSON ONLY.
-- EXACTLY 3 translation variants.
-- EXACTLY ONE item must have "recommended": true.
-- Back-translation is REQUIRED.
-- No explanations. No markdown.
+- EXACTLY ONE translation result.
+- Translation MUST be a natural literal translation.
+- NO paraphrasing.
+- NO interpretation.
+- NO emotional rewriting.
+- NO English as intermediate language.
 
-JSON TEMPLATE (must follow exactly):
+BACK-TRANSLATION (MANDATORY):
+- Back-translate the translation into ${sName}.
+- Back-translation MUST preserve original structure and meaning.
+- This is a semantic equivalence check, NOT intent explanation.
+
+JSON FORMAT (must follow exactly):
 {
+  "mode": "speed",
+  "result": {
+    "label": "Literal | 直译",
+    "translation": "",
+    "back_translation": "",
+    "recommended": true
+  }
+}
+`
+      : `
+You are a PROFESSIONAL chat translation engine (Chinese ↔ Burmese).
+
+Translate from ${sName} to ${tName} for real chat usage.
+
+GLOBAL RULES:
+- Output JSON ONLY.
+- No added or omitted meaning.
+- No emotional amplification.
+- No English as intermediate language.
+
+TRANSLATION LAYERS:
+1. Literal (semantic ground truth)
+2. Free (natural but same meaning)
+3. Spoken (native chat style)
+
+BACK-TRANSLATION RULE:
+- ALL layers MUST include back_translation in ${sName}.
+- Back-translation MUST be literal and semantic.
+- NO intent explanation.
+
+JSON FORMAT (must follow exactly):
+{
+  "mode": "normal",
   "results": [
     {
       "label": "Literal | 直译",
+      "translation": "",
+      "back_translation": "",
+      "recommended": true
+    },
+    {
+      "label": "Free | 意译",
       "translation": "",
       "back_translation": "",
       "recommended": false
@@ -85,55 +134,10 @@ JSON TEMPLATE (must follow exactly):
       "label": "Spoken | 口语",
       "translation": "",
       "back_translation": "",
-      "recommended": true
-    },
-    {
-      "label": "Polite | 得体",
-      "translation": "",
-      "back_translation": "",
       "recommended": false
     }
-  ],
-  "quick_replies": ["", "", ""]
+  ]
 }
-
-IMPORTANT:
-- quick_replies must be in ${sName}.
-`
-      : `
-You are a PROFESSIONAL multilingual chat translation engine.
-
-Translate from ${sName} to ${tName} for REAL chat usage.
-
-GLOBAL RULES:
-- Output JSON ONLY.
-- No hallucination.
-- No added or omitted meaning.
-- Preserve intent, emotion, and politeness.
-- If source language is Auto Detect, do NOT guess when ambiguous.
-
-JSON TEMPLATE (must follow exactly):
-{
-  "results": [
-    {
-      "label": "Variant",
-      "translation": "",
-      "back_translation": "",
-      "similarity_score": 0.95,
-      "risk_level": "low",
-      "recommended": false
-    }
-  ],
-  "quick_replies": ["", "", "", "", ""]
-}
-
-MANDATORY REQUIREMENTS:
-- results MUST contain EXACTLY 8 items.
-- EXACTLY ONE item must have "recommended": true.
-- similarity_score range: 0.00 – 1.00.
-- risk_level: "low" | "medium" | "high".
-- quick_replies must be natural, conversational, and in ${sName}.
-- Do NOT add extra fields.
 `;
 
     // =========================
@@ -141,7 +145,7 @@ MANDATORY REQUIREMENTS:
     // =========================
     const messages = [
       { role: "system", content: SYSTEM_PROMPT },
-      ...Array.isArray(context) ? context.slice(-20) : [],
+      ...(Array.isArray(context) ? context.slice(-20) : []),
       { role: "user", content: text }
     ];
 
@@ -157,7 +161,7 @@ MANDATORY REQUIREMENTS:
       body: JSON.stringify({
         model: MODEL,
         messages,
-        temperature: speedMode ? 0.18 : 0.25,
+        temperature: speedMode ? 0.1 : 0.22,
         top_p: 0.9,
         stream: false,
         response_format: { type: "json_object" }
@@ -177,13 +181,15 @@ MANDATORY REQUIREMENTS:
     }
 
     // =========================
-    // 6. 解析并清洗
+    // 6. 解析 & 清洗
     // =========================
     const data = await upstream.json();
     let content = data?.choices?.[0]?.message?.content || "{}";
 
-    // DeepSeek 偶发 ```json
-    content = content.replace(/```json/g, "").replace(/```/g, "").trim();
+    content = content
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
 
     // =========================
     // 7. 返回
