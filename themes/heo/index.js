@@ -10,12 +10,12 @@ import { loadWowJS } from '@/lib/plugins/wow'
 import { useGlobal } from '@/lib/global'
 import { siteConfig } from '@/lib/config'
 import CONFIG from './config'
-import { useAI } from '@/components/AIConfigContext' // 确保路径正确
+import { useAI } from '@/components/AIConfigContext' 
 
 // Icons
 import {
     GraduationCap, Settings, LifeBuoy, Moon, Sun, UserCircle,
-    BookOpen, Sparkles, Gem
+    BookOpen, Sparkles, Gem, Mic, Send, Volume2, Copy, X, Star, Loader2, Languages
 } from 'lucide-react'
 import { HashTag } from '@/components/HeroIcons'
 
@@ -64,6 +64,10 @@ const CustomScrollbarStyle = () => (
             display: none !important;
         }
         body { background-color: #0f172a; }
+        
+        /* 翻译器动画 */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
     `}</style>
 );
 
@@ -186,8 +190,226 @@ const HomeSidebar = ({ isOpen, onClose, sidebarX }) => {
   );
 };
 
+// =================================================================================
+// ======================  组件: AI 翻译器 (AITranslator)  =========================
+// =================================================================================
+
+const AITranslator = () => {
+    const [input, setInput] = useState('');
+    const [isListening, setIsListening] = useState(false);
+    const [targetLang, setTargetLang] = useState('my'); // 默认缅甸语
+    const [recognitionLang, setRecognitionLang] = useState('zh');
+    const [results, setResults] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
+    const recognitionRef = useRef(null);
+    const [customApiUrl, setCustomApiUrl] = useState(''); // 支持设置自定义API
+    const [customApiKey, setCustomApiKey] = useState('');
+
+    // 初始化语音识别
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (SR) {
+                const recognition = new SR();
+                recognition.continuous = false;
+                recognition.interimResults = true;
+                recognition.onresult = (e) => {
+                    const text = Array.from(e.results)
+                        .map(result => result[0].transcript)
+                        .join('');
+                    setInput(text);
+                };
+                recognition.onend = () => setIsListening(false);
+                recognition.onerror = () => setIsListening(false);
+                recognitionRef.current = recognition;
+            }
+        }
+    }, []);
+
+    const toggleListening = () => {
+        if (!recognitionRef.current) return alert('当前浏览器不支持语音识别');
+        if (isListening) {
+            recognitionRef.current.stop();
+        } else {
+            recognitionRef.current.lang = recognitionLang === 'zh' ? 'zh-CN' : (recognitionLang === 'my' ? 'my-MM' : 'en-US');
+            recognitionRef.current.start();
+            setIsListening(true);
+        }
+    };
+
+    const handleSend = async () => {
+        if (!input.trim()) return;
+        setLoading(true);
+        setResults([]);
+        
+        try {
+            // 调用我们写好的 Next.js API
+            const res = await fetch('/api/translate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: input,
+                    targetLang,
+                    // 如果需要在前端透传自定义API设置，可以在这里扩展，目前使用后端硬编码
+                })
+            });
+            const data = await res.json();
+            if (data.results) {
+                setResults(data.results);
+            } else if (data.error) {
+                alert(`Error: ${data.error}`);
+            }
+        } catch (e) {
+            console.error(e);
+            alert('翻译请求失败');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // 微软 TTS
+    const speak = (text, lang) => {
+        const voice = lang === 'my' ? 'my-MM-NilarNeural' : (lang === 'zh' ? 'zh-CN-XiaoxiaoNeural' : 'en-US-JennyNeural');
+        const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${voice}&r=-10`;
+        new Audio(url).play().catch(e => console.error("TTS play error", e));
+    };
+
+    return (
+        <div className="w-full bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden mb-6 transition-all duration-300">
+            {/* 顶部栏 */}
+            <div className="bg-gray-50 dark:bg-gray-700/50 px-4 py-3 flex justify-between items-center border-b dark:border-gray-700">
+                <div className="flex items-center gap-2 text-sm font-bold text-gray-700 dark:text-gray-200">
+                    <Sparkles size={16} className="text-blue-500" />
+                    <span>AI 深度翻译</span>
+                </div>
+                <div className="flex items-center gap-3">
+                    <select 
+                        value={targetLang} 
+                        onChange={(e) => setTargetLang(e.target.value)}
+                        className="bg-white dark:bg-gray-800 border-none text-xs rounded-lg py-1 px-2 focus:ring-1 focus:ring-blue-500 text-gray-700 dark:text-gray-300"
+                    >
+                        <option value="my">🇲🇲 译成缅文</option>
+                        <option value="zh">🇨🇳 译成中文</option>
+                        <option value="en">🇺🇸 译成英文</option>
+                    </select>
+                    <button onClick={() => setShowSettings(!showSettings)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                        <Settings size={16} />
+                    </button>
+                </div>
+            </div>
+
+            {/* 设置面板 */}
+            {showSettings && (
+                <div className="px-4 py-3 bg-gray-100 dark:bg-gray-900/50 text-xs text-gray-600 dark:text-gray-400 border-b dark:border-gray-700">
+                    <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                            <span>语音识别语言</span>
+                            <div className="flex gap-2">
+                                <button onClick={() => setRecognitionLang('zh')} className={`px-2 py-1 rounded ${recognitionLang === 'zh' ? 'bg-blue-100 text-blue-600' : 'bg-gray-200'}`}>中文</button>
+                                <button onClick={() => setRecognitionLang('my')} className={`px-2 py-1 rounded ${recognitionLang === 'my' ? 'bg-blue-100 text-blue-600' : 'bg-gray-200'}`}>缅文</button>
+                            </div>
+                        </div>
+                        <div className="mt-1 pt-2 border-t dark:border-gray-700">
+                            <label className="block mb-1 font-bold">自定义 API (可选)</label>
+                            <input 
+                                type="text" 
+                                placeholder="默认为阿里心流 DeepSeek-v3.2" 
+                                className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded px-2 py-1 mb-1"
+                                disabled
+                            />
+                            <p className="text-[10px] text-gray-400">目前使用后端统一配置以保护密钥安全。</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 输入区 */}
+            <div className="p-4">
+                <div className="relative">
+                    <textarea 
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        placeholder="输入内容或点击话筒说话..."
+                        className="w-full min-h-[80px] bg-gray-50 dark:bg-black/20 border-0 rounded-xl p-3 pr-10 resize-none focus:ring-2 focus:ring-blue-500/50 text-sm text-gray-800 dark:text-gray-200"
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSend();
+                            }
+                        }}
+                    />
+                    <div className="absolute bottom-2 right-2 flex items-center gap-2">
+                        {input && (
+                            <button 
+                                onClick={() => setInput('')}
+                                className="p-1.5 text-gray-400 hover:bg-gray-200 rounded-full transition-colors"
+                            >
+                                <X size={14} />
+                            </button>
+                        )}
+                        <button 
+                            onClick={toggleListening}
+                            className={`p-2 rounded-full transition-all duration-300 ${isListening ? 'bg-red-500 text-white shadow-red-500/50 shadow-lg scale-110 animate-pulse' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 hover:bg-gray-200'}`}
+                        >
+                            <Mic size={18} />
+                        </button>
+                        <button 
+                            onClick={handleSend}
+                            disabled={!input || loading}
+                            className={`p-2 rounded-full transition-all duration-300 ${input ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-gray-100 dark:bg-gray-700 text-gray-300'}`}
+                        >
+                           {loading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* 结果展示区 */}
+            {results.length > 0 && (
+                <div className="bg-gray-50/50 dark:bg-black/10 border-t dark:border-gray-700 p-2 space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
+                    {results.map((item, idx) => (
+                        <div key={idx} className={`relative p-3 rounded-xl border ${item.recommended ? 'bg-blue-50/80 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700'} animate-fade-in`}>
+                            <div className="flex justify-between items-start mb-1">
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${item.recommended ? 'bg-blue-100 text-blue-700 dark:bg-blue-800 dark:text-blue-200' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
+                                    {item.label}
+                                </span>
+                                {item.recommended && <span className="flex items-center text-[10px] text-orange-500 font-bold gap-1"><Star size={10} fill="currentColor" /> 推荐</span>}
+                            </div>
+                            
+                            <p className="text-base text-gray-800 dark:text-gray-100 font-medium leading-relaxed my-1 select-all">
+                                {item.translation}
+                            </p>
+
+                            <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50">
+                                <p className="text-[10px] text-gray-400 italic">
+                                    ↩ {item.back_translation}
+                                </p>
+                                <div className="flex items-center gap-2">
+                                    <button onClick={() => speak(item.translation, targetLang)} className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors">
+                                        <Volume2 size={14} />
+                                    </button>
+                                    <button 
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(item.translation);
+                                            // 这里可以加一个简单的 Toast 提示，简单起见略过
+                                        }} 
+                                        className="p-1.5 text-gray-400 hover:text-green-500 hover:bg-green-50 rounded-lg transition-colors"
+                                    >
+                                        <Copy size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
 // ... (PriceChartDisplay 组件保持不变) ...
-const PriceChartDisplay = () => { /* ... */ };
+const PriceChartDisplay = () => { return null; }; // 假设这是你原来的组件逻辑
 
 // =================================================================================
 // ======================  新主页布局 (手机端强制) ========================
@@ -242,16 +464,24 @@ const LayoutIndex = props => {
                         <p className='text-xs font-bold opacity-90 mb-1'>专业中缅双语教学，文化与机遇的桥梁。</p>
                         <p className='text-[8px] font-bold text-blue-300 tracking-wider'>မြန်မာ-တရုတ် နှစ်ဘာသာစကား သင်ကြားရေး။</p>
                     </div>
+                    {/* 这里如果是你原来的价格表组件，可以放回 */}
                     <PriceChartDisplay />
                 </div>
 
                 <div ref={scrollableContainerRef} className='absolute inset-0 z-20 overflow-y-auto overscroll-y-contain custom-scrollbar'>
-                    <div className='h-[310px] w-full flex-shrink-0' />
+                    {/* 调整顶部留白，为翻译器腾出空间 */}
+                    <div className='h-[280px] w-full flex-shrink-0' />
                     
                     <div className='relative bg-white dark:bg-gray-900 rounded-t-[32px] shadow-[0_-10px_30px_rgba(0,0,0,0.5)] pb-10 min-h-screen'>
                         <div className='w-10 h-1 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto my-4'></div>
 
                         <main className="px-4">
+                            {/* ============ 插入 AI 翻译器 ============ */}
+                            <div className="mb-6 -mt-2">
+                                <AITranslator />
+                            </div>
+                            {/* ======================================= */}
+
                             <div className='mb-4 flex items-center justify-between'>
                                 <div>
                                     <h2 className='text-lg font-black text-gray-800 dark:text-gray-100 flex items-center gap-2'>
@@ -304,13 +534,13 @@ const LayoutBase = props => {
   )
 }
 
-const LayoutPostList = (props) => { /* ... */ };
-const LayoutSearch = (props) => { /* ... */ };
-const LayoutArchive = (props) => { /* ... */ };
-const LayoutSlug = (props) => { /* ... */ };
-const Layout404 = () => { /* ... */ };
-const LayoutCategoryIndex = (props) => { /* ... */ };
-const LayoutTagIndex = (props) => { /* ... */ };
+const LayoutPostList = (props) => { return <LayoutBase {...props}><div>PostList Placeholder</div></LayoutBase> };
+const LayoutSearch = (props) => { return <LayoutBase {...props}><div>Search Placeholder</div></LayoutBase> };
+const LayoutArchive = (props) => { return <LayoutBase {...props}><div>Archive Placeholder</div></LayoutBase> };
+const LayoutSlug = (props) => { return <LayoutBase {...props}><div>Slug Placeholder</div></LayoutBase> };
+const Layout404 = () => { return <LayoutBase {...props}><div>404 Not Found</div></LayoutBase> };
+const LayoutCategoryIndex = (props) => { return <LayoutBase {...props}><div>Category Placeholder</div></LayoutBase> };
+const LayoutTagIndex = (props) => { return <LayoutBase {...props}><div>Tag Placeholder</div></LayoutBase> };
 
 export {
   Layout404, LayoutArchive, LayoutBase, LayoutCategoryIndex, LayoutIndex,
