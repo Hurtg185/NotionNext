@@ -11,7 +11,7 @@ export async function onRequestPost(context) {
 
     // 2. 配置参数 (建议在 CF 后台设置环境变量 IFLOW_API_KEY，或者临时硬编码)
     // 注意：CF 环境变量通过 env.VARIABLE_NAME 获取
-    const API_KEY = env.IFLOW_API_KEY || "sk-xxxxxxxx"; // ⚠️ 请确保这里填入了你的 Key
+    const API_KEY = env.IFLOW_API_KEY || "sk-d2881db63d572542cd7127ec08ffde9a"; // ⚠️ 请确保这里填入了你的 Key
     const API_URL = "https://apis.iflow.cn/v1/chat/completions";
     const MODEL = "deepseek-v3.2";
 
