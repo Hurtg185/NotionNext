@@ -6,7 +6,7 @@ import {
   Sparkles, PlayCircle, Gem, MessageCircle,
   Crown, Heart, ChevronRight, Star, BookOpen,
   ChevronDown, ChevronUp, GraduationCap,
-  MessageSquareText, Headphones, Volume2, Languages // 引入 Languages 图标用于翻译
+  MessageSquareText, Headphones, Volume2, BrainCircuit // 引入新图标
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
@@ -206,7 +206,7 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
   );
 };
 
-// 拼音面板组件
+// 拼音面板组件 (布局调整)
 const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection }) => {
   const router = useRouter();
 
@@ -246,22 +246,22 @@ const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection }) => {
       </button>
 
       {/* ==================================================== */}
-      {/* 新增：翻译器入口 (替换原来的 AI 助教) */}
+      {/* 新增：AI 助手入口 */}
       {/* ==================================================== */}
       <button 
-        onClick={() => router.push('/translator')} 
-        className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-indigo-50 to-violet-50 rounded-2xl border border-indigo-100/50 active:scale-95 transition-transform group"
+        onClick={() => router.push('@/components/AIChatDrawer')} // 点击跳转到 /ai-assistant 页面
+        className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100/50 active:scale-95 transition-transform group"
       >
         <div className="flex items-center gap-3">
-          <div className="p-1.5 bg-white rounded-full text-indigo-500 shadow-sm shrink-0">
-            <Languages size={16} />
+          <div className="p-1.5 bg-white rounded-full text-blue-500 shadow-sm shrink-0">
+            <BrainCircuit size={16} />
           </div>
           <div className="text-left">
-            <span className="block text-xs font-black text-slate-700">在线翻译 (Translator)</span>
-            <span className="block text-[10px] text-slate-500 font-medium">ဘာသာပြန်ဆိုရန်</span>
+            <span className="block text-xs font-black text-slate-700">AI 助教 (Assistant)</span>
+            <span className="block text-[10px] text-slate-500 font-medium">AI အကူဖြင့် လေ့ကျင့်ပါ</span>
           </div>
         </div>
-        <ChevronRight size={16} className="text-indigo-300" />
+        <ChevronRight size={16} className="text-blue-300" />
       </button>
       {/* ==================================================== */}
       
@@ -307,13 +307,18 @@ export default function HskPageClient() {
 
   const isCardViewOpen = router.asPath.includes('#hsk-vocabulary');
 
-  // 普通跳转：进入口语首页
+  // ====================================================
+  // 修改处：将口语跳转拆分为两个函数
+  // ====================================================
+
+  // 1. 普通跳转：进入口语首页 (点击 Banner)
   const handleSpokenGeneralClick = useCallback((e) => {
     if(e) e.preventDefault();
     router.push('/spoken');
   }, [router]);
 
-  // 收藏跳转：进入口语收藏
+  // 2. 收藏跳转：进入口语收藏 (点击按钮)
+  // 通过 query 参数 filter=favorites 告诉目标页面显示收藏
   const handleSpokenCollectionClick = useCallback((e) => {
     if(e) e.preventDefault();
     router.push({
@@ -321,6 +326,8 @@ export default function HskPageClient() {
       query: { filter: 'favorites' }
     });
   }, [router]);
+
+  // ====================================================
 
   // 处理生词本点击逻辑
   const handleVocabularyClick = useCallback((level) => {
@@ -361,6 +368,7 @@ export default function HskPageClient() {
             <span className="text-[10px] font-bold text-blue-800 uppercase">Premium Class</span>
           </div>
           
+          {/* Messenger 风格按钮 */}
           <a href={FB_CHAT_LINK} target="_blank" rel="noopener noreferrer"
             className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white rounded-full shadow-sm border border-slate-100 active:scale-95 transition-all"
           >
@@ -372,12 +380,13 @@ export default function HskPageClient() {
         <div className="bg-white rounded-[1.8rem] p-4 shadow-xl shadow-slate-200/60 border border-slate-50">
           <PinyinSection 
             onOpenCollection={handleCollectionClick} 
+            // 传递新的收藏跳转函数
             onOpenSpokenCollection={handleSpokenCollectionClick}
           />
         </div>
       </header>
 
-      {/* 口语练习横图入口 */}
+      {/* 口语练习横图入口 (缅语化) - 使用普通跳转 */}
       <div className="px-4 mt-4">
         <div 
           onClick={handleSpokenGeneralClick}
