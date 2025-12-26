@@ -6,7 +6,8 @@ import {
   FaTimes,
   FaArrowRight,
   FaLightbulb,
-  FaSpinner
+  FaSpinner,
+  FaRobot
 } from 'react-icons/fa';
 import { pinyin } from 'pinyin-pro';
 
@@ -128,7 +129,7 @@ const audioController = {
 };
 
 // =================================================================================
-// 3. 样式表 (Duolingo 风格深度定制)
+// 3. 样式表 (Duolingo 风格深度定制 + AI 按钮样式)
 // =================================================================================
 const cssStyles = `
 .xzt-container {
@@ -255,9 +256,10 @@ const cssStyles = `
   font-size: 1.1rem; font-weight: 700;
 }
 
+/* ✅ 修改: 提交栏位置上移，底部 padding 增加 */
 .submit-bar {
   position: absolute; bottom: 0; left: 0; right: 0;
-  padding: 20px 20px calc(30px + env(safe-area-inset-bottom)); 
+  padding: 20px 20px calc(50px + env(safe-area-inset-bottom)); 
   border-top: 2px solid #f3f4f6;
   background: #fff;
   display: flex; justify-content: space-between; align-items: center;
@@ -285,13 +287,14 @@ const cssStyles = `
   transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   z-index: 100;
   box-shadow: 0 -10px 40px rgba(0,0,0,0.1);
+  display: flex; flex-direction: column; gap: 12px; /* 增加 gap */
 }
 .result-sheet.correct { background: #dcfce7; color: #166534; }
 .result-sheet.wrong { background: #fee2e2; color: #991b1b; }
 .result-sheet.show { transform: translateY(0); }
 
 .sheet-header {
-  font-size: 1.5rem; font-weight: 800; margin-bottom: 16px;
+  font-size: 1.5rem; font-weight: 800; margin-bottom: 8px;
   display: flex; align-items: center; gap: 12px;
 }
 .next-btn {
@@ -304,6 +307,24 @@ const cssStyles = `
 .next-btn:active { transform: translateY(2px); border-bottom-width: 0; }
 .btn-correct { background: #58cc02; border-bottom-color: #46a302; }
 .btn-wrong { background: #ef4444; border-bottom-color: #b91c1c; }
+
+/* ✅ 新增: AI 按钮样式 */
+.ai-btn {
+  margin-top: 0px;
+  margin-bottom: 4px;
+  background: #fff;
+  border: 2px solid #e5e7eb;
+  color: #4f46e5;
+  padding: 12px;
+  border-radius: 14px;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  transition: all 0.1s;
+}
+.ai-btn:active { background: #f9fafb; transform: scale(0.98); }
 `;
 
 // =================================================================================
@@ -332,7 +353,7 @@ const vibrate = (pattern) => {
 // =================================================================================
 // 5. 组件主体
 // =================================================================================
-const XuanZeTi = ({ data: rawData, onCorrect, onWrong }) => {
+const XuanZeTi = ({ data: rawData, onCorrect, onWrong, onNext, triggerAI }) => {
   const data = rawData?.content || rawData || {};
   const question = data.question || {};
   const questionText = typeof question === 'string' ? question : question.text || '';
@@ -427,19 +448,40 @@ const XuanZeTi = ({ data: rawData, onCorrect, onWrong }) => {
     } else {
       playSfx('wrong');
       vibrate([50, 50, 50]); 
+      // 错了，通知父级记分，但不翻页
+      if(onWrong) onWrong();
     }
   };
 
-  // 点击 Continue (这才是真正通知父组件的地方)
+  // 点击 Continue (这才是真正翻页的地方)
   const handleContinue = () => {
     if (nextLockRef.current) return;
     nextLockRef.current = true;
     audioController.stop();
 
     if (isRight) {
-        onCorrect?.();
+        // 如果对了，可能父组件有庆祝逻辑，没有就直接翻页
+        onCorrect ? onCorrect() : onNext();
     } else {
-        onWrong?.(); // 这里通知父组件：我错了，父组件决定是否沉题 + 翻页
+        // 如果错了，因为前面已经记过分了，这里直接翻页
+        onNext && onNext();
+    }
+  };
+
+  // ✅ 新增: 触发 AI 解析
+  const handleAskAI = (e) => {
+    e.stopPropagation();
+    if (triggerAI) {
+      const userSelectedText = options
+        .filter(o => selectedIds.includes(String(o.id)))
+        .map(o => o.text)
+        .join(', ');
+
+      triggerAI({
+        grammarPoint: data.grammarPoint || "通用语法",
+        question: questionText,
+        userChoice: userSelectedText
+      });
     }
   };
 
@@ -568,7 +610,7 @@ const XuanZeTi = ({ data: rawData, onCorrect, onWrong }) => {
         </div>
 
         {!isRight && explanation && (
-            <div className="mb-4 p-4 bg-white/50 rounded-xl border border-red-200 text-red-900">
+            <div className="mb-2 p-4 bg-white/50 rounded-xl border border-red-200 text-red-900">
                 <div className="font-bold flex items-center gap-2 mb-1">
                      <FaLightbulb /> Explanation:
                 </div>
@@ -577,9 +619,17 @@ const XuanZeTi = ({ data: rawData, onCorrect, onWrong }) => {
         )}
 
         {!isRight && !explanation && (
-             <div className="mb-4 text-lg font-semibold text-red-800">
+             <div className="mb-2 text-lg font-semibold text-red-800">
                  Correct answer: {options.filter(o => correctAnswers.includes(String(o.id))).map(o=>o.text).join(', ')}
              </div>
+        )}
+        
+        {/* ✅ 新增: AI 按钮 (仅在错误时显示) */}
+        {!isRight && (
+            <button className="ai-btn" onClick={handleAskAI}>
+               <FaRobot size={18} />
+               <span>AI 老师解析</span>
+            </button>
         )}
 
         <button 
