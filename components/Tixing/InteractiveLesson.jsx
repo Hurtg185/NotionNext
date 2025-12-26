@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/router';
 import { FaPlay, FaHome, FaRedo, FaStar, FaRegStar, FaClock, FaMedal, FaExpand, FaCompress } from "react-icons/fa";
 import confetti from 'canvas-confetti';
+import { useAI } from './AIConfigContext'; // ✅ 修改1：引入 AI Context
 
 // --- 核心全屏播放器组件 ---
 import WordStudyPlayer from './WordStudyPlayer';
@@ -222,6 +223,9 @@ export default function InteractiveLesson({ lesson }) {
   const router = useRouter();
   const [hasMounted, setHasMounted] = useState(false);
   
+  // ✅ 修改2：获取 AI 触发方法
+  const { triggerInteractiveAI } = useAI();
+  
   // 核心状态
   const [dynamicBlocks, setDynamicBlocks] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -387,25 +391,26 @@ export default function InteractiveLesson({ lesson }) {
       case 'sentences': return <CardListRenderer {...commonProps} type={type} onComplete={goNext} />;
       case 'grammar_study': return <GrammarPointPlayer grammarPoints={commonProps.data.grammarPoints} onComplete={goNext} />;
       
-      // 在这里控制 Choice 和 PaiXu 的流程，错题后直接下一题
+      // ✅ 修改3：选择题 (Choice) 逻辑改造
+      // 传入 triggerAI, onNext, 取消 onWrong 里的 goNext (让组件内Continue控制)
       case 'choice': 
         return (
           <XuanZeTi 
             {...commonProps} 
-            onCorrect={() => {
-              goNext();
-            }}
-            onWrong={() => {
-              handleWrong(); // 仅记错
-              goNext();      // 直接下一题
-            }}
+            triggerAI={triggerInteractiveAI} // 传递 AI 触发器
+            onNext={goNext}                  // 传递下一题句柄
+            onCorrect={() => {}}             // 正确时无需此处处理，组件内点按钮再跳转
+            onWrong={handleWrong}            // 错误时只记分
           />
         );
-        
+      
+      // ✅ 修改4：排序题 (PaiXu) 逻辑改造
+      // 传入 triggerAI
       case 'paixu': 
         return (
           <PaiXuTi 
             {...commonProps} 
+            triggerAI={triggerInteractiveAI} // 传递 AI 触发器
             onCorrect={() => {
               goNext();
             }}
