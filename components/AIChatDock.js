@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  FaPaperPlane, FaChevronUp, FaRobot, FaCog, FaTimes,
+  FaPaperPlane, FaChevronLeft, FaRobot, FaCog, FaTimes,
   FaVolumeUp, FaStop, FaCopy, FaMicrophone, FaEraser,
   FaList, FaEdit, FaTrashAlt, FaPlus, FaLightbulb, FaFeatherAlt,
   FaLanguage, FaCheck, FaFont, FaLock, FaRocket, FaGoogle,
@@ -27,13 +27,13 @@ const STT_LANGS = [
 
 const API_ENDPOINTS = [
   { name: 'NVIDIA (默认)', value: 'https://integrate.api.nvidia.com/v1' },
-  { name: '阿里心流 (Iflow)', value: 'https://apis.iflow.cn/v1' }, // 确保带 /v1
+  { name: '阿里心流 (Iflow)', value: 'https://apis.iflow.cn/v1' },
   { name: 'DeepSeek 官方', value: 'https://api.deepseek.com' }
 ];
 
 const MODEL_OPTIONS = [
   { name: 'DeepSeek V3 (推荐)', value: 'deepseek-ai/deepseek-v3.2' },
-  { name: 'Qwen 2.5 (阿里)', value: 'qwen-turbo' }, // 心流常用模型名
+  { name: 'Qwen 2.5 (阿里)', value: 'qwen-turbo' }, 
   { name: 'Gemini 2.5 Flash', value: 'Gemini-2.5-Flash-Lite' },
   { name: 'Llama 3.1 405B', value: 'meta/llama-3.1-405b-instruct' }
 ];
@@ -117,7 +117,7 @@ export default function AIChatDock() {
   } = useAI();
 
   const [showSettings, setShowSettings] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false); // 全屏模式下，侧边栏作为历史记录抽屉
   const [showPaywall, setShowPaywall] = useState(false); 
   const [showLoginTip, setShowLoginTip] = useState(false);
 
@@ -134,7 +134,7 @@ export default function AIChatDock() {
   // API Key 显示状态，默认显示
   const [showKeyText, setShowKeyText] = useState(true);
 
-  // 悬浮按钮位置
+  // 悬浮按钮位置 (仅当关闭时使用)
   const [btnPos, setBtnPos] = useState({ right: 20, bottom: 40 });
   const draggingRef = useRef(false);
   const dragStartPos = useRef({ x: 0, y: 0 });
@@ -147,6 +147,29 @@ export default function AIChatDock() {
   const historyRef = useRef(null);
   const abortControllerRef = useRef(null);
   const recognitionRef = useRef(null);
+
+  // =======================================================
+  // ✅ 核心逻辑 1：拦截手机物理返回键 / 侧滑手势
+  // =======================================================
+  useEffect(() => {
+    if (isAiOpen) {
+      // 当 AI 打开时，向浏览器历史压入一个状态
+      // 这样用户按返回键时，会触发 popstate 而不是跳转页面
+      window.history.pushState({ aiDockOpen: true }, '');
+      
+      const handlePopState = (event) => {
+        // 用户按了返回键 -> 关闭 AI 窗口
+        setIsAiOpen(false);
+      };
+
+      window.addEventListener('popstate', handlePopState);
+
+      return () => {
+        window.removeEventListener('popstate', handlePopState);
+        // 组件卸载或状态变化时，如果需要可以做清理
+      };
+    }
+  }, [isAiOpen, setIsAiOpen]);
 
   const messages = useMemo(() => {
     const session = sessions.find(s => s.id === currentSessionId);
@@ -234,6 +257,7 @@ export default function AIChatDock() {
       window.getSelection().removeAllRanges();
   };
 
+  // 悬浮球拖拽逻辑
   const handleTouchStart = (e) => {
     draggingRef.current = false;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -327,7 +351,6 @@ export default function AIChatDock() {
       login();
   };
 
-  // --- 发送逻辑（增强兼容性） ---
   const handleSend = async (textToSend = input, isSystemTrigger = false) => {
     if (!textToSend.trim() || loading) return;
     if (!isSystemTrigger && !user) { setShowLoginTip(true); return; }
@@ -348,7 +371,6 @@ export default function AIChatDock() {
     if (abortControllerRef.current) abortControllerRef.current.abort();  
     abortControllerRef.current = new AbortController();  
 
-    // 乐观 UI 更新：先显示用户消息和“思考中”
     const userMsg = { role: 'user', content: userText };
     updateMessages(prev => [...prev, userMsg, { role: 'assistant', content: '' }]);
 
@@ -374,9 +396,8 @@ export default function AIChatDock() {
         body: JSON.stringify({  
           messages: apiMessages,
           email: user?.email, 
-          // 传递配置。如果第三方 API 需要特殊路径，确保 baseUrl 正确
           config: { 
-              apiKey: config.apiKey?.trim(), // 去除空格
+              apiKey: config.apiKey?.trim(), 
               baseUrl: config.baseUrl?.trim(), 
               modelId: config.modelId?.trim() 
           }  
@@ -403,19 +424,15 @@ export default function AIChatDock() {
         const chunk = decoder.decode(value, { stream: true });  
         buffer += chunk;  
         
-        // --- 增强的流解析逻辑 (解决第三方API兼容性) ---
-        // 部分第三方 API 返回的 chunk 可能包含多行，或者不完整的行
         const lines = buffer.split('\n');  
-        buffer = lines.pop(); // 保留最后一个不完整的片段
+        buffer = lines.pop(); 
 
         for (const line of lines) {  
             const trimmed = line.trim();  
             if (!trimmed || trimmed === 'data: [DONE]') continue;  
-            
-            // 兼容部分 API 返回 'data: {"choices":...}' 也有可能前面没空格
             if (trimmed.startsWith('data:')) {  
                 try {  
-                    const jsonStr = trimmed.replace(/^data:\s?/, ''); // 替换 'data:' 和可能存在的空格
+                    const jsonStr = trimmed.replace(/^data:\s?/, ''); 
                     if (jsonStr === '[DONE]') continue;
                     
                     const data = JSON.parse(jsonStr);  
@@ -433,7 +450,6 @@ export default function AIChatDock() {
                         });  
                     }  
                 } catch (e) {
-                    // console.warn('JSON Parse Error:', e, trimmed); // 调试用
                 }  
             }  
         }  
@@ -469,7 +485,6 @@ export default function AIChatDock() {
           console.error("Chat Error:", err);
           updateMessages(prev => {
               const last = prev[prev.length - 1];
-              // 错误时显示具体信息，帮助排查
               return [...prev.slice(0, -1), { ...last, content: last.content || `[系统]: 生成中断，请检查设置。(${err.message})` }];
           });
       }  
@@ -505,7 +520,6 @@ export default function AIChatDock() {
   const handleActivate = () => window.location.href = '/pricing'; 
   const handlePreviewCourse = () => window.location.href = '/course-intro';
 
-  // 设置页手势关闭
   const handleSettingsTouchStart = (e) => {
       settingsTouchStart.current = e.touches[0].clientX;
   };
@@ -514,6 +528,12 @@ export default function AIChatDock() {
       if (touchEnd - settingsTouchStart.current > 80) { // 右滑阈值
           setShowSettings(false);
       }
+  };
+
+  // 模拟返回操作（用于顶部导航栏的返回按钮）
+  const handleBack = () => {
+    // 调用 history.back() 会触发 popstate 事件，从而关闭 AI 窗口
+    window.history.back();
   };
 
   return (
@@ -532,6 +552,7 @@ export default function AIChatDock() {
           </div>
       )}
 
+      {/* 悬浮球 (仅当关闭时显示) */}
       {!isAiOpen && (
         <div 
             style={{...styles.floatingBtn, right: btnPos.right, bottom: btnPos.bottom}}
@@ -542,8 +563,11 @@ export default function AIChatDock() {
         </div>
       )}
 
+      {/* ✅ 修改：全屏模式 AI 窗口 */}
       {isAiOpen && (
-        <>
+        <div style={styles.fullScreenContainer}>
+            
+            {/* 侧边栏（历史记录） */}
             {showSidebar && <div onClick={() => setShowSidebar(false)} style={styles.sidebarOverlay} />}
             <div style={{...styles.sidebar, transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)'}}>
                 <div style={styles.sidebarHeader}>
@@ -569,271 +593,272 @@ export default function AIChatDock() {
                 </div>
             </div>
 
-            <div style={styles.chatWindow}>
-                <div style={{...styles.header, background: aiMode === 'INTERACTIVE' ? '#eff6ff' : '#fff'}}>
-                    <button onClick={() => setShowSidebar(true)} style={styles.headerIconBtn}><FaList size={16}/></button>
-                    <div style={{flex:1, textAlign:'center', fontWeight:'bold', color:'#334155', fontSize:'0.9rem'}}>
-                        {aiMode === 'INTERACTIVE' ? 'AI 互动辅导中' : `AI 助教 ${isActivated ? '(已激活)' : `(免费: ${remainingQuota})`}`}
-                    </div>
+            {/* ✅ 修改：顶部导航栏 (Native App 风格) */}
+            <div style={styles.navHeader}>
+                <button onClick={handleBack} style={styles.navBackBtn}>
+                    <FaChevronLeft size={20} />
+                </button>
+                <div style={styles.navTitle}>
+                    {aiMode === 'INTERACTIVE' ? 'AI 互动辅导' : `AI 助教 ${isActivated ? '' : `(${remainingQuota})`}`}
+                </div>
+                <div style={{display:'flex', gap:12}}>
                     {aiMode === 'INTERACTIVE' && (
-                        <button onClick={resetToChatMode} style={{marginRight:8, fontSize:'0.8rem', color:'#4f46e5', border:'none', background:'transparent'}}>退出</button>
+                        <button onClick={resetToChatMode} style={styles.navTextBtn}>退出互动</button>
                     )}
-                    <button onClick={() => setShowSettings(true)} style={styles.headerIconBtn}><FaCog size={16}/></button>
+                    <button onClick={() => setShowSidebar(true)} style={styles.navIconBtn}><FaList size={18}/></button>
+                    <button onClick={() => setShowSettings(true)} style={styles.navIconBtn}><FaCog size={18}/></button>
                 </div>
+            </div>
 
-                <div ref={historyRef} style={styles.messageArea}>
-                    {messages.length === 0 && (
-                        <div style={styles.emptyState}>
-                            <FaRobot size={40} color="#cbd5e1"/>
-                            <p style={{color:'#94a3b8', marginTop:10, fontSize:'0.9rem'}}>
-                                有什么问题都可以问我哦<br/><span style={{fontSize:'0.75rem', opacity:0.8}}>支持划词翻译、语音提问</span>
-                            </p>
-                        </div>
-                    )}
-                    
-                    {messages.map((m, i) => (
-                        <div key={i} style={{...styles.messageRow, alignItems: m.role === 'user' ? 'flex-end' : 'flex-start'}}>
-                            <div style={{...styles.bubbleWrapper, alignItems: m.role === 'user' ? 'flex-end' : 'flex-start'}}>
-                                <div style={{
-                                    ...styles.bubble,
-                                    background: m.role === 'user' ? '#f1f5f9' : 'transparent',
-                                    borderRadius: m.role === 'user' ? '12px' : '0',
-                                    padding: m.role === 'user' ? '10px 14px' : '0',
-                                    textAlign: m.role === 'user' ? 'right' : 'left'
-                                }}>
-                                    {m.role === 'user' ? (
-                                        <div style={{fontSize:'0.95rem', color:'#1e293b', fontWeight:500, whiteSpace: 'pre-wrap'}}>{m.content}</div>
-                                    ) : (
-                                        <div className="notion-md">
-                                            {/* 内容为空且loading时显示动画，否则显示 Markdown */}
-                                            {m.content === '' && loading ? (
-                                                <TypingIndicator />
-                                            ) : (
-                                                <ReactMarkdown
-                                                    remarkPlugins={[remarkGfm]} 
-                                                    components={{
-                                                        h1: ({children}) => <h1 style={styles.h1}>{children}</h1>,
-                                                        h2: ({children}) => <h2 style={styles.h2}>{children}</h2>,
-                                                        h3: ({children}) => <h3 style={styles.h3}>{children}</h3>,
-                                                        p: ({children}) => <p style={styles.p}>{React.Children.map(children, c => typeof c==='string'?<PinyinRenderer text={c} show={config.showPinyin}/>:c)}</p>,
-                                                        strong: ({children}) => <strong style={styles.strong}>{children}</strong>,
-                                                        ul: ({children}) => <ul style={styles.ul}>{children}</ul>,
-                                                        li: ({children}) => <li style={styles.li}>{children}</li>,
-                                                        del: ({children}) => <del style={styles.del}>{children}</del>,
-                                                        table: ({children}) => <div style={{overflowX:'auto'}}><table style={styles.table}>{children}</table></div>,
-                                                        th: ({children}) => <th style={styles.th}>{children}</th>,
-                                                        td: ({children}) => <td style={styles.td}>{React.Children.map(children, c => typeof c==='string'?<PinyinRenderer text={c} show={config.showPinyin}/>:c)}</td>
-                                                    }}
-                                                >
-                                                    {m.content}
-                                                </ReactMarkdown>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                                <div style={styles.msgActionBar}>
-                                    {m.role === 'assistant' && m.content !== '' && (
-                                        <>
-                                            <button onClick={() => playInternalTTS(m.content)} style={styles.msgActionBtn} title="朗读"><FaVolumeUp/></button>
-                                            <button onClick={() => copyText(m.content)} style={styles.msgActionBtn} title="复制"><FaCopy/></button>
-                                            <button 
-                                                onClick={() => setConfig({...config, showPinyin: !config.showPinyin})} 
-                                                style={{...styles.msgActionBtn, color: config.showPinyin ? '#4f46e5' : '#94a3b8'}} 
-                                                title="切换拼音"
-                                            >
-                                                <FaFont size={12} /> 拼
-                                            </button>
-                                        </>
-                                    )}
-                                    {m.role === 'user' && <button onClick={() => deleteMessage(i)} style={{...styles.msgActionBtn, color:'#ef4444'}} title="删除"><FaTrashAlt/></button>}
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                <div style={styles.footer}>
-                    {!loading && suggestions.length > 0 && (
-                        <div style={styles.scrollSuggestionContainer}>
-                            {suggestions.map((s, idx) => (
-                                <button key={idx} onClick={() => handleSend(s)} style={styles.scrollSuggestionBtn}>
-                                    <FaLightbulb color="#4f46e5" size={10} style={{marginRight:6}}/>{s}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                    <div style={styles.inputContainer}>
-                        {isPlaying && (
-                            <div style={styles.ttsBar} onClick={() => setIsPlaying(false)}>
-                                <FaVolumeUp className="animate-pulse"/> 正在朗读... <FaStop/>
-                            </div>
-                        )}
-                        <div style={styles.inputBox}>
-                            <textarea 
-                                value={input} onChange={e => setInput(e.target.value)}
-                                onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }}}
-                                placeholder={isListening ? "正在聆听..." : "输入问题..."}
-                                style={styles.textarea} rows={1}
-                            />
-                            {input.trim().length > 0 ? (
-                                <button onClick={() => handleSend()} disabled={loading} style={styles.sendBtn}><FaPaperPlane size={15}/></button>
-                            ) : (
-                                <button onClick={toggleListening} style={{...styles.micBtn, background: isListening ? '#ef4444' : 'transparent'}}>
-                                    <FaMicrophone size={18} color={isListening ? '#fff' : '#94a3b8'} className={isListening ? 'animate-pulse' : ''}/>
-                                </button>
-                            )}
-                        </div>
+            {/* 消息区域 (撑满剩余空间) */}
+            <div ref={historyRef} style={styles.chatBody}>
+                {messages.length === 0 && (
+                    <div style={styles.emptyState}>
+                        <FaRobot size={40} color="#cbd5e1"/>
+                        <p style={{color:'#94a3b8', marginTop:10, fontSize:'0.9rem'}}>
+                            有什么问题都可以问我哦<br/><span style={{fontSize:'0.75rem', opacity:0.8}}>支持划词翻译、语音提问</span>
+                        </p>
                     </div>
-                </div>
-            </div>
-
-            <div style={styles.closeArea} onClick={() => setIsAiOpen(false)}>
-                <FaChevronUp color="rgba(255,255,255,0.8)" size={14} />
-            </div>
-        </>
-      )}
-
-      {showLoginTip && (
-        <div style={styles.paywallOverlay}>
-            <div style={{...styles.paywallModal, maxWidth: 300}}>
-                <div style={{...styles.paywallHeader, background: '#4f46e5'}}>👋 温馨提示</div>
-                <div style={styles.paywallBody}>
-                    <p style={{color: '#334155', fontSize: '0.95rem', lineHeight: '1.6'}}>为了给您提供更准确的 AI 教学服务，并保存您的学习记录，请先登录账号。</p>
-                    <button onClick={handleConfirmLogin} style={styles.activateBtn}><FaGoogle style={{marginRight:8}}/> 立即登录</button>
-                    <button onClick={() => setShowLoginTip(false)} style={{...styles.previewBtn, marginTop: 8}}>暂不登录</button>
-                </div>
-            </div>
-        </div>
-      )}
-
-      {showPaywall && (
-        <div style={styles.paywallOverlay}>
-            <div style={styles.paywallModal}>
-                <div style={styles.paywallHeader}>🎉 你已经用 AI 学习了 {TOTAL_FREE_QUOTA} 次</div>
-                <div style={styles.paywallBody}>
-                    <div style={styles.paywallTitle}>接下来解锁完整课程，你可以：</div>
-                    <ul style={styles.featureList}>
-                        <li><FaCheck color="#4ade80" style={{marginRight:8}}/> 无限提问</li>
-                        <li><FaCheck color="#4ade80" style={{marginRight:8}}/> 所有语法 AI 解析</li>
-                        <li><FaCheck color="#4ade80" style={{marginRight:8}}/> 错题专属讲解</li>
-                    </ul>
-                    <button onClick={handleActivate} style={styles.activateBtn}>【激活课程】</button>
-                    <button onClick={handlePreviewCourse} style={styles.previewBtn}>【先看看课程介绍】</button>
-                </div>
-                <button onClick={() => setShowPaywall(false)} style={styles.closePaywallBtn}><FaTimes/></button>
-            </div>
-        </div>
-      )}
-
-      {showSettings && (
-        <div 
-            style={styles.settingsOverlay} 
-            onClick={(e) => e.target === e.currentTarget && setShowSettings(false)}
-        >
-            <div 
-                style={styles.settingsModal} 
-                onTouchStart={handleSettingsTouchStart} 
-                onTouchEnd={handleSettingsTouchEnd}
-            >
-                <div style={styles.modalHeader}>
-                    <h3>AI 设置</h3>
-                    <button onClick={()=>setShowSettings(false)} style={styles.closeBtn}><FaTimes/></button>
-                </div>
+                )}
                 
-                {/* 内容区域：可滑动，无滚动条 */}
-                <div style={styles.modalBody}>
-                    {!isActivated && (
-                        <div style={{background:'#fff7ed', color:'#c2410c', padding:8, borderRadius:6, fontSize:'0.85rem'}}>
-                            试用剩余: {remainingQuota} / {TOTAL_FREE_QUOTA} 次
-                        </div>
-                    )}
-                    <label style={styles.settingRow}>
-                        <span>学生等级</span>
-                        <select value={config.userLevel || 'H1'} onChange={e=>setConfig({...config, userLevel:e.target.value})} style={styles.select}>
-                            <option value="H1">HSK 1-2 (初学者)</option>
-                            <option value="H3">HSK 3 (进阶)</option>
-                            <option value="H4">HSK 4+ (高级)</option>
-                        </select>
-                    </label>
-
-                    <label style={styles.settingRow}>
-                        <span>接口地址 (Base URL)</span>
-                        <input type="text" list="api-url-list" placeholder="例如: https://apis.iflow.cn/v1" value={config.baseUrl || ''} onChange={e=>setConfig({...config, baseUrl:e.target.value})} style={styles.input}/>
-                        <datalist id="api-url-list">
-                            {API_ENDPOINTS.map((endpoint, idx) => <option key={idx} value={endpoint.value}>{endpoint.name}</option>)}
-                        </datalist>
-                    </label>
-
-                    <label style={styles.settingRow}>
-                        <span>模型名称 (Model ID)</span>
-                        <input type="text" list="model-list" placeholder="手动输入或选择..." value={config.modelId || ''} onChange={e=>setConfig({...config, modelId:e.target.value})} style={styles.input}/>
-                         <datalist id="model-list">
-                            {MODEL_OPTIONS.map((model, idx) => <option key={idx} value={model.value}>{model.name}</option>)}
-                        </datalist>
-                    </label>
-
-                    <label style={styles.settingRow}>
-                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                            <span>API Key (自动隐藏)</span>
-                            <div style={{cursor:'pointer', color:'#6366f1', display:'flex', alignItems:'center', gap:4}} onClick={() => setShowKeyText(!showKeyText)}>
-                                {showKeyText ? <><FaEye size={14} /> 显示</> : <><FaEyeSlash size={14} /> 隐藏</>}
+                {messages.map((m, i) => (
+                    <div key={i} style={{...styles.messageRow, alignItems: m.role === 'user' ? 'flex-end' : 'flex-start'}}>
+                        <div style={{...styles.bubbleWrapper, alignItems: m.role === 'user' ? 'flex-end' : 'flex-start'}}>
+                            <div style={{
+                                ...styles.bubble,
+                                background: m.role === 'user' ? '#f1f5f9' : 'transparent',
+                                borderRadius: m.role === 'user' ? '12px' : '0',
+                                padding: m.role === 'user' ? '10px 14px' : '0',
+                                textAlign: m.role === 'user' ? 'right' : 'left'
+                            }}>
+                                {m.role === 'user' ? (
+                                    <div style={{fontSize:'0.95rem', color:'#1e293b', fontWeight:500, whiteSpace: 'pre-wrap'}}>{m.content}</div>
+                                ) : (
+                                    <div className="notion-md">
+                                        {m.content === '' && loading ? (
+                                            <TypingIndicator />
+                                        ) : (
+                                            <ReactMarkdown
+                                                remarkPlugins={[remarkGfm]} 
+                                                components={{
+                                                    h1: ({children}) => <h1 style={styles.h1}>{children}</h1>,
+                                                    h2: ({children}) => <h2 style={styles.h2}>{children}</h2>,
+                                                    h3: ({children}) => <h3 style={styles.h3}>{children}</h3>,
+                                                    p: ({children}) => <p style={styles.p}>{React.Children.map(children, c => typeof c==='string'?<PinyinRenderer text={c} show={config.showPinyin}/>:c)}</p>,
+                                                    strong: ({children}) => <strong style={styles.strong}>{children}</strong>,
+                                                    ul: ({children}) => <ul style={styles.ul}>{children}</ul>,
+                                                    li: ({children}) => <li style={styles.li}>{children}</li>,
+                                                    del: ({children}) => <del style={styles.del}>{children}</del>,
+                                                    table: ({children}) => <div style={{overflowX:'auto'}}><table style={styles.table}>{children}</table></div>,
+                                                    th: ({children}) => <th style={styles.th}>{children}</th>,
+                                                    td: ({children}) => <td style={styles.td}>{React.Children.map(children, c => typeof c==='string'?<PinyinRenderer text={c} show={config.showPinyin}/>:c)}</td>
+                                                }}
+                                            >
+                                                {m.content}
+                                            </ReactMarkdown>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                            <div style={styles.msgActionBar}>
+                                {m.role === 'assistant' && m.content !== '' && (
+                                    <>
+                                        <button onClick={() => playInternalTTS(m.content)} style={styles.msgActionBtn} title="朗读"><FaVolumeUp/></button>
+                                        <button onClick={() => copyText(m.content)} style={styles.msgActionBtn} title="复制"><FaCopy/></button>
+                                        <button 
+                                            onClick={() => setConfig({...config, showPinyin: !config.showPinyin})} 
+                                            style={{...styles.msgActionBtn, color: config.showPinyin ? '#4f46e5' : '#94a3b8'}} 
+                                            title="切换拼音"
+                                        >
+                                            <FaFont size={12} /> 拼
+                                        </button>
+                                    </>
+                                )}
+                                {m.role === 'user' && <button onClick={() => deleteMessage(i)} style={{...styles.msgActionBtn, color:'#ef4444'}} title="删除"><FaTrashAlt/></button>}
                             </div>
                         </div>
-                        <input 
-                            type={showKeyText ? "text" : "password"} 
-                            value={config.apiKey} 
-                            onChange={e=>setConfig({...config, apiKey:e.target.value})} 
-                            style={{...styles.input, fontFamily: 'monospace'}}
-                            placeholder="sk-..."
-                        />
-                        <div 
-                            style={{fontSize: '0.8rem', color: '#6366f1', marginTop: 4, cursor: 'pointer', textDecoration: 'underline'}}
-                            onClick={() => window.open('https://build.nvidia.com/explore/discover', '_blank')}
-                        >
-                           👉 教程：如何免费获取 NVIDIA 大模型 API Key？
+                    </div>
+                ))}
+            </div>
+
+            {/* 底部输入区 */}
+            <div style={styles.footer}>
+                {!loading && suggestions.length > 0 && (
+                    <div style={styles.scrollSuggestionContainer}>
+                        {suggestions.map((s, idx) => (
+                            <button key={idx} onClick={() => handleSend(s)} style={styles.scrollSuggestionBtn}>
+                                <FaLightbulb color="#4f46e5" size={10} style={{marginRight:6}}/>{s}
+                            </button>
+                        ))}
+                    </div>
+                )}
+                <div style={styles.inputContainer}>
+                    {isPlaying && (
+                        <div style={styles.ttsBar} onClick={() => setIsPlaying(false)}>
+                            <FaVolumeUp className="animate-pulse"/> 正在朗读... <FaStop/>
                         </div>
-                    </label>
-
-                    <div style={styles.switchRow}>
-                        <span>显示拼音 (默认关)</span>
-                        <input type="checkbox" checked={!!config.showPinyin} onChange={e=>setConfig({...config, showPinyin:e.target.checked})}/>
+                    )}
+                    <div style={styles.inputBox}>
+                        <textarea 
+                            value={input} onChange={e => setInput(e.target.value)}
+                            onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }}}
+                            placeholder={isListening ? "正在聆听..." : "输入问题..."}
+                            style={styles.textarea} rows={1}
+                        />
+                        {input.trim().length > 0 ? (
+                            <button onClick={() => handleSend()} disabled={loading} style={styles.sendBtn}><FaPaperPlane size={15}/></button>
+                        ) : (
+                            <button onClick={toggleListening} style={{...styles.micBtn, background: isListening ? '#ef4444' : 'transparent'}}>
+                                <FaMicrophone size={18} color={isListening ? '#fff' : '#94a3b8'} className={isListening ? 'animate-pulse' : ''}/>
+                            </button>
+                        )}
                     </div>
-                    <div style={styles.switchRow}>
-                        <span>打字音效</span>
-                        <input type="checkbox" checked={config.soundEnabled} onChange={e=>setConfig({...config, soundEnabled:e.target.checked})}/>
-                    </div>
-                    <label style={styles.settingRow}>
-                        <span>语速 ({config.ttsSpeed}x)</span>
-                        <input type="range" min="0.5" max="2.0" step="0.1" value={config.ttsSpeed} onChange={e=>setConfig({...config, ttsSpeed:parseFloat(e.target.value)})} style={{width:'100%'}}/>
-                    </label>
-                    <label style={styles.settingRow}>
-                        <span>发音人</span>
-                        <select value={config.ttsVoice} onChange={e=>setConfig({...config, ttsVoice:e.target.value})} style={styles.select}>
-                            {VOICES.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
-                        </select>
-                    </label>
-                    <hr style={{margin:'10px 0', borderColor:'#f1f5f9'}}/>
-                    <label style={styles.settingRow}>
-                        <span>语音识别语言</span>
-                        <select value={config.sttLang} onChange={e=>setConfig({...config, sttLang:e.target.value})} style={styles.select}>
-                            {STT_LANGS.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
-                        </select>
-                    </label>
-                    <div style={styles.switchRow}>
-                        <span>识别后自动发送</span>
-                        <input type="checkbox" checked={config.autoSendStt} onChange={e=>setConfig({...config, autoSendStt:e.target.checked})}/>
-                    </div>
-                </div>
-
-                <div style={styles.modalFooter}>
-                    <button onClick={()=>setShowSettings(false)} style={styles.backBtn}>
-                        <FaArrowLeft size={12}/> 返回聊天
-                    </button>
-                    <button onClick={()=>setShowSettings(false)} style={styles.saveBtn}>
-                        保存
-                    </button>
                 </div>
             </div>
+
+            {/* 弹窗区域 (设置/付费/登录) */}
+            {showLoginTip && (
+                <div style={styles.paywallOverlay}>
+                    <div style={{...styles.paywallModal, maxWidth: 300}}>
+                        <div style={{...styles.paywallHeader, background: '#4f46e5'}}>👋 温馨提示</div>
+                        <div style={styles.paywallBody}>
+                            <p style={{color: '#334155', fontSize: '0.95rem', lineHeight: '1.6'}}>为了给您提供更准确的 AI 教学服务，并保存您的学习记录，请先登录账号。</p>
+                            <button onClick={handleConfirmLogin} style={styles.activateBtn}><FaGoogle style={{marginRight:8}}/> 立即登录</button>
+                            <button onClick={() => setShowLoginTip(false)} style={{...styles.previewBtn, marginTop: 8}}>暂不登录</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showPaywall && (
+                <div style={styles.paywallOverlay}>
+                    <div style={styles.paywallModal}>
+                        <div style={styles.paywallHeader}>🎉 你已经用 AI 学习了 {TOTAL_FREE_QUOTA} 次</div>
+                        <div style={styles.paywallBody}>
+                            <div style={styles.paywallTitle}>接下来解锁完整课程，你可以：</div>
+                            <ul style={styles.featureList}>
+                                <li><FaCheck color="#4ade80" style={{marginRight:8}}/> 无限提问</li>
+                                <li><FaCheck color="#4ade80" style={{marginRight:8}}/> 所有语法 AI 解析</li>
+                                <li><FaCheck color="#4ade80" style={{marginRight:8}}/> 错题专属讲解</li>
+                            </ul>
+                            <button onClick={handleActivate} style={styles.activateBtn}>【激活课程】</button>
+                            <button onClick={handlePreviewCourse} style={styles.previewBtn}>【先看看课程介绍】</button>
+                        </div>
+                        <button onClick={() => setShowPaywall(false)} style={styles.closePaywallBtn}><FaTimes/></button>
+                    </div>
+                </div>
+            )}
+
+            {showSettings && (
+                <div 
+                    style={styles.settingsOverlay} 
+                    onClick={(e) => e.target === e.currentTarget && setShowSettings(false)}
+                >
+                    <div 
+                        style={styles.settingsModal} 
+                        onTouchStart={handleSettingsTouchStart} 
+                        onTouchEnd={handleSettingsTouchEnd}
+                    >
+                        <div style={styles.modalHeader}>
+                            <h3>AI 设置</h3>
+                            <button onClick={()=>setShowSettings(false)} style={styles.closeBtn}><FaTimes/></button>
+                        </div>
+                        
+                        <div style={styles.modalBody}>
+                            {!isActivated && (
+                                <div style={{background:'#fff7ed', color:'#c2410c', padding:8, borderRadius:6, fontSize:'0.85rem'}}>
+                                    试用剩余: {remainingQuota} / {TOTAL_FREE_QUOTA} 次
+                                </div>
+                            )}
+                            <label style={styles.settingRow}>
+                                <span>学生等级</span>
+                                <select value={config.userLevel || 'H1'} onChange={e=>setConfig({...config, userLevel:e.target.value})} style={styles.select}>
+                                    <option value="H1">HSK 1-2 (初学者)</option>
+                                    <option value="H3">HSK 3 (进阶)</option>
+                                    <option value="H4">HSK 4+ (高级)</option>
+                                </select>
+                            </label>
+
+                            <label style={styles.settingRow}>
+                                <span>接口地址 (Base URL)</span>
+                                <input type="text" list="api-url-list" placeholder="例如: https://apis.iflow.cn/v1" value={config.baseUrl || ''} onChange={e=>setConfig({...config, baseUrl:e.target.value})} style={styles.input}/>
+                                <datalist id="api-url-list">
+                                    {API_ENDPOINTS.map((endpoint, idx) => <option key={idx} value={endpoint.value}>{endpoint.name}</option>)}
+                                </datalist>
+                            </label>
+
+                            <label style={styles.settingRow}>
+                                <span>模型名称 (Model ID)</span>
+                                <input type="text" list="model-list" placeholder="手动输入或选择..." value={config.modelId || ''} onChange={e=>setConfig({...config, modelId:e.target.value})} style={styles.input}/>
+                                <datalist id="model-list">
+                                    {MODEL_OPTIONS.map((model, idx) => <option key={idx} value={model.value}>{model.name}</option>)}
+                                </datalist>
+                            </label>
+
+                            <label style={styles.settingRow}>
+                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                                    <span>API Key (自动隐藏)</span>
+                                    <div style={{cursor:'pointer', color:'#6366f1', display:'flex', alignItems:'center', gap:4}} onClick={() => setShowKeyText(!showKeyText)}>
+                                        {showKeyText ? <><FaEye size={14} /> 显示</> : <><FaEyeSlash size={14} /> 隐藏</>}
+                                    </div>
+                                </div>
+                                <input 
+                                    type={showKeyText ? "text" : "password"} 
+                                    value={config.apiKey} 
+                                    onChange={e=>setConfig({...config, apiKey:e.target.value})} 
+                                    style={{...styles.input, fontFamily: 'monospace'}}
+                                    placeholder="sk-..."
+                                />
+                                <div 
+                                    style={{fontSize: '0.8rem', color: '#6366f1', marginTop: 4, cursor: 'pointer', textDecoration: 'underline'}}
+                                    onClick={() => window.open('https://build.nvidia.com/explore/discover', '_blank')}
+                                >
+                                👉 教程：如何免费获取 NVIDIA 大模型 API Key？
+                                </div>
+                            </label>
+
+                            <div style={styles.switchRow}>
+                                <span>显示拼音 (默认关)</span>
+                                <input type="checkbox" checked={!!config.showPinyin} onChange={e=>setConfig({...config, showPinyin:e.target.checked})}/>
+                            </div>
+                            <div style={styles.switchRow}>
+                                <span>打字音效</span>
+                                <input type="checkbox" checked={config.soundEnabled} onChange={e=>setConfig({...config, soundEnabled:e.target.checked})}/>
+                            </div>
+                            <label style={styles.settingRow}>
+                                <span>语速 ({config.ttsSpeed}x)</span>
+                                <input type="range" min="0.5" max="2.0" step="0.1" value={config.ttsSpeed} onChange={e=>setConfig({...config, ttsSpeed:parseFloat(e.target.value)})} style={{width:'100%'}}/>
+                            </label>
+                            <label style={styles.settingRow}>
+                                <span>发音人</span>
+                                <select value={config.ttsVoice} onChange={e=>setConfig({...config, ttsVoice:e.target.value})} style={styles.select}>
+                                    {VOICES.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
+                                </select>
+                            </label>
+                            <hr style={{margin:'10px 0', borderColor:'#f1f5f9'}}/>
+                            <label style={styles.settingRow}>
+                                <span>语音识别语言</span>
+                                <select value={config.sttLang} onChange={e=>setConfig({...config, sttLang:e.target.value})} style={styles.select}>
+                                    {STT_LANGS.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
+                                </select>
+                            </label>
+                            <div style={styles.switchRow}>
+                                <span>识别后自动发送</span>
+                                <input type="checkbox" checked={config.autoSendStt} onChange={e=>setConfig({...config, autoSendStt:e.target.checked})}/>
+                            </div>
+                        </div>
+
+                        <div style={styles.modalFooter}>
+                            <button onClick={()=>setShowSettings(false)} style={styles.backBtn}>
+                                <FaArrowLeft size={12}/> 返回聊天
+                            </button>
+                            <button onClick={()=>setShowSettings(false)} style={styles.saveBtn}>
+                                保存
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
       )}
 
@@ -856,6 +881,40 @@ export default function AIChatDock() {
 }
 
 const styles = {
+  // ✅ 修改：全屏容器
+  fullScreenContainer: {
+    position: 'fixed', inset: 0, 
+    background: '#f8fafc', 
+    zIndex: 99999, // 确保比页面其他元素高
+    display: 'flex', flexDirection: 'column',
+    animation: 'slideUp 0.3s ease-out'
+  },
+  // ✅ 新增：顶部导航栏
+  navHeader: {
+    height: 56, background: '#fff', 
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '0 16px', borderBottom: '1px solid #e2e8f0',
+    flexShrink: 0
+  },
+  navTitle: { fontSize: '1.1rem', fontWeight: 'bold', color: '#1e293b' },
+  navBackBtn: { background:'none', border:'none', padding:8, cursor:'pointer', color:'#334155', marginLeft:-8 },
+  navIconBtn: { background:'none', border:'none', padding:8, cursor:'pointer', color:'#64748b' },
+  navTextBtn: { background:'none', border:'1px solid #e0e7ff', borderRadius: 4, padding: '4px 8px', color:'#4f46e5', fontSize:'0.8rem', cursor:'pointer' },
+
+  // ✅ 修改：消息区域样式（撑满）
+  chatBody: {
+    flex: 1, overflowY: 'auto', padding: '16px', 
+    background: '#f8fafc',
+    WebkitOverflowScrolling: 'touch' 
+  },
+  // 底部输入区
+  footer: { 
+    background: '#fff', borderTop: '1px solid #e2e8f0', 
+    paddingBottom: 'env(safe-area-inset-bottom)', // 适配 iPhone X+
+    display: 'flex', flexDirection: 'column'
+  },
+
+  // 悬浮按钮 (仅当关闭时使用)
   floatingBtn: {
     position: 'fixed', width: 56, height: 56, borderRadius: '50%',
     background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
@@ -863,18 +922,19 @@ const styles = {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     zIndex: 9999, cursor: 'grab', touchAction: 'none' 
   },
-  chatWindow: {
-    position: 'fixed', top: 0, left: 0, width: '100%', height: '85%',
-    background: '#fff', borderBottomLeftRadius: 24, borderBottomRightRadius: 24,
-    display: 'flex', flexDirection: 'column', zIndex: 10000, overflow: 'hidden',
-    boxShadow: '0 10px 40px rgba(0,0,0,0.1)'
+
+  // 侧边栏（抽屉式）
+  sidebar: {
+      position: 'fixed', top: 56, left: 0, width: '75%', maxWidth: 280, bottom: 0,
+      background: '#fff', borderRight: '1px solid #e2e8f0', zIndex: 100000,
+      transition: 'transform 0.3s ease', display: 'flex', flexDirection: 'column'
   },
-  header: {
-    height: 44, borderBottom: '1px solid #f1f5f9', display: 'flex', 
-    alignItems: 'center', padding: '0 12px', background: '#fff', flexShrink: 0
-  },
-  headerIconBtn: { background:'none', border:'none', color:'#64748b', padding:8, cursor:'pointer' },
-  messageArea: { flex: 1, overflowY: 'auto', padding: '16px 20px', display:'flex', flexDirection:'column' },
+  sidebarOverlay: { position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', zIndex:99999 },
+  sidebarHeader: { padding: 20, borderBottom: '1px solid #e2e8f0', display:'flex', justifyContent:'space-between', alignItems:'center' },
+  newChatBtn: { background:'#fff', border:'1px solid #cbd5e1', borderRadius:6, padding:'4px 8px', fontSize:'0.8rem', display:'flex', alignItems:'center', gap:4, cursor:'pointer' },
+  sessionList: { flex: 1, overflowY: 'auto', padding: 10 },
+  sessionItem: { padding: '12px', borderRadius: 8, marginBottom: 4, fontSize: '0.9rem', cursor: 'pointer', display:'flex', justifyContent:'space-between', alignItems:'center' },
+
   emptyState: { marginTop:'40%', textAlign:'center' },
   messageRow: { display: 'flex', marginBottom: 24, width: '100%', flexDirection: 'column' },
   bubbleWrapper: { display: 'flex', flexDirection: 'column', maxWidth: '100%' },
@@ -892,7 +952,7 @@ const styles = {
   table: { width: '100%', borderCollapse: 'collapse', margin: '10px 0', fontSize: '0.9em' },
   th: { border: '1px solid #e2e8f0', padding: '6px 10px', background: '#f8fafc', fontWeight: '600', textAlign: 'left' },
   td: { border: '1px solid #e2e8f0', padding: '6px 10px', verticalAlign: 'top' },
-  footer: { background: '#fff', borderTop: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column' },
+  
   scrollSuggestionContainer: { 
       display: 'flex', gap: 10, padding: '12px 16px 4px 16px', overflowX: 'auto', 
       whiteSpace: 'nowrap', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch', msOverflowStyle: 'none'
@@ -922,22 +982,6 @@ const styles = {
   micBtn: {
       width: 32, height: 32, borderRadius: '50%', border: 'none', 
       display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink:0, transition: 'background 0.2s'
-  },
-  sidebar: {
-      position: 'fixed', top: 0, left: 0, width: '75%', maxWidth: 280, height: '85%',
-      background: '#f8fafc', borderRight: '1px solid #e2e8f0', zIndex: 10002,
-      transition: 'transform 0.3s ease', display: 'flex', flexDirection: 'column'
-  },
-  sidebarOverlay: { position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', zIndex:10001 },
-  sidebarHeader: { padding: 20, borderBottom: '1px solid #e2e8f0', display:'flex', justifyContent:'space-between', alignItems:'center' },
-  newChatBtn: { background:'#fff', border:'1px solid #cbd5e1', borderRadius:6, padding:'4px 8px', fontSize:'0.8rem', display:'flex', alignItems:'center', gap:4, cursor:'pointer' },
-  sessionList: { flex: 1, overflowY: 'auto', padding: 10 },
-  sessionItem: { padding: '12px', borderRadius: 8, marginBottom: 4, fontSize: '0.9rem', cursor: 'pointer', display:'flex', justifyContent:'space-between', alignItems:'center' },
-  closeArea: {
-      position: 'fixed', bottom: 0, left: 0, width: '100%', height: '15%',
-      background: 'linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.6))',
-      backdropFilter: 'blur(3px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      cursor: 'pointer'
   },
   popover: {
       position: 'fixed', transform: 'translateX(-50%)', background: '#1e293b', 
