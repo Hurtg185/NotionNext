@@ -425,7 +425,12 @@ export default function AIChatDock() {
         body: JSON.stringify({  
           messages: apiMessages,
           email: user?.email, 
-          config: { apiKey: config.apiKey, modelId: config.modelId }  
+          // 传递完整的配置，包含 BaseURL 和 ModelID
+          config: { 
+              apiKey: config.apiKey, 
+              baseUrl: config.baseUrl, 
+              modelId: config.modelId 
+          }  
         }),  
         signal: abortControllerRef.current.signal  
       });  
@@ -850,6 +855,41 @@ export default function AIChatDock() {
                             <option value="H4">HSK 4+ (高级)</option>
                         </select>
                     </label>
+
+                    {/* 新增：自定义 BaseURL */}
+                    <label style={styles.settingRow}>
+                        <span>接口地址 (Base URL)</span>
+                        <input 
+                            type="text" 
+                            placeholder="默认: https://integrate.api.nvidia.com/v1"
+                            value={config.baseUrl || ''} 
+                            onChange={e=>setConfig({...config, baseUrl:e.target.value})} 
+                            style={styles.input}
+                        />
+                        <div style={{fontSize:'0.75rem', color:'#94a3b8', fontWeight:'normal'}}>
+                            如: https://apis.iflow.cn/v1
+                        </div>
+                    </label>
+
+                    {/* 新增：自定义 Model ID (带自动补全) */}
+                    <label style={styles.settingRow}>
+                        <span>模型名称 (Model ID)</span>
+                        <input 
+                            type="text" 
+                            list="model-options"
+                            placeholder="默认: deepseek-ai/deepseek-v3.2"
+                            value={config.modelId || ''} 
+                            onChange={e=>setConfig({...config, modelId:e.target.value})} 
+                            style={styles.input}
+                        />
+                        <datalist id="model-options">
+                             <option value="deepseek-ai/deepseek-v3.2" />
+                             <option value="qwen3-235b" />
+                             <option value="Gemini-2.5-Flash-Lite" />
+                             <option value="meta/llama-3.1-405b-instruct" />
+                        </datalist>
+                    </label>
+
                     <label style={styles.settingRow}>
                         <span>API Key</span>
                         <input type="password" value={config.apiKey} onChange={e=>setConfig({...config, apiKey:e.target.value})} style={styles.input}/>
