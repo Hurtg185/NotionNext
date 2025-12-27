@@ -281,8 +281,8 @@ const TopPlayer = ({
 // ===== 4. 主组件 GrammarPointPlayer =====
 // =================================================================================
 const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
-  // ✅ 修改 2：获取 Context 方法
-  const { updatePageContext } = useAI();
+  // ✅ 修改 2：获取 Context 方法，包括 createNewSession
+  const { updatePageContext, createNewSession } = useAI();
 
   const normalizedPoints = useMemo(() => {
     if (!Array.isArray(grammarPoints)) return [];
@@ -311,10 +311,10 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
   
   const currentPoint = normalizedPoints[currentIndex];
 
-  // ✅ 修改 3：核心逻辑 —— 翻页时告诉 AI 当前内容
+  // ✅ 修改 3：核心逻辑 —— 翻页时告诉 AI 当前内容，并重置会话
   useEffect(() => {
     if (currentPoint) {
-      // 将当前页面内容打包成字符串
+      // 1. 更新上下文 Prompt
       const contextString = `
 【当前 PPT 内容】
 - 标题：${currentPoint.title}
@@ -325,10 +325,12 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
 ${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('\n')}
       `.trim();
       
-      // 更新全局上下文
       updatePageContext(contextString);
+
+      // 2. 强制开启新会话 (实现翻页即新对话)
+      createNewSession();
     }
-  }, [currentPoint, updatePageContext]);
+  }, [currentPoint, updatePageContext, createNewSession]);
 
   const { 
     play, stop, toggle, seek, setRate,
