@@ -6,7 +6,7 @@ import {
   Sparkles, PlayCircle, Gem, MessageCircle,
   Crown, Heart, ChevronRight, Star, BookOpen,
   ChevronDown, ChevronUp, GraduationCap,
-  MessageSquareText, Headphones, Volume2, BrainCircuit // 引入新图标
+  MessageSquareText, Headphones, Volume2, Globe // 引入新图标 Globe，替换 BrainCircuit
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
@@ -246,19 +246,19 @@ const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection }) => {
       </button>
 
       {/* ==================================================== */}
-      {/* 新增：AI 助手入口 */}
+      {/* 修改：AI 翻译入口 */}
       {/* ==================================================== */}
       <button 
-        onClick={() => router.push('@/components/AIChatDrawer')} // 点击跳转到 /ai-assistant 页面
+        onClick={() => router.push('/translator')} // 点击跳转到 /translator 页面
         className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100/50 active:scale-95 transition-transform group"
       >
         <div className="flex items-center gap-3">
           <div className="p-1.5 bg-white rounded-full text-blue-500 shadow-sm shrink-0">
-            <BrainCircuit size={16} />
+            <Globe size={16} />
           </div>
           <div className="text-left">
-            <span className="block text-xs font-black text-slate-700">AI 助教 (Assistant)</span>
-            <span className="block text-[10px] text-slate-500 font-medium">AI အကူဖြင့် လေ့ကျင့်ပါ</span>
+            <span className="block text-xs font-black text-slate-700">AI 翻译 (Translator)</span>
+            <span className="block text-[10px] text-slate-500 font-medium">AI ဘာသာပြန်</span>
           </div>
         </div>
         <ChevronRight size={16} className="text-blue-300" />
