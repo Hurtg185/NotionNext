@@ -29,10 +29,12 @@ export const AIProvider = ({ children }) => {
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
 
   /* ======================
-     2. AI 配置 (保留基础配置)
+     2. AI 配置 (修改点：增加了 baseUrl)
   ====================== */
   const [config, setConfig] = useState({
     apiKey: '',
+    // ✅ 新增：接口地址，默认为英伟达接口，用户可在前端修改
+    baseUrl: 'https://integrate.api.nvidia.com/v1', 
     modelId: 'deepseek-ai/deepseek-v3.2',
     userLevel: 'H1',
     showPinyin: true, 
