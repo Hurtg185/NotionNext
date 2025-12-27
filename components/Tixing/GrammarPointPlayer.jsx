@@ -6,8 +6,8 @@ import {
   FaPause, FaPlay, FaChevronRight, FaTachometerAlt, 
   FaExclamationTriangle, FaBookReader, FaVolumeUp
 } from 'react-icons/fa';
-import AIChatDock from '../AIChatDock';
-import { useAI } from '../AIConfigContext'; // ✅ 修改 1：引入 Context Hook
+// ✅ 已删除：不再在这里引入 AIChatDock，由父组件统一渲染
+import { useAI } from '../AIConfigContext'; 
 
 // =================================================================================
 // ===== 0. 音效工具 =====
@@ -281,14 +281,14 @@ const TopPlayer = ({
 // ===== 4. 主组件 GrammarPointPlayer =====
 // =================================================================================
 const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
-  // ✅ 修改 2：获取 Context 方法
+  // ✅ 获取 Context 方法
   const { updatePageContext } = useAI();
 
   const normalizedPoints = useMemo(() => {
     if (!Array.isArray(grammarPoints)) return [];
     return grammarPoints.map((item, idx) => ({
       id: item.id || idx,
-      type: 'grammar', // 为 AI Dock 提供上下文类型
+      type: 'grammar', 
       title: item['语法标题'] || item.grammarPoint || '',
       pattern: item['句型结构'] || item.pattern || '',
       explanationScript: item['讲解脚本'] || (item['语法详解'] || '').replace(/\*\*|###/g, ''),
@@ -311,10 +311,9 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
   
   const currentPoint = normalizedPoints[currentIndex];
 
-  // ✅ 修改 3：核心逻辑 —— 翻页时告诉 AI 当前内容
+  // ✅ 翻页时告诉全局唯一 AI 当前内容
   useEffect(() => {
     if (currentPoint) {
-      // 将当前页面内容打包成字符串
       const contextString = `
 【当前 PPT 内容】
 - 标题：${currentPoint.title}
@@ -324,8 +323,6 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
 - 场景例句：
 ${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('\n')}
       `.trim();
-      
-      // 更新全局上下文
       updatePageContext(contextString);
     }
   }, [currentPoint, updatePageContext]);
@@ -425,7 +422,7 @@ ${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('
                   </div>
                 </div>
 
-                {/* 易错点 */}
+                {/* 注意事项 */}
                 {gp.attention && (
                   <div style={styles.section}>
                     <div style={styles.sectionHeader}>
@@ -441,7 +438,7 @@ ${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('
                   </div>
                 )}
 
-                {/* 场景对话 - 优化版 */}
+                {/* 场景对话 */}
                 <div style={styles.section}>
                   <div style={styles.sectionHeader}>
                     <span style={styles.sectionTitle}>💬 场景对话</span>
@@ -471,7 +468,6 @@ ${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('
                              />
                           </div>
                           
-                          {/* 紧凑气泡布局 */}
                           <div style={{...styles.bubbleCol, alignItems: isBoy ? 'flex-end' : 'flex-start'}}>
                              <div style={{
                                 ...styles.bubble,
@@ -498,7 +494,6 @@ ${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('
                    </button>
                 </div>
                 
-                {/* 底部留白，悬浮球模式下不需要很大空间 */}
                 <div style={{ height: '40px' }} />
               </div>
             </div>
@@ -506,8 +501,7 @@ ${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('
         );
       })}
 
-      {/* ✅ 修改 4：AI 助教挂载点 (移除 contextData 属性，因为已通过 Context 同步) */}
-      <AIChatDock />
+      {/* ✅ 已移除：AIChatDock 不再在这里渲染 */}
       
     </div>
   );
@@ -528,7 +522,6 @@ const styles = {
   scrollContainer: { flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 16px', paddingTop: '70px' },
   contentWrapper: { maxWidth: '600px', margin: '0 auto', paddingTop: '20px' }, 
   
-  // Top Player
   topPlayerWrapper: { position: 'absolute', top: '15px', left: 0, right: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, pointerEvents: 'none' },
   topPlayerCapsule: { pointerEvents: 'auto', width: '94%', maxWidth: '500px', height: '56px', background: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', borderRadius: '28px', border: '1px solid rgba(0,0,0,0.08)', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', padding: '0 12px', gap: '12px' },
   mainPlayBtn: { width: 38, height: 38, borderRadius: '50%', background: '#3b82f6', color: 'white', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, boxShadow: '0 4px 10px rgba(59, 130, 246, 0.3)' },
@@ -541,7 +534,6 @@ const styles = {
   hiddenRangeInput: { position: 'absolute', top: -6, left: 0, width: '100%', height: '16px', opacity: 0, cursor: 'pointer', margin: 0 },
   bpSpeedBtn: { background: '#f1f5f9', border: 'none', borderRadius: '12px', padding: '4px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', gap: '1px', fontSize: '0.6rem', color: '#64748b', fontWeight: 'bold' },
 
-  // Content
   title: { fontSize: '1.5rem', fontWeight: '800', textAlign: 'center', color: '#1e293b', marginBottom: '24px', marginTop: '10px' },
   card: { background: 'white', borderRadius: '16px', padding: '24px', marginBottom: '30px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9' },
   cardLabel: { fontSize: '0.85rem', color: '#64748b', fontWeight: 'bold', marginBottom: '12px', display:'flex', gap: '6px', alignItems:'center' },
@@ -557,7 +549,6 @@ const styles = {
   attentionBox: { background: '#fef2f2', borderRadius: '16px', border: '1px solid #fee2e2', padding: '20px', boxShadow: '0 2px 8px rgba(220, 38, 38, 0.05)' },
   attentionText: { lineHeight: 1.8, color: '#991b1b', fontSize: '1rem', whiteSpace: 'pre-wrap' },
 
-  // Dialogue
   dialogueContainer: { display: 'flex', flexDirection: 'column', gap: '16px' },
   dialogueRow: { display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' },
   avatarWrapper: { display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '4px' },
