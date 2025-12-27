@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import PropTypes from 'prop-types';
 import { useTransition, animated } from '@react-spring/web';
 import { pinyin } from 'pinyin-pro';
+import ReactPlayer from 'react-player';
 import {
   FaPause, FaPlay, FaChevronRight, FaTachometerAlt,
-  FaExclamationTriangle, FaBookReader, FaVolumeUp, FaVideo, FaExpand
+  FaExclamationTriangle, FaBookReader, FaVolumeUp
 } from 'react-icons/fa';
 import { useAI } from '../AIConfigContext';
 
@@ -21,7 +22,7 @@ const playSFX = (type) => {
 };
 
 // =================================================================================
-// ===== 1. 健壮的 TTS Hook =====
+// ===== 1. TTS Hook =====
 // =================================================================================
 function useRobustTTS() {
   const [playerState, setPlayerState] = useState({
@@ -113,7 +114,7 @@ function useRobustTTS() {
     cleanupAudio();
     setPlayerState(prev => ({ ...prev, loadingId: uniqueId, activeId: uniqueId, isPlaying: false }));
 
-    let cleanText = String(text).replace(/\*\*|~~|###/g, '').replace(/<[^>]+>/g, '').trim();
+    let cleanText = String(text).replace(/\*\*|~~|\{\{|\}\}|###/g, '').replace(/<[^>]+>/g, '').trim();
     if (!cleanText) {
       setPlayerState(prev => ({ ...prev, loadingId: null }));
       return;
@@ -158,13 +159,12 @@ function useRobustTTS() {
 }
 
 // =================================================================================
-// ===== 2. 文本渲染组件 (支持拼音、加粗点、删除线) =====
+// ===== 2. 文本渲染组件 (严格配色方案) =====
 // =================================================================================
 
-const PinyinText = ({ text, onClick, color = 'inherit', bold = false, strikethrough = false }) => {
+const PinyinText = ({ text, onClick, color = '#000000', bold = false, strikethrough = false }) => {
   if (!text) return null;
-  // 移除标记符号
-  const displayable = text.replace(/\*\*|~~|###/g, '').replace(/{{|}}/g, '');
+  const displayable = text.replace(/\*\*|~~|\{\{|\}\}|###/g, '');
   const regex = /([\u4e00-\u9fa5]+)/g;
   const parts = displayable.split(regex);
 
@@ -175,11 +175,9 @@ const PinyinText = ({ text, onClick, color = 'inherit', bold = false, strikethro
       }}
       style={{
         lineHeight: '2.2', wordBreak: 'break-word', color: color,
-        fontWeight: bold ? '700' : '400', 
-        fontSize: '1.1rem', 
-        cursor: onClick ? 'pointer' : 'default',
+        fontWeight: bold ? '700' : '400', fontSize: '1.1rem', cursor: onClick ? 'pointer' : 'default',
         textDecoration: strikethrough ? 'line-through' : 'none',
-        textDecorationColor: strikethrough ? '#ef4444' : 'transparent',
+        textDecorationColor: strikethrough ? '#ff0000' : 'transparent',
         textDecorationThickness: '2px'
       }}
     >
@@ -209,33 +207,31 @@ const RichTextRenderer = ({ content, onPlayText }) => {
         if (trimmed.startsWith('###')) {
           return (
             <h3 key={idx} style={{
-              fontSize: '1.1rem', fontWeight: 'bold', color: '#4338ca',
-              marginTop: '10px', marginBottom: '4px', borderLeft: '4px solid #818cf8', paddingLeft: '8px'
+              fontSize: '1.1rem', fontWeight: 'bold', color: '#000000',
+              marginTop: '10px', marginBottom: '4px', borderLeft: '4px solid #0000ff', paddingLeft: '8px'
             }}>{trimmed.replace(/###\s?/, '')}</h3>
           );
         }
         
-        // 正则解析：**重点** 或 ~~错误~~ 或 普通文本
-        const parts = trimmed.split(/(\*\*.*?\*\*|~~.*?~~)/g);
+        // 解析：**蓝色**, ~~红色删除线~~, {{黄色}}
+        const parts = trimmed.split(/(\*\*.*?\*\*|~~.*?~~|\{\{.*?\}\})/g);
         
         return (
           <div key={idx} style={{ marginBottom: '4px', lineHeight: '1.8' }}>
             {parts.map((part, pIdx) => {
               if (part.startsWith('**') && part.endsWith('**')) {
-                // 重点文字：粗体 + 前置小白点
                 return (
-                  <span key={pIdx} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#f0f9ff', padding: '0 6px', borderRadius: '4px' }}>
-                    <span style={{ fontSize: '0.6rem', color: '#0ea5e9' }}>▪️</span>
-                    <PinyinText text={part.slice(2, -2)} onClick={onPlayText} color="#0c4a6e" bold={true} />
+                  <span key={pIdx} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <span style={{ fontSize: '0.6rem', color: '#0000ff' }}>▪️</span>
+                    <PinyinText text={part.slice(2, -2)} onClick={onPlayText} color="#0000ff" bold={true} />
                   </span>
                 );
               } else if (part.startsWith('~~') && part.endsWith('~~')) {
-                // 错误文字：红色 + 删除线
-                return (
-                  <PinyinText key={pIdx} text={part.slice(2, -2)} onClick={onPlayText} color="#ef4444" strikethrough={true} />
-                );
+                return <PinyinText key={pIdx} text={part.slice(2, -2)} onClick={onPlayText} color="#ff0000" strikethrough={true} />;
+              } else if (part.startsWith('{{') && part.endsWith('}}')) {
+                return <PinyinText key={pIdx} text={part.slice(2, -2)} onClick={onPlayText} color="#eab308" bold={true} />;
               } else if (part.trim()) {
-                return <PinyinText key={pIdx} text={part} onClick={onPlayText} color="#334155" />;
+                return <PinyinText key={pIdx} text={part} onClick={onPlayText} color="#000000" />;
               }
               return null;
             })}
@@ -247,31 +243,28 @@ const RichTextRenderer = ({ content, onPlayText }) => {
 };
 
 // =================================================================================
-// ===== 3. 顶部固定播放器 (常驻) =====
+// ===== 3. 顶部固定播放器 =====
 // =================================================================================
 const TopPlayer = ({
   isPlaying, isPaused, duration, currentTime,
   onToggle, onSeek, onRateChange, playbackRate, label, visible
 }) => {
   if (!visible) return null;
-
   const cycleRate = () => {
     if (playbackRate === 0.9) onRateChange(1.0);
     else if (playbackRate === 1.0) onRateChange(0.7);
     else onRateChange(0.9);
   };
-
   const formatTime = (t) => {
     if (!t) return '0:00';
     const min = Math.floor(t / 60);
     const sec = Math.floor(t % 60);
     return `${min}:${sec < 10 ? '0' + sec : sec}`;
   };
-
   return (
     <div style={styles.topPlayerWrapper}>
       <div style={styles.topPlayerCapsule}>
-        <button onClick={(e) => { playSFX('click'); onToggle(); }} style={styles.mainPlayBtn}>
+        <button onClick={() => { playSFX('click'); onToggle(); }} style={styles.mainPlayBtn}>
           {(isPlaying || isPaused) && !isPaused ? <FaPause size={14} /> : <FaPlay size={14} style={{marginLeft:2}} />}
         </button>
         <div style={styles.bpInfo}>
@@ -285,7 +278,7 @@ const TopPlayer = ({
             <span style={styles.bpTime}>{formatTime(duration)}</span>
           </div>
         </div>
-        <button onClick={(e) => { playSFX('click'); cycleRate(); }} style={styles.bpSpeedBtn}>
+        <button onClick={() => { playSFX('click'); cycleRate(); }} style={styles.bpSpeedBtn}>
           <FaTachometerAlt size={12} /><span>{playbackRate}x</span>
         </button>
       </div>
@@ -294,73 +287,29 @@ const TopPlayer = ({
 };
 
 // =================================================================================
-// ===== 4. 视频播放组件 (竖屏适配，点击全屏) =====
-// =================================================================================
-const VideoPlayerSection = ({ videoUrl }) => {
-  const videoRef = useRef(null);
-
-  const handlePlayVideo = () => {
-    if (videoRef.current) {
-      if (videoRef.current.requestFullscreen) {
-        videoRef.current.requestFullscreen();
-      } else if (videoRef.current.webkitRequestFullscreen) {
-        videoRef.current.webkitRequestFullscreen();
-      }
-      videoRef.current.play();
-    }
-  };
-
-  if (!videoUrl) return null;
-
-  return (
-    <div style={styles.videoSection}>
-      <div style={styles.sectionHeader}>
-        <span style={styles.sectionTitle}>📺 讲解视频</span>
-      </div>
-      <div style={styles.videoCard} onClick={handlePlayVideo}>
-         <video 
-            ref={videoRef}
-            src={videoUrl} 
-            style={styles.videoElement}
-            playsInline
-            controls={false}
-         />
-         <div style={styles.videoOverlay}>
-            <div style={styles.videoPlayCircle}>
-              <FaPlay color="white" size={20} style={{marginLeft: 4}} />
-            </div>
-            <span style={styles.videoHint}>点击全屏播放</span>
-         </div>
-      </div>
-    </div>
-  );
-};
-
-// =================================================================================
-// ===== 5. 主组件 GrammarPointPlayer =====
+// ===== 4. 主组件 GrammarPointPlayer =====
 // =================================================================================
 const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
   const { updatePageContext } = useAI();
+  const playerWrapperRef = useRef(null);
 
   const normalizedPoints = useMemo(() => {
     if (!Array.isArray(grammarPoints)) return [];
     return grammarPoints.map((item, idx) => ({
       id: item.id || idx,
-      type: 'grammar',
       title: item['语法标题'] || item.grammarPoint || '',
       pattern: item['句型结构'] || item.pattern || '',
-      videoUrl: item['视频链接'] || 'https://audio.886.best/chinese-vocab-audio/35339558-uhd_1440_2560_25fps.mp4', // 使用您提供的视频链接
-      explanationScript: item['讲解脚本'] || (item['语法详解'] || '').replace(/\*\*|~~|###/g, ''),
+      // 视频链接防盗处理及默认值
+      videoUrl: item['视频链接'] || 'https://audio.886.best/chinese-vocab-audio/35339558-uhd_1440_2560_25fps.mp4',
+      explanationScript: item['讲解脚本'] || (item['语法详解'] || '').replace(/\*\*|~~|\{\{|\}\}|###/g, ''),
       explanationRaw: item['语法详解'] || item.visibleExplanation || '',
       attention: item['注意事项'] || item.attention || '',
       dialogues: (item['例句列表'] || item.examples || []).map((ex, i) => {
-        // 增强性别判断：判断 B, 男, Male, Boy 等
-        const speakerTag = (ex.speaker || '').toUpperCase();
-        const isBoy = speakerTag === 'B' || speakerTag.includes('男') || speakerTag.includes('MALE') || speakerTag.includes('BOY');
-        
+        // 修正性别识别：判断 A/B 或 男/女 标签
+        const s = (ex.speaker || '').toUpperCase();
+        const isBoy = s === 'B' || s.includes('男') || s.includes('BOY') || s.includes('MALE');
         return {
-          id: ex.id || i, 
-          gender: isBoy ? 'male' : 'female',
+          id: ex.id || i, gender: isBoy ? 'male' : 'female',
           sentence: ex['句子'] || ex.sentence || '',
           translation: ex['翻译'] || ex.translation || '',
           script: ex['例句发音'] || ex['句子'] || ''
@@ -375,16 +324,8 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
 
   useEffect(() => {
     if (currentPoint) {
-      const contextString = `
-【当前学习页面】
-标题：${currentPoint.title}
-句型：${currentPoint.pattern}
-详解：${currentPoint.explanationRaw}
-注意事项：${currentPoint.attention}
-例句：
-${currentPoint.dialogues.map(d => `* ${d.sentence} (${d.translation})`).join('\n')}
-`.trim();
-      updatePageContext(contextString);
+      const ctx = `标题：${currentPoint.title}\n句型：${currentPoint.pattern}\n详解：${currentPoint.explanationRaw}\n注意事项：${currentPoint.attention}`;
+      updatePageContext(ctx);
     }
   }, [currentPoint, updatePageContext]);
 
@@ -400,10 +341,18 @@ ${currentPoint.dialogues.map(d => `* ${d.sentence} (${d.translation})`).join('\n
 
   const handleNext = () => {
     playSFX('switch');
-    if (currentIndex < normalizedPoints.length - 1) {
-      setCurrentIndex(p => p + 1);
-    } else {
-      if (onComplete) onComplete();
+    if (currentIndex < normalizedPoints.length - 1) setCurrentIndex(p => p + 1);
+    else if (onComplete) onComplete();
+  };
+
+  const handleVideoClick = () => {
+    const wrapper = playerWrapperRef.current;
+    if (wrapper) {
+      const videoEl = wrapper.querySelector('video');
+      if (videoEl) {
+        if (videoEl.requestFullscreen) videoEl.requestFullscreen();
+        else if (videoEl.webkitRequestFullscreen) videoEl.webkitRequestFullscreen();
+      }
     }
   };
 
@@ -419,32 +368,23 @@ ${currentPoint.dialogues.map(d => `* ${d.sentence} (${d.translation})`).join('\n
   const narrationId = `narration_${currentPoint.id}`;
   const isControllingNarration = activeId === narrationId;
 
-  const handleTopPlayClick = () => {
-    if (isControllingNarration) toggle();
-    else play(currentPoint.explanationScript, narrationId);
-  };
-
   return (
     <div style={styles.container}>
-      {/* 顶部悬浮播放器 */}
       <TopPlayer 
-        label={loadingId === narrationId ? '加载中...' : (isControllingNarration ? '正在播放讲解' : '点击播放全文讲解')}
+        label={loadingId === narrationId ? '加载中...' : (isControllingNarration ? '正在讲解' : '播放全文讲解')}
         isPlaying={isControllingNarration && isPlaying}
         isPaused={isControllingNarration && isPaused}
         currentTime={isControllingNarration ? currentTime : 0}
         duration={isControllingNarration ? duration : 0}
         playbackRate={playbackRate}
-        onToggle={handleTopPlayClick}
+        onToggle={() => isControllingNarration ? toggle() : play(currentPoint.explanationScript, narrationId)}
         onSeek={seek}
         onRateChange={setRate}
         visible={true} 
       />
 
-      {/* 页面过渡动画 */}
       {transitions((style, i) => {
         const gp = normalizedPoints[i];
-        if (!gp) return null;
-        
         return (
           <animated.div style={{ ...styles.page, ...style }}>
             <div style={styles.scrollContainer} ref={contentRef}>
@@ -452,25 +392,39 @@ ${currentPoint.dialogues.map(d => `* ${d.sentence} (${d.translation})`).join('\n
                 
                 <h2 style={styles.title}>{gp.title}</h2>
 
-                {/* 核心句型 */}
-                {gp.pattern && (
-                  <div style={styles.card}>
+                {/* 核心句型 + 视频并排 */}
+                <div style={styles.headerFlexRow}>
+                  <div style={styles.patternCard}>
                     <div style={styles.cardLabel}><FaBookReader /> 核心句型</div>
                     <div 
                       onClick={() => play(gp.pattern, `pattern_${gp.id}`)}
-                      style={{ 
-                        cursor: 'pointer', ...styles.patternText,
-                        color: activeId === `pattern_${gp.id}` ? '#3b82f6' : '#0f172a'
-                      }}
-                      className="active-scale"
+                      style={{ cursor: 'pointer', ...styles.patternText, color: activeId === `pattern_${gp.id}` ? '#3b82f6' : '#000' }}
                     >
                       <PinyinText text={gp.pattern} />
                     </div>
                   </div>
-                )}
 
-                {/* 视频讲解板块 */}
-                <VideoPlayerSection videoUrl={gp.videoUrl} />
+                  {/* 竖屏视频防盗播放器 */}
+                  <div style={styles.videoSideContainer} ref={playerWrapperRef} onClick={handleVideoClick} onContextMenu={(e)=>e.preventDefault()}>
+                    <ReactPlayer
+                      url={gp.videoUrl}
+                      width="100%"
+                      height="100%"
+                      playing={false}
+                      controls={false}
+                      light={true} // 显示封面图模式
+                      config={{
+                        file: {
+                          attributes: {
+                            controlsList: 'nodownload', // 禁止下载
+                            disablePictureInPicture: true,
+                          }
+                        }
+                      }}
+                    />
+                    <div style={styles.videoOverlayLabel}>点击全屏播放</div>
+                  </div>
+                </div>
 
                 {/* 语法详解 */}
                 <div style={styles.section}>
@@ -482,7 +436,7 @@ ${currentPoint.dialogues.map(d => `* ${d.sentence} (${d.translation})`).join('\n
                     </button>
                   </div>
                   <div style={styles.richTextBlock}>
-                      <RichTextRenderer content={gp.explanationRaw} onPlayText={(text) => play(text, `text_${Date.now()}`)} />
+                      <RichTextRenderer content={gp.explanationRaw} onPlayText={(t) => play(t, `txt_${Date.now()}`)} />
                   </div>
                 </div>
 
@@ -490,57 +444,35 @@ ${currentPoint.dialogues.map(d => `* ${d.sentence} (${d.translation})`).join('\n
                 {gp.attention && (
                   <div style={styles.section}>
                     <div style={styles.sectionHeader}>
-                      <span style={{...styles.sectionTitle, color: '#b91c1c', display:'flex', alignItems:'center', gap:6}}>
+                      <span style={{...styles.sectionTitle, color: '#ff0000', display:'flex', alignItems:'center', gap:6}}>
                         <FaExclamationTriangle /> 注意事项
                       </span>
                     </div>
                     <div style={styles.attentionBox}>
-                      <div style={styles.attentionText}>
-                          <RichTextRenderer content={gp.attention} onPlayText={(text) => play(text, `attn_play_${Date.now()}`)} />
-                      </div>
+                       <RichTextRenderer content={gp.attention} onPlayText={(t) => play(t, `attn_${Date.now()}`)} />
                     </div>
                   </div>
                 )}
 
                 {/* 场景对话 */}
                 <div style={styles.section}>
-                  <div style={styles.sectionHeader}>
-                    <span style={styles.sectionTitle}>💬 场景对话</span>
-                  </div>
+                  <div style={styles.sectionHeader}><span style={styles.sectionTitle}>💬 场景对话</span></div>
                   <div style={styles.dialogueContainer}>
                     {gp.dialogues.map((ex, idx) => {
                       const exId = `ex_${gp.id}_${idx}`;
                       const isBoy = ex.gender === 'male';
-                      const voiceId = isBoy ? 'zh-CN-YunxiNeural' : 'zh-CN-XiaoyouNeural';
-
                       return (
-                        <div key={idx} 
-                             onClick={() => play(ex.script, exId, voiceId)}
-                             style={{ 
-                               ...styles.dialogueRow, 
-                               flexDirection: isBoy ? 'row-reverse' : 'row',
-                             }}
-                             className="active-scale"
+                        <div key={idx} onClick={() => play(ex.script, exId, isBoy ? 'zh-CN-YunxiNeural' : 'zh-CN-XiaoyouNeural')}
+                             style={{ ...styles.dialogueRow, flexDirection: isBoy ? 'row-reverse' : 'row' }} className="active-scale"
                         >
                           <div style={styles.avatarWrapper}>
-                             <img 
-                                src={isBoy 
-                                  ? "https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/10111437211381.jpg" 
-                                  : "https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/images.jpeg"}
-                                alt={isBoy ? "Boy" : "Girl"}
-                                style={styles.avatarImg}
-                             />
+                             <img src={isBoy ? "https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/10111437211381.jpg" : "https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/images.jpeg"}
+                                  alt="avatar" style={styles.avatarImg} />
                           </div>
-                          
                           <div style={{...styles.bubbleCol, alignItems: isBoy ? 'flex-end' : 'flex-start'}}>
-                             <div style={{
-                                ...styles.bubble,
-                                background: isBoy ? '#eff6ff' : '#fff1f2',
-                                border: isBoy ? '1px solid #bfdbfe' : '1px solid #fbcfe8',
-                                color: activeId === exId ? (isBoy ? '#1e40af' : '#be185d') : '#334155'
-                             }}>
+                             <div style={{ ...styles.bubble, background: isBoy ? '#eff6ff' : '#fff1f2', border: isBoy ? '1px solid #bfdbfe' : '1px solid #fbcfe8' }}>
                                 <div style={isBoy ? styles.tailRight : styles.tailLeft} />
-                                <div style={styles.bubbleText}>
+                                <div style={{...styles.bubbleText, color: activeId === exId ? (isBoy ? '#1e40af' : '#be185d') : '#000'}}>
                                   <PinyinText text={ex.sentence} />
                                 </div>
                                 <div style={styles.bubbleTrans}>{ex.translation}</div>
@@ -557,7 +489,6 @@ ${currentPoint.dialogues.map(d => `* ${d.sentence} (${d.translation})`).join('\n
                      {i === normalizedPoints.length -1 ? '完成学习' : '下一页'} <FaChevronRight size={14} />
                    </button>
                 </div>
-                
                 <div style={{ height: '40px' }} />
               </div>
             </div>
@@ -568,95 +499,69 @@ ${currentPoint.dialogues.map(d => `* ${d.sentence} (${d.translation})`).join('\n
   );
 };
 
-GrammarPointPlayer.propTypes = {
-  grammarPoints: PropTypes.array.isRequired,
-  onComplete: PropTypes.func,
-};
-
 // =================================================================================
-// ===== 6. 样式定义 =====
+// ===== 5. 样式定义 =====
 // =================================================================================
 const styles = {
-  container: { position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#f8fafc', fontFamily: '"Padauk", "Myanmar3", sans-serif' },
+  container: { position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#f8fafc' },
   center: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#94a3b8' },
   page: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'white' },
-  scrollContainer: { flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 16px', paddingTop: '70px' },
-  contentWrapper: { maxWidth: '600px', margin: '0 auto', paddingTop: '20px' },
+  scrollContainer: { flex: 1, overflowY: 'auto', padding: '0 16px', paddingTop: '70px' },
+  contentWrapper: { maxWidth: '650px', margin: '0 auto', paddingTop: '20px' },
 
-  topPlayerWrapper: { position: 'absolute', top: '15px', left: 0, right: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, pointerEvents: 'none' },
+  topPlayerWrapper: { position: 'absolute', top: '15px', left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 1000, pointerEvents: 'none' },
   topPlayerCapsule: { pointerEvents: 'auto', width: '94%', maxWidth: '500px', height: '56px', background: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', borderRadius: '28px', border: '1px solid rgba(0,0,0,0.08)', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', padding: '0 12px', gap: '12px' },
-  mainPlayBtn: { width: 38, height: 38, borderRadius: '50%', background: '#3b82f6', color: 'white', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, boxShadow: '0 4px 10px rgba(59, 130, 246, 0.3)' },
+  mainPlayBtn: { width: 38, height: 38, borderRadius: '50%', background: '#3b82f6', color: 'white', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
   bpInfo: { flex: 1, display: 'flex', flexDirection: 'column', gap: '2px', overflow: 'hidden' },
-  bpLabel: { fontSize: '0.75rem', fontWeight: 'bold', color: '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  bpLabel: { fontSize: '0.75rem', fontWeight: 'bold', color: '#334155', whiteSpace: 'nowrap' },
   bpTimeRow: { display: 'flex', alignItems: 'center', gap: '8px' },
-  bpTime: { fontSize: '0.65rem', color: '#94a3b8', fontFamily: 'monospace', width: '28px' },
+  bpTime: { fontSize: '0.65rem', color: '#94a3b8', fontFamily: 'monospace' },
   bpProgressBg: { flex: 1, height: '4px', background: '#e2e8f0', borderRadius: '2px', position: 'relative' },
   bpProgressFill: { height: '100%', background: '#3b82f6', borderRadius: '2px' },
-  hiddenRangeInput: { position: 'absolute', top: -6, left: 0, width: '100%', height: '16px', opacity: 0, cursor: 'pointer', margin: 0 },
-  bpSpeedBtn: { background: '#f1f5f9', border: 'none', borderRadius: '12px', padding: '4px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', gap: '1px', fontSize: '0.6rem', color: '#64748b', fontWeight: 'bold' },
+  hiddenRangeInput: { position: 'absolute', top: -6, left: 0, width: '100%', height: '16px', opacity: 0, cursor: 'pointer' },
+  bpSpeedBtn: { background: '#f1f5f9', border: 'none', borderRadius: '12px', padding: '4px 8px', fontSize: '0.6rem', color: '#64748b' },
 
-  title: { fontSize: '1.5rem', fontWeight: '800', textAlign: 'center', color: '#1e293b', marginBottom: '24px', marginTop: '10px' },
-  card: { background: 'white', borderRadius: '16px', padding: '24px', marginBottom: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9' },
-  cardLabel: { fontSize: '0.85rem', color: '#64748b', fontWeight: 'bold', marginBottom: '12px', display:'flex', gap: '6px', alignItems:'center' },
-  patternText: { fontSize: '1.3rem', fontWeight: '600', color: '#0f172a', lineHeight: 1.6, textAlign: 'center' },
+  title: { fontSize: '1.5rem', fontWeight: '800', textAlign: 'center', color: '#000', marginBottom: '24px' },
+  
+  headerFlexRow: { display: 'flex', gap: '12px', marginBottom: '30px', alignItems: 'stretch' },
+  patternCard: { flex: 1, background: 'white', borderRadius: '16px', padding: '20px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', justifyContent: 'center' },
+  videoSideContainer: { width: '100px', height: '150px', borderRadius: '12px', overflow: 'hidden', background: '#000', position: 'relative', cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' },
+  videoOverlayLabel: { position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.5)', color: 'white', fontSize: '10px', textAlign: 'center', padding: '2px 0' },
 
-  videoSection: { marginBottom: '30px' },
-  videoCard: { 
-    position: 'relative', 
-    width: '160px', 
-    height: '240px', 
-    margin: '0 auto', 
-    borderRadius: '16px', 
-    overflow: 'hidden', 
-    background: '#000', 
-    boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
-    cursor: 'pointer'
-  },
-  videoElement: { width: '100%', height: '100%', objectFit: 'cover', opacity: 0.8 },
-  videoOverlay: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' },
-  videoPlayCircle: { width: 50, height: 50, borderRadius: '50%', background: 'rgba(59, 130, 246, 0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' },
-  videoHint: { color: 'white', fontSize: '0.75rem', fontWeight: 'bold', textShadow: '0 1px 4px rgba(0,0,0,0.5)' },
+  cardLabel: { fontSize: '0.8rem', color: '#64748b', fontWeight: 'bold', marginBottom: '8px', display:'flex', gap: '4px' },
+  patternText: { fontSize: '1.2rem', fontWeight: '600', lineHeight: 1.5, textAlign: 'center' },
 
-  section: { marginBottom: '36px' },
-  sectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' },
-  sectionTitle: { fontSize: '1.15rem', fontWeight: '700', color: '#334155' },
-  playBtnCircle: { width: 30, height: 30, borderRadius: '50%', background: '#eff6ff', color: '#3b82f6', border: '1px solid #dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
-  miniSpin: { width: 14, height: 14, border: '2px solid #3b82f6', borderTopColor: 'transparent', borderRadius: '50%' },
+  section: { marginBottom: '30px' },
+  sectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' },
+  sectionTitle: { fontSize: '1.1rem', fontWeight: '700', color: '#000' },
+  playBtnCircle: { width: 28, height: 28, borderRadius: '50%', background: '#f1f5f9', color: '#3b82f6', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
+  miniSpin: { width: 12, height: 12, border: '2px solid #3b82f6', borderTopColor: 'transparent', borderRadius: '50%' },
 
-  richTextBlock: { fontSize: '1.05rem', lineHeight: '1.8', color: '#475569' },
-  attentionBox: { background: '#fef2f2', borderRadius: '16px', border: '1px solid #fee2e2', padding: '20px', boxShadow: '0 2px 8px rgba(220, 38, 38, 0.05)' },
-  attentionText: { lineHeight: 1.8, color: '#991b1b', fontSize: '1rem', whiteSpace: 'pre-wrap' },
+  richTextBlock: { fontSize: '1.05rem', lineHeight: '1.8', color: '#000' },
+  attentionBox: { border: '1px dashed #ff0000', borderRadius: '12px', padding: '16px' },
 
-  dialogueContainer: { display: 'flex', flexDirection: 'column', gap: '16px' },
+  dialogueContainer: { display: 'flex', flexDirection: 'column', gap: '12px' },
   dialogueRow: { display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' },
-  avatarWrapper: { display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '4px' },
-  avatarImg: { width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', border: '2px solid white', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' },
+  avatarWrapper: { display: 'flex', flexDirection: 'column', alignItems: 'center' },
+  avatarImg: { width: 34, height: 34, borderRadius: '50%', objectFit: 'cover', border: '1px solid #eee' },
+  bubbleCol: { display: 'flex', flexDirection: 'column', maxWidth: '82%' },
+  bubble: { padding: '10px 12px', position: 'relative', borderRadius: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' },
+  tailLeft: { position: 'absolute', top: '12px', left: '-5px', width: 0, height: 0, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderRight: '6px solid #fff1f2' },
+  tailRight: { position: 'absolute', top: '12px', right: '-5px', width: 0, height: 0, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '6px solid #eff6ff' },
+  bubbleText: { fontSize: '1.05rem', marginBottom: '2px' },
+  bubbleTrans: { fontSize: '0.85rem', color: '#666' },
 
-  bubbleCol: { display: 'flex', flexDirection: 'column', maxWidth: '85%' },
-  bubble: {
-    padding: '10px 14px', position: 'relative', borderRadius: '14px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.03)', transition: 'background 0.2s', minWidth: '60px'
-  },
-  tailLeft: { position: 'absolute', top: '12px', left: '-6px', width: 0, height: 0, borderTop: '6px solid transparent', borderBottom: '6px solid transparent', borderRight: '1px solid #fbcfe8', background: '#fff1f2', clipPath: 'polygon(100% 0, 0 50%, 100% 100%)', width: '8px', height: '12px' },
-  tailRight: { position: 'absolute', top: '12px', right: '-6px', width: 0, height: 0, borderTop: '6px solid transparent', borderBottom: '6px solid transparent', borderLeft: '1px solid #bfdbfe', background: '#eff6ff', clipPath: 'polygon(0 0, 100% 50%, 0 100%)', width: '8px', height: '12px' },
-
-  bubbleText: { fontSize: '1.05rem', marginBottom: '4px' },
-  bubbleTrans: { fontSize: '0.85rem', opacity: 0.85, fontFamily: '"Padauk", sans-serif' },
-
-  nextButtonContainer: { marginTop: '30px', marginBottom: '20px', display: 'flex', justifyContent: 'center', width: '100%' },
-  nextBtn: { background: '#1e293b', color: 'white', border: 'none', padding: '16px 48px', borderRadius: '50px', fontSize: '1.1rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', boxShadow: '0 10px 25px rgba(30, 41, 59, 0.25)', transition: 'transform 0.1s', fontFamily: '"Padauk", sans-serif' },
+  nextButtonContainer: { marginTop: '30px', display: 'flex', justifyContent: 'center' },
+  nextBtn: { background: '#000', color: 'white', border: 'none', padding: '14px 40px', borderRadius: '30px', fontSize: '1rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' },
 };
 
-// 全局样式注入
 if (typeof document !== 'undefined' && !document.getElementById('gp-player-style')) {
   const style = document.createElement('style');
   style.id = 'gp-player-style';
   style.innerHTML = `
     .spin { animation: spin 1s linear infinite; } 
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } 
-    .active-scale:active { transform: scale(0.98); opacity: 0.9; } 
-    .attention-box * { color: #991b1b !important; }
-    video::-webkit-media-controls-fullscreen-button { display: block; }
+    .active-scale:active { transform: scale(0.97); opacity: 0.9; }
   `;
   document.head.appendChild(style);
 }
