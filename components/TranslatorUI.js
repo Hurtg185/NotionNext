@@ -3,7 +3,7 @@ import {
   Mic, Send, Settings, X, 
   Volume2, Copy, BrainCircuit,
   ExternalLink, Sparkles,
-  Loader2, Star, ArrowRightArrowLeft, ChevronDown
+  Loader2, Star, ArrowLeftRight, ChevronDown // 1. 这里修正为 ArrowLeftRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Head from 'next/head';
@@ -28,7 +28,7 @@ const RECOGNITION_LANGUAGES = [
 export default function TranslatorUI() {
   const [mounted, setMounted] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showAllLangs, setShowAllLangs] = useState(false);
+  const [showAllLangs, setShowAllLangs] = useState(false); // 'source' | 'target' | false
   const [showMicLangMenu, setShowMicLangMenu] = useState(false);
   
   const [input, setInput] = useState('');
@@ -122,7 +122,7 @@ export default function TranslatorUI() {
       isLongPress.current = true;
       setIsListening(false);
       setShowMicLangMenu(true);
-    }, 400); // 400ms 长按触发
+    }, 400); 
   };
 
   const handleMicRelease = () => {
@@ -134,7 +134,7 @@ export default function TranslatorUI() {
 
   const speak = (text) => {
     if (typeof window === 'undefined') return;
-    const cleanedText = text.replace(/\*/g, ''); // 移除Markdown星号
+    const cleanedText = text.replace(/\*/g, ''); 
     const voiceMap = { my: 'my-MM-NilarNeural', zh: 'zh-CN-XiaoxiaoNeural', en: 'en-US-JennyNeural' };
     const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(cleanedText)}&v=${voiceMap[targetLang] || 'my-MM-NilarNeural'}&r=-10`;
     const audio = new Audio(url);
@@ -213,7 +213,7 @@ export default function TranslatorUI() {
                 <ChevronDown size={14} className={`transition-transform ${showAllLangs === 'source' ? 'rotate-180' : ''}`} />
               </button>
               <button onClick={() => { handleSourceLangChange(targetLang); handleTargetLangChange(sourceLang); }} className="p-2 text-slate-500 hover:bg-slate-200 rounded-full transition-colors active:scale-90">
-                <ArrowRightArrowLeft size={16} />
+                <ArrowLeftRight size={16} /> {/* 2. 这里修正为 ArrowLeftRight */}
               </button>
               <button onClick={() => setShowAllLangs(showAllLangs === 'target' ? false : 'target')} className="flex-1 flex items-center justify-center gap-2 p-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">
                 <span className="text-sm font-bold text-slate-700">{currentTargetLang?.label}</span>
