@@ -7,7 +7,7 @@ import {
   FaExclamationTriangle, FaBookReader, FaVolumeUp
 } from 'react-icons/fa';
 import AIChatDock from '../AIChatDock';
-import { useAI } from '../AIConfigContext'; 
+import { useAI } from '../AIConfigContext'; // ✅ 修改 1：引入 Context Hook
 
 // =================================================================================
 // ===== 0. 音效工具 =====
@@ -281,13 +281,14 @@ const TopPlayer = ({
 // ===== 4. 主组件 GrammarPointPlayer =====
 // =================================================================================
 const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
-  const { updatePageContext, createNewSession } = useAI();
+  // ✅ 修改 2：获取 Context 方法
+  const { updatePageContext } = useAI();
 
   const normalizedPoints = useMemo(() => {
     if (!Array.isArray(grammarPoints)) return [];
     return grammarPoints.map((item, idx) => ({
       id: item.id || idx,
-      type: 'grammar', 
+      type: 'grammar', // 为 AI Dock 提供上下文类型
       title: item['语法标题'] || item.grammarPoint || '',
       pattern: item['句型结构'] || item.pattern || '',
       explanationScript: item['讲解脚本'] || (item['语法详解'] || '').replace(/\*\*|###/g, ''),
@@ -310,8 +311,10 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
   
   const currentPoint = normalizedPoints[currentIndex];
 
+  // ✅ 修改 3：核心逻辑 —— 翻页时告诉 AI 当前内容
   useEffect(() => {
     if (currentPoint) {
+      // 将当前页面内容打包成字符串
       const contextString = `
 【当前 PPT 内容】
 - 标题：${currentPoint.title}
@@ -322,11 +325,10 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
 ${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('\n')}
       `.trim();
       
+      // 更新全局上下文
       updatePageContext(contextString);
-      // 切换页面时，清空历史，只保留当前上下文
-      createNewSession();
     }
-  }, [currentIndex, updatePageContext, createNewSession, currentPoint]);
+  }, [currentPoint, updatePageContext]);
 
   const { 
     play, stop, toggle, seek, setRate,
@@ -356,17 +358,17 @@ ${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('
 
   if (!normalizedPoints.length) return <div style={styles.center}>Data Loading...</div>;
 
-  const narrationId = `narration_${currentPoint?.id}`;
+  const narrationId = `narration_${currentPoint.id}`;
   const isControllingNarration = activeId === narrationId;
   
   const handleTopPlayClick = () => {
-      if (!currentPoint) return;
       if (isControllingNarration) toggle();
       else play(currentPoint.explanationScript, narrationId);
   };
 
   return (
     <div style={styles.container}>
+      {/* 顶部悬浮播放器 */}
       <TopPlayer 
         label={loadingId === narrationId ? '加载中...' : (isControllingNarration ? '正在播放讲解' : '点击播放全文讲解')}
         isPlaying={isControllingNarration && isPlaying}
@@ -380,6 +382,7 @@ ${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('
         visible={true} 
       />
 
+      {/* 页面内容 */}
       {transitions((style, i) => {
         const gp = normalizedPoints[i];
         if (!gp) return null;
@@ -391,6 +394,7 @@ ${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('
                 
                 <h2 style={styles.title}>{gp.title}</h2>
 
+                {/* 核心句型 */}
                 {gp.pattern && (
                   <div style={styles.card}>
                     <div style={styles.cardLabel}><FaBookReader /> 核心句型</div>
@@ -407,6 +411,7 @@ ${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('
                   </div>
                 )}
 
+                {/* 语法详解 */}
                 <div style={styles.section}>
                   <div style={styles.sectionHeader}>
                     <span style={styles.sectionTitle}>📝 语法详解</span>
@@ -420,6 +425,7 @@ ${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('
                   </div>
                 </div>
 
+                {/* 易错点 */}
                 {gp.attention && (
                   <div style={styles.section}>
                     <div style={styles.sectionHeader}>
@@ -435,6 +441,7 @@ ${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('
                   </div>
                 )}
 
+                {/* 场景对话 - 优化版 */}
                 <div style={styles.section}>
                   <div style={styles.sectionHeader}>
                     <span style={styles.sectionTitle}>💬 场景对话</span>
@@ -464,6 +471,7 @@ ${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('
                              />
                           </div>
                           
+                          {/* 紧凑气泡布局 */}
                           <div style={{...styles.bubbleCol, alignItems: isBoy ? 'flex-end' : 'flex-start'}}>
                              <div style={{
                                 ...styles.bubble,
@@ -490,15 +498,17 @@ ${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('
                    </button>
                 </div>
                 
-                {/* 🔴 核心修改：留出足够的空白，防止按钮被地址栏遮挡 */}
-                <div style={styles.bottomSpacer} />
+                {/* 底部留白，悬浮球模式下不需要很大空间 */}
+                <div style={{ height: '40px' }} />
               </div>
             </div>
           </animated.div>
         );
       })}
 
+      {/* ✅ 修改 4：AI 助教挂载点 (移除 contextData 属性，因为已通过 Context 同步) */}
       <AIChatDock />
+      
     </div>
   );
 };
@@ -508,13 +518,17 @@ GrammarPointPlayer.propTypes = {
   onComplete: PropTypes.func,
 };
 
+// =================================================================================
+// ===== 5. 样式定义 =====
+// =================================================================================
 const styles = {
   container: { position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#f8fafc', fontFamily: '"Padauk", "Myanmar3", sans-serif' },
   center: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#94a3b8' },
   page: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'white' },
-  scrollContainer: { flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 16px', paddingTop: '70px', WebkitOverflowScrolling: 'touch' },
+  scrollContainer: { flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 16px', paddingTop: '70px' },
   contentWrapper: { maxWidth: '600px', margin: '0 auto', paddingTop: '20px' }, 
   
+  // Top Player
   topPlayerWrapper: { position: 'absolute', top: '15px', left: 0, right: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, pointerEvents: 'none' },
   topPlayerCapsule: { pointerEvents: 'auto', width: '94%', maxWidth: '500px', height: '56px', background: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', borderRadius: '28px', border: '1px solid rgba(0,0,0,0.08)', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', padding: '0 12px', gap: '12px' },
   mainPlayBtn: { width: 38, height: 38, borderRadius: '50%', background: '#3b82f6', color: 'white', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, boxShadow: '0 4px 10px rgba(59, 130, 246, 0.3)' },
@@ -527,6 +541,7 @@ const styles = {
   hiddenRangeInput: { position: 'absolute', top: -6, left: 0, width: '100%', height: '16px', opacity: 0, cursor: 'pointer', margin: 0 },
   bpSpeedBtn: { background: '#f1f5f9', border: 'none', borderRadius: '12px', padding: '4px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', gap: '1px', fontSize: '0.6rem', color: '#64748b', fontWeight: 'bold' },
 
+  // Content
   title: { fontSize: '1.5rem', fontWeight: '800', textAlign: 'center', color: '#1e293b', marginBottom: '24px', marginTop: '10px' },
   card: { background: 'white', borderRadius: '16px', padding: '24px', marginBottom: '30px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9' },
   cardLabel: { fontSize: '0.85rem', color: '#64748b', fontWeight: 'bold', marginBottom: '12px', display:'flex', gap: '6px', alignItems:'center' },
@@ -542,24 +557,25 @@ const styles = {
   attentionBox: { background: '#fef2f2', borderRadius: '16px', border: '1px solid #fee2e2', padding: '20px', boxShadow: '0 2px 8px rgba(220, 38, 38, 0.05)' },
   attentionText: { lineHeight: 1.8, color: '#991b1b', fontSize: '1rem', whiteSpace: 'pre-wrap' },
 
+  // Dialogue
   dialogueContainer: { display: 'flex', flexDirection: 'column', gap: '16px' },
   dialogueRow: { display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' },
   avatarWrapper: { display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '4px' },
   avatarImg: { width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', border: '2px solid white', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' },
   
   bubbleCol: { display: 'flex', flexDirection: 'column', maxWidth: '85%' },
-  bubble: { padding: '10px 14px', position: 'relative', borderRadius: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.03)', transition: 'background 0.2s', minWidth: '60px' },
+  bubble: { 
+    padding: '10px 14px', position: 'relative', borderRadius: '14px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.03)', transition: 'background 0.2s', minWidth: '60px'
+  },
   tailLeft: { position: 'absolute', top: '12px', left: '-6px', width: 0, height: 0, borderTop: '6px solid transparent', borderBottom: '6px solid transparent', borderRight: '6px solid #fff1f2' },
   tailRight: { position: 'absolute', top: '12px', right: '-6px', width: 0, height: 0, borderTop: '6px solid transparent', borderBottom: '6px solid transparent', borderLeft: '6px solid #eff6ff' },
 
   bubbleText: { fontSize: '1.05rem', marginBottom: '4px' },
   bubbleTrans: { fontSize: '0.85rem', opacity: 0.85, fontFamily: '"Padauk", sans-serif' },
 
-  nextButtonContainer: { marginTop: '30px', display: 'flex', justifyContent: 'center', width: '100%' },
+  nextButtonContainer: { marginTop: '30px', marginBottom: '20px', display: 'flex', justifyContent: 'center', width: '100%' },
   nextBtn: { background: '#1e293b', color: 'white', border: 'none', padding: '16px 48px', borderRadius: '50px', fontSize: '1.1rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', boxShadow: '0 10px 25px rgba(30, 41, 59, 0.25)', transition: 'transform 0.1s', fontFamily: '"Padauk", sans-serif' },
-  
-  // 底部空白区域，留出 120px 确保避开浏览器 bar
-  bottomSpacer: { height: '120px', paddingBottom: 'env(safe-area-inset-bottom)' }
 };
 
 if (typeof document !== 'undefined' && !document.getElementById('gp-player-style')) {
