@@ -88,7 +88,7 @@ const CardListRenderer = ({ data, type, onComplete }) => {
           ))}
         </div>
       </div>
-      <div className="absolute bottom-6 left-0 right-0 p-6 z-20 flex justify-center">
+      <div className="absolute bottom-6 left-0 right-0 p-6 z-20 flex justify-center pb-[calc(env(safe-area-inset-bottom)+24px)]">
         <button onClick={onComplete} className="w-full max-w-md py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-xl shadow-blue-200 active:scale-95 transition-all">
           မှတ်မိပါပြီ 
         </button>
@@ -162,7 +162,7 @@ const SummaryBlock = ({ duration, mistakes, router, onRestart }) => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-full bg-slate-50 p-6 text-center animate-fade-in">
+    <div className="flex flex-col items-center justify-center h-full bg-slate-50 p-6 text-center animate-fade-in pb-[calc(env(safe-area-inset-bottom)+20px)]">
       <div className="mb-8 relative">
          <div className="text-9xl filter drop-shadow-2xl animate-bounce">
             {stars >= 4 ? "🏆" : stars >= 3 ? "🥈" : "🥉"}
@@ -408,7 +408,7 @@ export default function InteractiveLesson({ lesson }) {
   };
 
   return (
-    <div ref={lessonContainerRef} className="fixed inset-0 w-screen h-screen bg-slate-50 flex flex-col overflow-hidden font-sans" style={{ touchAction: 'none' }}>
+    <div ref={lessonContainerRef} className="fixed inset-0 w-screen h-[100dvh] bg-slate-50 flex flex-col overflow-hidden font-sans" style={{ touchAction: 'none' }}>
       <style>{`
         ::-webkit-scrollbar { display: none; } 
         * { -webkit-tap-highlight-color: transparent; }
@@ -416,7 +416,7 @@ export default function InteractiveLesson({ lesson }) {
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
       
-      <main className="relative w-full h-full z-10">
+      <main className="relative w-full h-full z-10 overflow-hidden">
         {renderContent()}
       </main>
 
