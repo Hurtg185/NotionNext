@@ -1,5 +1,5 @@
 import React from 'react';
-import TranslatorUI from '../components/TranslatorUI'; // 从 components 文件夹导入 UI 组件
+import TranslatorUI from './components/TranslatorUI'; // 从 components 文件夹导入 UI 组件
 
 // 这是一个页面 (Page)
 export default function TranslatorPage() {
