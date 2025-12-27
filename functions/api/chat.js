@@ -65,8 +65,21 @@ export async function onRequestPost(context) {
       `).bind(Date.now(), email).run();
     }
 
-    // 3. 请求 NVIDIA AI
+    // 3. 请求 AI (支持自定义接口和模型)
+    
+    // 处理 Base URL: 优先使用 config.baseUrl，否则回退到默认 NVIDIA
+    // 注意：前端配置如 "https://apis.iflow.cn/v1"，后端会自动拼接 "/chat/completions"
+    let baseUrl = config?.baseUrl || 'https://integrate.api.nvidia.com/v1';
+    
+    // 去除 URL 末尾可能多余的斜杠
+    if (baseUrl.endsWith('/')) {
+      baseUrl = baseUrl.slice(0, -1);
+    }
+    
+    const apiUrl = `${baseUrl}/chat/completions`;
+
     const payload = {
+      // 优先使用前端传入的模型ID，否则回退默认
       model: config?.modelId || 'deepseek-ai/deepseek-v3.2',
       messages,
       temperature: 0.7,
@@ -76,7 +89,7 @@ export async function onRequestPost(context) {
     };
 
     const aiRes = await fetch(
-      'https://integrate.api.nvidia.com/v1/chat/completions',
+      apiUrl,
       {
         method: 'POST',
         headers: {
