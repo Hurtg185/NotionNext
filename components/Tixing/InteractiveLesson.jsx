@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { FaPlay, FaHome, FaRedo, FaStar, FaRegStar, FaClock, FaMedal, FaExpand, FaCompress } from "react-icons/fa";
 import confetti from 'canvas-confetti';
 import { useAI } from '../AIConfigContext'; // ✅ 修改1：引入 AI Context
+import AIChatDock from './AIChatDock';      // ✅ 修改2：引入 AI 助手 UI 组件
 
 // --- 核心全屏播放器组件 ---
 import WordStudyPlayer from './WordStudyPlayer';
@@ -70,7 +71,6 @@ const audioManager = (() => {
 const CardListRenderer = ({ data, type, onComplete }) => {
   const isPhrase = type === 'phrase_study' || type === 'sentences';
   const list = data.words || data.sentences || data.vocabulary || []; 
-  // 缅文标题映射
   const defaultTitle = isPhrase ? "အသုံးများသော စကားစုများ" : "အဓိက ဝေါဟာရများ";
 
   return (
@@ -90,7 +90,7 @@ const CardListRenderer = ({ data, type, onComplete }) => {
       </div>
       <div className="absolute bottom-6 left-0 right-0 p-6 z-20 flex justify-center">
         <button onClick={onComplete} className="w-full max-w-md py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-xl shadow-blue-200 active:scale-95 transition-all">
-          မှတ်မိပါပြီ {/* 我学会了 */}
+          မှတ်မိပါပြီ 
         </button>
       </div>
     </div>
@@ -103,7 +103,6 @@ const CoverBlock = ({ data, onNext }) => {
     <div className="w-full h-full flex flex-col items-center justify-center relative bg-slate-900 overflow-hidden">
       {data.imageUrl && (
         <div className="absolute inset-0 z-0">
-           {/* 图片加载优化: eager + high priority */}
            <img 
              src={data.imageUrl} 
              alt="Cover" 
@@ -116,17 +115,17 @@ const CoverBlock = ({ data, onNext }) => {
       )}
       <div className="relative z-10 w-full px-8 text-center flex flex-col items-center">
         <h1 className="text-4xl md:text-5xl font-black text-white mb-6 leading-tight drop-shadow-lg">
-          {data.title || "စတင်လေ့လာမည်"} {/* 开始学习 */}
+          {data.title || "စတင်လေ့လာမည်"} 
         </h1>
         <p className="text-white/80 text-lg max-w-xs mb-16 font-medium drop-shadow-md">
-          {data.description || "အဆင်သင့်ဖြစ်ပြီလား။ သင်ခန်းစာစလိုက်ကြရအောင်။"} {/* 准备好了吗... */}
+          {data.description || "အဆင်သင့်ဖြစ်ပြီလား။ သင်ခန်းစာစလိုက်ကြရအောင်။"} 
         </p>
         <button 
           onClick={onNext}
           className="flex items-center gap-3 px-10 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-full font-bold text-lg shadow-xl shadow-blue-900/50 active:scale-95 transition-all"
         >
           <FaPlay size={18} />
-          <span>စိန်ခေါ်မှု စတင်မည်</span> {/* 开始挑战 */}
+          <span>စိန်ခေါ်မှု စတင်မည်</span> 
         </button>
       </div>
     </div>
@@ -135,38 +134,35 @@ const CoverBlock = ({ data, onNext }) => {
 
 // 3. 结果结算页面 (5星制 + 缅文)
 const SummaryBlock = ({ duration, mistakes, router, onRestart }) => { 
-  // 5星评分逻辑
   let stars = 0;
   let title = "";
   let color = "";
 
   if (mistakes === 0) {
-    stars = 5; title = "ထူးချွန်ပါတယ်!"; // 完美
+    stars = 5; title = "ထူးချွန်ပါတယ်!"; 
     color = "text-yellow-500";
   } else if (mistakes === 1) {
-    stars = 4; title = "အလွန်ကောင်းမွန်သည်!"; // 很好
+    stars = 4; title = "အလွန်ကောင်းမွန်သည်!"; 
     color = "text-blue-500";
   } else if (mistakes === 2) {
-    stars = 3; title = "ကောင်းမွန်သည်!"; // 不错
+    stars = 3; title = "ကောင်းမွန်သည်!"; 
     color = "text-blue-400";
   } else if (mistakes === 3) {
-    stars = 2; title = "ကြိုးစားပါ!"; // 加油
+    stars = 2; title = "ကြိုးစားပါ!"; 
     color = "text-slate-600";
   } else {
-    stars = 1; title = "ထပ်မံလေ့ကျင့်ပါ"; // 再练练
+    stars = 1; title = "ထပ်မံလေ့ကျင့်ပါ"; 
     color = "text-slate-500";
   }
 
-  // 格式化时间
   const formatTime = (seconds) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
-    return `${m} မိနစ် ${s} စက္ကန့်`; // 分 秒
+    return `${m} မိနစ် ${s} စက္ကန့်`; 
   };
 
   return (
     <div className="flex flex-col items-center justify-center h-full bg-slate-50 p-6 text-center animate-fade-in">
-      {/* 奖牌/动画区 */}
       <div className="mb-8 relative">
          <div className="text-9xl filter drop-shadow-2xl animate-bounce">
             {stars >= 4 ? "🏆" : stars >= 3 ? "🥈" : "🥉"}
@@ -175,41 +171,38 @@ const SummaryBlock = ({ duration, mistakes, router, onRestart }) => {
       </div>
 
       <h2 className={`text-3xl font-black mb-2 ${color}`}>{title}</h2>
-      <p className="text-slate-400 mb-8 font-medium">သင်ခန်းစာ ပြီးမြောက်ပါပြီ</p> {/* 课程完成 */}
+      <p className="text-slate-400 mb-8 font-medium">သင်ခန်းစာ ပြီးမြောက်ပါပြီ</p> 
 
-      {/* 统计卡片 */}
       <div className="flex gap-4 w-full max-w-sm mb-10">
         <div className="flex-1 bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center">
-            {/* 5星显示 */}
             <div className="text-yellow-400 text-lg mb-1 flex gap-0.5">
               {[...Array(5)].map((_, i) => (
                  i < stars ? <FaStar key={i}/> : <FaRegStar key={i} className="text-slate-200"/>
               ))}
             </div>
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">ရမှတ်</span> {/* 评分 */}
+            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">ရမှတ်</span> 
         </div>
         <div className="flex-1 bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center">
             <div className="text-slate-700 text-lg font-black mb-1 flex items-center gap-2">
                <FaClock size={18} className="text-blue-500"/> 
                <span className="text-base">{formatTime(duration)}</span>
             </div>
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">အချိန်</span> {/* 时间 */}
+            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">အချိန်</span> 
         </div>
       </div>
 
-      {/* 操作按钮 */}
       <div className="flex flex-col gap-3 w-full max-w-xs">
          <button 
            onClick={onRestart} 
            className="w-full py-4 bg-slate-800 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-slate-300 active:scale-[0.98] transition-all"
          >
-           <FaRedo /> နောက်တစ်ခါ ပြန်ကြိုးစားမည် {/* 再练一次 */}
+           <FaRedo /> နောက်တစ်ခါ ပြန်ကြိုးစားမည် 
          </button>
          <button 
            onClick={() => router.push('/')} 
            className="w-full py-4 bg-white border-2 border-slate-200 text-slate-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-50 active:scale-[0.98] transition-all"
          >
-           <FaHome /> ပင်မစာမျက်နှာသို့ {/* 返回主页 */}
+           <FaHome /> ပင်မစာမျက်နှာသို့ 
          </button>
       </div>
     </div>
@@ -223,10 +216,9 @@ export default function InteractiveLesson({ lesson }) {
   const router = useRouter();
   const [hasMounted, setHasMounted] = useState(false);
   
-  // ✅ 修改2：获取 AI 触发方法
+  // ✅ 获取 AI 触发方法
   const { triggerInteractiveAI } = useAI();
   
-  // 核心状态
   const [dynamicBlocks, setDynamicBlocks] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [mistakeCount, setMistakeCount] = useState(0);
@@ -234,11 +226,9 @@ export default function InteractiveLesson({ lesson }) {
   
   const initializedLessonId = useRef(null);
   
-  // 计时器状态
   const [timeSpent, setTimeSpent] = useState(0);
   const timerRef = useRef(null);
 
-  // 全屏控制
   const lessonContainerRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -247,9 +237,9 @@ export default function InteractiveLesson({ lesson }) {
     if (elem) {
       if (elem.requestFullscreen) {
         elem.requestFullscreen().catch(err => console.error(`Error attempting to enable full-screen mode: ${err.message}`));
-      } else if (elem.webkitRequestFullscreen) { // Safari
+      } else if (elem.webkitRequestFullscreen) {
         elem.webkitRequestFullscreen();
-      } else if (elem.msRequestFullscreen) { // IE11
+      } else if (elem.msRequestFullscreen) {
         elem.msRequestFullscreen();
       }
     }
@@ -258,9 +248,9 @@ export default function InteractiveLesson({ lesson }) {
   const exitFullscreen = useCallback(() => {
     if (document.exitFullscreen) {
       document.exitFullscreen();
-    } else if (document.webkitExitFullscreen) { // Safari
+    } else if (document.webkitExitFullscreen) {
       document.webkitExitFullscreen();
-    } else if (document.msExitFullscreen) { // IE11
+    } else if (document.msExitFullscreen) {
       document.msExitFullscreen();
     }
   }, []);
@@ -277,8 +267,6 @@ export default function InteractiveLesson({ lesson }) {
     };
   }, []);
 
-
-  // 初始化
   useEffect(() => {
     setHasMounted(true);
     if (lesson?.blocks && lesson.id !== initializedLessonId.current) {
@@ -297,7 +285,6 @@ export default function InteractiveLesson({ lesson }) {
   const currentBlock = dynamicBlocks[currentIndex];
   const type = currentBlock?.type?.toLowerCase() || '';
 
-  // 智能计时器逻辑
   useEffect(() => {
     if (!hasMounted || isFinished) return;
     const isLearningPhase = ['cover', 'start_page', 'word_study', 'grammar_study', 'phrase_study', 'end'].includes(type);
@@ -311,10 +298,6 @@ export default function InteractiveLesson({ lesson }) {
     };
   }, [hasMounted, isFinished, type]);
 
-
-  // --- 核心动作 ---
-  
-  // 1. 进入下一页
   const goNext = useCallback(() => {
     audioManager.stop();
     if (currentIndex < dynamicBlocks.length - 1) {
@@ -324,13 +307,11 @@ export default function InteractiveLesson({ lesson }) {
     }
   }, [currentIndex, dynamicBlocks.length]);
 
-  // 2. 开始课程
   const handleStartLesson = useCallback(() => {
     enterFullscreen();
     goNext();
   }, [enterFullscreen, goNext]);
 
-  // 3. 完成课程
   const handleFinish = () => {
     setIsFinished(true);
     if (isFullscreen) {
@@ -350,14 +331,10 @@ export default function InteractiveLesson({ lesson }) {
     setIsFinished(false);
   };
 
-  // 4. 错题处理 (仅记录分数，取消沉底逻辑)
   const handleWrong = useCallback(() => {
     setMistakeCount(prev => prev + 1);
-    // 这里取消了之前 setDynamicBlocks 添加错题的代码
   }, []);
 
-
-  // --- 渲染逻辑 ---
   if (!hasMounted) return null;
 
   if (isFinished) {
@@ -375,10 +352,10 @@ export default function InteractiveLesson({ lesson }) {
     if (!currentBlock) return <div className="p-10 text-center text-slate-400">Loading Lesson...</div>;
 
     const commonProps = {
-      key: `${currentIndex}-${currentBlock.id || 'idx'}`, // 确保 Key 变化以重置组件状态
+      key: `${currentIndex}-${currentBlock.id || 'idx'}`, 
       data: currentBlock.content,
       settings: { playTTS: audioManager?.playTTS },
-      isRetry: false // 强制关闭 Retry 标识
+      isRetry: false 
     };
 
     switch (type) {
@@ -391,26 +368,22 @@ export default function InteractiveLesson({ lesson }) {
       case 'sentences': return <CardListRenderer {...commonProps} type={type} onComplete={goNext} />;
       case 'grammar_study': return <GrammarPointPlayer grammarPoints={commonProps.data.grammarPoints} onComplete={goNext} />;
       
-      // ✅ 修改3：选择题 (Choice) 逻辑改造
-      // 传入 triggerAI, onNext, 取消 onWrong 里的 goNext (让组件内Continue控制)
       case 'choice': 
         return (
           <XuanZeTi 
             {...commonProps} 
-            triggerAI={triggerInteractiveAI} // 传递 AI 触发器
-            onNext={goNext}                  // 传递下一题句柄
-            onCorrect={() => {}}             // 正确时无需此处处理，组件内点按钮再跳转
-            onWrong={handleWrong}            // 错误时只记分
+            triggerAI={triggerInteractiveAI} 
+            onNext={goNext}                  
+            onCorrect={() => {}}             
+            onWrong={handleWrong}            
           />
         );
       
-      // ✅ 修改4：排序题 (PaiXu) 逻辑改造
-      // 传入 triggerAI
       case 'paixu': 
         return (
           <PaiXuTi 
             {...commonProps} 
-            triggerAI={triggerInteractiveAI} // 传递 AI 触发器
+            triggerAI={triggerInteractiveAI} 
             onCorrect={() => {
               goNext();
             }}
@@ -443,11 +416,12 @@ export default function InteractiveLesson({ lesson }) {
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
       
-      {/* 移除了顶部进度条面板 (hideTopProgressBar 逻辑已全部删除) */}
-
       <main className="relative w-full h-full z-10">
         {renderContent()}
       </main>
+
+      {/* ✅ 核心修复：在这里渲染 AIChatDock 组件，它才会出现在屏幕上并响应 triggerInteractiveAI */}
+      <AIChatDock />
     </div>
   );
 }
