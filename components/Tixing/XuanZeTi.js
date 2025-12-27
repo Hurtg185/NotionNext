@@ -129,7 +129,7 @@ const audioController = {
 };
 
 // =================================================================================
-// 3. 样式表
+// 3. 样式表 (包含底部自适应修复)
 // =================================================================================
 const cssStyles = `
 .xzt-container {
@@ -137,11 +137,12 @@ const cssStyles = `
   position: absolute; inset: 0;
   display: flex; flex-direction: column;
   background: #fff;
+  height: 100dvh;
 }
 
 .xzt-header {
   flex-shrink: 0;
-  padding: 60px 20px 10px; 
+  padding: 40px 20px 10px; 
   display: flex; justify-content: center;
 }
 
@@ -152,7 +153,7 @@ const cssStyles = `
 }
 
 .teacher-img {
-  height: 180px;
+  height: 140px;
   object-fit: contain;
   mix-blend-mode: multiply; 
   flex-shrink: 0;
@@ -193,7 +194,7 @@ const cssStyles = `
 
 .xzt-scroll-area {
   flex: 1; overflow-y: auto;
-  padding: 10px 16px 180px; 
+  padding: 10px 16px 200px; 
   display: flex; flex-direction: column; align-items: center;
 }
 
@@ -235,24 +236,9 @@ const cssStyles = `
   border-color: #ef4444; background: #fee2e2; color: #991b1b; 
 }
 
-.option-card.has-image-layout {
-  flex-direction: column;
-  padding: 10px;
-  gap: 10px;
-}
-.option-img {
-  width: 100%;
-  height: 120px;
-  object-fit: cover;
-  border-radius: 12px;
-}
-.option-text {
-  font-size: 1.1rem; font-weight: 700;
-}
-
 .submit-bar {
   position: absolute; bottom: 0; left: 0; right: 0;
-  padding: 20px 20px calc(50px + env(safe-area-inset-bottom)); 
+  padding: 16px 20px calc(16px + env(safe-area-inset-bottom)); 
   border-top: 2px solid #f3f4f6;
   background: #fff;
   display: flex; justify-content: space-between; align-items: center;
@@ -274,7 +260,7 @@ const cssStyles = `
 .result-sheet {
   position: absolute; bottom: 0; left: 0; right: 0;
   background: #fff;
-  padding: 20px 24px calc(40px + env(safe-area-inset-bottom));
+  padding: 20px 24px calc(24px + env(safe-area-inset-bottom));
   border-top-left-radius: 24px; border-top-right-radius: 24px;
   transform: translateY(110%);
   transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -287,7 +273,7 @@ const cssStyles = `
 .result-sheet.show { transform: translateY(0); }
 
 .sheet-header {
-  font-size: 1.5rem; font-weight: 800; margin-bottom: 8px;
+  font-size: 1.5rem; font-weight: 800; margin-bottom: 4px;
   display: flex; align-items: center; gap: 12px;
 }
 .next-btn {
@@ -297,7 +283,6 @@ const cssStyles = `
   cursor: pointer;
   border-bottom: 4px solid rgba(0,0,0,0.2);
 }
-.next-btn:active { transform: translateY(2px); border-bottom-width: 0; }
 .btn-correct { background: #58cc02; border-bottom-color: #46a302; }
 .btn-wrong { background: #ef4444; border-bottom-color: #b91c1c; }
 
@@ -312,9 +297,8 @@ const cssStyles = `
   width: 100%;
   cursor: pointer;
   box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-  transition: all 0.1s;
+  margin-bottom: 4px;
 }
-.ai-btn:active { background: #f9fafb; transform: scale(0.98); }
 `;
 
 // =================================================================================
@@ -435,7 +419,6 @@ const XuanZeTi = ({ data: rawData, onCorrect, onWrong, onNext, triggerAI }) => {
     if (nextLockRef.current) return;
     nextLockRef.current = true;
     audioController.stop();
-    // 核心修复：无论对错，点击继续都应该调用 onNext
     if (onNext) onNext();
   };
 
@@ -447,13 +430,11 @@ const XuanZeTi = ({ data: rawData, onCorrect, onWrong, onNext, triggerAI }) => {
         .map(o => o.text)
         .join(', ');
 
-      // ✅ 核心修复：添加 timestamp，确保 AI 侧边栏能检测到“新任务”
-      // 这里的 triggerAI 是 context 中的方法，它会设置 activeTask 并 setIsAiOpen(true)
       triggerAI({
         grammarPoint: data.grammarPoint || "通用语法",
         question: questionText,
         userChoice: userSelectedText || "未选择",
-        timestamp: Date.now() // 必须有这个，AI 才会动
+        timestamp: Date.now()
       });
     }
   };
@@ -519,7 +500,7 @@ const XuanZeTi = ({ data: rawData, onCorrect, onWrong, onNext, triggerAI }) => {
       
       {questionImg && (
           <div className="w-full flex justify-center mt-2 mb-2 px-4">
-              <img src={questionImg} alt="Topic" className="rounded-xl max-h-40 object-contain shadow-sm" />
+              <img src={questionImg} alt="Topic" className="rounded-xl max-h-32 object-contain shadow-sm" />
           </div>
       )}
 
@@ -538,11 +519,8 @@ const XuanZeTi = ({ data: rawData, onCorrect, onWrong, onNext, triggerAI }) => {
             } else if (isSel) cls += ' selected';
             return (
               <div key={sid} className={cls} onClick={() => toggleOption(sid)}>
-                {optImg && <img src={optImg} alt="option" className="option-img" />}
+                {optImg && <img src={optImg} alt="option" className="option-img h-24 w-full object-cover rounded-lg mb-2" />}
                 <span className="option-text">{opt.text}</span>
-                {correctAnswers.length > 1 && isSel && (
-                     <div className="absolute top-2 right-2 text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full">Selected</div>
-                )}
               </div>
             );
           })}
@@ -561,7 +539,7 @@ const XuanZeTi = ({ data: rawData, onCorrect, onWrong, onNext, triggerAI }) => {
           <span>{isRight ? 'Excellent!' : 'Incorrect'}</span>
         </div>
         {!isRight && (
-             <div className="mb-2 text-lg font-semibold text-red-800">
+             <div className="mb-2 text-md font-semibold text-red-800">
                  Correct answer: {options.filter(o => correctAnswers.includes(String(o.id))).map(o=>o.text).join(', ')}
              </div>
         )}
