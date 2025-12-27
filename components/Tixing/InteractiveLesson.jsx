@@ -337,6 +337,17 @@ export default function InteractiveLesson({ lesson }) {
 
   if (!hasMounted) return null;
 
+  // ✅ 核心修复逻辑：决定是否渲染 AI 以及是否隐藏羽毛球
+  // 1. 判断是否是语法页面 (需要显示羽毛按钮)
+  const isGrammarPage = type === 'grammar_study';
+  // 2. 判断是否是练习题目页面 (不需要常驻羽毛按钮，但需要组件存在来响应 triggerInteractiveAI)
+  const isQuestionPage = ['choice', 'paixu', 'lianxian', 'gaicuo', 'image_match_blanks'].includes(type);
+  
+  // 只有在【语法页】或者【题目页】且没结束时，才渲染 AIChatDock 实例
+  const showAIDock = !isFinished && (isGrammarPage || isQuestionPage);
+  // 在题目页面时，通知 AI 组件隐藏它的悬浮羽毛按钮 (需要 AIChatDock 支持 hideFloatingBall 属性)
+  const shouldHideAiBall = isQuestionPage;
+
   if (isFinished) {
     return (
       <SummaryBlock 
@@ -420,8 +431,12 @@ export default function InteractiveLesson({ lesson }) {
         {renderContent()}
       </main>
 
-      {/* ✅ 核心修复：在这里渲染 AIChatDock 组件，它才会出现在屏幕上并响应 triggerInteractiveAI */}
-      <AIChatDock />
+      {/* ✅ 核心修复：在这里统一渲染 AIChatDock。
+          1. 语法页渲染它，且显示按钮。
+          2. 练习页渲染它，但隐藏按钮（hideFloatingBall 传 true）。
+          3. 这样全局只有一个 AI 实例，解析窗也能弹出，且不重复。
+      */}
+      {showAIDock && <AIChatDock hideFloatingBall={shouldHideAiBall} />}
     </div>
   );
 }
