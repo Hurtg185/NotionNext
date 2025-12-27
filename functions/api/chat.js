@@ -67,7 +67,7 @@ export async function onRequestPost(context) {
 
     // 3. 请求 NVIDIA AI
     const payload = {
-      model: config?.modelId || 'deepseek-v3.2',
+      model: config?.modelId || 'gemini-2.5-flash',
       messages,
       temperature: 0.7,
       top_p: 0.9,
@@ -76,7 +76,7 @@ export async function onRequestPost(context) {
     };
 
     const aiRes = await fetch(
-      'https://apis.iflow.cn/v1/chat/completions',
+      'https://x666.me/v1/chat/completions',
       {
         method: 'POST',
         headers: {
