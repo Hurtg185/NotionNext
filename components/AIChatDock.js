@@ -252,7 +252,7 @@ export default function AIChatDock() {
 
   const handleTranslateSelection = () => {
       if (!selectionMenu.text) return;
-      handleSend(`请详细解释并翻译这段文字：\n"${selectionMenu.text}"`);
+      handleSend(`请用缅文详细解释这段文字：\n"${selectionMenu.text}"`);
       setSelectionMenu(prev => ({...prev, show: false}));
       window.getSelection().removeAllRanges();
   };
