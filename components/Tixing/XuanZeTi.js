@@ -186,11 +186,6 @@ const cssStyles = `
   border-right: 8px solid #fff;
 }
 
-.question-img-bubble {
-  max-width: 100px; max-height: 80px;
-  border-radius: 8px; object-fit: cover;
-}
-
 .zh-seg { display: inline-flex; flex-direction: column; align-items: center; margin: 0 1px; }
 .zh-py { font-size: .75rem; color: #94a3b8; }
 .zh-char { font-size: 1.25rem; font-weight: 700; color: #1e293b; }
@@ -306,7 +301,6 @@ const cssStyles = `
 .btn-correct { background: #58cc02; border-bottom-color: #46a302; }
 .btn-wrong { background: #ef4444; border-bottom-color: #b91c1c; }
 
-/* AI 按钮样式 */
 .ai-btn {
   background: #fff;
   border: 2px solid #e5e7eb;
@@ -334,7 +328,6 @@ const playSfx = (type) => {
   };
   const path = paths[type];
   if (!path) return;
-  
   const audio = new Audio(path);
   audio.volume = 1.0;
   audio.play().catch(() => {}); 
@@ -349,13 +342,11 @@ const vibrate = (pattern) => {
 // =================================================================================
 // 5. 组件主体
 // =================================================================================
-// ✅ 关键修复：接收 onNext, triggerAI 参数
 const XuanZeTi = ({ data: rawData, onCorrect, onWrong, onNext, triggerAI }) => {
   const data = rawData?.content || rawData || {};
   const question = data.question || {};
   const questionText = typeof question === 'string' ? question : question.text || '';
   const questionImg = data.imageUrl || ''; 
-  
   const options = data.options || [];
 
   const correctAnswers = useMemo(() => {
@@ -382,7 +373,6 @@ const XuanZeTi = ({ data: rawData, onCorrect, onWrong, onNext, triggerAI }) => {
     return opts;
   }, [data.id, options]); 
 
-  // 初始化
   useEffect(() => {
     nextLockRef.current = false;
     setSelectedIds([]);
@@ -407,13 +397,10 @@ const XuanZeTi = ({ data: rawData, onCorrect, onWrong, onNext, triggerAI }) => {
     };
   }, [data?.id]);
 
-  // 点击选项
   const toggleOption = (id) => {
     if (isSubmitted) return;
-    
     playSfx('click');
     vibrate(15); 
-
     const sid = String(id);
     if (correctAnswers.length === 1) {
         setSelectedIds([sid]);
@@ -422,49 +409,36 @@ const XuanZeTi = ({ data: rawData, onCorrect, onWrong, onNext, triggerAI }) => {
           prev.includes(sid) ? prev.filter(i => i !== sid) : [...prev, sid]
         );
     }
-    
     const opt = options.find(o => String(o.id) === sid);
     if (opt && opt.text) audioController.playMixed(opt.text);
   };
 
-  // 提交答案
   const handleSubmit = () => {
     if (!selectedIds.length) return;
-
     const correct =
       selectedIds.length === correctAnswers.length &&
       selectedIds.every(id => correctAnswers.includes(id));
-
     setIsRight(correct);
     setIsSubmitted(true);
-
     if (correct) {
       playSfx('correct');
       confetti({ particleCount: 120, spread: 80, origin: { y: 0.7 } });
+      if(onCorrect) onCorrect();
     } else {
       playSfx('wrong');
       vibrate([50, 50, 50]); 
-      // ✅ 关键修复：答错时，只调用 onWrong 记分，不调用 onNext 跳转
-      // 只有在 InteractiveLesson 里配合 onNext 使用才生效
       if(onWrong) onWrong();
     }
   };
 
-  // 点击 Continue (这才是真正跳转的地方)
   const handleContinue = () => {
     if (nextLockRef.current) return;
     nextLockRef.current = true;
     audioController.stop();
-
-    if (isRight) {
-        onCorrect ? onCorrect() : (onNext && onNext());
-    } else {
-        // ✅ 关键修复：答错点击继续时，才调用 onNext 进入下一题
-        onNext && onNext();
-    }
+    // 核心修复：无论对错，点击继续都应该调用 onNext
+    if (onNext) onNext();
   };
 
-  // 触发 AI 解析
   const handleAskAI = (e) => {
     e.stopPropagation();
     if (triggerAI) {
@@ -473,10 +447,13 @@ const XuanZeTi = ({ data: rawData, onCorrect, onWrong, onNext, triggerAI }) => {
         .map(o => o.text)
         .join(', ');
 
+      // ✅ 核心修复：添加 timestamp，确保 AI 侧边栏能检测到“新任务”
+      // 这里的 triggerAI 是 context 中的方法，它会设置 activeTask 并 setIsAiOpen(true)
       triggerAI({
         grammarPoint: data.grammarPoint || "通用语法",
         question: questionText,
-        userChoice: userSelectedText
+        userChoice: userSelectedText || "未选择",
+        timestamp: Date.now() // 必须有这个，AI 才会动
       });
     }
   };
@@ -502,7 +479,6 @@ const XuanZeTi = ({ data: rawData, onCorrect, onWrong, onNext, triggerAI }) => {
     <div className="xzt-container">
       <style>{cssStyles}</style>
 
-      {/* Header */}
       <div className="xzt-header">
         <div className="scene-wrapper">
             <img
@@ -512,24 +488,18 @@ const XuanZeTi = ({ data: rawData, onCorrect, onWrong, onNext, triggerAI }) => {
             />
             <div className="bubble-container">
                 <div className="bubble-tail" />
-                
                 <div className="flex-1">
                     {questionImg ? (
-                        <div className="text-gray-500 italic text-sm">
-                           Look at the image
-                        </div>
+                        <div className="text-gray-500 italic text-sm">Look at the image</div>
                     ) : (
                         <div className="flex flex-wrap items-end gap-1">
                              {renderRichText(questionText)}
                         </div>
                     )}
                 </div>
-
                 <div
                     className={`p-3 rounded-xl cursor-pointer transition-colors flex-shrink-0 ${
-                    isPlaying
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-blue-100 text-blue-500'
+                    isPlaying ? 'bg-blue-500 text-white' : 'bg-blue-100 text-blue-500'
                     }`}
                     onClick={(e) => {
                     e.stopPropagation();
@@ -553,7 +523,6 @@ const XuanZeTi = ({ data: rawData, onCorrect, onWrong, onNext, triggerAI }) => {
           </div>
       )}
 
-      {/* Options */}
       <div className="xzt-scroll-area">
         <div className={`options-grid ${hasOptionImages ? 'has-images' : ''}`}>
           {shuffledOptions.map(opt => {
@@ -561,23 +530,18 @@ const XuanZeTi = ({ data: rawData, onCorrect, onWrong, onNext, triggerAI }) => {
             const isSel = selectedIds.includes(sid);
             const isCorrect = correctAnswers.includes(sid);
             const optImg = opt.img || opt.imageUrl;
-
             let cls = 'option-card';
             if(optImg) cls += ' has-image-layout'; 
-
             if (isSubmitted) {
               if (isCorrect) cls += ' correct';
               else if (isSel) cls += ' wrong';
             } else if (isSel) cls += ' selected';
-
             return (
               <div key={sid} className={cls} onClick={() => toggleOption(sid)}>
                 {optImg && <img src={optImg} alt="option" className="option-img" />}
                 <span className="option-text">{opt.text}</span>
                 {correctAnswers.length > 1 && isSel && (
-                     <div className="absolute top-2 right-2 text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full">
-                         Selected
-                     </div>
+                     <div className="absolute top-2 right-2 text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full">Selected</div>
                 )}
               </div>
             );
@@ -585,46 +549,29 @@ const XuanZeTi = ({ data: rawData, onCorrect, onWrong, onNext, triggerAI }) => {
         </div>
       </div>
 
-      {/* 提交栏 */}
       {!isSubmitted && (
         <div className="submit-bar">
-          <button
-            className="submit-btn"
-            disabled={!selectedIds.length}
-            onClick={handleSubmit}
-          >
-            CHECK
-          </button>
+          <button className="submit-btn" disabled={!selectedIds.length} onClick={handleSubmit}>CHECK</button>
         </div>
       )}
 
-      {/* 结果面板 */}
       <div className={`result-sheet ${isSubmitted ? 'show' : ''} ${isRight ? 'correct' : 'wrong'}`}>
         <div className="sheet-header">
           {isRight ? <FaCheck className="text-2xl" /> : <FaTimes className="text-2xl" />}
           <span>{isRight ? 'Excellent!' : 'Incorrect'}</span>
         </div>
-
         {!isRight && (
              <div className="mb-2 text-lg font-semibold text-red-800">
                  Correct answer: {options.filter(o => correctAnswers.includes(String(o.id))).map(o=>o.text).join(', ')}
              </div>
         )}
-        
-        {/* ✅ AI 按钮：仅在做错时显示 */}
         {!isRight && (
             <button className="ai-btn" onClick={handleAskAI}>
                <FaRobot size={18} />
                <span>AI 老师解析</span>
             </button>
         )}
-
-        <button 
-           className={`next-btn ${isRight ? 'btn-correct' : 'btn-wrong'}`} 
-           onClick={handleContinue}
-        >
-          CONTINUE
-        </button>
+        <button className={`next-btn ${isRight ? 'btn-correct' : 'btn-wrong'}`} onClick={handleContinue}>CONTINUE</button>
       </div>
     </div>
   );
