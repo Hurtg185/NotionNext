@@ -251,7 +251,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
       id: item.id || idx,
       title: item['语法标题'] || '',
       pattern: item['句型结构'] || '',
-      videoUrl: item['视频链接'] || 'https://audio.886.best/chinese-vocab-audio/35339558-uhd_1440_2560_25fps.mp4',
+      videoUrl: item['视频链接'] || 'https://audio.886.best/chinese-vocab-audio/%E8%A7%86%E9%A2%91/Screenrecorder-2025-05-23-17-46-34-343.mp4',
       explanationRaw: item['语法详解'] || '',
       attention: item['注意事项'] || '',
       dialogues: (item['例句列表'] || []).map((ex, i) => {
