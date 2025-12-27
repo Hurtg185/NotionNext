@@ -395,19 +395,21 @@ export default function WordStudyPlayer({ data, onNext, onPrev }) {
         )}
       </div>
 
-      {/* 底部按钮 (提高位置，浅色系) */}
-      <div className="flex-none w-full px-6 pb-12 pt-2 max-w-md mx-auto z-20">
-        <button 
-          onClick={handleNext}
-          className="w-full h-14 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-2xl font-bold text-lg shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-3 border border-indigo-100"
-        >
-          <span className="font-['Padauk'] font-extrabold">
-            {index === total - 1 ? "ပြီးပါပြီ" : "ရှေ့ဆက်"} {/* Continue */}
-          </span> 
-          <FaArrowRight size={16} />
-        </button>
-      </div>
-
+      {/* 底部按钮 (安全区域优化) */}
+<div className="flex-none w-full px-4 pb-[calc(1rem+env(safe-area-inset-bottom,0))] pt-3 max-w-md mx-auto z-20">
+  <button 
+    onClick={handleNext}
+    className="w-full h-14 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-2xl font-bold text-lg shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-3 border border-indigo-100 shadow-md"
+    style={{
+      marginBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0.5rem))'
+    }}
+  >
+    <span className="font-['Padauk'] font-extrabold">
+      {index === total - 1 ? "ပြီးပါပြီ" : "ရှေ့ဆက်"} {/* Continue */}
+    </span> 
+    <FaArrowRight size={16} />
+  </button>
+</div>
       {/* 拼读弹窗 */}
       {showSpelling && <SpellingModal wordObj={currentWord} onClose={() => setShowSpelling(false)} />}
     </div>
