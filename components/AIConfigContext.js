@@ -33,7 +33,7 @@ export const AIProvider = ({ children }) => {
   ====================== */
   const [config, setConfig] = useState({
     apiKey: '',
-    modelId: 'deepseek-v3.2',
+    modelId: 'gemini-2.5-flash',
     userLevel: 'H1',
     showPinyin: true, 
     autoSendStt: false, 
