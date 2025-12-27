@@ -2,17 +2,17 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import PropTypes from 'prop-types';
 import { useTransition, animated } from '@react-spring/web';
 import { pinyin } from 'pinyin-pro';
-import { 
-  FaPause, FaPlay, FaChevronRight, FaTachometerAlt, 
-  FaExclamationTriangle, FaBookReader, FaVolumeUp
+import {
+  FaPause, FaPlay, FaChevronRight, FaTachometerAlt,
+  FaExclamationTriangle, FaBookReader, FaVolumeUp, FaVideo, FaExpand
 } from 'react-icons/fa';
-// ✅ 已删除：不再在这里引入 AIChatDock，由父组件统一渲染
-import { useAI } from '../AIConfigContext'; 
+import { useAI } from '../AIConfigContext';
 
 // =================================================================================
 // ===== 0. 音效工具 =====
 // =================================================================================
 const playSFX = (type) => {
+  if (typeof window === 'undefined') return;
   const audio = new Audio(
     type === 'switch' ? '/sounds/switch-card.mp3' : '/sounds/click.mp3'
   );
@@ -25,14 +25,14 @@ const playSFX = (type) => {
 // =================================================================================
 function useRobustTTS() {
   const [playerState, setPlayerState] = useState({
-    isPlaying: false, isPaused: false, loadingId: null, activeId: null, 
+    isPlaying: false, isPaused: false, loadingId: null, activeId: null,
     duration: 0, currentTime: 0, playbackRate: 0.9,
   });
 
-  const audioRef = useRef(null);      
-  const audioUrlRef = useRef(null);   
-  const requestRef = useRef(null);    
-  const mountedRef = useRef(true);    
+  const audioRef = useRef(null);
+  const audioUrlRef = useRef(null);
+  const requestRef = useRef(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -47,7 +47,7 @@ function useRobustTTS() {
     if (audioRef.current) {
       const audio = audioRef.current;
       audio.pause();
-      audio.removeAttribute('src'); 
+      audio.removeAttribute('src');
       audio.load();
     }
     if (audioUrlRef.current) {
@@ -60,7 +60,7 @@ function useRobustTTS() {
   const stop = useCallback(() => {
     cleanupAudio();
     setPlayerState(prev => ({
-      ...prev, isPlaying: false, isPaused: false, activeId: null, 
+      ...prev, isPlaying: false, isPaused: false, activeId: null,
       loadingId: null, currentTime: 0, duration: 0
     }));
   }, [cleanupAudio]);
@@ -113,7 +113,7 @@ function useRobustTTS() {
     cleanupAudio();
     setPlayerState(prev => ({ ...prev, loadingId: uniqueId, activeId: uniqueId, isPlaying: false }));
 
-    let cleanText = String(text).replace(/\*\*|###/g, '').replace(/<[^>]+>/g, '').trim();
+    let cleanText = String(text).replace(/\*\*|~~|###/g, '').replace(/<[^>]+>/g, '').trim();
     if (!cleanText) {
       setPlayerState(prev => ({ ...prev, loadingId: null }));
       return;
@@ -158,23 +158,29 @@ function useRobustTTS() {
 }
 
 // =================================================================================
-// ===== 2. 文本渲染组件 =====
+// ===== 2. 文本渲染组件 (支持拼音、加粗点、删除线) =====
 // =================================================================================
 
-const PinyinText = ({ text, onClick, color = 'inherit', bold = false }) => {
+const PinyinText = ({ text, onClick, color = 'inherit', bold = false, strikethrough = false }) => {
   if (!text) return null;
-  const displayable = text.replace(/\*\*|###/g, '').replace(/\{\{|\}\}/g, '');
+  // 移除标记符号
+  const displayable = text.replace(/\*\*|~~|###/g, '').replace(/{{|}}/g, '');
   const regex = /([\u4e00-\u9fa5]+)/g;
   const parts = displayable.split(regex);
 
   return (
-    <span 
+    <span
       onClick={(e) => {
         if(onClick) { e.stopPropagation(); onClick(text); }
       }}
-      style={{ 
-        lineHeight: '2.2', wordBreak: 'break-word', color: color, 
-        fontWeight: bold ? '700' : '400', fontSize: '1.1rem', cursor: onClick ? 'pointer' : 'default'
+      style={{
+        lineHeight: '2.2', wordBreak: 'break-word', color: color,
+        fontWeight: bold ? '700' : '400', 
+        fontSize: '1.1rem', 
+        cursor: onClick ? 'pointer' : 'default',
+        textDecoration: strikethrough ? 'line-through' : 'none',
+        textDecorationColor: strikethrough ? '#ef4444' : 'transparent',
+        textDecorationThickness: '2px'
       }}
     >
       {parts.map((part, idx) => {
@@ -194,48 +200,58 @@ const PinyinText = ({ text, onClick, color = 'inherit', bold = false }) => {
 };
 
 const RichTextRenderer = ({ content, onPlayText }) => {
-    if (!content) return null;
-    return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {content.split('\n').map((line, idx) => {
-                const trimmed = line.trim();
-                if (!trimmed) return null;
-                if (trimmed.startsWith('###')) {
-                    return (
-                        <h3 key={idx} style={{ 
-                            fontSize: '1.1rem', fontWeight: 'bold', color: '#4338ca', 
-                            marginTop: '10px', marginBottom: '4px', borderLeft: '4px solid #818cf8', paddingLeft: '8px' 
-                        }}>{trimmed.replace(/###\s?/, '')}</h3>
-                    );
-                }
-                const parts = trimmed.split(/(\*\*.*?\*\*)/g);
+  if (!content) return null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {content.split('\n').map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) return null;
+        if (trimmed.startsWith('###')) {
+          return (
+            <h3 key={idx} style={{
+              fontSize: '1.1rem', fontWeight: 'bold', color: '#4338ca',
+              marginTop: '10px', marginBottom: '4px', borderLeft: '4px solid #818cf8', paddingLeft: '8px'
+            }}>{trimmed.replace(/###\s?/, '')}</h3>
+          );
+        }
+        
+        // 正则解析：**重点** 或 ~~错误~~ 或 普通文本
+        const parts = trimmed.split(/(\*\*.*?\*\*|~~.*?~~)/g);
+        
+        return (
+          <div key={idx} style={{ marginBottom: '4px', lineHeight: '1.8' }}>
+            {parts.map((part, pIdx) => {
+              if (part.startsWith('**') && part.endsWith('**')) {
+                // 重点文字：粗体 + 前置小白点
                 return (
-                    <div key={idx} style={{ marginBottom: '4px', lineHeight: '1.8' }}>
-                        {parts.map((part, pIdx) => {
-                            if (part.startsWith('**') && part.endsWith('**')) {
-                                return (
-                                    <span key={pIdx} style={{ background: '#fff7ed', padding: '0 4px', borderRadius: '4px', borderBottom: '1px solid #fed7aa' }}>
-                                        <PinyinText text={part.slice(2, -2)} onClick={onPlayText} color="#9a3412" bold />
-                                    </span>
-                                );
-                            } else if (part.trim()) {
-                                return <PinyinText key={pIdx} text={part} onClick={onPlayText} color="#334155" />;
-                            }
-                            return null;
-                        })}
-                    </div>
+                  <span key={pIdx} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#f0f9ff', padding: '0 6px', borderRadius: '4px' }}>
+                    <span style={{ fontSize: '0.6rem', color: '#0ea5e9' }}>▪️</span>
+                    <PinyinText text={part.slice(2, -2)} onClick={onPlayText} color="#0c4a6e" bold={true} />
+                  </span>
                 );
+              } else if (part.startsWith('~~') && part.endsWith('~~')) {
+                // 错误文字：红色 + 删除线
+                return (
+                  <PinyinText key={pIdx} text={part.slice(2, -2)} onClick={onPlayText} color="#ef4444" strikethrough={true} />
+                );
+              } else if (part.trim()) {
+                return <PinyinText key={pIdx} text={part} onClick={onPlayText} color="#334155" />;
+              }
+              return null;
             })}
-        </div>
-    );
+          </div>
+        );
+      })}
+    </div>
+  );
 };
 
 // =================================================================================
 // ===== 3. 顶部固定播放器 (常驻) =====
 // =================================================================================
-const TopPlayer = ({ 
-  isPlaying, isPaused, duration, currentTime, 
-  onToggle, onSeek, onRateChange, playbackRate, label, visible 
+const TopPlayer = ({
+  isPlaying, isPaused, duration, currentTime,
+  onToggle, onSeek, onRateChange, playbackRate, label, visible
 }) => {
   if (!visible) return null;
 
@@ -256,18 +272,18 @@ const TopPlayer = ({
     <div style={styles.topPlayerWrapper}>
       <div style={styles.topPlayerCapsule}>
         <button onClick={(e) => { playSFX('click'); onToggle(); }} style={styles.mainPlayBtn}>
-           {(isPlaying || isPaused) && !isPaused ? <FaPause size={14} /> : <FaPlay size={14} style={{marginLeft:2}} />}
+          {(isPlaying || isPaused) && !isPaused ? <FaPause size={14} /> : <FaPlay size={14} style={{marginLeft:2}} />}
         </button>
         <div style={styles.bpInfo}>
-           <div style={styles.bpLabel}>{label}</div>
-           <div style={styles.bpTimeRow}>
-             <span style={styles.bpTime}>{formatTime(currentTime)}</span>
-             <div style={styles.bpProgressBg}>
-                <div style={{...styles.bpProgressFill, width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%`}} />
-                <input type="range" min="0" max={duration || 100} value={currentTime} onChange={(e) => onSeek(Number(e.target.value))} style={styles.hiddenRangeInput} />
-             </div>
-             <span style={styles.bpTime}>{formatTime(duration)}</span>
-           </div>
+          <div style={styles.bpLabel}>{label}</div>
+          <div style={styles.bpTimeRow}>
+            <span style={styles.bpTime}>{formatTime(currentTime)}</span>
+            <div style={styles.bpProgressBg}>
+              <div style={{...styles.bpProgressFill, width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%`}} />
+              <input type="range" min="0" max={duration || 100} value={currentTime} onChange={(e) => onSeek(Number(e.target.value))} style={styles.hiddenRangeInput} />
+            </div>
+            <span style={styles.bpTime}>{formatTime(duration)}</span>
+          </div>
         </div>
         <button onClick={(e) => { playSFX('click'); cycleRate(); }} style={styles.bpSpeedBtn}>
           <FaTachometerAlt size={12} /><span>{playbackRate}x</span>
@@ -278,26 +294,73 @@ const TopPlayer = ({
 };
 
 // =================================================================================
-// ===== 4. 主组件 GrammarPointPlayer =====
+// ===== 4. 视频播放组件 (竖屏适配，点击全屏) =====
+// =================================================================================
+const VideoPlayerSection = ({ videoUrl }) => {
+  const videoRef = useRef(null);
+
+  const handlePlayVideo = () => {
+    if (videoRef.current) {
+      if (videoRef.current.requestFullscreen) {
+        videoRef.current.requestFullscreen();
+      } else if (videoRef.current.webkitRequestFullscreen) {
+        videoRef.current.webkitRequestFullscreen();
+      }
+      videoRef.current.play();
+    }
+  };
+
+  if (!videoUrl) return null;
+
+  return (
+    <div style={styles.videoSection}>
+      <div style={styles.sectionHeader}>
+        <span style={styles.sectionTitle}>📺 讲解视频</span>
+      </div>
+      <div style={styles.videoCard} onClick={handlePlayVideo}>
+         <video 
+            ref={videoRef}
+            src={videoUrl} 
+            style={styles.videoElement}
+            playsInline
+            controls={false}
+         />
+         <div style={styles.videoOverlay}>
+            <div style={styles.videoPlayCircle}>
+              <FaPlay color="white" size={20} style={{marginLeft: 4}} />
+            </div>
+            <span style={styles.videoHint}>点击全屏播放</span>
+         </div>
+      </div>
+    </div>
+  );
+};
+
+// =================================================================================
+// ===== 5. 主组件 GrammarPointPlayer =====
 // =================================================================================
 const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
-  // ✅ 获取 Context 方法
   const { updatePageContext } = useAI();
 
   const normalizedPoints = useMemo(() => {
     if (!Array.isArray(grammarPoints)) return [];
     return grammarPoints.map((item, idx) => ({
       id: item.id || idx,
-      type: 'grammar', 
+      type: 'grammar',
       title: item['语法标题'] || item.grammarPoint || '',
       pattern: item['句型结构'] || item.pattern || '',
-      explanationScript: item['讲解脚本'] || (item['语法详解'] || '').replace(/\*\*|###/g, ''),
+      videoUrl: item['视频链接'] || 'https://audio.886.best/chinese-vocab-audio/35339558-uhd_1440_2560_25fps.mp4', // 使用您提供的视频链接
+      explanationScript: item['讲解脚本'] || (item['语法详解'] || '').replace(/\*\*|~~|###/g, ''),
       explanationRaw: item['语法详解'] || item.visibleExplanation || '',
-      attention: item['注意事项'] || item.attention || '', 
+      attention: item['注意事项'] || item.attention || '',
       dialogues: (item['例句列表'] || item.examples || []).map((ex, i) => {
-        const isBoy = ex.speaker === 'B' || ex.speaker === 'Boy' || (ex.speaker && ex.speaker.includes('男'));
+        // 增强性别判断：判断 B, 男, Male, Boy 等
+        const speakerTag = (ex.speaker || '').toUpperCase();
+        const isBoy = speakerTag === 'B' || speakerTag.includes('男') || speakerTag.includes('MALE') || speakerTag.includes('BOY');
+        
         return {
-          id: ex.id || i, gender: isBoy ? 'male' : 'female',
+          id: ex.id || i, 
+          gender: isBoy ? 'male' : 'female',
           sentence: ex['句子'] || ex.sentence || '',
           translation: ex['翻译'] || ex.translation || '',
           script: ex['例句发音'] || ex['句子'] || ''
@@ -308,32 +371,30 @@ const GrammarPointPlayer = ({ grammarPoints, onComplete }) => {
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const contentRef = useRef(null);
-  
   const currentPoint = normalizedPoints[currentIndex];
 
-  // ✅ 翻页时告诉全局唯一 AI 当前内容
   useEffect(() => {
     if (currentPoint) {
       const contextString = `
-【当前 PPT 内容】
-- 标题：${currentPoint.title}
-- 核心句型：${currentPoint.pattern}
-- 语法详解：${currentPoint.explanationRaw}
-- 注意事项：${currentPoint.attention}
-- 场景例句：
-${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('\n')}
-      `.trim();
+【当前学习页面】
+标题：${currentPoint.title}
+句型：${currentPoint.pattern}
+详解：${currentPoint.explanationRaw}
+注意事项：${currentPoint.attention}
+例句：
+${currentPoint.dialogues.map(d => `* ${d.sentence} (${d.translation})`).join('\n')}
+`.trim();
       updatePageContext(contextString);
     }
   }, [currentPoint, updatePageContext]);
 
-  const { 
+  const {
     play, stop, toggle, seek, setRate,
-    isPlaying, isPaused, loadingId, activeId, currentTime, duration, playbackRate 
+    isPlaying, isPaused, loadingId, activeId, currentTime, duration, playbackRate
   } = useRobustTTS();
 
   useEffect(() => {
-    stop(); 
+    stop();
     if (contentRef.current) contentRef.current.scrollTop = 0;
   }, [currentIndex, stop]);
 
@@ -357,10 +418,10 @@ ${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('
 
   const narrationId = `narration_${currentPoint.id}`;
   const isControllingNarration = activeId === narrationId;
-  
+
   const handleTopPlayClick = () => {
-      if (isControllingNarration) toggle();
-      else play(currentPoint.explanationScript, narrationId);
+    if (isControllingNarration) toggle();
+    else play(currentPoint.explanationScript, narrationId);
   };
 
   return (
@@ -379,7 +440,7 @@ ${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('
         visible={true} 
       />
 
-      {/* 页面内容 */}
+      {/* 页面过渡动画 */}
       {transitions((style, i) => {
         const gp = normalizedPoints[i];
         if (!gp) return null;
@@ -408,6 +469,9 @@ ${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('
                   </div>
                 )}
 
+                {/* 视频讲解板块 */}
+                <VideoPlayerSection videoUrl={gp.videoUrl} />
+
                 {/* 语法详解 */}
                 <div style={styles.section}>
                   <div style={styles.sectionHeader}>
@@ -432,7 +496,7 @@ ${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('
                     </div>
                     <div style={styles.attentionBox}>
                       <div style={styles.attentionText}>
-                          <PinyinText text={gp.attention} onClick={(t) => play(t, `attn_${gp.id}`)} />
+                          <RichTextRenderer content={gp.attention} onPlayText={(text) => play(text, `attn_play_${Date.now()}`)} />
                       </div>
                     </div>
                   </div>
@@ -500,9 +564,6 @@ ${currentPoint.dialogues.map(d => `  * ${d.sentence} (${d.translation})`).join('
           </animated.div>
         );
       })}
-
-      {/* ✅ 已移除：AIChatDock 不再在这里渲染 */}
-      
     </div>
   );
 };
@@ -513,15 +574,15 @@ GrammarPointPlayer.propTypes = {
 };
 
 // =================================================================================
-// ===== 5. 样式定义 =====
+// ===== 6. 样式定义 =====
 // =================================================================================
 const styles = {
   container: { position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#f8fafc', fontFamily: '"Padauk", "Myanmar3", sans-serif' },
   center: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#94a3b8' },
   page: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'white' },
   scrollContainer: { flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 16px', paddingTop: '70px' },
-  contentWrapper: { maxWidth: '600px', margin: '0 auto', paddingTop: '20px' }, 
-  
+  contentWrapper: { maxWidth: '600px', margin: '0 auto', paddingTop: '20px' },
+
   topPlayerWrapper: { position: 'absolute', top: '15px', left: 0, right: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, pointerEvents: 'none' },
   topPlayerCapsule: { pointerEvents: 'auto', width: '94%', maxWidth: '500px', height: '56px', background: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', borderRadius: '28px', border: '1px solid rgba(0,0,0,0.08)', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', padding: '0 12px', gap: '12px' },
   mainPlayBtn: { width: 38, height: 38, borderRadius: '50%', background: '#3b82f6', color: 'white', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, boxShadow: '0 4px 10px rgba(59, 130, 246, 0.3)' },
@@ -535,9 +596,26 @@ const styles = {
   bpSpeedBtn: { background: '#f1f5f9', border: 'none', borderRadius: '12px', padding: '4px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', gap: '1px', fontSize: '0.6rem', color: '#64748b', fontWeight: 'bold' },
 
   title: { fontSize: '1.5rem', fontWeight: '800', textAlign: 'center', color: '#1e293b', marginBottom: '24px', marginTop: '10px' },
-  card: { background: 'white', borderRadius: '16px', padding: '24px', marginBottom: '30px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9' },
+  card: { background: 'white', borderRadius: '16px', padding: '24px', marginBottom: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9' },
   cardLabel: { fontSize: '0.85rem', color: '#64748b', fontWeight: 'bold', marginBottom: '12px', display:'flex', gap: '6px', alignItems:'center' },
   patternText: { fontSize: '1.3rem', fontWeight: '600', color: '#0f172a', lineHeight: 1.6, textAlign: 'center' },
+
+  videoSection: { marginBottom: '30px' },
+  videoCard: { 
+    position: 'relative', 
+    width: '160px', 
+    height: '240px', 
+    margin: '0 auto', 
+    borderRadius: '16px', 
+    overflow: 'hidden', 
+    background: '#000', 
+    boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+    cursor: 'pointer'
+  },
+  videoElement: { width: '100%', height: '100%', objectFit: 'cover', opacity: 0.8 },
+  videoOverlay: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' },
+  videoPlayCircle: { width: 50, height: 50, borderRadius: '50%', background: 'rgba(59, 130, 246, 0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' },
+  videoHint: { color: 'white', fontSize: '0.75rem', fontWeight: 'bold', textShadow: '0 1px 4px rgba(0,0,0,0.5)' },
 
   section: { marginBottom: '36px' },
   sectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' },
@@ -553,14 +631,14 @@ const styles = {
   dialogueRow: { display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' },
   avatarWrapper: { display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '4px' },
   avatarImg: { width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', border: '2px solid white', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' },
-  
+
   bubbleCol: { display: 'flex', flexDirection: 'column', maxWidth: '85%' },
-  bubble: { 
+  bubble: {
     padding: '10px 14px', position: 'relative', borderRadius: '14px',
     boxShadow: '0 2px 8px rgba(0,0,0,0.03)', transition: 'background 0.2s', minWidth: '60px'
   },
-  tailLeft: { position: 'absolute', top: '12px', left: '-6px', width: 0, height: 0, borderTop: '6px solid transparent', borderBottom: '6px solid transparent', borderRight: '6px solid #fff1f2' },
-  tailRight: { position: 'absolute', top: '12px', right: '-6px', width: 0, height: 0, borderTop: '6px solid transparent', borderBottom: '6px solid transparent', borderLeft: '6px solid #eff6ff' },
+  tailLeft: { position: 'absolute', top: '12px', left: '-6px', width: 0, height: 0, borderTop: '6px solid transparent', borderBottom: '6px solid transparent', borderRight: '1px solid #fbcfe8', background: '#fff1f2', clipPath: 'polygon(100% 0, 0 50%, 100% 100%)', width: '8px', height: '12px' },
+  tailRight: { position: 'absolute', top: '12px', right: '-6px', width: 0, height: 0, borderTop: '6px solid transparent', borderBottom: '6px solid transparent', borderLeft: '1px solid #bfdbfe', background: '#eff6ff', clipPath: 'polygon(0 0, 100% 50%, 0 100%)', width: '8px', height: '12px' },
 
   bubbleText: { fontSize: '1.05rem', marginBottom: '4px' },
   bubbleTrans: { fontSize: '0.85rem', opacity: 0.85, fontFamily: '"Padauk", sans-serif' },
@@ -569,14 +647,16 @@ const styles = {
   nextBtn: { background: '#1e293b', color: 'white', border: 'none', padding: '16px 48px', borderRadius: '50px', fontSize: '1.1rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', boxShadow: '0 10px 25px rgba(30, 41, 59, 0.25)', transition: 'transform 0.1s', fontFamily: '"Padauk", sans-serif' },
 };
 
+// 全局样式注入
 if (typeof document !== 'undefined' && !document.getElementById('gp-player-style')) {
   const style = document.createElement('style');
   style.id = 'gp-player-style';
   style.innerHTML = `
-    .spin { animation: spin 1s linear infinite; }
-    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-    .active-scale:active { transform: scale(0.98); opacity: 0.9; }
+    .spin { animation: spin 1s linear infinite; } 
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } 
+    .active-scale:active { transform: scale(0.98); opacity: 0.9; } 
     .attention-box * { color: #991b1b !important; }
+    video::-webkit-media-controls-fullscreen-button { display: block; }
   `;
   document.head.appendChild(style);
 }
