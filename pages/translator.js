@@ -1,6 +1,6 @@
 // pages/translate.jsx
 import Head from 'next/head';
-import Translator from '@/components/Translator';
+import Translator from '../components/Translator';
 
 export default function TranslatePage() {
   return (
