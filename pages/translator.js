@@ -1,13 +1,15 @@
-// pages/translator.js
+// pages/translate.jsx
 import Head from 'next/head';
-import dynamic from 'next/dynamic';
+import Translator from '@/components/Translator';
 
-// 强制关闭 SSR，完美解决 ReferenceError
-const TranslatorUI = dynamic(
-  () => import('../components/TranslatorUI'), // 确保文件名对应
-  { ssr: false }
-);
-
-export default function Home() {
-  return <TranslatorUI />;
+export default function TranslatePage() {
+  return (
+    <>
+      <Head>
+        <title>中缅翻译 | Myanmar-Chinese Translator</title>
+        <meta name="description" content="专业的中缅双语翻译工具，提供5种翻译风格" />
+      </Head>
+      <Translator />
+    </>
+  );
 }
