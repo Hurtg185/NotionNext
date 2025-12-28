@@ -10,9 +10,14 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
+import { useSwipeable } from 'react-swipeable'; // 引入手势库
 
-// 引入独立的翻译组件
-import GlosbeSearchCard from './GlosbeSearchCard';
+// ==========================================
+// 1. 引入组件
+// ==========================================
+
+// 引入全屏 AI 助手组件 (替换原有的 GlosbeSearchCard)
+import AIChatDrawer from './AIChatDrawer';
 
 // 动态导入 WordCard 组件
 const WordCard = dynamic(
@@ -21,7 +26,7 @@ const WordCard = dynamic(
 );
 
 // ==========================================
-// 0. 图标组件 (Messenger)
+// 2. 图标与辅助组件
 // ==========================================
 const MessengerIcon = ({ size = 24 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -30,7 +35,7 @@ const MessengerIcon = ({ size = 24 }) => (
 );
 
 // ==========================================
-// 1. 全局配置与数据
+// 3. 全局配置与数据
 // ==========================================
 
 const FB_CHAT_LINK = "https://m.me/61575187883357";
@@ -90,7 +95,7 @@ const checkIsFree = (level, lessonId) => {
 };
 
 // ==========================================
-// 2. 核心子组件
+// 4. 核心子组件
 // ==========================================
 
 // 会员弹窗
@@ -134,48 +139,6 @@ const MembershipModal = ({ isOpen, onClose, targetLevel }) => {
             <MessageCircle size={20} fill="currentColor" />
             ဆက်သွယ်ရန် (Contact)
           </a>
-        </div>
-      </motion.div>
-    </div>
-  );
-};
-
-// ==========================================
-// NEW: 翻译助手弹窗容器
-// 直接调用 GlosbeSearchCard 组件
-// ==========================================
-const TranslatorModal = ({ isOpen, onClose }) => {
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-0 md:p-4">
-      {/* 背景遮罩 */}
-      <motion.div
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        onClick={onClose}
-        className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
-      />
-      
-      {/* 弹窗主体 */}
-      <motion.div
-        initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }}
-        className="relative w-full h-full md:h-auto md:max-h-[85vh] md:max-w-2xl bg-white md:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden"
-      >
-        {/* 顶部关闭栏 - 因为引入的组件有自己的Header，我们这里放一个悬浮关闭按钮即可 */}
-        <button 
-          onClick={onClose} 
-          className="absolute top-4 right-4 z-50 p-2 bg-white/80 backdrop-blur-sm rounded-full text-slate-500 shadow-sm hover:bg-slate-100 border border-slate-200 transition-colors"
-        >
-          <X size={20} />
-        </button>
-
-        {/* 渲染引入的翻译组件 */}
-        {/* 使用 overflow-y-auto 确保如果组件内容过长可以在弹窗内滚动 */}
-        <div className="flex-1 overflow-y-auto bg-slate-50">
-           {/* 这里可能需要一个 padding 或者容器来适配 GlosbeSearchCard 的全宽布局 */}
-           <div className="min-h-full pb-10">
-              <GlosbeSearchCard />
-           </div>
         </div>
       </motion.div>
     </div>
@@ -291,7 +254,7 @@ const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection, onOpenTransla
       </button>
 
       {/* ==================================================== */}
-      {/* 修改：AI 翻译入口 (改为打开弹窗) */}
+      {/* AI 翻译/助手入口 */}
       {/* ==================================================== */}
       <button 
         onClick={onOpenTranslator} 
@@ -308,7 +271,6 @@ const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection, onOpenTransla
         </div>
         <ChevronRight size={16} className="text-blue-300" />
       </button>
-      {/* ==================================================== */}
       
       {/* 第四行：双收藏按钮 */}
       <div className="grid grid-cols-2 gap-3">
@@ -341,7 +303,7 @@ const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection, onOpenTransla
 };
 
 // ==========================================
-// 3. 主页面入口
+// 5. 主页面入口
 // ==========================================
 
 export default function HskPageClient() {
@@ -349,13 +311,35 @@ export default function HskPageClient() {
   const [activeHskWords, setActiveHskWords] = useState(null);
   const [activeLevelTag, setActiveLevelTag] = useState(null);
   const [membership, setMembership] = useState({ open: false, level: null });
-  // 控制翻译弹窗状态
+  // 控制 AI 翻译 Drawer 状态
   const [isTranslatorOpen, setIsTranslatorOpen] = useState(false);
 
   const isCardViewOpen = router.asPath.includes('#hsk-vocabulary');
 
   // ====================================================
-  // 修改处：将口语跳转拆分为两个函数
+  // 手势控制逻辑 (新增)
+  // ====================================================
+  const swipeHandlers = useSwipeable({
+    onSwipedRight: (eventData) => {
+      // 1. 如果 AI 翻译打开，右滑关闭
+      if (isTranslatorOpen) {
+        setIsTranslatorOpen(false);
+        return;
+      }
+      // 2. 如果生词卡片 (WordCard) 打开 (通过 Hash 控制)，右滑返回上一级
+      if (isCardViewOpen) {
+        router.back();
+        return;
+      }
+    },
+    // 允许触摸滑动，防止误触
+    trackMouse: true,
+    delta: 50, // 滑动距离超过 50px 触发
+    preventScrollOnSwipe: false 
+  });
+
+  // ====================================================
+  // 跳转逻辑
   // ====================================================
 
   // 1. 普通跳转：进入口语首页 (点击 Banner)
@@ -372,8 +356,6 @@ export default function HskPageClient() {
       query: { filter: 'favorites' }
     });
   }, [router]);
-
-  // ====================================================
 
   // 处理生词本点击逻辑
   const handleVocabularyClick = useCallback((level) => {
@@ -403,7 +385,8 @@ export default function HskPageClient() {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] font-sans text-slate-900 pb-20 relative overflow-x-hidden max-w-md mx-auto shadow-2xl shadow-slate-200">
+    // 将手势监听器绑定到最外层容器
+    <div {...swipeHandlers} className="min-h-screen bg-[#f8fafc] font-sans text-slate-900 pb-20 relative overflow-x-hidden max-w-md mx-auto shadow-2xl shadow-slate-200">
       
       <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-blue-50/50 to-transparent pointer-events-none" />
 
@@ -483,15 +466,16 @@ export default function HskPageClient() {
             targetLevel={membership.level}
           />
         )}
-        
-        {/* 翻译弹窗 - 包含调用 */}
-        {isTranslatorOpen && (
-          <TranslatorModal 
-            isOpen={isTranslatorOpen} 
-            onClose={() => setIsTranslatorOpen(false)} 
-          />
-        )}
       </AnimatePresence>
+
+      {/* 
+         修改：使用 AIChatDrawer 代替原来的 TranslatorModal 
+         全屏效果由 AIChatDrawer 内部 CSS 控制
+      */}
+      <AIChatDrawer 
+        isOpen={isTranslatorOpen} 
+        onClose={() => setIsTranslatorOpen(false)} 
+      />
 
       <WordCard
         isOpen={isCardViewOpen}
