@@ -1,6 +1,6 @@
 // functions/api/translate.js
 
-// 您的核心提示词，作为模板安全地存放在后端 (未做任何修改)
+// 您的核心提示词，作为模板安全地存放在后端
 const TRANSLATION_PROMPT_TEMPLATE = `
 你是【中缅双语高保真翻译引擎】。
 
@@ -56,11 +56,7 @@ const TRANSLATION_PROMPT_TEMPLATE = `
 `;
 
 /**
- * [新增] AI 结果解析器
- * 这个函数的作用是将 AI 返回的一整块文本，根据您在提示词中定义的 <<<TAG>>> 标记，
- * 转换成前端需要的小卡片JSON数据结构。
- * @param {string} text - AI返回的原始文本。
- * @returns {object}
+ * AI 结果解析器，用于解析最终的完整数据。
  */
 function parseAIOutput(text) {
   const extract = (tag) => {
@@ -68,97 +64,90 @@ function parseAIOutput(text) {
     const match = text.match(regex);
     return match?.[1]?.trim() || '';
   };
-
-  return {
-    direct: { translation: extract('T2'), back: extract('B2') }, // 自然直译（推荐）作为 direct
-    spoken: { translation: extract('T4'), back: extract('B4') }, // 口语版 作为 spoken
-    free: { translation: extract('T5'), back: extract('B5') },   // 自然意译 作为 free
-    social: { translation: extract('T3'), back: extract('B3') }  // 顺语直译 作为 social (可按需调整)
-  };
+  const types = [
+    { id: 'raw-direct', label: '原结构直译', tTag: 'T1', bTag: 'B1' },
+    { id: 'natural-direct', label: '自然直译', tTag: 'T2', bTag: 'B2', recommended: true },
+    { id: 'fluent-direct', label: '顺语直译', tTag: 'T3', bTag: 'B3' },
+    { id: 'spoken', label: '口语版', tTag: 'T4', bTag: 'B4' },
+    { id: 'free', label: '自然意译', tTag: 'T5', bTag: 'B5' },
+  ];
+  return types.map(type => ({ ...type, translation: extract(type.tTag), back: extract(type.bTag) })).filter(item => item.translation);
 }
 
-
 /**
- * Cloudflare Functions API handler
- * 当浏览器访问 /api/translate 时，这里的代码就会执行
+ * Cloudflare Functions API handler for Streaming
  */
 export async function onRequestPost(context) {
   try {
-    // 1. 从前端请求中解析出 JSON 数据
     const { text, sourceLang, targetLang, customConfig } = await context.request.json();
+    if (!text) return new Response(JSON.stringify({ error: 'Text is required' }), { status: 400 });
 
-    if (!text) {
-      return new Response(JSON.stringify({ error: 'Text to translate is required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    // 2. 确定 API 配置 (优先级: 前端传入 > 服务器环境变量 > 默认值)
-    const apiKey = customConfig?.apiKey || context.env.IFLOW_API_KEY; 
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'API Key is missing.' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
+    const apiKey = customConfig?.apiKey || context.env.IFLOW_API_KEY;
+    if (!apiKey) return new Response(JSON.stringify({ error: 'API Key is missing' }), { status: 401 });
 
     const apiUrl = customConfig?.apiUrl || 'https://apis.iflow.cn/v1';
     const model = customConfig?.model || 'deepseek-v3.2';
 
-    // 3. 构造最终的 Prompt
     const finalPrompt = TRANSLATION_PROMPT_TEMPLATE
       .replace('{SOURCE_LANG}', sourceLang || 'auto')
       .replace('{TARGET_LANG}', targetLang || '中文')
       .replace('{USER_TEXT}', text);
 
-    // 4. 发起对外部 AI 服务的请求
     const apiResponse = await fetch(`${apiUrl}/chat/completions`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: model,
         messages: [{ role: 'system', content: finalPrompt }],
-        stream: false,
+        stream: true, // 启用流式响应
       }),
     });
 
-    if (!apiResponse.ok) {
-        const errorData = await apiResponse.json();
-        console.error('External API Error:', errorData);
-        return new Response(JSON.stringify({ error: 'External API failed', details: errorData }), {
-            status: apiResponse.status,
-            headers: { 'Content-Type': 'application/json' },
-        });
-    }
+    if (!apiResponse.ok) return apiResponse;
 
-    const data = await apiResponse.json();
-    const aiGeneratedText = data.choices?.[0]?.message?.content || "";
+    let fullResponseText = "";
+    let recommendedStreamStarted = false;
+    const streamDelimiter = "\n|||FINAL_JSON|||\n"; // 自定义分隔符
 
-    // 5. 【核心修改】格式化结果并返回给前端
-    // 使用上面新增的 parseAIOutput 函数来处理 AI 返回的文本
-    const parsedData = parseAIOutput(aiGeneratedText);
-    
-    // 构建前端期望的、能够渲染成小卡片的 JSON 结构
-    const responsePayload = {
-      raw: aiGeneratedText, // 保留原始回复，方便调试
-      parsed: parsedData,
-      quick_replies: []
-    };
+    const transformStream = new TransformStream({
+      transform(chunk, controller) {
+        const chunkText = new TextDecoder().decode(chunk);
+        
+        const lines = chunkText.split('\n').filter(line => line.startsWith('data: '));
+        for (const line of lines) {
+          if (line.includes('[DONE]')) continue;
+          try {
+            const json = JSON.parse(line.substring(6));
+            const content = json.choices?.[0]?.delta?.content || "";
+            if (content) {
+              fullResponseText += content; // 始终累加完整响应
+              // 智能判断何时开始流式传输推荐译文
+              if (!recommendedStreamStarted && fullResponseText.includes("<<<T2>>>")) {
+                recommendedStreamStarted = true;
+              }
+              if (recommendedStreamStarted && !fullResponseText.includes("<<<B2>>>")) {
+                 const cleanContent = content.replace("<<<T2>>>", "").trim();
+                 controller.enqueue(new TextEncoder().encode(cleanContent));
+              }
+            }
+          } catch (e) { /* 忽略不完整的JSON块 */ }
+        }
+      },
+      flush(controller) {
+        // 流结束后，打包最终的完整JSON数据
+        const parsedData = parseAIOutput(fullResponseText);
+        const finalPayload = { parsed: parsedData, quick_replies: [] };
+        controller.enqueue(new TextEncoder().encode(streamDelimiter));
+        controller.enqueue(new TextEncoder().encode(JSON.stringify(finalPayload)));
+      }
+    });
 
-    return new Response(JSON.stringify(responsePayload), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
+    return new Response(apiResponse.body.pipeThrough(transformStream), {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     });
 
   } catch (error) {
     console.error('Internal Server Error:', error);
-    return new Response(JSON.stringify({ error: 'Failed to connect to the translation service.' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(JSON.stringify({ error: 'Internal Server Error' }), { status: 500 });
   }
 }
