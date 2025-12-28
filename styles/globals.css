@@ -2,9 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* --- 新增：核心修复 --- */
+/* 确保 Next.js 的根节点和 body 能撑满全屏，防止背景色只显示一半 */
+html, body, #__next {
+  height: 100%;
+  width: 100%;
+}
+
 html {
   overflow-x: hidden;
 }
+
+/* --- 以下是你原有的样式，保持不变 --- */
 
 .wrapper {
   min-height: 100vh;
@@ -164,17 +173,14 @@ nav {
   margin: -0.125em 0.25em;
 }
 
-/* twikoo 评论区超链接样式 */
 .tk-main a {
   @apply text-blue-700;
 }
 
-/* twikoo 内置的 element-ui 加载样式 */
 .el-loading-spinner {
   @apply flex justify-center items-center;
 }
 
-/* Webmention style */
 .webmention-block {
   background: rgba(0, 116, 222, 0.2);
   padding: 1rem 2rem;
@@ -209,9 +215,6 @@ nav {
   margin-right: 0.2rem;
 }
 
-/* .webmention-counts .counts > span {
-  margin-right: .8rem;
-} */
 .webmention-counts .counts > span:not(:last-child):after {
   content: ' • ';
 }
@@ -267,11 +270,10 @@ a.avatar-wrapper {
 }
 
 .writing-vertical {
-  writing-mode: vertical-rl; /* 竖向排列从右向左 */
-  text-orientation: upright; /* 文字方向正常 */
+  writing-mode: vertical-rl;
+  text-orientation: upright;
 }
 
-/* Chatbase 在移动端禁止遮挡 */
 @media (max-width: 700px) {
   button#chatbase-bubble-button {
     margin-bottom: 42px;
@@ -287,14 +289,14 @@ img {
   overflow: hidden;
 }
 
-
 .lazy-image-placeholder{
   background: 
       linear-gradient(90deg,#0001 33%,#0005 50%,#0001 66%)
       #f2f2f2;
   background-size:300% 100%;
   animation: l1 1s infinite linear;
-  }
-  @keyframes l1 {
+}
+
+@keyframes l1 {
   0% {background-position: right}
 }
