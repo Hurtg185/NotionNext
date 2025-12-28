@@ -8,7 +8,6 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import Head from 'next/head';
 
-// 语言配置
 const ALL_LANGUAGES = [
   { code: 'auto', label: '🤖 自动检测' },
   { code: 'zh', label: '🇨🇳 中文' },
@@ -27,6 +26,8 @@ const RECOGNITION_LANGUAGES = [
 
 export default function TranslatorUI() {
   const [mounted, setMounted] = useState(false);
+  const [viewportHeight, setViewportHeight] = useState('100vh'); // 核心修复：动态高度
+  
   const [showSettings, setShowSettings] = useState(false);
   const [showMicLangMenu, setShowMicLangMenu] = useState(false);
   const [showLangPicker, setShowLangPicker] = useState(false); 
@@ -46,12 +47,16 @@ export default function TranslatorUI() {
 
   const recognitionRef = useRef(null);
   const textareaRef = useRef(null);
-  const bottomRef = useRef(null); // 用于自动滚动到底部
+  const scrollRef = useRef(null); // 滚动容器 ref
+  const bottomRef = useRef(null); // 底部锚点
   const longPressTimerRef = useRef(null);
   const isLongPress = useRef(false);
 
+  // 1. 初始化与动态高度计算 (最关键的一步)
   useEffect(() => {
     setMounted(true);
+    
+    // 初始化配置
     if (typeof window !== 'undefined') {
       setApiKey(localStorage.getItem('tr_api_key') || '');
       setModel(localStorage.getItem('tr_model') || 'deepseek-v3.2');
@@ -68,21 +73,34 @@ export default function TranslatorUI() {
         rec.onend = () => setIsListening(false);
         recognitionRef.current = rec;
       }
+
+      // --- 强制计算视口高度，解决移动端底部遮挡问题 ---
+      const handleResize = () => {
+        setViewportHeight(`${window.innerHeight}px`);
+      };
+      
+      // 初始设置
+      handleResize();
+      
+      // 监听窗口变化（如键盘弹出、旋转）
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
     }
   }, []);
 
-  // 结果更新时滚动到底部
+  // 2. 自动滚动到底部
   useEffect(() => {
-    if (bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [results, loading]);
+  }, [results, loading, quickReplies]);
 
-  // 输入框自适应高度
+  // 3. 输入框自适应高度
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
+      // 限制最大高度，防止撑破布局
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
     }
   }, [input]);
   
@@ -91,7 +109,7 @@ export default function TranslatorUI() {
     if (!textToTranslate.trim() || loading) return;
 
     setLoading(true);
-    setResults([]); // 清空旧结果，显示加载状态
+    setResults([]); 
     setQuickReplies([]);
 
     try {
@@ -154,9 +172,7 @@ export default function TranslatorUI() {
   };
 
   const copyToClipboard = (text) => {
-    if (typeof navigator !== 'undefined') {
-      navigator.clipboard.writeText(text.replace(/\*/g, ''));
-    }
+    if (typeof navigator !== 'undefined') navigator.clipboard.writeText(text.replace(/\*/g, ''));
   };
 
   if (!mounted) return null;
@@ -165,132 +181,93 @@ export default function TranslatorUI() {
   const currentTarget = ALL_LANGUAGES.find(l => l.code === targetLang) || ALL_LANGUAGES[2];
 
   return (
-    <div className="min-h-screen w-full bg-[#f8fafc] text-slate-900 font-sans relative">
+    <>
       <Head>
         <title>AI 翻译官 Pro</title>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
       </Head>
 
-      {/* --- 顶部固定栏 --- */}
-      <header className="fixed top-0 left-0 right-0 bg-white/80 backdrop-blur-md border-b border-slate-200 z-40 px-6 py-4 flex justify-between items-center shadow-sm">
-        <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_10px_#22c55e]" />
-          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Pro Engine</span>
-        </div>
-        <div className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">V3.2 Active</div>
-      </header>
+      {/* 
+         布局容器：
+         1. style={{ height: viewportHeight }} -> 强制设为浏览器可见区域的高度
+         2. flex flex-col -> 垂直弹性布局
+         3. overflow-hidden -> 禁止整个页面滚动，只让中间部分滚
+      */}
+      <div 
+        style={{ height: viewportHeight }} 
+        className="w-full bg-[#f8fafc] text-slate-900 font-sans flex flex-col overflow-hidden relative"
+      >
+        
+        {/* --- 1. 顶部栏 (固定高度) --- */}
+        <header className="shrink-0 h-14 bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 flex justify-between items-center z-10">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pro v3.2</span>
+          </div>
+          <div className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
+             Connected
+          </div>
+        </header>
 
-      {/* --- 主要内容区 (Padding-bottom 很大，防止被固定底栏遮挡) --- */}
-      <main className="w-full max-w-3xl mx-auto pt-20 pb-72 px-4 space-y-6">
-        <AnimatePresence>
+        {/* --- 2. 核心内容区 (占据剩余空间，可滚动) --- */}
+        <main ref={scrollRef} className="flex-1 w-full overflow-y-auto p-4 space-y-4 custom-scrollbar">
+          
+          {/* 空状态 */}
           {results.length === 0 && !loading && (
-            <motion.div initial={{opacity:0}} animate={{opacity:0.3}} className="flex flex-col items-center justify-center pt-32 grayscale">
-              <BrainCircuit size={80} strokeWidth={1.2} />
-              <p className="mt-6 font-black uppercase tracking-[0.3em] text-xs text-slate-400">Ready to Translate</p>
-            </motion.div>
+            <div className="flex flex-col items-center justify-center h-full pb-20 opacity-30">
+              <BrainCircuit size={80} strokeWidth={1} />
+              <p className="mt-4 font-black uppercase tracking-[0.2em] text-xs">Waiting for Input</p>
+            </div>
           )}
 
-          {results.map((item, idx) => (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }} 
-              animate={{ opacity: 1, scale: 1, y: 0 }} 
-              key={idx} 
-              className={`p-6 rounded-[2rem] shadow-sm border transition-all ${item.recommended ? 'bg-white border-indigo-200 shadow-xl shadow-indigo-100/50' : 'bg-white border-slate-100'}`}
-            >
-              <div className="flex justify-between items-center mb-4">
-                <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wide ${item.recommended ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                  {item.label}
-                </span>
-                {item.recommended && (
-                  <div className="flex items-center gap-1 text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
-                    <Star size={10} fill="currentColor" /> BEST
-                  </div>
-                )}
-              </div>
-              <p className="text-lg font-medium text-slate-800 leading-relaxed whitespace-pre-wrap select-text">
-                {item.translation}
-              </p>
-              <div className="flex justify-end gap-3 mt-5 pt-4 border-t border-slate-50">
-                <button onClick={() => speak(item.translation)} className="p-2.5 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-500 transition-colors">
-                  <Volume2 size={18}/>
-                </button>
-                <button onClick={() => copyToClipboard(item.translation)} className="p-2.5 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-500 transition-colors">
-                  <Copy size={18}/>
-                </button>
-              </div>
-            </motion.div>
-          ))}
+          {/* 结果列表 */}
+          <AnimatePresence>
+            {results.map((item, idx) => (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} 
+                key={idx} 
+                className={`p-5 rounded-[1.5rem] border shadow-sm ${item.recommended ? 'bg-white border-indigo-200 ring-2 ring-indigo-50' : 'bg-white border-slate-100'}`}
+              >
+                <div className="flex justify-between items-center mb-3">
+                  <span className={`text-[9px] font-black px-2 py-1 rounded-full uppercase ${item.recommended ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                    {item.label}
+                  </span>
+                  {item.recommended && <Star size={12} className="text-indigo-500" fill="currentColor"/>}
+                </div>
+                <p className="text-lg font-medium text-slate-800 leading-relaxed whitespace-pre-wrap select-text">
+                  {item.translation}
+                </p>
+                <div className="flex justify-end gap-3 mt-4 pt-3 border-t border-slate-50">
+                  <button onClick={() => speak(item.translation)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full"><Volume2 size={18}/></button>
+                  <button onClick={() => copyToClipboard(item.translation)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full"><Copy size={18}/></button>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
 
+          {/* 加载中 */}
           {loading && (
-            <div className="flex flex-col items-center justify-center py-12 gap-3">
-              <Loader2 size={36} className="animate-spin text-indigo-500" />
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Processing...</p>
+            <div className="flex flex-col items-center justify-center py-6 gap-2">
+              <Loader2 size={24} className="animate-spin text-indigo-500" />
+              <p className="text-[10px] font-bold text-slate-300 uppercase">Processing...</p>
             </div>
           )}
           
-          {/* 这是一个隐形的 div，用于确保滚动到底部 */}
-          <div ref={bottomRef} />
-        </AnimatePresence>
-      </main>
+          {/* 底部垫片，确保最后一条消息不贴边 */}
+          <div className="h-4" />
+        </main>
 
-      {/* --- 底部固定操作栏 (强制 z-50) --- */}
-      <footer className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-xl border-t border-slate-200 pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.08)]">
-        
-        {/* 联想词气泡 (悬浮在操作栏上方) */}
-        <AnimatePresence>
-          {quickReplies.length > 0 && (
-            <motion.div initial={{ opacity:0, y: 10 }} animate={{ opacity:1, y: 0 }} exit={{ opacity:0 }} className="absolute -top-12 left-0 right-0 h-10 px-4 flex gap-2 overflow-x-auto no-scrollbar pointer-events-auto">
-              {quickReplies.map((q, i) => (
-                <button key={i} onClick={() => { setInput(q); handleTranslate(q); }} className="whitespace-nowrap px-4 h-8 bg-indigo-600 text-white rounded-full text-xs font-bold shadow-lg shadow-indigo-200 active:scale-95 transition-all flex items-center gap-1.5 border border-indigo-500">
-                  <Sparkles size={12}/> {q}
-                </button>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <div className="max-w-3xl mx-auto p-3 space-y-3">
+        {/* --- 3. 底部操作区 (不使用 fixed，而是 flex item，绝对不会被遮挡) --- */}
+        <footer className="shrink-0 bg-white border-t border-slate-200 z-20 pb-safe shadow-[0_-5px_20px_rgba(0,0,0,0.03)]">
           
-          {/* 语言选择行 */}
-          <div className="bg-slate-50 p-1.5 rounded-2xl flex items-center gap-2 border border-slate-100">
-             <button 
-                onClick={() => setShowLangPicker(showLangPicker === 'src' ? null : 'src')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all ${showLangPicker === 'src' ? 'bg-white text-slate-800 shadow-sm border border-slate-200' : 'text-slate-500'}`}
-              >
-                {currentSource.label} <ChevronDown size={12} className={`transition-transform ${showLangPicker === 'src' ? 'rotate-180':''}`} />
-              </button>
-
-              <button 
-                onClick={() => { setSourceLang(targetLang); setTargetLang(sourceLang); }}
-                className="p-2 text-slate-400 bg-white rounded-lg border border-slate-200 shadow-sm active:rotate-180 transition-all"
-              >
-                <ArrowLeftRight size={14} />
-              </button>
-
-              <button 
-                onClick={() => setShowLangPicker(showLangPicker === 'tar' ? null : 'tar')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all ${showLangPicker === 'tar' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'text-slate-500'}`}
-              >
-                {currentTarget.label} <ChevronDown size={12} className={`transition-transform ${showLangPicker === 'tar' ? 'rotate-180':''}`} />
-              </button>
-          </div>
-
-          {/* 语言下拉面板 */}
+          {/* 联想词气泡 */}
           <AnimatePresence>
-            {showLangPicker && (
-              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                <div className="grid grid-cols-3 gap-2 p-2 bg-slate-100 rounded-xl mb-2">
-                  {ALL_LANGUAGES.map(lang => (
-                    <button 
-                      key={lang.code}
-                      onClick={() => {
-                        if (showLangPicker === 'src') setSourceLang(lang.code);
-                        else setTargetLang(lang.code);
-                        setShowLangPicker(null);
-                      }}
-                      className="py-2.5 text-[10px] font-bold bg-white border border-slate-200 rounded-lg shadow-sm active:bg-indigo-50"
-                    >
-                      {lang.label}
+            {quickReplies.length > 0 && (
+              <motion.div initial={{height:0}} animate={{height:'auto'}} className="overflow-hidden bg-slate-50">
+                <div className="px-4 py-2 flex gap-2 overflow-x-auto no-scrollbar">
+                  {quickReplies.map((q, i) => (
+                    <button key={i} onClick={() => { setInput(q); handleTranslate(q); }} className="whitespace-nowrap px-3 py-1.5 bg-white text-indigo-600 rounded-full text-xs font-bold border border-indigo-100 shadow-sm">
+                      {q}
                     </button>
                   ))}
                 </div>
@@ -298,124 +275,135 @@ export default function TranslatorUI() {
             )}
           </AnimatePresence>
 
-          {/* 核心输入区：[设置] + [输入框] + [发送/语音] */}
-          <div className="flex items-end gap-2">
-            <button 
-              onClick={() => setShowSettings(true)}
-              className="p-3.5 bg-slate-100 text-slate-500 rounded-[1.2rem] active:scale-95 transition-all"
-            >
-              <Settings size={20} />
-            </button>
-
-            <div className="relative flex-1">
-              <textarea 
-                ref={textareaRef}
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                placeholder={isListening ? "Listening..." : "输入文本..."}
-                rows={1}
-                className={`w-full bg-slate-100 rounded-[1.5rem] px-4 py-3.5 pr-10 text-base font-medium outline-none resize-none max-h-32 transition-all focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-100 border border-transparent ${isListening ? 'bg-rose-50 ring-2 ring-rose-200' : ''}`}
-              />
-              {input && (
-                <button onClick={() => setInput('')} className="absolute right-3 bottom-3 text-slate-300 p-1 bg-slate-100 rounded-full hover:text-slate-500">
-                  <X size={14} />
+          <div className="p-3 space-y-3 max-w-3xl mx-auto">
+            
+            {/* 语言切换栏 */}
+            <div className="flex items-center gap-2">
+               <button 
+                  onClick={() => setShowLangPicker(showLangPicker === 'src' ? null : 'src')}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold flex justify-center items-center gap-1 transition-colors ${showLangPicker === 'src' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}
+                >
+                  {currentSource.label} <ChevronDown size={12}/>
                 </button>
-              )}
+                <button 
+                  onClick={() => { setSourceLang(targetLang); setTargetLang(sourceLang); }}
+                  className="p-2 bg-slate-50 text-slate-400 rounded-lg border border-slate-100"
+                >
+                  <ArrowLeftRight size={14} />
+                </button>
+                <button 
+                  onClick={() => setShowLangPicker(showLangPicker === 'tar' ? null : 'tar')}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold flex justify-center items-center gap-1 transition-colors ${showLangPicker === 'tar' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+                >
+                  {currentTarget.label} <ChevronDown size={12}/>
+                </button>
             </div>
 
-            <div className="shrink-0">
-              <AnimatePresence mode="wait">
+            {/* 语言选择面板 */}
+            <AnimatePresence>
+              {showLangPicker && (
+                <motion.div initial={{height:0}} animate={{height:'auto'}} exit={{height:0}} className="overflow-hidden">
+                  <div className="grid grid-cols-3 gap-2 p-2 bg-slate-50 rounded-xl mb-1">
+                    {ALL_LANGUAGES.map(lang => (
+                      <button 
+                        key={lang.code}
+                        onClick={() => {
+                          if (showLangPicker === 'src') setSourceLang(lang.code);
+                          else setTargetLang(lang.code);
+                          setShowLangPicker(null);
+                        }}
+                        className="py-2 text-[10px] font-bold bg-white border border-slate-200 rounded-lg shadow-sm"
+                      >
+                        {lang.label}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* 核心输入行 */}
+            <div className="flex items-end gap-2">
+              <button onClick={() => setShowSettings(true)} className="p-3 bg-slate-100 text-slate-500 rounded-xl">
+                <Settings size={20} />
+              </button>
+
+              <div className="relative flex-1">
+                <textarea 
+                  ref={textareaRef}
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  placeholder={isListening ? "正在聆听..." : "输入文本..."}
+                  rows={1}
+                  className={`w-full bg-slate-100 rounded-xl px-4 py-3 pr-10 text-sm font-medium outline-none resize-none max-h-32 transition-colors focus:bg-white focus:ring-2 focus:ring-indigo-500/10 ${isListening ? 'bg-rose-50 ring-2 ring-rose-100' : ''}`}
+                />
+                {input && <button onClick={() => setInput('')} className="absolute right-2 bottom-3 p-1 text-slate-300"><X size={14} /></button>}
+              </div>
+
+              <div className="shrink-0">
                 {input.trim() ? (
-                  <motion.button 
-                    key="send"
-                    initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.5, opacity: 0 }}
-                    onClick={() => handleTranslate()}
-                    disabled={loading}
-                    className="w-12 h-12 bg-indigo-600 text-white rounded-[1.2rem] flex items-center justify-center shadow-lg shadow-indigo-200 active:scale-90 transition-all"
-                  >
+                  <button onClick={() => handleTranslate()} disabled={loading} className="w-11 h-11 bg-indigo-600 text-white rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200 active:scale-95">
                     {loading ? <Loader2 className="animate-spin" size={20}/> : <Send size={20}/>}
-                  </motion.button>
+                  </button>
                 ) : (
-                  <motion.button 
-                    key="mic"
-                    initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.5, opacity: 0 }}
+                  <button 
                     onMouseDown={handleMicPressStart}
                     onMouseUp={handleMicPressEnd}
                     onTouchStart={handleMicPressStart}
                     onTouchEnd={handleMicPressEnd}
-                    className={`w-12 h-12 rounded-[1.2rem] flex items-center justify-center shadow-lg transition-all active:scale-90 ${isListening ? 'bg-rose-500 text-white animate-pulse shadow-rose-200' : 'bg-slate-800 text-white shadow-slate-300'}`}
+                    className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-lg active:scale-95 transition-colors ${isListening ? 'bg-rose-500 text-white animate-pulse' : 'bg-slate-800 text-white'}`}
                   >
-                    <Mic size={22} />
-                  </motion.button>
+                    <Mic size={20} />
+                  </button>
                 )}
-              </AnimatePresence>
+              </div>
             </div>
           </div>
-        </div>
-      </footer>
+        </footer>
 
-      {/* --- 设置抽屉 (高层级 z-100) --- */}
-      <AnimatePresence>
-        {showSettings && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end" onClick={() => setShowSettings(false)}>
-            <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: 'spring', damping: 25, stiffness: 300 }} className="w-full bg-white rounded-t-[2.5rem] p-6 pb-safe" onClick={e => e.stopPropagation()}>
-              <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6" />
-              <div className="flex justify-between items-center mb-6 px-2">
-                <h3 className="text-xl font-black text-slate-800 tracking-tight">配置中心</h3>
-                <button onClick={() => setShowSettings(false)} className="p-2 bg-slate-100 rounded-full text-slate-400"><X size={20} /></button>
-              </div>
+        {/* --- 弹窗组件 --- */}
+        
+        {/* 设置面板 */}
+        <AnimatePresence>
+          {showSettings && (
+            <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 z-50 bg-black/60 flex items-end" onClick={()=>setShowSettings(false)}>
+              <motion.div initial={{y:'100%'}} animate={{y:0}} exit={{y:'100%'}} className="w-full bg-white rounded-t-3xl p-6 pb-10" onClick={e=>e.stopPropagation()}>
+                <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-6"/>
+                <h3 className="text-lg font-bold mb-4">系统设置</h3>
+                <div className="space-y-3">
+                  <input type="password" value={apiKey} onChange={e=>{setApiKey(e.target.value);localStorage.setItem('tr_api_key', e.target.value)}} placeholder="API Key" className="w-full p-3 bg-slate-50 rounded-xl text-sm outline-none border border-slate-100" />
+                  <input type="text" value={apiUrl} onChange={e=>{setApiUrl(e.target.value);localStorage.setItem('tr_api_url', e.target.value)}} placeholder="Host URL" className="w-full p-3 bg-slate-50 rounded-xl text-sm outline-none border border-slate-100" />
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-              <div className="space-y-4">
-                <div className="p-5 bg-slate-900 rounded-[2rem] text-white space-y-4 shadow-xl">
-                  <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2 px-1">API Key</label>
-                    <input type="password" value={apiKey} onChange={e => {setApiKey(e.target.value); localStorage.setItem('tr_api_key', e.target.value)}} placeholder="sk-..." className="w-full bg-white/10 border border-white/5 rounded-xl p-3 text-sm font-mono outline-none focus:bg-white/20 transition-colors" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2 px-1">Host URL</label>
-                    <input type="text" value={apiUrl} onChange={e => {setApiUrl(e.target.value); localStorage.setItem('tr_api_url', e.target.value)}} placeholder="https://..." className="w-full bg-white/10 border border-white/5 rounded-xl p-3 text-sm font-mono outline-none focus:bg-white/20 transition-colors" />
-                  </div>
-                  <div className="pt-2">
-                     <select value={model} onChange={e => {setModel(e.target.value); localStorage.setItem('tr_model', e.target.value)}} className="w-full bg-indigo-600 border-0 rounded-xl p-3 text-sm font-bold outline-none text-center">
-                      <option value="deepseek-v3.2">DeepSeek V3.2</option>
-                      <option value="qwen3-235b">Qwen3 235B</option>
-                    </select>
-                  </div>
+        {/* 语音语言选择 */}
+        <AnimatePresence>
+          {showMicLangMenu && (
+            <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-8" onClick={()=>setShowMicLangMenu(false)}>
+              <div className="bg-white rounded-2xl p-4 w-full max-w-xs shadow-2xl" onClick={e=>e.stopPropagation()}>
+                <h4 className="text-xs font-bold text-slate-400 mb-3 text-center uppercase">选择识别语言</h4>
+                <div className="grid gap-2">
+                  {RECOGNITION_LANGUAGES.map(lang => (
+                    <button key={lang.code} onClick={() => {setSourceLang(lang.code); setShowMicLangMenu(false)}} className={`p-3 rounded-xl text-sm font-bold ${sourceLang === lang.code ? 'bg-indigo-600 text-white' : 'bg-slate-50'}`}>
+                      {lang.label}
+                    </button>
+                  ))}
                 </div>
               </div>
-              <div className="mt-8 text-center text-[10px] font-black text-slate-300 uppercase tracking-[0.3em]">System V3.2.1</div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
 
-      {/* --- 长按麦克风菜单 --- */}
-      <AnimatePresence>
-        {showMicLangMenu && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[110] bg-black/50 backdrop-blur-sm flex items-center justify-center p-8" onClick={() => setShowMicLangMenu(false)}>
-            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="w-full max-w-xs bg-white rounded-[2rem] p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
-              <h4 className="text-xs font-black text-slate-400 mb-4 px-2 uppercase tracking-widest text-center">Select Voice Language</h4>
-              <div className="grid grid-cols-1 gap-2">
-                {RECOGNITION_LANGUAGES.map(lang => (
-                  <button 
-                    key={lang.code}
-                    onClick={() => { setSourceLang(lang.code); setShowMicLangMenu(false); }}
-                    className={`w-full p-4 rounded-xl text-sm font-bold transition-all ${sourceLang === lang.code ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-slate-50 text-slate-600'}`}
-                  >
-                    {lang.label}
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      </div>
 
       <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 0px; display: none; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
       `}</style>
-    </div>
+    </>
   );
 }
