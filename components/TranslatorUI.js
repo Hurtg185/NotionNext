@@ -187,18 +187,33 @@ export default function TranslatorUI() {
         
         if (delimiterIndex !== -1) {
           // 1. 分离流式文本和最终JSON
-          const finalJsonPart = buffer.substring(delimiterIndex + streamDelimiter.length);
-          const finalData = JSON.parse(finalJsonPart);
-          
-          if (finalData.parsed && Array.isArray(finalData.parsed)) {
-            // 更新最终结果
-            const recommended = finalData.parsed.find(r => r.recommended) || finalData.parsed[0];
-            setStreamingResult(recommended);
-            setFinalResults(finalData.parsed);
+          // 这里的 buffer 包含：[...流式文本...] + [Delimiter] + [JSON]
+          // 我们取 Delimiter 之前的部分作为最后的流式文本，防止画面跳变
+          const finalStreamText = buffer.substring(0, delimiterIndex);
+          setStreamingResult(prev => ({ ...prev, translation: finalStreamText }));
 
-            if (autoSpeak && recommended) {
-              speak(recommended.translation);
-            }
+          const finalJsonPart = buffer.substring(delimiterIndex + streamDelimiter.length);
+          
+          try {
+              const finalData = JSON.parse(finalJsonPart);
+              
+              if (finalData.parsed && Array.isArray(finalData.parsed) && finalData.parsed.length > 0) {
+                // 更新最终结果
+                const recommended = finalData.parsed.find(r => r.recommended) || finalData.parsed[0];
+                
+                // 关键修正：确保只有当解析结果有效时才替换流式结果
+                if (recommended.translation) {
+                    setStreamingResult(recommended);
+                    setFinalResults(finalData.parsed);
+
+                    if (autoSpeak) {
+                      speak(recommended.translation);
+                    }
+                }
+              }
+          } catch (jsonError) {
+              console.error("JSON Parse Error", jsonError);
+              // 如果 JSON 解析失败，保留流式结果，不置空
           }
           break; 
         } else {
