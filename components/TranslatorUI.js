@@ -1,754 +1,485 @@
-import React, { useState, useEffect, useRef } from 'react';
+
+// pages/translator.js
+import React, { useState, useRef, useEffect } from 'react';
+import Head from 'next/head';
 import { 
-  DndContext, 
-  DragOverlay, 
-  KeyboardSensor, 
-  PointerSensor, 
-  useSensor, 
-  useSensors, 
-  closestCenter, 
-  defaultDropAnimationSideEffects 
-} from '@dnd-kit/core';
-import { 
-  arrayMove, 
-  SortableContext, 
-  sortableKeyboardCoordinates, 
-  useSortable, 
-  rectSortingStrategy 
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import confetti from 'canvas-confetti';
-import { 
-  FaVolumeUp, 
-  FaCheck, 
-  FaTimes, 
-  FaArrowRight, 
-  FaLightbulb, 
-  FaSpinner, 
-  FaRedo,
-  FaRobot 
-} from 'react-icons/fa';
-import { pinyin } from 'pinyin-pro';
+  ArrowUpDown, 
+  ArrowUp, 
+  Mic, 
+  Copy, 
+  Volume2, 
+  Settings, 
+  Check,
+  ChevronDown,
+  ChevronUp,
+  X,
+  Loader2
+} from 'lucide-react';
 
-// =================================================================================
-// 1. IndexedDB 缓存
-// =================================================================================
-const DB_NAME = 'LessonCacheDB';
-const STORE_NAME = 'tts_audio';
+// 语言配置
+const LANGUAGES = [
+  { code: 'zh', name: '中文', flag: '🇨🇳' },
+  { code: 'my', name: '缅甸语', flag: '🇲🇲' },
+  { code: 'en', name: 'English', flag: '🇺🇸' },
+  { code: 'th', name: '泰语', flag: '🇹🇭' },
+  { code: 'ja', name: '日语', flag: '🇯🇵' },
+  { code: 'ko', name: '韩语', flag: '🇰🇷' },
+];
 
-const idb = {
-  db: null,
-  async init() {
-    if (typeof window === 'undefined' || this.db) return;
-    return new Promise((resolve) => {
-      const request = indexedDB.open(DB_NAME, 1);
-      request.onupgradeneeded = (e) => {
-        const db = e.target.result;
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-          db.createObjectStore(STORE_NAME);
-        }
-      };
-      request.onsuccess = (e) => {
-        this.db = e.target.result;
-        resolve();
-      };
-    });
-  },
-  async get(key) {
-    await this.init();
-    if (!this.db) return null;
-    return new Promise((resolve) => {
-      const tx = this.db.transaction(STORE_NAME, 'readonly');
-      const req = tx.objectStore(STORE_NAME).get(key);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => resolve(null);
-    });
-  },
-  async set(key, blob) {
-    await this.init();
-    if (!this.db) return;
-    const tx = this.db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).put(blob, key);
-  }
-};
+// 模型配置
+const MODELS = [
+  { id: 'gpt-4o', name: 'GPT-4o' },
+  { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
+  { id: 'gpt-4-turbo', name: 'GPT-4 Turbo' },
+  { id: 'gpt-3.5-turbo', name: 'GPT-3.5' },
+];
 
-// =================================================================================
-// 2. 音效与TTS控制器
-// =================================================================================
-
-const playSfx = (type) => {
-  const paths = {
-    click: '/sounds/click.mp3',
-    correct: '/sounds/correct.mp3',
-    wrong: '/sounds/incorrect.mp3',
-    switch: '/sounds/switch-card.mp3'
-  };
-  const path = paths[type];
-  if (!path) return;
+export default function TranslatorPage() {
+  // --- 状态管理 ---
+  const [inputText, setInputText] = useState('');
+  const [sourceLang, setSourceLang] = useState('zh');
+  const [targetLang, setTargetLang] = useState('my');
   
-  const audio = new Audio(path);
-  audio.volume = 1.0;
-  audio.play().catch(() => {});
-};
+  const [translations, setTranslations] = useState([]);
+  
+  const [isLoading, setIsLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [showMoreLangs, setShowMoreLangs] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [copiedId, setCopiedId] = useState(null);
+  const [voiceLang, setVoiceLang] = useState('zh');
+  const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
+  
+  const [settings, setSettings] = useState({
+    apiEndpoint: 'https://api.openai.com/v1',
+    apiKey: '',
+    model: 'gpt-4o-mini',
+    temperature: 0.3,
+    autoSendVoice: true,
+  });
 
-const vibrate = (pattern) => {
-  if (typeof navigator !== 'undefined' && navigator.vibrate) {
-    navigator.vibrate(pattern);
-  }
-};
+  const textareaRef = useRef(null);
+  const resultsRef = useRef(null);
+  const recognitionRef = useRef(null);
 
-const audioController = {
-  currentAudio: null,
-  latestRequestId: 0,
-  activeUrls: [],
-
-  stop() {
-    this.latestRequestId++;
-    if (this.currentAudio) {
-      this.currentAudio.pause();
-      this.currentAudio = null;
+  // --- 初始化 ---
+  useEffect(() => {
+    const saved = localStorage.getItem('translator-settings');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      setSettings(parsed);
+      setSelectedModel(parsed.model || 'gpt-4o-mini');
     }
-    this.activeUrls.forEach(url => URL.revokeObjectURL(url));
-    this.activeUrls = [];
-  },
+  }, []);
 
-  async playSingle(text, lang = 'zh', speed = 1.0) {
-    this.stop(); 
-    if (!text) return;
-
-    const voice = lang === 'my' ? 'my-MM-ThihaNeural' : 'zh-CN-XiaoyouNeural';
-    const cacheKey = `${voice}-${text}`;
-
-    try {
-      let blob = await idb.get(cacheKey);
-      if (!blob) {
-        const res = await fetch(`/api/tts?t=${encodeURIComponent(text)}&v=${voice}`);
-        blob = await res.blob();
-        await idb.set(cacheKey, blob);
-      }
-      const url = URL.createObjectURL(blob);
-      this.activeUrls.push(url);
-      
-      const audio = new Audio(url);
-      if (lang !== 'my') audio.playbackRate = speed;
-      
-      this.currentAudio = audio;
-      audio.play().catch(() => {});
-    } catch (e) {
-      console.error(e);
+  // 监听输入框高度自动变化 (核心体验优化)
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + 'px';
     }
-  },
+  }, [inputText]);
 
-  async playMixed(text, speed = 1.0, onStart, onEnd) {
-    this.stop();
-    if (!text) return;
+  // --- 辅助函数 ---
+  const saveSettings = (newSettings) => {
+    setSettings(newSettings);
+    localStorage.setItem('translator-settings', JSON.stringify(newSettings));
+  };
+
+  const swapLanguages = () => {
+    setSourceLang(targetLang);
+    setTargetLang(sourceLang);
+  };
+
+  const getLangName = (code) => LANGUAGES.find(l => l.code === code)?.name || code;
+  const getLangFlag = (code) => LANGUAGES.find(l => l.code === code)?.flag || '🌐';
+
+  // --- 核心功能: 翻译 ---
+  const handleTranslate = async () => {
+    if (!inputText.trim() || isLoading) return;
+
+    setIsLoading(true);
     
-    const reqId = this.latestRequestId;
-    onStart?.();
-
-    const regex = /([\u4e00-\u9fa5]+|[\u1000-\u109F\s]+|[a-zA-Z0-9\s]+)/g;
-    const segments = text.match(regex) || [text];
-
     try {
-      const queue = [];
-      for (const seg of segments) {
-        if (!seg.trim()) continue;
-        const isMy = /[\u1000-\u109F]/.test(seg);
-        const voice = isMy ? 'my-MM-ThihaNeural' : 'zh-CN-XiaoyouNeural';
-        
-        queue.push(async () => {
-          const cacheKey = `${voice}-${seg}`;
-          let blob = await idb.get(cacheKey);
-          if (!blob) {
-            const res = await fetch(`/api/tts?t=${encodeURIComponent(seg)}&v=${voice}`);
-            blob = await res.blob();
-            await idb.set(cacheKey, blob);
-          }
-          const url = URL.createObjectURL(blob);
-          this.activeUrls.push(url);
-          const audio = new Audio(url);
-          if (!isMy) audio.playbackRate = speed;
-          return audio;
-        });
+      const response = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: inputText,
+          sourceLang: sourceLang, 
+          targetLang: targetLang,
+          customConfig: {
+            baseUrl: settings.apiEndpoint,
+            apiKey: settings.apiKey,
+            model: selectedModel,
+          },
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || data.details || '请求失败');
       }
 
-      const playNext = async (index) => {
-        if (reqId !== this.latestRequestId) return;
+      if (data.translations) {
+        const newResult = {
+          sourceText: data.sourceText,
+          sourceLang: getLangName(data.sourceLang),
+          targetLang: getLangName(data.targetLang),
+          results: data.translations
+        };
+
+        setTranslations(prev => [newResult, ...prev]);
+        setInputText(''); // 清空输入框
         
-        if (index >= queue.length) {
-          onEnd?.();
-          return;
+        // 滚动到顶部查看新结果
+        if (resultsRef.current) {
+          setTimeout(() => {
+            resultsRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+          }, 100);
         }
-        
-        const audio = await queue[index]();
-        if (reqId !== this.latestRequestId) return;
-        
-        this.currentAudio = audio;
-        audio.onended = () => playNext(index + 1);
-        audio.play().catch(() => playNext(index + 1));
-      };
-
-      playNext(0);
-    } catch (e) {
-      console.error(e);
-      onEnd?.();
+      }
+    } catch (error) {
+      console.error('Translation error:', error);
+      alert(`翻译出错: ${error.message}`);
+    } finally {
+      setIsLoading(false);
     }
-  }
-};
+  };
 
-// =================================================================================
-// 3. 样式表 (CSS-in-JS)
-// =================================================================================
-const styles = `
-.pxt-container {
-  font-family: "Padauk", "Noto Sans SC", sans-serif;
-  position: absolute; inset: 0;
-  display: flex; flex-direction: column;
-  background: #f8fafc;
-  overflow: hidden;
-}
+  // --- 核心功能: 语音识别 ---
+  const toggleRecording = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('您的浏览器不支持语音识别');
+      return;
+    }
 
-.pxt-header {
-  flex-shrink: 0;
-  padding: 40px 20px 0px; 
-  display: flex; justify-content: center;
-  margin-bottom: 10px;
-}
-.scene-wrapper {
-  width: 100%; max-width: 600px;
-  display: flex; 
-  align-items: flex-end; 
-  gap: 10px;
-}
-.teacher-img {
-  height: 240px; 
-  width: auto;
-  object-fit: contain;
-  mix-blend-mode: multiply;
-  flex-shrink: 0;
-  margin-left: -10px;
-}
-.bubble-box {
-  flex: 1; background: #fff;
-  border-radius: 20px 20px 20px 4px;
-  padding: 16px;
-  border: 2px solid #e2e8f0;
-  position: relative;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.03);
-  margin-bottom: 40px; 
-}
-.bubble-tail {
-  position: absolute; 
-  bottom: 15px; left: -11px;
-  width: 0; height: 0;
-  border-top: 10px solid transparent;
-  border-bottom: 10px solid transparent;
-  border-right: 12px solid #e2e8f0;
-}
-.bubble-tail::after {
-  content: ''; position: absolute;
-  top: -7px; left: 3px;
-  border-top: 7px solid transparent;
-  border-bottom: 7px solid transparent;
-  border-right: 9px solid #fff;
-}
-.question-img-small {
-  width: 60px; height: 60px;
-  object-fit: cover; border-radius: 8px;
-  margin-right: 10px; float: left;
-  border: 1px solid #f1f5f9;
-}
+    if (isRecording) {
+      recognitionRef.current?.stop();
+      setIsRecording(false);
+      return;
+    }
 
-.pxt-scroll-body {
-  flex: 1; overflow-y: auto;
-  padding: 0 16px 220px; 
-  display: flex; flex-direction: column; align-items: center;
-}
+    const recognition = new SpeechRecognition();
+    const langMap = { 'zh': 'zh-CN', 'my': 'my-MM', 'en': 'en-US', 'th': 'th-TH' };
+    recognition.lang = langMap[voiceLang] || 'zh-CN';
+    recognition.continuous = false;
+    recognition.interimResults = true;
 
-.sort-area {
-  width: 100%; max-width: 600px;
-  min-height: 120px;
-  background: #fff;
-  border: 2px dashed #cbd5e1;
-  border-radius: 16px;
-  padding: 12px;
-  display: flex; flex-wrap: wrap; gap: 8px;
-  align-content: flex-start;
-  margin-bottom: 24px;
-  transition: all 0.3s ease;
-}
-.sort-area.active { border-color: #3b82f6; background: #eff6ff; border-style: solid; }
-.sort-area.error { border-color: #fca5a5; background: #fef2f2; border-style: solid; }
-.sort-area.success { border-color: #86efac; background: #f0fdf4; border-style: solid; }
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map(result => result[0].transcript)
+        .join('');
+      setInputText(transcript);
+      
+      if (event.results[0].isFinal && settings.autoSendVoice) {
+        setTimeout(() => {
+           triggerTranslateWithText(transcript);
+        }, 500);
+      }
+    };
 
-.pool-area {
-  width: 100%; max-width: 600px;
-  display: flex; flex-wrap: wrap; 
-  justify-content: center; 
-  gap: 10px;
-}
+    recognition.onend = () => setIsRecording(false);
+    recognition.onerror = () => setIsRecording(false);
 
-.word-card {
-  touch-action: none;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-bottom: 3px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 6px 14px;
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: #334155;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  user-select: none;
-  cursor: grab;
-  transition: all 0.1s;
-  min-width: 50px;
-}
-.word-card:active { transform: translateY(2px); border-bottom-width: 1px; margin-top: 2px; }
-.word-card.in-pool { background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
-.word-card.dragging { opacity: 0.3; }
-.word-card.overlay { 
-  transform: scale(1.1) rotate(2deg); 
-  box-shadow: 0 10px 25px rgba(0,0,0,0.15); 
-  z-index: 999; border-color: #3b82f6; background: #fff;
-}
-.pinyin-sub { font-size: 0.75rem; color: #94a3b8; font-weight: 500; margin-bottom: 0px; line-height: 1.2; }
+    recognition.start();
+    recognitionRef.current = recognition;
+    setIsRecording(true);
+  };
 
-/* 提交按钮上移 */
-.footer-bar {
-  position: absolute; bottom: 0; left: 0; right: 0;
-  padding: 20px 20px calc(50px + env(safe-area-inset-bottom));
-  background: #fff;
-  border-top: 1px solid #f1f5f9;
-  display: flex; justify-content: center;
-  z-index: 50;
-  box-shadow: 0 -4px 20px rgba(0,0,0,0.02);
-}
-.check-btn {
-  width: 100%; max-width: 600px;
-  background: #58cc02; color: white;
-  padding: 15px; border-radius: 16px;
-  font-size: 1.1rem; font-weight: 800; text-transform: uppercase;
-  box-shadow: 0 4px 0 #46a302;
-  border: none;
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  transition: all 0.1s;
-}
-.check-btn:active { transform: translateY(4px); box-shadow: none; }
-.check-btn:disabled { background: #e5e7eb; color: #9ca3af; box-shadow: none; transform: none; }
+  const triggerTranslateWithText = async (text) => {
+    if (!text || !text.trim()) return;
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: text,
+          sourceLang: sourceLang, 
+          targetLang: targetLang,
+          customConfig: {
+            baseUrl: settings.apiEndpoint,
+            apiKey: settings.apiKey,
+            model: selectedModel,
+          },
+        }),
+      });
+      const data = await response.json();
+      if (data.translations) {
+        setTranslations(prev => [{
+          sourceText: data.sourceText,
+          sourceLang: getLangName(data.sourceLang),
+          targetLang: getLangName(data.targetLang),
+          results: data.translations
+        }, ...prev]);
+        setInputText('');
+      }
+    } catch (e) { console.error(e); } 
+    finally { setIsLoading(false); }
+  };
 
-.result-sheet {
-  position: absolute; bottom: 0; left: 0; right: 0;
-  background: white;
-  border-radius: 24px 24px 0 0;
-  padding: 24px 24px calc(40px + env(safe-area-inset-bottom));
-  box-shadow: 0 -10px 40px rgba(0,0,0,0.15);
-  transform: translateY(110%);
-  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  z-index: 100;
-  max-height: 85vh; overflow-y: auto;
-  display: flex; flex-direction: column; gap: 12px;
-}
-.result-sheet.correct { background: #dcfce7; color: #166534; }
-.result-sheet.wrong { background: #fee2e2; color: #991b1b; }
-.result-sheet.open { transform: translateY(0); }
+  // --- 核心功能: 复制 & 朗读 ---
+  const copyText = async (text, id) => {
+    await navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
-.sheet-header {
-  display: flex; align-items: center; gap: 10px;
-  font-size: 1.4rem; font-weight: 800; margin-bottom: 8px;
-}
-.correct-answer-box {
-  background: #fff; padding: 14px; border-radius: 12px;
-  margin-bottom: 12px; color: #475569; font-size: 1.1rem; font-weight: 600;
-  border: 1px solid rgba(0,0,0,0.05);
-}
-.explanation-box {
-  background: #fffbeb; border: 1px solid #fcd34d;
-  padding: 14px; border-radius: 12px;
-  margin-bottom: 12px; font-size: 0.95rem; color: #92400e;
-  line-height: 1.6;
-}
-.next-action-btn {
-  width: 100%; padding: 15px; border-radius: 16px; border: none;
-  font-size: 1.1rem; font-weight: 800; text-transform: uppercase;
-  color: white; cursor: pointer;
-  border-bottom: 4px solid rgba(0,0,0,0.2);
-}
-.next-action-btn:active { transform: translateY(4px); border-bottom-width: 0; }
-.btn-correct { background: #58cc02; }
-.btn-wrong { background: #ef4444; }
+  const speakText = (text, langName) => {
+    const utterance = new SpeechSynthesisUtterance(text);
+    let code = 'en-US';
+    if (langName.includes('中')) code = 'zh-CN';
+    else if (langName.includes('缅')) code = 'my-MM';
+    else if (langName.includes('英')) code = 'en-US';
+    
+    utterance.lang = code;
+    window.speechSynthesis.speak(utterance);
+  };
 
-/* AI 按钮样式 */
-.ai-btn {
-  background: #fff;
-  border: 2px solid #e5e7eb;
-  color: #4f46e5;
-  padding: 12px;
-  border-radius: 14px;
-  font-weight: 700;
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  width: 100%;
-  cursor: pointer;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-  transition: all 0.1s;
-}
-.ai-btn:active { background: #f9fafb; transform: scale(0.98); }
-`;
-
-// =================================================================================
-// 4. 组件：卡片内容
-// =================================================================================
-const CardContent = ({ text }) => {
-  const isPunc = /^[。，、？！；：“”‘’（）《》〈〉【】 .,!?;:"'()\[\]{}]+$/.test(text);
-  const py = !isPunc ? pinyin(text, { toneType: 'mark' }) : '';
+  const hasInput = inputText.trim().length > 0;
 
   return (
     <>
-      {py && <div className="pinyin-sub">{py}</div>}
-      <div>{text}</div>
+      <Head>
+        <title>中缅智译</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+      </Head>
+
+      {/* 
+        ★ 布局核心 (仿照 AiChatAssistant.js):
+        1. fixed inset-0: 占满全屏，脱离文档流
+        2. h-[100dvh]: 动态视口高度，解决移动端地址栏遮挡问题
+        3. flex flex-col: 垂直弹性布局
+        4. bg-white: 确保背景不透明
+      */}
+      <div className="fixed inset-0 z-[9999] h-[100dvh] flex flex-col bg-gray-50 text-slate-900 font-sans overflow-hidden">
+        
+        {/* 
+          1. 顶部 Header 
+          shrink-0: 禁止高度压缩
+        */}
+        <header className="shrink-0 bg-white border-b px-4 py-3 z-10 shadow-sm">
+          <div className="flex items-center justify-between max-w-lg mx-auto">
+            {/* 源语言 */}
+            <div className="flex-1 min-w-0">
+              <button
+                onClick={() => setShowMoreLangs(!showMoreLangs)}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 font-bold text-sm whitespace-nowrap"
+              >
+                {getLangFlag(sourceLang)} {getLangName(sourceLang)}
+                {showMoreLangs ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+            </div>
+
+            {/* 交换按钮 */}
+            <button
+              onClick={swapLanguages}
+              className="mx-2 p-2 rounded-full bg-gray-100 text-gray-500 hover:bg-blue-50 hover:text-blue-500 transition-all"
+            >
+              <ArrowUpDown size={18} />
+            </button>
+
+            {/* 目标语言 */}
+            <div className="flex-1 min-w-0 flex justify-end">
+              <button className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-green-50 text-green-600 font-bold text-sm whitespace-nowrap">
+                {getLangFlag(targetLang)} {getLangName(targetLang)}
+              </button>
+            </div>
+
+            {/* 设置按钮 */}
+            <button
+              onClick={() => setShowSettings(true)}
+              className="ml-3 p-2 text-gray-400 hover:text-gray-600"
+            >
+              <Settings size={20} />
+            </button>
+          </div>
+
+          {/* 更多语言下拉 */}
+          {showMoreLangs && (
+            <div className="absolute top-14 left-0 right-0 bg-white border-b shadow-lg z-20 p-4 animate-in slide-in-from-top-2">
+              <div className="max-w-lg mx-auto">
+                <p className="text-xs text-gray-400 mb-2 font-bold">源语言</p>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {LANGUAGES.map(lang => (
+                    <button
+                      key={`src-${lang.code}`}
+                      onClick={() => { setSourceLang(lang.code); setShowMoreLangs(false); }}
+                      className={`px-3 py-1.5 rounded-full text-xs border ${sourceLang === lang.code ? 'bg-blue-500 text-white' : 'bg-white'}`}
+                    >
+                      {lang.flag} {lang.name}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400 mb-2 font-bold">目标语言</p>
+                <div className="flex flex-wrap gap-2">
+                  {LANGUAGES.map(lang => (
+                    <button
+                      key={`tgt-${lang.code}`}
+                      onClick={() => { setTargetLang(lang.code); setShowMoreLangs(false); }}
+                      className={`px-3 py-1.5 rounded-full text-xs border ${targetLang === lang.code ? 'bg-green-500 text-white' : 'bg-white'}`}
+                    >
+                      {lang.flag} {lang.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </header>
+
+        {/* 
+          2. 中间滚动区域 (核心)
+          flex-1: 自动填满 Header 和 Footer 之间的所有空间
+          min-h-0: 允许 Flex 子项收缩，这是滚动生效的关键
+          overflow-y-auto: 只在这里滚动
+        */}
+        <main 
+          ref={resultsRef}
+          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-gray-50 scroll-smooth w-full"
+        >
+          <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
+            {translations.length === 0 ? (
+              <div className="flex flex-col items-center justify-center mt-20 opacity-50">
+                <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mb-4 text-4xl">🌏</div>
+                <p className="text-gray-500 font-medium">输入文字或语音开始翻译</p>
+              </div>
+            ) : (
+              translations.map((response, idx) => (
+                <div key={idx} className="animate-in slide-in-from-bottom-2 duration-300">
+                  {/* 源文本气泡 */}
+                  <div className="flex justify-end mb-2">
+                    <div className="bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-2 shadow-sm max-w-[85%]">
+                      <p className="text-sm">{response.sourceText}</p>
+                    </div>
+                  </div>
+                  
+                  {/* 翻译结果 */}
+                  <div className="space-y-3">
+                    {response.results.map((result, rIdx) => (
+                      <div key={rIdx} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-bold text-gray-400">{result.label}</span>
+                          {rIdx === 1 && <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100">推荐</span>}
+                        </div>
+                        <p className="text-gray-800 text-lg leading-relaxed font-medium">{result.translation}</p>
+                        <div className="mt-2 pt-2 border-t border-gray-50">
+                           <p className="text-[10px] text-gray-400 mb-0.5">回译:</p>
+                           <p className="text-blue-500 text-sm font-mono">{result.backTranslation}</p>
+                        </div>
+                        <div className="flex justify-end gap-3 mt-3">
+                          <button onClick={() => speakText(result.translation, response.targetLang)} className="p-1.5 text-gray-400 hover:text-blue-500"><Volume2 size={16} /></button>
+                          <button onClick={() => copyText(result.translation, `${idx}-${rIdx}`)} className="flex items-center gap-1 p-1.5 text-gray-400 hover:text-green-600 text-xs">
+                            {copiedId === `${idx}-${rIdx}` ? <Check size={16} /> : <Copy size={16} />}
+                            {copiedId === `${idx}-${rIdx}` ? "已复制" : "复制"}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="my-6 border-t border-gray-200/50 w-1/2 mx-auto"></div>
+                </div>
+              ))
+            )}
+            {/* 底部垫片 */}
+            <div className="h-4 w-full"></div>
+          </div>
+        </main>
+
+        {/* 
+          3. 底部固定区域
+          shrink-0: 确保不被压缩
+          pb-safe: 适配 iPhone 底部
+          无需 fixed 定位，因为它是 Flex 容器的最后一个元素，自然在底部
+        */}
+        <footer className="shrink-0 bg-white border-t border-gray-200 z-30 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+          <div className="max-w-lg mx-auto px-4 py-2 w-full">
+            {/* 工具栏 */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+                <span className="text-xs font-bold text-gray-400 flex-shrink-0">语音:</span>
+                {[{code:'zh', label:'中'}, {code:'my', label:'缅'}, {code:'en', label:'英'}].map(lang => (
+                  <button
+                    key={lang.code}
+                    onClick={() => setVoiceLang(lang.code)}
+                    className={`px-2 py-1 rounded text-xs font-bold ${voiceLang === lang.code ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-500'}`}
+                  >
+                    {lang.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-gray-400">模型:</span>
+                <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} className="text-xs bg-gray-100 border-none rounded py-1 pl-2 pr-6 text-gray-600 font-medium">
+                  {MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* 输入框主体 */}
+            <div className="flex items-end gap-2 w-full">
+              <div className="flex-1 bg-gray-100 rounded-2xl border border-transparent focus-within:border-blue-500 focus-within:bg-white transition-all">
+                <textarea
+                  ref={textareaRef}
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleTranslate();
+                    }
+                  }}
+                  placeholder="输入文字..."
+                  className="w-full px-4 py-3 bg-transparent resize-none focus:outline-none text-base text-gray-800 placeholder-gray-400"
+                  rows={1}
+                  style={{ maxHeight: '120px', minHeight: '48px' }}
+                />
+              </div>
+              <button
+                onClick={hasInput ? handleTranslate : toggleRecording}
+                disabled={isLoading}
+                className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-md ${
+                  isLoading ? 'bg-gray-300' : hasInput ? 'bg-blue-600 text-white' : isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-white text-gray-500 border border-gray-200'
+                }`}
+              >
+                {isLoading ? <Loader2 size={24} className="animate-spin" /> : hasInput ? <ArrowUp size={24} strokeWidth={3} /> : <Mic size={24} />}
+              </button>
+            </div>
+          </div>
+        </footer>
+
+        {/* 设置弹窗 */}
+        {showSettings && (
+          <div className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center animate-in fade-in">
+            <div className="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl animate-in slide-in-from-bottom-10 max-h-[80vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6 border-b pb-4">
+                <h2 className="text-lg font-bold text-gray-800">设置</h2>
+                <button onClick={() => setShowSettings(false)} className="p-2 bg-gray-100 rounded-full"><X size={20} /></button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">API 接口地址</label>
+                  <input type="text" value={settings.apiEndpoint} onChange={(e) => saveSettings({ ...settings, apiEndpoint: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">API Key</label>
+                  <input type="password" value={settings.apiKey} onChange={(e) => saveSettings({ ...settings, apiKey: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border rounded-lg text-sm" />
+                </div>
+                <div className="flex items-center justify-between pt-2">
+                  <span className="text-sm font-bold text-gray-700">语音自动发送</span>
+                  <button onClick={() => saveSettings({ ...settings, autoSendVoice: !settings.autoSendVoice })} className={`w-12 h-6 rounded-full transition-colors relative ${settings.autoSendVoice ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${settings.autoSendVoice ? 'left-7' : 'left-1'}`} />
+                  </button>
+                </div>
+              </div>
+              <button onClick={() => setShowSettings(false)} className="w-full mt-8 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-600/20">保存</button>
+            </div>
+          </div>
+        )}
+      </div>
     </>
   );
-};
-
-// =================================================================================
-// 5. 组件：排序项
-// =================================================================================
-const SortableItem = ({ id, content, isPool, onClick, isOverlay }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  if (isOverlay) {
-    return (
-      <div className="word-card overlay">
-         <CardContent text={content} />
-      </div>
-    );
-  }
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`word-card ${isDragging ? 'dragging' : ''} ${isPool ? 'in-pool' : ''}`}
-      {...attributes}
-      {...listeners}
-      onClick={onClick} 
-    >
-      <CardContent text={content} />
-    </div>
-  );
-};
-
-// =================================================================================
-// 6. 主逻辑组件
-// =================================================================================
-// ✅ 关键修改：接收 triggerAI 参数
-const PaiXuTi = ({ 
-  data, 
-  onCorrect, 
-  onNext, 
-  onWrong,
-  triggerAI 
-}) => {
-  const { 
-    title,       
-    items,       
-    correctOrder,
-    imageUrl     
-  } = data || {};
-
-  const [poolIds, setPoolIds] = useState([]);
-  const [answerIds, setAnswerIds] = useState([]);
-  const [activeId, setActiveId] = useState(null);
-  
-  const [gameStatus, setGameStatus] = useState('idle');
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [speed, setSpeed] = useState(1.0); 
-
-  // 初始化：加入干扰项逻辑
-  useEffect(() => {
-    if (!items) return;
-    
-    // items 数组包含了所有卡片（包括干扰项）
-    const allIds = items.map(i => i.id);
-    
-    // 打乱所有卡片
-    for (let i = allIds.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [allIds[i], allIds[j]] = [allIds[j], allIds[i]];
-    }
-
-    setPoolIds(allIds);
-    setAnswerIds([]);
-    setGameStatus('idle');
-    
-    audioController.stop(); 
-    let timer;
-    if (title) {
-        timer = setTimeout(() => {
-            audioController.playMixed(title, speed, () => setIsPlaying(true), () => setIsPlaying(false));
-        }, 800);
-    }
-
-    return () => {
-        if(timer) clearTimeout(timer);
-        audioController.stop();
-    };
-  }, [data]);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
-  const findItem = (id) => items.find(i => i.id === id);
-
-  const toggleSpeed = (e) => {
-      e.stopPropagation();
-      const newSpeed = speed === 1.0 ? 0.75 : 1.0;
-      setSpeed(newSpeed);
-  };
-
-  const handleCardClick = (id) => {
-    if (gameStatus === 'success') return;
-
-    playSfx('click');
-    vibrate(15);
-    
-    const item = findItem(id);
-    if (item) audioController.playSingle(item.text, 'zh', speed);
-
-    if (answerIds.includes(id)) {
-      setAnswerIds(prev => prev.filter(i => i !== id));
-      setPoolIds(prev => [...prev, id]);
-    } else {
-      setPoolIds(prev => prev.filter(i => i !== id));
-      setAnswerIds(prev => [...prev, id]);
-      if (gameStatus === 'error') setGameStatus('idle');
-    }
-  };
-
-  const handleDragEnd = (event) => {
-    const { active, over } = event;
-    if (over && active.id !== over.id) {
-      setAnswerIds((items) => {
-        const oldIndex = items.indexOf(active.id);
-        const newIndex = items.indexOf(over.id);
-        return arrayMove(items, oldIndex, newIndex);
-      });
-    }
-    setActiveId(null);
-    vibrate(15);
-  };
-
-  // 提交检查
-  const handleCheck = () => {
-    playSfx('click'); 
-
-    const currentStr = answerIds.join(',');
-    const correctStr = (correctOrder || []).join(',');
-
-    const isCorrect = currentStr === correctStr;
-
-    setTimeout(() => {
-        if (isCorrect) {
-          setGameStatus('success');
-          playSfx('correct');
-          confetti({ particleCount: 150, spread: 100, origin: { y: 0.65 } });
-          
-          const fullSentence = correctOrder.map(id => findItem(id).text).join('');
-          audioController.playSingle(fullSentence, 'zh', speed); 
-        } else {
-          setGameStatus('error');
-          playSfx('wrong');
-          vibrate([50, 50, 50]);
-        }
-    }, 150);
-  };
-
-  // 点击 Next
-  const handleContinue = () => {
-    playSfx('switch'); 
-    audioController.stop();
-    
-    if (gameStatus === 'success') {
-        onCorrect?.();
-    } else {
-        onWrong?.();
-    }
-  };
-
-  // ✅ 关键修复：AI 解析触发器逻辑
-  const handleAskAI = (e) => {
-    e.stopPropagation();
-    if (triggerAI) {
-      const userSentence = answerIds.map(id => findItem(id)?.text).join('');
-      const correctSentence = correctOrder.map(id => findItem(id)?.text).join('');
-
-      triggerAI({
-        grammarPoint: "连词成句/排序",
-        question: `请将这些词排成正确的句子：${items.map(i=>i.text).join(' / ')}`,
-        userChoice: userSentence,
-        correctAnswer: correctSentence // 可以把正确答案带给 AI 做参考
-      });
-    }
-  };
-
-  const activeItem = activeId ? findItem(activeId) : null;
-
-  return (
-    <div className="pxt-container">
-      <style>{styles}</style>
-      
-      <DndContext 
-        sensors={sensors} 
-        collisionDetection={closestCenter} 
-        onDragStart={({active}) => {
-          setActiveId(active.id);
-          vibrate(10);
-        }} 
-        onDragEnd={handleDragEnd}
-      >
-        {/* Header */}
-        <div className="pxt-header">
-          <div className="scene-wrapper">
-             <img 
-               src="https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/1765952194374.png" 
-               className="teacher-img" 
-               alt="Teacher" 
-             />
-             <div className="bubble-box" onClick={() => audioController.playMixed(title, speed)}>
-               <div className="bubble-tail" />
-               
-               <div className="flex items-start gap-2">
-                 {imageUrl && <img src={imageUrl} className="question-img-small" alt="Context" />}
-                 
-                 <span className="text-lg font-semibold text-slate-700 leading-snug flex-1 pt-1">
-                   {title || "Put the words in the correct order."}
-                 </span>
-                 
-                 <div className="flex flex-col gap-2 shrink-0">
-                    <button className={`p-2 rounded-full ${isPlaying ? 'text-blue-600' : 'text-slate-400'} bg-slate-50`}>
-                        {isPlaying ? <FaSpinner className="animate-spin" /> : <FaVolumeUp />}
-                    </button>
-                    <button 
-                        onClick={toggleSpeed}
-                        className="p-2 rounded-full text-slate-400 bg-slate-50 text-xs font-bold flex items-center justify-center border border-slate-200"
-                    >
-                        {speed}x
-                    </button>
-                 </div>
-               </div>
-             </div>
-          </div>
-        </div>
-
-        {/* 答题区 */}
-        <div className="pxt-scroll-body">
-          <div className={`sort-area ${gameStatus}`}>
-             <SortableContext items={answerIds} strategy={rectSortingStrategy}>
-               {answerIds.map(id => (
-                 <SortableItem 
-                   key={id} 
-                   id={id} 
-                   content={findItem(id)?.text} 
-                   onClick={() => handleCardClick(id)}
-                 />
-               ))}
-             </SortableContext>
-             
-             {answerIds.length === 0 && !activeId && (
-               <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm italic">
-                 Tap words below
-               </div>
-             )}
-          </div>
-
-          <div className="pool-area">
-             {poolIds.map(id => (
-               <div key={id} onClick={() => handleCardClick(id)}>
-                  <div className="word-card in-pool">
-                    <CardContent text={findItem(id)?.text} />
-                  </div>
-               </div>
-             ))}
-          </div>
-        </div>
-
-        <DragOverlay dropAnimation={{ sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0.5' } } }) }}>
-          {activeItem ? <SortableItem id={activeId} content={activeItem.text} isOverlay /> : null}
-        </DragOverlay>
-
-        {/* 底部按钮 */}
-        <div className="footer-bar">
-           {!isOrderedResult(gameStatus) && (
-             <button 
-                className="check-btn" 
-                onClick={handleCheck}
-                disabled={answerIds.length === 0}
-             >
-               CHECK
-             </button>
-           )}
-        </div>
-
-        {/* 结果弹层 */}
-        <div className={`result-sheet ${isOrderedResult(gameStatus) ? 'open' : ''} ${gameStatus === 'success' ? 'correct' : 'wrong'}`}>
-           {gameStatus === 'success' && (
-             <>
-               <div className="sheet-header">
-                 <FaCheck /> Excellent!
-               </div>
-               <button className="next-action-btn btn-correct" onClick={handleContinue}>
-                 CONTINUE <FaArrowRight style={{marginLeft:8}} />
-               </button>
-             </>
-           )}
-
-           {gameStatus === 'error' && (
-             <>
-               <div className="sheet-header">
-                 <FaTimes /> Incorrect
-               </div>
-               
-               <div className="mb-2 text-sm font-bold opacity-80">Correct Answer:</div>
-               <div className="correct-answer-box">
-                  {correctOrder?.map(id => findItem(id)?.text).join('')}
-               </div>
-
-               {/* ✅ 已删除 explanation 显示块 */}
-
-               {/* ✅ 修复: AI 按钮触发 */}
-               <button className="ai-btn" onClick={handleAskAI}>
-                   <FaRobot size={18} />
-                   <span>AI 老师解析</span>
-               </button>
-
-               <button className="next-action-btn btn-wrong" onClick={handleContinue}>
-                 GOT IT <FaRedo style={{marginLeft:8, fontSize: '0.9em'}} />
-               </button>
-             </>
-           )}
-        </div>
-
-      </DndContext>
-    </div>
-  );
-};
-
-function isOrderedResult(status) {
-  return status === 'success' || status === 'error';
 }
-
-export default PaiXuTi;
