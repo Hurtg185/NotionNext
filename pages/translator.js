@@ -7,7 +7,7 @@ import dynamic from 'next/dynamic';
 // 2. 使用 dynamic 动态引入组件，并强制关闭 SSR (服务端渲染)
 // 这样 Next.js 在构建时就会跳过这个组件，不再报错 "self is not defined"
 const TranslatorChat = dynamic(
-  () => import('../components/Translator'),
+  () => import('../components/TranslatorUI'),
   { 
     ssr: false, // 关键配置：禁止服务端渲染
     loading: () => (
