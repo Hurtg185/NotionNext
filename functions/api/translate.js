@@ -1,7 +1,7 @@
 // pages/api/translate.js
 
 export const config = {
-  runtime: 'edge',
+  runtime: 'edge', // 保持 Edge 运行时
 };
 
 const TRANSLATION_PROMPT_TEMPLATE = `
@@ -76,7 +76,7 @@ function parseAIOutput(text) {
     recommended: type.recommended || false,
     translation: extractBetweenTags(type.tTag),
     backTranslation: extractBetweenTags(type.bTag),
-  })).filter(item => item.translation); // 过滤空结果
+  })).filter(item => item.translation);
 }
 
 // 检测语言
@@ -94,7 +94,8 @@ export default async function handler(req) {
   }
 
   try {
-    const { text, sourceLang, targetLang, stream = false } = await req.json();
+    // 1. 接收前端传来的 customConfig
+    const { text, sourceLang, targetLang, stream = false, customConfig } = await req.json();
 
     if (!text?.trim()) {
       return new Response(JSON.stringify({ error: '请输入要翻译的文本' }), {
@@ -103,10 +104,29 @@ export default async function handler(req) {
       });
     }
 
+    // 2. 确定配置：优先用前端传来的，如果没有则回退到环境变量
+    // 注意：去除 baseUrl 末尾可能多余的斜杠
+    const apiKey = customConfig?.apiKey || process.env.OPENAI_API_KEY;
+    let baseUrl = customConfig?.baseUrl || 'https://api.openai.com/v1';
+    if (baseUrl.endsWith('/')) {
+      baseUrl = baseUrl.slice(0, -1);
+    }
+    const model = customConfig?.model || 'gpt-4o-mini';
+
+    // 3. 检查 API Key 是否存在
+    if (!apiKey) {
+      return new Response(JSON.stringify({ 
+        error: '未配置 API Key', 
+        details: '请在前端设置中填写 API Key，或在服务器环境变量配置 OPENAI_API_KEY' 
+      }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     // 自动检测语言
     const detectedSourceLang = sourceLang || detectLanguage(text);
     const detectedTargetLang = targetLang || (detectedSourceLang === 'zh' ? 'my' : 'zh');
-
     const langNames = { zh: '中文', my: '缅甸语' };
     
     const prompt = TRANSLATION_PROMPT_TEMPLATE
@@ -114,15 +134,18 @@ export default async function handler(req) {
       .replace('{TARGET_LANG}', langNames[detectedTargetLang])
       .replace('{USER_TEXT}', text.trim());
 
-    // 调用 AI API (这里以 OpenAI 为例，可替换为其他服务)
-    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+    // 4. 发起请求 (使用动态 URL 和 Key)
+    // 必须加上 /chat/completions 后缀
+    const apiUrl = `${baseUrl}/chat/completions`;
+
+    const aiResponse = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini', // 或 gpt-4
+        model: model,
         messages: [
           { role: 'system', content: '你是专业的中缅双语翻译专家。' },
           { role: 'user', content: prompt }
@@ -133,12 +156,25 @@ export default async function handler(req) {
       }),
     });
 
+    // 5. 处理 API 错误
     if (!aiResponse.ok) {
-      const error = await aiResponse.text();
-      throw new Error(`AI API Error: ${error}`);
+      const errorText = await aiResponse.text();
+      let errorMsg = `API 请求失败 (${aiResponse.status})`;
+      try {
+        // 尝试解析 OpenAI 的 JSON 错误信息
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.error && errorJson.error.message) {
+          errorMsg = `API 错误: ${errorJson.error.message}`;
+        }
+      } catch (e) {
+        // 如果不是 JSON，直接使用文本
+        errorMsg += `: ${errorText}`;
+      }
+      
+      throw new Error(errorMsg);
     }
 
-    // 流式响应
+    // 流式响应处理
     if (stream) {
       return new Response(aiResponse.body, {
         headers: {
@@ -149,18 +185,19 @@ export default async function handler(req) {
       });
     }
 
-    // 非流式响应
+    // 非流式响应处理
     const data = await aiResponse.json();
     const aiContent = data.choices?.[0]?.message?.content || '';
     const translations = parseAIOutput(aiContent);
 
+    // 6. 返回最终结果
     return new Response(JSON.stringify({
       success: true,
       sourceText: text,
       sourceLang: detectedSourceLang,
       targetLang: detectedTargetLang,
       translations,
-      rawOutput: aiContent, // 调试用，生产环境可移除
+      rawOutput: aiContent,
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -168,9 +205,10 @@ export default async function handler(req) {
 
   } catch (error) {
     console.error('Translation error:', error);
+    // 7. 捕获所有错误并返回 JSON，防止前端报 "Unexpected end of JSON"
     return new Response(JSON.stringify({ 
-      error: '翻译失败，请稍后重试',
-      details: error.message 
+      error: '翻译服务出错',
+      details: error.message || String(error)
     }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
