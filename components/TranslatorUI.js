@@ -1,14 +1,13 @@
-
 // pages/translator.js
 import React, { useState, useRef, useEffect } from 'react';
 import Head from 'next/head';
-import { 
-  ArrowUpDown, 
-  ArrowUp, 
-  Mic, 
-  Copy, 
-  Volume2, 
-  Settings, 
+import {
+  ArrowUpDown,
+  ArrowUp,
+  Mic,
+  Copy,
+  Volume2,
+  Settings,
   Check,
   ChevronDown,
   ChevronUp,
@@ -39,9 +38,9 @@ export default function TranslatorPage() {
   const [inputText, setInputText] = useState('');
   const [sourceLang, setSourceLang] = useState('zh');
   const [targetLang, setTargetLang] = useState('my');
-  
+
   const [translations, setTranslations] = useState([]);
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [showMoreLangs, setShowMoreLangs] = useState(false);
@@ -49,7 +48,10 @@ export default function TranslatorPage() {
   const [copiedId, setCopiedId] = useState(null);
   const [voiceLang, setVoiceLang] = useState('zh');
   const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
-  
+
+  // iOS 键盘高度（visualViewport）
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
+
   const [settings, setSettings] = useState({
     apiEndpoint: 'https://api.openai.com/v1',
     apiKey: '',
@@ -72,7 +74,29 @@ export default function TranslatorPage() {
     }
   }, []);
 
-  // 监听输入框高度自动变化 (核心体验优化)
+  // ✅ iOS/移动端键盘适配：监听 visualViewport
+  useEffect(() => {
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    if (!vv) return;
+
+    const handler = () => {
+      // keyboardHeight ≈ layoutViewportHeight - visualViewportHeight - offsetTop
+      // 取一个稳定值：window.innerHeight - vv.height - vv.offsetTop
+      const kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      setKeyboardOffset(kb);
+    };
+
+    vv.addEventListener('resize', handler);
+    vv.addEventListener('scroll', handler);
+    handler();
+
+    return () => {
+      vv.removeEventListener('resize', handler);
+      vv.removeEventListener('scroll', handler);
+    };
+  }, []);
+
+  // 监听输入框高度自动变化
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -99,14 +123,14 @@ export default function TranslatorPage() {
     if (!inputText.trim() || isLoading) return;
 
     setIsLoading(true);
-    
+
     try {
       const response = await fetch('/api/translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: inputText,
-          sourceLang: sourceLang, 
+          sourceLang: sourceLang,
           targetLang: targetLang,
           customConfig: {
             baseUrl: settings.apiEndpoint,
@@ -117,7 +141,7 @@ export default function TranslatorPage() {
       });
 
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.error || data.details || '请求失败');
       }
@@ -131,8 +155,8 @@ export default function TranslatorPage() {
         };
 
         setTranslations(prev => [newResult, ...prev]);
-        setInputText(''); // 清空输入框
-        
+        setInputText('');
+
         // 滚动到顶部查看新结果
         if (resultsRef.current) {
           setTimeout(() => {
@@ -173,10 +197,10 @@ export default function TranslatorPage() {
         .map(result => result[0].transcript)
         .join('');
       setInputText(transcript);
-      
+
       if (event.results[0].isFinal && settings.autoSendVoice) {
         setTimeout(() => {
-           triggerTranslateWithText(transcript);
+          triggerTranslateWithText(transcript);
         }, 500);
       }
     };
@@ -198,7 +222,7 @@ export default function TranslatorPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: text,
-          sourceLang: sourceLang, 
+          sourceLang: sourceLang,
           targetLang: targetLang,
           customConfig: {
             baseUrl: settings.apiEndpoint,
@@ -217,8 +241,11 @@ export default function TranslatorPage() {
         }, ...prev]);
         setInputText('');
       }
-    } catch (e) { console.error(e); } 
-    finally { setIsLoading(false); }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // --- 核心功能: 复制 & 朗读 ---
@@ -234,7 +261,7 @@ export default function TranslatorPage() {
     if (langName.includes('中')) code = 'zh-CN';
     else if (langName.includes('缅')) code = 'my-MM';
     else if (langName.includes('英')) code = 'en-US';
-    
+
     utterance.lang = code;
     window.speechSynthesis.speak(utterance);
   };
@@ -245,23 +272,16 @@ export default function TranslatorPage() {
     <>
       <Head>
         <title>中缅智译</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+        />
       </Head>
 
-      {/* 
-        ★ 布局核心 (仿照 AiChatAssistant.js):
-        1. fixed inset-0: 占满全屏，脱离文档流
-        2. h-[100dvh]: 动态视口高度，解决移动端地址栏遮挡问题
-        3. flex flex-col: 垂直弹性布局
-        4. bg-white: 确保背景不透明
-      */}
-      <div className="fixed inset-0 z-[9999] h-[100dvh] flex flex-col bg-gray-50 text-slate-900 font-sans overflow-hidden">
-        
-        {/* 
-          1. 顶部 Header 
-          shrink-0: 禁止高度压缩
-        */}
-        <header className="shrink-0 bg-white border-b px-4 py-3 z-10 shadow-sm">
+      {/* ✅ 不再 fixed + overflow-hidden，改为 min-h + flex */}
+      <div className="min-h-[100svh] flex flex-col bg-gray-50 text-slate-900 font-sans">
+        {/* Header */}
+        <header className="shrink-0 bg-white border-b px-4 py-3 z-10 shadow-sm sticky top-0">
           <div className="flex items-center justify-between max-w-lg mx-auto">
             {/* 源语言 */}
             <div className="flex-1 min-w-0">
@@ -331,15 +351,12 @@ export default function TranslatorPage() {
           )}
         </header>
 
-        {/* 
-          2. 中间滚动区域 (核心)
-          flex-1: 自动填满 Header 和 Footer 之间的所有空间
-          min-h-0: 允许 Flex 子项收缩，这是滚动生效的关键
-          overflow-y-auto: 只在这里滚动
-        */}
-        <main 
+        {/* 中间滚动区域 */}
+        <main
           ref={resultsRef}
           className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-gray-50 scroll-smooth w-full"
+          // ✅ 给底部留出空间，避免被 footer 覆盖（尤其在 iOS）
+          style={{ paddingBottom: 140 }}
         >
           <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
             {translations.length === 0 ? (
@@ -356,7 +373,7 @@ export default function TranslatorPage() {
                       <p className="text-sm">{response.sourceText}</p>
                     </div>
                   </div>
-                  
+
                   {/* 翻译结果 */}
                   <div className="space-y-3">
                     {response.results.map((result, rIdx) => (
@@ -367,8 +384,8 @@ export default function TranslatorPage() {
                         </div>
                         <p className="text-gray-800 text-lg leading-relaxed font-medium">{result.translation}</p>
                         <div className="mt-2 pt-2 border-t border-gray-50">
-                           <p className="text-[10px] text-gray-400 mb-0.5">回译:</p>
-                           <p className="text-blue-500 text-sm font-mono">{result.backTranslation}</p>
+                          <p className="text-[10px] text-gray-400 mb-0.5">回译:</p>
+                          <p className="text-blue-500 text-sm font-mono">{result.backTranslation}</p>
                         </div>
                         <div className="flex justify-end gap-3 mt-3">
                           <button onClick={() => speakText(result.translation, response.targetLang)} className="p-1.5 text-gray-400 hover:text-blue-500"><Volume2 size={16} /></button>
@@ -384,18 +401,19 @@ export default function TranslatorPage() {
                 </div>
               ))
             )}
-            {/* 底部垫片 */}
-            <div className="h-4 w-full"></div>
+            <div className="h-6 w-full" />
           </div>
         </main>
 
-        {/* 
-          3. 底部固定区域
-          shrink-0: 确保不被压缩
-          pb-safe: 适配 iPhone 底部
-          无需 fixed 定位，因为它是 Flex 容器的最后一个元素，自然在底部
-        */}
-        <footer className="shrink-0 bg-white border-t border-gray-200 z-30 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        {/* ✅ Footer：sticky + visualViewport 抬升，解决“看不到输入框” */}
+        <footer
+          className="shrink-0 bg-white border-t border-gray-200 z-30 sticky bottom-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]"
+          style={{
+            transform: keyboardOffset ? `translateY(-${keyboardOffset}px)` : undefined,
+            paddingBottom: 'max(env(safe-area-inset-bottom), 8px)',
+            willChange: 'transform'
+          }}
+        >
           <div className="max-w-lg mx-auto px-4 py-2 w-full">
             {/* 工具栏 */}
             <div className="flex items-center justify-between mb-2">
@@ -413,7 +431,11 @@ export default function TranslatorPage() {
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-gray-400">模型:</span>
-                <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} className="text-xs bg-gray-100 border-none rounded py-1 pl-2 pr-6 text-gray-600 font-medium">
+                <select
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  className="text-xs bg-gray-100 border border-transparent rounded py-1 pl-2 pr-6 text-gray-600 font-medium"
+                >
                   {MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                 </select>
               </div>
@@ -462,20 +484,38 @@ export default function TranslatorPage() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">API 接口地址</label>
-                  <input type="text" value={settings.apiEndpoint} onChange={(e) => saveSettings({ ...settings, apiEndpoint: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border rounded-lg text-sm" />
+                  <input
+                    type="text"
+                    value={settings.apiEndpoint}
+                    onChange={(e) => saveSettings({ ...settings, apiEndpoint: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-50 border rounded-lg text-sm"
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">API Key</label>
-                  <input type="password" value={settings.apiKey} onChange={(e) => saveSettings({ ...settings, apiKey: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border rounded-lg text-sm" />
+                  <input
+                    type="password"
+                    value={settings.apiKey}
+                    onChange={(e) => saveSettings({ ...settings, apiKey: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-50 border rounded-lg text-sm"
+                  />
                 </div>
                 <div className="flex items-center justify-between pt-2">
                   <span className="text-sm font-bold text-gray-700">语音自动发送</span>
-                  <button onClick={() => saveSettings({ ...settings, autoSendVoice: !settings.autoSendVoice })} className={`w-12 h-6 rounded-full transition-colors relative ${settings.autoSendVoice ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                  <button
+                    onClick={() => saveSettings({ ...settings, autoSendVoice: !settings.autoSendVoice })}
+                    className={`w-12 h-6 rounded-full transition-colors relative ${settings.autoSendVoice ? 'bg-blue-500' : 'bg-gray-300'}`}
+                  >
                     <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${settings.autoSendVoice ? 'left-7' : 'left-1'}`} />
                   </button>
                 </div>
               </div>
-              <button onClick={() => setShowSettings(false)} className="w-full mt-8 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-600/20">保存</button>
+              <button
+                onClick={() => setShowSettings(false)}
+                className="w-full mt-8 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-600/20"
+              >
+                保存
+              </button>
             </div>
           </div>
         )}
