@@ -6,10 +6,13 @@ import {
   Sparkles, PlayCircle, Gem, MessageCircle,
   Crown, Heart, ChevronRight, Star, BookOpen,
   ChevronDown, ChevronUp, GraduationCap,
-  MessageSquareText, Headphones, Volume2, Globe // 引入新图标 Globe，替换 BrainCircuit
+  MessageSquareText, Headphones, Volume2, Globe, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
+
+// 引入独立的翻译组件
+import GlosbeSearchCard from './GlosbeSearchCard';
 
 // 动态导入 WordCard 组件
 const WordCard = dynamic(
@@ -137,6 +140,48 @@ const MembershipModal = ({ isOpen, onClose, targetLevel }) => {
   );
 };
 
+// ==========================================
+// NEW: 翻译助手弹窗容器
+// 直接调用 GlosbeSearchCard 组件
+// ==========================================
+const TranslatorModal = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-0 md:p-4">
+      {/* 背景遮罩 */}
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+      />
+      
+      {/* 弹窗主体 */}
+      <motion.div
+        initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }}
+        className="relative w-full h-full md:h-auto md:max-h-[85vh] md:max-w-2xl bg-white md:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden"
+      >
+        {/* 顶部关闭栏 - 因为引入的组件有自己的Header，我们这里放一个悬浮关闭按钮即可 */}
+        <button 
+          onClick={onClose} 
+          className="absolute top-4 right-4 z-50 p-2 bg-white/80 backdrop-blur-sm rounded-full text-slate-500 shadow-sm hover:bg-slate-100 border border-slate-200 transition-colors"
+        >
+          <X size={20} />
+        </button>
+
+        {/* 渲染引入的翻译组件 */}
+        {/* 使用 overflow-y-auto 确保如果组件内容过长可以在弹窗内滚动 */}
+        <div className="flex-1 overflow-y-auto bg-slate-50">
+           {/* 这里可能需要一个 padding 或者容器来适配 GlosbeSearchCard 的全宽布局 */}
+           <div className="min-h-full pb-10">
+              <GlosbeSearchCard />
+           </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 // 课程卡片组件
 const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
   const router = useRouter();
@@ -207,7 +252,7 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
 };
 
 // 拼音面板组件 (布局调整)
-const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection }) => {
+const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection, onOpenTranslator }) => {
   const router = useRouter();
 
   return (
@@ -246,10 +291,10 @@ const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection }) => {
       </button>
 
       {/* ==================================================== */}
-      {/* 修改：AI 翻译入口 */}
+      {/* 修改：AI 翻译入口 (改为打开弹窗) */}
       {/* ==================================================== */}
       <button 
-        onClick={() => router.push('/translator')} // 点击跳转到 /translator 页面
+        onClick={onOpenTranslator} 
         className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100/50 active:scale-95 transition-transform group"
       >
         <div className="flex items-center gap-3">
@@ -304,6 +349,8 @@ export default function HskPageClient() {
   const [activeHskWords, setActiveHskWords] = useState(null);
   const [activeLevelTag, setActiveLevelTag] = useState(null);
   const [membership, setMembership] = useState({ open: false, level: null });
+  // 控制翻译弹窗状态
+  const [isTranslatorOpen, setIsTranslatorOpen] = useState(false);
 
   const isCardViewOpen = router.asPath.includes('#hsk-vocabulary');
 
@@ -318,7 +365,6 @@ export default function HskPageClient() {
   }, [router]);
 
   // 2. 收藏跳转：进入口语收藏 (点击按钮)
-  // 通过 query 参数 filter=favorites 告诉目标页面显示收藏
   const handleSpokenCollectionClick = useCallback((e) => {
     if(e) e.preventDefault();
     router.push({
@@ -380,8 +426,8 @@ export default function HskPageClient() {
         <div className="bg-white rounded-[1.8rem] p-4 shadow-xl shadow-slate-200/60 border border-slate-50">
           <PinyinSection 
             onOpenCollection={handleCollectionClick} 
-            // 传递新的收藏跳转函数
             onOpenSpokenCollection={handleSpokenCollectionClick}
+            onOpenTranslator={() => setIsTranslatorOpen(true)} 
           />
         </div>
       </header>
@@ -435,6 +481,14 @@ export default function HskPageClient() {
             isOpen={membership.open}
             onClose={() => setMembership({ open: false, level: null })}
             targetLevel={membership.level}
+          />
+        )}
+        
+        {/* 翻译弹窗 - 包含调用 */}
+        {isTranslatorOpen && (
+          <TranslatorModal 
+            isOpen={isTranslatorOpen} 
+            onClose={() => setIsTranslatorOpen(false)} 
           />
         )}
       </AnimatePresence>
