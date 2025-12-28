@@ -1,18 +1,20 @@
-// AIChatDrawer.js (最终修复版 - 内置AiTtsButton，修复ReferenceError)
+// components/AiChatAssistant.js (最终修复编译错误版)
 
 import { Transition } from '@headlessui/react'
 import React, { useState, useEffect, useRef, useCallback, useMemo, Fragment } from 'react';
 
-// 1. 导入你的题型组件 (请确保该文件存在，如果没有请注释掉下面这行)
+// 1. 导入你的题型组件
+// (注意：如果您没有 './Tixing/PaiXuTi' 这个文件，请保持下面这行代码注释状态，否则会报错)
 // import PaiXuTi from './Tixing/PaiXuTi';
 
 // 2. 创建一个组件映射表
-// const componentMap = {
-    PaiXuTi: PaiXuTi
+// (修复：确保 componentMap 始终是一个合法的对象)
+const componentMap = {
+    // 如果您上面取消了 PaiXuTi 的注释，请把下面这也取消注释
+    // PaiXuTi: PaiXuTi
 };
 
-// --- 【内置组件】AiTtsButton (修复 ReferenceError 问题) ---
-// 将 TTS 按钮直接定义在此处，防止因缺少文件导致报错
+// --- 【内置组件】AiTtsButton (防止因缺少文件导致 ReferenceError) ---
 const AiTtsButton = ({ text, ttsSettings }) => {
     const [isPlaying, setIsPlaying] = useState(false);
 
@@ -46,18 +48,16 @@ const AiTtsButton = ({ text, ttsSettings }) => {
 
         const utterance = new SpeechSynthesisUtterance(cleanText);
         
-        // 尝试匹配设置的声音 (仅限系统声音模式，第三方声音通常需要API)
-        // 为了兼容性，这里主要使用系统TTS
+        // 尝试匹配设置的声音
         if (ttsSettings?.systemTtsVoiceURI) {
             const voices = window.speechSynthesis.getVoices();
             const voice = voices.find(v => v.voiceURI === ttsSettings.systemTtsVoiceURI);
             if (voice) utterance.voice = voice;
         } else if (ttsSettings?.speechLanguage) {
-             // 尝试根据语言代码匹配
              utterance.lang = ttsSettings.speechLanguage;
         }
 
-        // 语速和音调映射 (-100~100 => 0.5~1.5 左右)
+        // 语速和音调映射
         const rateVal = (ttsSettings?.ttsRate || 0);
         const pitchVal = (ttsSettings?.ttsPitch || 0);
         utterance.rate = 1 + (rateVal / 200); 
@@ -871,21 +871,5 @@ const AiChatAssistant = ({ onClose }) => {
 };
 
 // 导出组件
-const AIChatDrawer = ({ isOpen, onClose }) => {
-    return (
-        <Transition.Root show={isOpen} as={Fragment}>
-            <div className='fixed inset-0 z-50'>
-                <Transition.Child as={Fragment} enter='ease-in-out duration-300' enterFrom='opacity-0' enterTo='opacity-100' leave='ease-in-out duration-200' leaveFrom='opacity-100' leaveTo='opacity-0'>
-                    <div className='absolute inset-0 bg-black bg-opacity-30' onClick={onClose} />
-                </Transition.Child>
-                <Transition.Child as={Fragment} enter='transform transition ease-in-out duration-300' enterFrom='translate-y-full' enterTo='translate-y-0' leave='transform transition ease-in-out duration-200' leaveFrom='translate-y-0' leaveTo='translate-y-full'>
-                    <div className='fixed inset-0 flex flex-col bg-white dark:bg-[#18171d]'>
-                        <AiChatAssistant onClose={onClose} />
-                    </div>
-                </Transition.Child>
-            </div>
-        </Transition.Root>
-    )
-}
-
-export default AIChatDrawer;
+// 修复：使用 AiChatAssistant 作为默认导出名，以匹配文件及其用途
+export default AiChatAssistant;
