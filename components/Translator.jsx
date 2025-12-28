@@ -2,8 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Mic, Send, Settings, X, 
   Volume2, Copy, BrainCircuit,
+  // 修复点：将 ArrowRightArrowLeft 改为 ArrowRightLeft
+  ArrowRightLeft, 
   ExternalLink, Sparkles,
-  Loader2, Star, ArrowRightArrowLeft, ChevronDown
+  Loader2, Star, ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Head from 'next/head';
@@ -47,7 +49,7 @@ export default function TranslatorUI() {
   const textareaRef = useRef(null);
   const longPressTimerRef = useRef();
   const isLongPress = useRef(false);
-  const messagesEndRef = useRef(null); // 用于自动滚动到底部
+  const messagesEndRef = useRef(null);
 
   useEffect(() => {
     setMounted(true);
@@ -70,16 +72,14 @@ export default function TranslatorUI() {
     }
   }, []);
 
-  // 自动调整文本框高度
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
       const scrollHeight = textareaRef.current.scrollHeight;
-      textareaRef.current.style.height = `${Math.min(scrollHeight, 150)}px`; // 限制最大高度
+      textareaRef.current.style.height = `${Math.min(scrollHeight, 150)}px`;
     }
   }, [input]);
 
-  // 新结果产生时滚动到底部
   useEffect(() => {
     if (results.length > 0 || loading) {
       setTimeout(() => {
@@ -92,7 +92,6 @@ export default function TranslatorUI() {
     const textToTranslate = overrideInput || input;
     if (!textToTranslate.trim() || loading) return;
     setLoading(true);
-    // 这里不清空 results，而是追加或替换，视需求而定。当前逻辑为替换当前显示。
     setResults([]); 
     
     try {
@@ -142,7 +141,7 @@ export default function TranslatorUI() {
       isLongPress.current = true;
       setIsListening(false);
       setShowMicLangMenu(true);
-    }, 400); // 400ms 长按触发
+    }, 400); 
   };
 
   const handleMicRelease = () => {
@@ -154,7 +153,7 @@ export default function TranslatorUI() {
 
   const speak = (text) => {
     if (typeof window === 'undefined') return;
-    const cleanedText = text.replace(/\*/g, ''); // 移除Markdown星号
+    const cleanedText = text.replace(/\*/g, '');
     const voiceMap = { my: 'my-MM-NilarNeural', zh: 'zh-CN-XiaoxiaoNeural', en: 'en-US-JennyNeural' };
     const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(cleanedText)}&v=${voiceMap[targetLang] || 'my-MM-NilarNeural'}&r=-10`;
     const audio = new Audio(url);
@@ -186,21 +185,8 @@ export default function TranslatorUI() {
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
       </Head>
 
-      {/* 
-        核心布局修改：
-        1. h-[100dvh]: 动态视口高度，解决移动端地址栏遮挡
-        2. flex flex-col: 垂直弹性布局
-        3. overflow-hidden: 防止外层滚动
-      */}
       <div className="flex flex-col h-[100dvh] w-full bg-slate-100 font-sans text-slate-900 overflow-hidden">
         
-        {/* 
-          中间内容区域：
-          1. flex-1: 占据剩余所有空间
-          2. overflow-y-auto: 内部独立滚动
-          3. overscroll-contain: 防止滚动链
-          4. 移除 pb-48: 不再需要 huge padding，因为 Footer 也是 flex 的一部分，不会遮挡
-        */}
         <main className="flex-1 w-full max-w-3xl mx-auto p-4 sm:p-6 md:p-8 space-y-4 overflow-y-auto custom-scrollbar overscroll-contain">
           <AnimatePresence>
             {results.map((item, idx) => (
@@ -237,19 +223,11 @@ export default function TranslatorUI() {
             </div> 
           )}
           
-          {/* 滚动锚点 */}
           <div ref={messagesEndRef} className="h-2" />
         </main>
 
-        {/* 
-          底部 Footer：
-          1. flex-shrink-0: 禁止压缩，保持高度
-          2. z-30: 确保浮动层级
-          3. 移除 fixed: 改为自然流布局，位于 flex 容器底部，完美解决遮挡和键盘弹起问题
-        */}
         <footer className="flex-shrink-0 z-30 bg-white/80 backdrop-blur-xl border-t border-slate-200/80 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
           <div className="max-w-3xl mx-auto p-3 sm:p-4 space-y-3 pb-safe">
-            {/* Language Selector */}
             <AnimatePresence>
               {showAllLangs && (
                 <motion.div initial={{height: 0, opacity: 0}} animate={{height: 'auto', opacity: 1}} exit={{height: 0, opacity: 0}} className="overflow-hidden">
@@ -270,7 +248,8 @@ export default function TranslatorUI() {
                 <ChevronDown size={14} className={`transition-transform ${showAllLangs === 'source' ? 'rotate-180' : ''}`} />
               </button>
               <button onClick={() => { handleSourceLangChange(targetLang); handleTargetLangChange(sourceLang); }} className="p-2 text-slate-500 hover:bg-slate-200 rounded-full transition-colors active:scale-90">
-                <ArrowRightArrowLeft size={16} />
+                {/* 修复点：使用 ArrowRightLeft */}
+                <ArrowRightLeft size={16} />
               </button>
               <button onClick={() => setShowAllLangs(showAllLangs === 'target' ? false : 'target')} className="flex-1 flex items-center justify-center gap-2 p-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">
                 <span className="text-sm font-bold text-slate-700">{currentTargetLang?.label}</span>
@@ -278,7 +257,6 @@ export default function TranslatorUI() {
               </button>
             </div>
 
-            {/* Input Row */}
             <div className="flex items-end gap-2">
               <button onClick={() => setShowSettings(true)} className="p-3 h-12 text-slate-500 hover:bg-slate-100 rounded-full transition-colors flex-shrink-0">
                 <Settings size={22} />
@@ -314,7 +292,6 @@ export default function TranslatorUI() {
           </div>
         </footer>
 
-        {/* Settings Panel */}
         <AnimatePresence>
           {showSettings && (
             <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 z-[100] bg-black/60 flex items-end" onClick={()=>setShowSettings(false)}>
@@ -337,7 +314,6 @@ export default function TranslatorUI() {
           )}
         </AnimatePresence>
 
-        {/* Mic Lang Quick Select Menu */}
         <AnimatePresence>
           {showMicLangMenu && (
             <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 z-[100] bg-black/60 flex items-end justify-end" onClick={()=>setShowMicLangMenu(false)}>
@@ -359,7 +335,6 @@ export default function TranslatorUI() {
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar { display: none; }
         .custom-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        /* 适配 iPhone 底部安全区域 */
         .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
       `}</style>
     </>
