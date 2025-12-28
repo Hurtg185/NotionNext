@@ -2,34 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 
-  全局基础样式
-  注意：去掉了强制 html/body overflow: hidden，
-  防止与 fixed inset-0 产生冲突，改由 React 组件自己管理
-*/
-html, body {
-  height: 100%;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  -webkit-tap-highlight-color: transparent;
+html {
+  overflow-x: hidden;
 }
 
-/* 适配 iPhone 底部黑条 */
-.pb-safe {
-  padding-bottom: env(safe-area-inset-bottom);
-}
-
-/* 隐藏滚动条但允许滚动 */
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-/* 保持你原有的样式，不做删除，只追加 */
 .wrapper {
   min-height: 100vh;
   display: flex;
@@ -233,6 +209,9 @@ nav {
   margin-right: 0.2rem;
 }
 
+/* .webmention-counts .counts > span {
+  margin-right: .8rem;
+} */
 .webmention-counts .counts > span:not(:last-child):after {
   content: ' • ';
 }
@@ -288,10 +267,11 @@ a.avatar-wrapper {
 }
 
 .writing-vertical {
-  writing-mode: vertical-rl;
-  text-orientation: upright;
+  writing-mode: vertical-rl; /* 竖向排列从右向左 */
+  text-orientation: upright; /* 文字方向正常 */
 }
 
+/* Chatbase 在移动端禁止遮挡 */
 @media (max-width: 700px) {
   button#chatbase-bubble-button {
     margin-bottom: 42px;
@@ -307,11 +287,14 @@ img {
   overflow: hidden;
 }
 
+
 .lazy-image-placeholder{
-  background: linear-gradient(90deg,#0001 33%,#0005 50%,#0001 66%) #f2f2f2;
+  background: 
+      linear-gradient(90deg,#0001 33%,#0005 50%,#0001 66%)
+      #f2f2f2;
   background-size:300% 100%;
   animation: l1 1s infinite linear;
-}
-@keyframes l1 {
+  }
+  @keyframes l1 {
   0% {background-position: right}
 }
