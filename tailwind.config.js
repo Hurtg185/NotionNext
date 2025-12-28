@@ -2,24 +2,21 @@ const BLOG = require('./blog.config')
 const { fontFamilies } = require('./lib/font')
 
 module.exports = {
+  // 核心修复：扩展了文件后缀匹配，确保 .jsx, .tsx 文件也能被扫描到
   content: [
-    './pages/**/*.js',
-    './components/**/*.js',
-    './layouts/**/*.js',
-    './themes/**/*.js'
+    './pages/**/*.{js,ts,jsx,tsx}',
+    './components/**/*.{js,ts,jsx,tsx}',
+    './layouts/**/*.{js,ts,jsx,tsx}',
+    './themes/**/*.{js,ts,jsx,tsx}'
   ],
   darkMode: BLOG.APPEARANCE === 'class' ? 'media' : 'class', // or 'media' or 'class'
   theme: {
     fontFamily: fontFamilies,
     screens: {
       sm: '540px',
-      // => @media (min-width: 576px) { ... }
       md: '720px',
-      // => @media (min-width: 768px) { ... }
       lg: '960px',
-      // => @media (min-width: 992px) { ... }
       xl: '1140px',
-      // => @media (min-width: 1200px) { ... }
       '2xl': '1536px'
     },
     container: {
@@ -28,6 +25,7 @@ module.exports = {
     },
     extend: {
       colors: {
+        // 保留你原有的颜色配置
         day: {
           DEFAULT: BLOG.BACKGROUND_LIGHT || '#ffffff'
         },
@@ -39,7 +37,6 @@ module.exports = {
           'black-gray': '#101414',
           'light-gray': '#e5e5e5'
         },
-        // black: '#212b36',
         'dark-700': '#090e34b3',
         dark: {
           DEFAULT: '#111928',
