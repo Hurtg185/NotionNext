@@ -1,6 +1,6 @@
 // functions/api/translate.js
 
-// 您的核心提示词，作为模板安全地存放在后端
+// 您的核心提示词 (保持不变)
 const TRANSLATION_PROMPT_TEMPLATE = `
 你是【中缅双语高保真翻译引擎】。
 
@@ -56,14 +56,17 @@ const TRANSLATION_PROMPT_TEMPLATE = `
 `;
 
 /**
- * AI 结果解析器，用于解析最终的完整数据。
+ * [修复版] AI 结果解析器
+ * 修复了正则匹配问题：现在可以正确匹配最后一段没有尾部标签的文本。
  */
 function parseAIOutput(text) {
   const extract = (tag) => {
-    const regex = new RegExp(`<<<${tag}>>>(.*?)<<<`, 's');
+    // 关键修复：(?:<<<|$) 表示匹配下一个标签的开始 OR 字符串的结尾
+    const regex = new RegExp(`<<<${tag}>>>(.*?)(?:<<<|$)`, 's');
     const match = text.match(regex);
     return match?.[1]?.trim() || '';
   };
+
   const types = [
     { id: 'raw-direct', label: '原结构直译', tTag: 'T1', bTag: 'B1' },
     { id: 'natural-direct', label: '自然直译', tTag: 'T2', bTag: 'B2', recommended: true },
@@ -71,18 +74,26 @@ function parseAIOutput(text) {
     { id: 'spoken', label: '口语版', tTag: 'T4', bTag: 'B4' },
     { id: 'free', label: '自然意译', tTag: 'T5', bTag: 'B5' },
   ];
-  return types.map(type => ({ ...type, translation: extract(type.tTag), back: extract(type.bTag) })).filter(item => item.translation);
+
+  return types.map(type => ({
+    id: type.id,
+    label: type.label,
+    translation: extract(type.tTag),
+    back: extract(type.bTag),
+    recommended: type.recommended || false,
+  })).filter(item => item.translation);
 }
 
 /**
- * Cloudflare Functions API handler for Streaming
+ * Cloudflare Functions API handler
  */
 export async function onRequestPost(context) {
   try {
     const { text, sourceLang, targetLang, customConfig } = await context.request.json();
+
     if (!text) return new Response(JSON.stringify({ error: 'Text is required' }), { status: 400 });
 
-    const apiKey = customConfig?.apiKey || context.env.IFLOW_API_KEY;
+    const apiKey = customConfig?.apiKey || context.env.IFLOW_API_KEY; 
     if (!apiKey) return new Response(JSON.stringify({ error: 'API Key is missing' }), { status: 401 });
 
     const apiUrl = customConfig?.apiUrl || 'https://apis.iflow.cn/v1';
@@ -95,48 +106,80 @@ export async function onRequestPost(context) {
 
     const apiResponse = await fetch(`${apiUrl}/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
       body: JSON.stringify({
         model: model,
         messages: [{ role: 'system', content: finalPrompt }],
-        stream: true, // 启用流式响应
+        stream: true, 
       }),
     });
 
-    if (!apiResponse.ok) return apiResponse;
+    if (!apiResponse.ok) {
+        return new Response(JSON.stringify({ error: 'External API Error' }), { status: 500 });
+    }
 
     let fullResponseText = "";
-    let recommendedStreamStarted = false;
-    const streamDelimiter = "\n|||FINAL_JSON|||\n"; // 自定义分隔符
+    let sentLength = 0; // 记录已经发送给前端的字符长度，防止重复或遗漏
+    const streamDelimiter = "\n|||FINAL_JSON|||\n"; 
 
     const transformStream = new TransformStream({
       transform(chunk, controller) {
         const chunkText = new TextDecoder().decode(chunk);
-        
         const lines = chunkText.split('\n').filter(line => line.startsWith('data: '));
+        
         for (const line of lines) {
           if (line.includes('[DONE]')) continue;
           try {
             const json = JSON.parse(line.substring(6));
             const content = json.choices?.[0]?.delta?.content || "";
+            
             if (content) {
-              fullResponseText += content; // 始终累加完整响应
-              // 智能判断何时开始流式传输推荐译文
-              if (!recommendedStreamStarted && fullResponseText.includes("<<<T2>>>")) {
-                recommendedStreamStarted = true;
+              fullResponseText += content;
+
+              // --- [核心修复] 智能增量流式发送逻辑 ---
+              // 不再依赖 replace 字符串，而是精确定位 T2 和 B2 的位置
+              const t2StartTag = "<<<T2>>>";
+              const t2EndTag = "<<<B2>>>";
+              
+              const startIndex = fullResponseText.indexOf(t2StartTag);
+              
+              if (startIndex !== -1) {
+                  // 找到了 T2 的开始
+                  const contentStartIndex = startIndex + t2StartTag.length;
+                  const endIndex = fullResponseText.indexOf(t2EndTag);
+                  
+                  let currentValidText = "";
+                  
+                  if (endIndex !== -1) {
+                      // T2 已经结束了，提取完整段落
+                      currentValidText = fullResponseText.substring(contentStartIndex, endIndex);
+                  } else {
+                      // T2 还在生成中，提取目前为止的所有内容
+                      currentValidText = fullResponseText.substring(contentStartIndex);
+                  }
+
+                  // 计算增量：只发送还没发送过的部分
+                  if (currentValidText.length > sentLength) {
+                      const newPart = currentValidText.substring(sentLength);
+                      controller.enqueue(new TextEncoder().encode(newPart));
+                      sentLength += newPart.length;
+                  }
               }
-              if (recommendedStreamStarted && !fullResponseText.includes("<<<B2>>>")) {
-                 const cleanContent = content.replace("<<<T2>>>", "").trim();
-                 controller.enqueue(new TextEncoder().encode(cleanContent));
-              }
+              // --- 逻辑结束 ---
             }
-          } catch (e) { /* 忽略不完整的JSON块 */ }
+          } catch (e) { }
         }
       },
       flush(controller) {
-        // 流结束后，打包最终的完整JSON数据
+        // 流结束后，解析完整数据并发送
         const parsedData = parseAIOutput(fullResponseText);
-        const finalPayload = { parsed: parsedData, quick_replies: [] };
+        const finalPayload = {
+          parsed: parsedData,
+          quick_replies: []
+        };
         controller.enqueue(new TextEncoder().encode(streamDelimiter));
         controller.enqueue(new TextEncoder().encode(JSON.stringify(finalPayload)));
       }
@@ -147,7 +190,6 @@ export async function onRequestPost(context) {
     });
 
   } catch (error) {
-    console.error('Internal Server Error:', error);
     return new Response(JSON.stringify({ error: 'Internal Server Error' }), { status: 500 });
   }
 }
