@@ -1,24 +1,21 @@
-// components/AiChatAssistant.js (最终修复编译错误版)
+// components/AIChatDrawer.js (最终完整修复版 - 包含全屏弹窗逻辑)
 
 import { Transition } from '@headlessui/react'
 import React, { useState, useEffect, useRef, useCallback, useMemo, Fragment } from 'react';
 
 // 1. 导入你的题型组件
-// (注意：如果您没有 './Tixing/PaiXuTi' 这个文件，请保持下面这行代码注释状态，否则会报错)
+// (注意：如果您没有 './Tixing/PaiXuTi' 这个文件，请保持下面这行代码注释状态)
 // import PaiXuTi from './Tixing/PaiXuTi';
 
 // 2. 创建一个组件映射表
-// (修复：确保 componentMap 始终是一个合法的对象)
 const componentMap = {
-    // 如果您上面取消了 PaiXuTi 的注释，请把下面这也取消注释
     // PaiXuTi: PaiXuTi
 };
 
-// --- 【内置组件】AiTtsButton (防止因缺少文件导致 ReferenceError) ---
+// --- 【内置组件】AiTtsButton ---
 const AiTtsButton = ({ text, ttsSettings }) => {
     const [isPlaying, setIsPlaying] = useState(false);
 
-    // 组件卸载时取消朗读
     useEffect(() => {
         return () => {
             if (window.speechSynthesis) {
@@ -29,26 +26,20 @@ const AiTtsButton = ({ text, ttsSettings }) => {
 
     const handleSpeak = (e) => {
         e.stopPropagation();
-        
         if (!window.speechSynthesis) {
             alert('您的浏览器不支持语音朗读功能');
             return;
         }
-
         if (isPlaying) {
             window.speechSynthesis.cancel();
             setIsPlaying(false);
             return;
         }
-
         if (!text) return;
 
-        // 简单的文本清理，移除Markdown符号
         const cleanText = text.replace(/[#*`]/g, '');
-
         const utterance = new SpeechSynthesisUtterance(cleanText);
         
-        // 尝试匹配设置的声音
         if (ttsSettings?.systemTtsVoiceURI) {
             const voices = window.speechSynthesis.getVoices();
             const voice = voices.find(v => v.voiceURI === ttsSettings.systemTtsVoiceURI);
@@ -57,7 +48,6 @@ const AiTtsButton = ({ text, ttsSettings }) => {
              utterance.lang = ttsSettings.speechLanguage;
         }
 
-        // 语速和音调映射
         const rateVal = (ttsSettings?.ttsRate || 0);
         const pitchVal = (ttsSettings?.ttsPitch || 0);
         utterance.rate = 1 + (rateVal / 200); 
@@ -84,18 +74,12 @@ const AiTtsButton = ({ text, ttsSettings }) => {
     );
 };
 
-// --- 【新增】数据清洗辅助函数 ---
+// --- 数据清洗辅助函数 ---
 const sanitizeQuizData = (props) => {
-    if (!props || !props.items || !props.correctOrder) {
-        return props; // 如果数据不完整，直接返回
-    }
-
+    if (!props || !props.items || !props.correctOrder) return props;
     let items = [...props.items];
     const correctOrder = [...props.correctOrder];
-
     const punctuationRegex = /^[。，、？！；：“”‘’（）《》〈〉【】 .,!?;:"'()\[\]{}]+$/;
-
-    // 找出所有在 items 中但不在 correctOrder 中的“孤儿”标点
     const orphanPunctuationItems = items.filter(item => {
         const isPunctuation = punctuationRegex.test(item.content.trim());
         const isInCorrectOrder = correctOrder.includes(item.id);
@@ -103,40 +87,30 @@ const sanitizeQuizData = (props) => {
     });
 
     if (orphanPunctuationItems.length > 0 && correctOrder.length > 0) {
-        // 找到正确顺序中的最后一个词的 ID
         const lastWordId = correctOrder[correctOrder.length - 1];
-
-        // 将所有孤儿标点符号合并到最后一个词上
         let lastWordIndex = items.findIndex(item => item.id === lastWordId);
         if (lastWordIndex !== -1) {
             const newContent = orphanPunctuationItems.reduce((acc, puncItem) => {
                 return acc + puncItem.content;
             }, items[lastWordIndex].content);
-
-            // 更新最后一个词的内容
             items[lastWordIndex] = { ...items[lastWordIndex], content: newContent };
         }
-
-        // 从 items 数组中移除这些孤儿标点卡片
         const orphanIds = new Set(orphanPunctuationItems.map(item => item.id));
         items = items.filter(item => !orphanIds.has(item.id));
     }
-
     return { ...props, items: items, correctOrder: correctOrder };
 };
 
-// --- 辅助函数 ---
+// --- 辅助函数与常量 ---
 const convertGitHubUrl = (url) => { if (typeof url === 'string' && url.includes('github.com') && url.includes('/blob/')) { return url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/'); } return url; };
 const safeLocalStorageGet = (key) => { if (typeof window !== 'undefined') { return localStorage.getItem(key); } return null; };
 const safeLocalStorageSet = (key, value) => { if (typeof window !== 'undefined') { localStorage.setItem(key, value); } };
 const generateSimpleId = (prefix = 'id') => `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-// --- 常量定义 ---
 const TTS_ENGINE = { SYSTEM: 'system', THIRD_PARTY: 'third_party' };
 const CHAT_MODELS_LIST = [ { id: 'model-1', name: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash', maxContextTokens: 8192 }, { id: 'model-2', name: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro', maxContextTokens: 8192 }, { id: 'model-3', name: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash', maxContextTokens: 4096 }, { id: 'model-4', name: 'Gemini 1.5 Flash (最新)', value: 'gemini-1.5-flash-latest', maxContextTokens: 8192 }, { id: 'model-5', name: 'Gemini 1.5 Pro (最新)', value: 'gemini-1.5-pro-latest', maxContextTokens: 8192 }, ];
 const DEFAULT_PROMPTS = [ { id: 'default-grammar-correction', name: '纠正中文语法', content: '你是一位专业的、耐心的中文老师，请纠正我发送的中文句子中的语法和用词错误，并给出修改建议和说明。', openingLine: '你好，请发送你需要我纠正的中文句子。', model: 'gemini-2.5-flash', ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural', avatarUrl: '' }, { id: 'explain-word', name: '解释中文词语', content: '你是一位专业的中文老师，请用简单易懂的方式解释我发送的中文词语，并提供几个例子。', openingLine: '你好，请问你想了解哪个中文词语？', model: 'gemini-1.5-pro-latest', ttsVoice: 'zh-CN-YunxiNeural', avatarUrl: '' }, { id: 'translate-myanmar', name: '中缅互译', content: '你是一位专业的翻译助手，请将我发送的内容在中文和缅甸语之间进行互译。', openingLine: '你好！请发送中文或缅甸语内容以进行翻译。', model: 'gemini-2.5-flash', ttsVoice: 'my-MM-NilarNeural', avatarUrl: '' } ];
 const DEFAULT_SETTINGS = { apiKey: '', apiKeys: [], activeApiKeyId: '', chatModels: CHAT_MODELS_LIST, selectedModel: 'gemini-2.5-flash', temperature: 0.8, maxOutputTokens: 2048, disableThinkingMode: true, startWithNewChat: false, prompts: DEFAULT_PROMPTS, currentPromptId: DEFAULT_PROMPTS[0]?.id || '', autoRead: false, ttsEngine: TTS_ENGINE.SYSTEM, ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural', ttsRate: 0, ttsPitch: 0, systemTtsVoiceURI: '', speechLanguage: 'zh-CN', chatBackgroundUrl: '/images/chat-bg-light.jpg', backgroundOpacity: 70, userAvatarUrl: '/images/user-avatar.png', aiAvatarUrl: '/images/ai-avatar.png', isFacebookApp: false, };
-
 const MICROSOFT_TTS_VOICES = [ { name: '晓晓 (女, 多语言)', value: 'zh-CN-XiaoxiaoMultilingualNeural' }, { name: '晓辰 (女, 多语言)', value: 'zh-CN-XiaochenMultilingualNeural' }, { name: '云希 (男, 温和)', value: 'zh-CN-YunxiNeural' }, { name: '云泽 (男, 叙事)', value: 'zh-CN-YunzeNeural' }, { name: '晓梦 (女, 播音)', value: 'zh-CN-XiaomengNeural' }, { name: '云扬 (男, 阳光)', value: 'zh-CN-YunyangNeural' }, { name: '晓伊 (女, 动漫)', value: 'zh-CN-XiaoyiNeural' }, { name: '晓臻 (女, 台湾)', value: 'zh-TW-HsiaoChenNeural' }, { name: '允喆 (男, 台湾)', value: 'zh-TW-YunJheNeural' }, { name: 'Ava (女, 美国, 多语言)', value: 'en-US-AvaMultilingualNeural' }, { name: 'Andrew (男, 美国, 多语言)', value: 'en-US-AndrewMultilingualNeural' }, { name: '七海 (女, 日本)', value: 'ja-JP-NanamiNeural' }, { name: '圭太 (男, 日本)', value: 'ja-JP-KeitaNeural' }, { name: '妮拉 (女, 缅甸)', value: 'my-MM-NilarNeural' }, { name: '蒂哈 (男, 缅甸)', value: 'my-MM-ThihaNeural' }, ];
 
 const TypingEffect = ({ text, onComplete, onUpdate }) => { 
@@ -175,11 +149,13 @@ const SimpleMarkdown = ({ text }) => {
     return <div>{lines}</div>; 
 };
 
+// ... MessageBubble, ChatSidebar, SubPageWrapper, PromptManager, ModelManager, ApiKeyManager, SettingsModal, ModelSelector, AssistantSelector ...
+// 为节省篇幅，这里复用您已有的子组件逻辑，直接到关键的 AiChatAssistant 组件
+
 const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate, onTypingComplete, onTypingUpdate, onCorrectionRequest }) => { 
     const isUser = msg.role === 'user'; 
     const userBubbleClass = 'bg-blue-500 text-white rounded-br-lg shadow-[0_5px_15px_rgba(59,130,246,0.3),_0_12px_28px_rgba(59,130,246,0.2)]'; 
     const aiBubbleClass = 'bg-white dark:bg-gray-700 border border-gray-200/50 dark:border-gray-600/50 shadow-[0_5px_15px_rgba(0,0,0,0.12),_0_15px_35px_rgba(0,0,0,0.08)]'; 
-    const isComponentMessage = msg.isComponent || false; 
     
     return ( 
         <div className={`flex items-end gap-2.5 my-4 ${isUser ? 'justify-end' : 'justify-start'}`}> 
@@ -188,7 +164,7 @@ const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate, onTypingC
                 {msg.images && msg.images.length > 0 && ( 
                     <div className="flex flex-wrap gap-2 mb-2">{msg.images.map((img, index) => <img key={index} src={img.previewUrl} alt={`附件 ${index + 1}`} className="w-24 h-24 object-cover rounded-md" />)}</div> 
                 )} 
-                {isComponentMessage ? ( 
+                {msg.isComponent ? ( 
                     componentMap[msg.componentName] ? React.createElement(componentMap[msg.componentName], { ...msg.props, onCorrectionRequest: onCorrectionRequest }) : <div className="text-red-500">组件 {msg.componentName} 未找到</div>
                 ) : ( 
                     <> 
@@ -551,6 +527,7 @@ const AssistantSelector = ({ prompts, settings, onSelect, onClose }) => (
     </div> 
 );
 
+// --- AiChatAssistant (主要逻辑组件) ---
 const AiChatAssistant = ({ onClose }) => {
     const [conversations, setConversations] = useState([]);
     const [currentConversationId, setCurrentConversationId] = useState(null);
@@ -572,7 +549,6 @@ const AiChatAssistant = ({ onClose }) => {
     const textareaRef = useRef(null);
     const lastAutoReadMessageId = useRef(null);
     
-    // ✅ 新增：handleSubmitRef 用于在语音回调中安全调用
     const handleSubmitRef = useRef();
 
     useEffect(() => { 
@@ -811,7 +787,6 @@ const AiChatAssistant = ({ onClose }) => {
         await fetchAiResponse(messagesForApi);
     };
 
-    // ✅ 更新 ref，确保 handleSubmit 永远最新
     handleSubmitRef.current = handleSubmit;
 
     const handleTypingComplete = useCallback(() => { setConversations(prev => prev.map(c => { if (c.id === currentConversationId) { const updatedMessages = c.messages.map((msg, index) => index === c.messages.length - 1 ? { ...msg, isTyping: false } : msg); return { ...c, messages: updatedMessages }; } return c; })); }, [currentConversationId]);
@@ -856,7 +831,7 @@ const AiChatAssistant = ({ onClose }) => {
                                 <button type="button" onClick={triggerCameraInput} className="p-2 rounded-full hover:bg-gray-500/10 dark:hover:bg-white/10" title="拍照"><i className="fas fa-camera text-xl text-gray-500 dark:text-gray-400"></i></button>
                             </div>
                             <textarea ref={textareaRef} value={userInput} onChange={(e) => setUserInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(false); } }} placeholder={isListening ? "正在聆听..." : "与 AI 聊天..."} className="flex-1 bg-transparent focus:outline-none text-gray-800 dark:text-gray-200 text-base resize-none overflow-hidden mx-2 py-1 leading-6 max-h-36 placeholder-gray-500 dark:placeholder-gray-400" rows="1" style={{minHeight:'2.5rem'}} readOnly={isListening} />
-                            <div className="flex items-center flex-shrink-0 ml-1">
+                            <div className="flex items-center flex-shrink-0 mr-1">
                                 {!showSendButton ? ( <button type="button" onClick={isListening ? stopListening : startListening} className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${isListening ? 'text-white bg-red-500 animate-pulse' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-500/10 dark:hover:bg-white/10'}`} title="语音输入"> <i className="fas fa-microphone text-xl"></i> </button> ) : ( <button type="submit" className="w-10 h-10 flex items-center justify-center bg-blue-600 text-white rounded-full shadow-lg shadow-blue-500/30 hover:bg-blue-700 disabled:opacity-50 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95" disabled={isLoading}> <i className="fas fa-arrow-up text-xl"></i> </button> )}
                             </div>
                         </form>
@@ -870,6 +845,26 @@ const AiChatAssistant = ({ onClose }) => {
     );
 };
 
-// 导出组件
-// 修复：使用 AiChatAssistant 作为默认导出名，以匹配文件及其用途
-export default AiChatAssistant;
+// --- AIChatDrawer (全屏弹窗包装器) ---
+// 修复：确保默认导出的是这个 AIChatDrawer 组件，它包含了 Transition 逻辑
+const AIChatDrawer = ({ isOpen, onClose }) => {
+    return (
+        <Transition.Root show={isOpen} as={Fragment}>
+            <div className='fixed inset-0 z-50'>
+                {/* 1. 背景遮罩 */}
+                <Transition.Child as={Fragment} enter='ease-in-out duration-300' enterFrom='opacity-0' enterTo='opacity-100' leave='ease-in-out duration-200' leaveFrom='opacity-100' leaveTo='opacity-0'>
+                    <div className='absolute inset-0 bg-black bg-opacity-30' onClick={onClose} />
+                </Transition.Child>
+                
+                {/* 2. 上滑面板 */}
+                <Transition.Child as={Fragment} enter='transform transition ease-in-out duration-300' enterFrom='translate-y-full' enterTo='translate-y-0' leave='transform transition ease-in-out duration-200' leaveFrom='translate-y-0' leaveTo='translate-y-full'>
+                    <div className='fixed inset-0 flex flex-col bg-white dark:bg-[#18171d]'>
+                        <AiChatAssistant onClose={onClose} />
+                    </div>
+                </Transition.Child>
+            </div>
+        </Transition.Root>
+    )
+}
+
+export default AIChatDrawer;
