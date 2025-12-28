@@ -2,18 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
-/* --- 新增：核心修复 --- */
-/* 确保 Next.js 的根节点和 body 能撑满全屏，防止背景色只显示一半 */
-html, body, #__next {
+/* ============================================================
+   核心修复区域：确保翻译App布局正常 (全屏无滚动，底部固定)
+   ============================================================ */
+
+html, body {
   height: 100%;
   width: 100%;
+  /* 关键：禁止浏览器窗口滚动，由 React 容器内部控制滚动 */
+  overflow: hidden; 
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
-html {
-  overflow-x: hidden;
+/* 工具类：隐藏滚动条但允许滚动 (用于语言切换栏) */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
-/* --- 以下是你原有的样式，保持不变 --- */
+/* 工具类：文本域滚动条美化 */
+textarea {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+/* 工具类：iPhone 底部安全区域适配 */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ============================================================
+   原有样式区域 (保持不变)
+   ============================================================ */
 
 .wrapper {
   min-height: 100vh;
@@ -173,14 +198,17 @@ nav {
   margin: -0.125em 0.25em;
 }
 
+/* twikoo 评论区超链接样式 */
 .tk-main a {
   @apply text-blue-700;
 }
 
+/* twikoo 内置的 element-ui 加载样式 */
 .el-loading-spinner {
   @apply flex justify-center items-center;
 }
 
+/* Webmention style */
 .webmention-block {
   background: rgba(0, 116, 222, 0.2);
   padding: 1rem 2rem;
@@ -215,6 +243,9 @@ nav {
   margin-right: 0.2rem;
 }
 
+/* .webmention-counts .counts > span {
+  margin-right: .8rem;
+} */
 .webmention-counts .counts > span:not(:last-child):after {
   content: ' • ';
 }
@@ -270,10 +301,11 @@ a.avatar-wrapper {
 }
 
 .writing-vertical {
-  writing-mode: vertical-rl;
-  text-orientation: upright;
+  writing-mode: vertical-rl; /* 竖向排列从右向左 */
+  text-orientation: upright; /* 文字方向正常 */
 }
 
+/* Chatbase 在移动端禁止遮挡 */
 @media (max-width: 700px) {
   button#chatbase-bubble-button {
     margin-bottom: 42px;
@@ -289,14 +321,14 @@ img {
   overflow: hidden;
 }
 
+
 .lazy-image-placeholder{
   background: 
       linear-gradient(90deg,#0001 33%,#0005 50%,#0001 66%)
       #f2f2f2;
   background-size:300% 100%;
   animation: l1 1s infinite linear;
-}
-
-@keyframes l1 {
+  }
+  @keyframes l1 {
   0% {background-position: right}
-}
+  }
