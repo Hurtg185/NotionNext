@@ -3,7 +3,8 @@ import {
   Mic, Send, Settings, X, 
   Volume2, Copy, BrainCircuit, ChevronDown,
   ExternalLink, Sparkles, ArrowRightLeft,
-  Loader2, Star, Languages, Check, Globe
+  Loader2, Star, Languages, Check, Globe,
+  MessageCircle, Feather, Zap, User
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Head from 'next/head';
@@ -42,7 +43,7 @@ export default function TranslatorUI() {
   const [quickReplies, setQuickReplies] = useState([]);
   const [isListening, setIsListening] = useState(false);
   
-  // 布局高度状态（工程级修复核心）
+  // 布局高度状态
   const [footerHeight, setFooterHeight] = useState(0);
 
   // 语言设置
@@ -63,7 +64,8 @@ export default function TranslatorUI() {
   // Refs
   const recognitionRef = useRef(null);
   const textareaRef = useRef(null);
-  const footerRef = useRef(null); // 底部容器 Ref
+  const footerRef = useRef(null); 
+  const audioRef = useRef(null); // 音频缓存 Ref
 
   // --- 初始化与副作用 ---
 
@@ -77,6 +79,7 @@ export default function TranslatorUI() {
       setSourceLang(localStorage.getItem('tr_src') || 'auto');
       setTargetLang(localStorage.getItem('tr_tar') || 'my');
 
+      // 初始化语音识别
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (SR) {
         const rec = new SR();
@@ -89,11 +92,10 @@ export default function TranslatorUI() {
     }
   }, []);
 
-  // 监听底部高度变化（工程级修复核心逻辑）
+  // 监听底部高度变化
   useEffect(() => {
     if (!footerRef.current) return;
     const ro = new ResizeObserver((entries) => {
-        // 获取底部实际高度，并添加一点余量
         const height = entries[0].contentRect.height;
         setFooterHeight(height);
     });
@@ -101,12 +103,17 @@ export default function TranslatorUI() {
     return () => ro.disconnect();
   }, []);
 
+  // 核心修复：正确的自动发送依赖逻辑
   useEffect(() => {
-    if (!isListening && autoSend && input.trim().length > 1 && !loading) {
-      const timer = setTimeout(() => handleTranslate(), 800);
+    // 只有在：自动发送开启 + 非录音中 + 非加载中 + 有内容 时触发
+    if (autoSend && !isListening && !loading && input.trim().length > 1) {
+      // 600ms 防抖，防止打字时频繁请求
+      const timer = setTimeout(() => {
+        handleTranslate();
+      }, 800);
       return () => clearTimeout(timer);
     }
-  }, [isListening]);
+  }, [input, isListening, autoSend]); // 必须包含 input
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -119,10 +126,10 @@ export default function TranslatorUI() {
 
   const handleTranslate = async (overrideInput) => {
     const textToTranslate = overrideInput || input;
-    if (!textToTranslate.trim() || loading) return;
+    if (!textToTranslate.trim()) return;
 
+    // 注意：这里不要 setResults([])，防止 UI 闪烁，只设置 loading 状态
     setLoading(true);
-    setQuickReplies([]);
 
     try {
       const res = await fetch('/api/translate', {
@@ -142,12 +149,53 @@ export default function TranslatorUI() {
       }
       
       const data = await res.json();
-      if (data.results) {
-        setResults(data.results.sort((a,b) => (b.recommended?1:0) - (a.recommended?1:0)));
-        setQuickReplies(data.quick_replies || []);
+      
+      // 核心修复：解析 parsed 结构
+      // 优先检查新结构 parsed，如果不存在则回退到 results（兼容旧逻辑）
+      if (data.parsed) {
+        const p = data.parsed;
+        const formattedResults = [
+          { 
+            id: 'direct', 
+            label: '直接翻译', 
+            icon: <Zap size={14} />,
+            translation: p.direct?.translation || '', 
+            recommended: true 
+          },
+          { 
+            id: 'spoken', 
+            label: '地道口语', 
+            icon: <MessageCircle size={14} />,
+            translation: p.spoken?.translation || '', 
+            recommended: false 
+          },
+          { 
+            id: 'free', 
+            label: '自然意译', 
+            icon: <Feather size={14} />,
+            translation: p.free?.translation || '', 
+            recommended: false 
+          },
+          { 
+            id: 'social', 
+            label: '社交语气', 
+            icon: <User size={14} />,
+            translation: p.social?.translation || '', 
+            recommended: false 
+          }
+        ].filter(item => item.translation); // 过滤掉空结果
+
+        setResults(formattedResults);
+      } else if (data.results) {
+        // 兼容旧接口
+        setResults(data.results);
       }
+      
+      setQuickReplies(data.quick_replies || []);
+
     } catch (e) {
-      alert(`发生错误: ${e.message}`);
+      console.error(e);
+      // 仅在错误时 alert，或者可以用 toast
     } finally {
       setLoading(false);
     }
@@ -166,13 +214,29 @@ export default function TranslatorUI() {
     }
   };
 
+  // 优化：使用 audioRef 缓存播放器
   const speak = (text) => {
     if (typeof window === 'undefined') return;
+    
+    // 如果正在播放，先暂停
+    if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+    }
+
     const currentTargetObj = TARGET_LANGUAGES.find(l => l.code === targetLang);
     const voice = currentTargetObj?.voice || 'en-US-JennyNeural';
     const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${voice}&r=-10`;
-    const audio = new Audio(url);
-    audio.play().catch(e => console.error("TTS Play Error", e));
+    
+    audioRef.current = new Audio(url);
+    audioRef.current.play().catch(e => console.error("TTS Play Error", e));
+  };
+
+  const handleCopy = (text) => {
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text);
+        // 这里可以加一个 Toast 提示，为了简洁暂略
+    }
   };
 
   const swapLanguages = () => {
@@ -209,7 +273,7 @@ export default function TranslatorUI() {
 
       <div className="flex flex-col h-[100dvh] max-w-md mx-auto relative overflow-hidden bg-white sm:shadow-2xl sm:rounded-[2.5rem] sm:my-4 sm:h-[calc(100vh-2rem)] sm:border border-slate-200">
         
-        {/* --- 顶部悬浮导航 (折叠设计) --- */}
+        {/* --- 顶部悬浮导航 --- */}
         <header className="absolute top-0 left-0 right-0 z-40 p-4 flex justify-between items-start pointer-events-none">
           <Link href="/">
             <a className="pointer-events-auto p-2.5 bg-white/90 backdrop-blur-md shadow-sm border border-slate-100 rounded-full text-slate-600 hover:bg-white hover:text-indigo-600 transition-all active:scale-95">
@@ -246,10 +310,10 @@ export default function TranslatorUI() {
           </button>
         </header>
 
-        {/* --- 主内容区 (动态 Padding) --- */}
+        {/* --- 主内容区 (动态 Padding + 小卡片列表) --- */}
         <main 
-            className="flex-1 overflow-y-auto px-4 pt-24 no-scrollbar space-y-5"
-            style={{ paddingBottom: footerHeight + 20 }} // 核心：根据底部高度自动让位
+            className="flex-1 overflow-y-auto px-4 pt-24 no-scrollbar space-y-3"
+            style={{ paddingBottom: footerHeight + 20 }}
         >
             {/* 空状态 */}
             {results.length === 0 && !loading && (
@@ -259,61 +323,68 @@ export default function TranslatorUI() {
               </div>
             )}
 
-            {/* Loading */}
+            {/* Loading Indicator (悬浮在列表顶部) */}
             {loading && (
-                <div className="flex flex-col items-center gap-3 py-10">
-                    <Loader2 size={28} className="animate-spin text-indigo-600" />
-                    <span className="text-[10px] font-bold text-slate-400 animate-pulse uppercase tracking-wider">AI Processing</span>
+                <div className="flex justify-center py-2">
+                    <div className="bg-white/80 backdrop-blur px-4 py-1.5 rounded-full shadow-sm border border-slate-100 flex items-center gap-2">
+                        <Loader2 size={14} className="animate-spin text-indigo-600" />
+                        <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wide">Thinking...</span>
+                    </div>
                 </div>
             )}
 
-            {/* 结果列表 */}
+            {/* 小卡片结果列表 */}
             <AnimatePresence mode='popLayout'>
               {results.map((item, idx) => (
                 <motion.div 
-                    key={`${idx}-${item.label}`}
-                    initial={{ opacity: 0, y: 20, scale: 0.95 }} 
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    transition={{ type: "spring", bounce: 0.3, delay: idx * 0.05 }}
-                    className={`relative overflow-hidden group rounded-3xl border transition-all ${
-                        item.recommended 
-                        ? 'bg-white border-indigo-100 shadow-[0_8px_30px_-8px_rgba(79,70,229,0.15)]' 
-                        : 'bg-slate-50 border-slate-100'
-                    }`}
+                    key={`${idx}-${item.id}`}
+                    initial={{ opacity: 0, y: 15 }} 
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.05 }}
+                    className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex flex-col gap-3 group"
                 >
-                  <div className="p-5 relative z-10">
-                    <div className="flex justify-between items-center mb-3">
-                      <div className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wide ${
-                          item.recommended ? 'bg-indigo-600 text-white shadow-indigo-200 shadow-sm' : 'bg-slate-200 text-slate-500'
-                      }`}>
-                          {item.label}
-                      </div>
-                      {item.recommended && <Star size={14} className="text-amber-400 fill-amber-400" />}
+                    {/* 卡片头部 */}
+                    <div className="flex justify-between items-center border-b border-slate-50 pb-2">
+                        <div className="flex items-center gap-2">
+                            <span className={`p-1 rounded-md ${item.recommended ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>
+                                {item.icon || <Sparkles size={14}/>}
+                            </span>
+                            <span className={`text-xs font-bold ${item.recommended ? 'text-indigo-700' : 'text-slate-600'}`}>
+                                {item.label}
+                            </span>
+                        </div>
+                        {item.recommended && <Star size={12} className="text-amber-400 fill-amber-400" />}
                     </div>
 
-                    <p className="text-[1.05rem] font-medium text-slate-800 leading-relaxed tracking-wide select-all whitespace-pre-wrap">
+                    {/* 卡片内容 */}
+                    <div className="text-[15px] text-slate-800 leading-relaxed font-medium select-all">
                         {item.translation}
-                    </p>
-
-                    <div className="flex justify-end gap-2 mt-4 pt-2">
-                      <button onClick={()=>speak(item.translation)} className="p-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-indigo-100 hover:text-indigo-600 transition-colors active:scale-90">
-                          <Volume2 size={18}/>
-                      </button>
-                      <button onClick={()=>{ if(navigator.clipboard) navigator.clipboard.writeText(item.translation) }} className="p-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-emerald-100 hover:text-emerald-600 transition-colors active:scale-90">
-                          <Copy size={18}/>
-                      </button>
                     </div>
-                  </div>
+
+                    {/* 卡片底部操作区 */}
+                    <div className="flex justify-end gap-2 pt-1">
+                         <button 
+                            onClick={() => speak(item.translation)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 rounded-full text-[10px] font-bold transition-colors active:scale-95"
+                         >
+                            <Volume2 size={12} /> 朗读
+                         </button>
+                         <button 
+                            onClick={() => handleCopy(item.translation)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-emerald-50 text-slate-500 hover:text-emerald-600 rounded-full text-[10px] font-bold transition-colors active:scale-95"
+                         >
+                            <Copy size={12} /> 复制
+                         </button>
+                    </div>
                 </motion.div>
               ))}
             </AnimatePresence>
         </main>
         
-        {/* --- 底部悬浮区 (ResizeObserver 监听对象) --- */}
+        {/* --- 底部悬浮区 --- */}
         <div 
             ref={footerRef}
-            className="absolute bottom-0 left-0 right-0 z-30 pb-safe" // 核心：pb-safe 适配 iPhone 黑条
+            className="absolute bottom-0 left-0 right-0 z-30 pb-safe" 
         >
            {/* 快捷回复 */}
            {quickReplies.length > 0 && (
@@ -368,7 +439,7 @@ export default function TranslatorUI() {
                     <span className="text-[10px] font-bold">{getSourceLabel().split(' ')[1]}</span>
                  </button>
 
-                 {/* 右侧：主操作按钮 (麦克风/发送 合并) */}
+                 {/* 右侧：主操作按钮 */}
                  <button 
                     onClick={input.trim() ? () => handleTranslate() : toggleListening}
                     disabled={loading}
