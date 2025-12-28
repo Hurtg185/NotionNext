@@ -39,7 +39,6 @@ export default function TranslatorPage() {
   const [sourceLang, setSourceLang] = useState('zh');
   const [targetLang, setTargetLang] = useState('my');
   
-  // 翻译结果历史
   const [translations, setTranslations] = useState([]);
   
   const [isLoading, setIsLoading] = useState(false);
@@ -64,7 +63,6 @@ export default function TranslatorPage() {
 
   // --- 初始化 ---
   useEffect(() => {
-    // 加载设置
     const saved = localStorage.getItem('translator-settings');
     if (saved) {
       const parsed = JSON.parse(saved);
@@ -73,7 +71,7 @@ export default function TranslatorPage() {
     }
   }, []);
 
-  // 监听输入框高度自动变化
+  // 监听输入框高度自动变化 (核心体验优化)
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -250,15 +248,19 @@ export default function TranslatorPage() {
       </Head>
 
       {/* 
-        ★ 核心修复布局：
-        fixed inset-0: 强制占满可视窗口，忽略父级高度限制
-        z-[9999]: 确保盖在所有主题元素上面
-        flex flex-col: 垂直布局
+        ★ 布局核心 (仿照 AiChatAssistant.js):
+        1. fixed inset-0: 占满全屏，脱离文档流
+        2. h-[100dvh]: 动态视口高度，解决移动端地址栏遮挡问题
+        3. flex flex-col: 垂直弹性布局
+        4. bg-white: 确保背景不透明
       */}
-      <div className="fixed inset-0 z-[9999] flex flex-col bg-gray-50 overflow-hidden text-slate-900 font-sans">
+      <div className="fixed inset-0 z-[9999] h-[100dvh] flex flex-col bg-gray-50 text-slate-900 font-sans overflow-hidden">
         
-        {/* 1. 顶部 Header (flex-shrink-0 不可压缩) */}
-        <header className="flex-shrink-0 bg-white border-b px-4 py-3 z-10 shadow-sm">
+        {/* 
+          1. 顶部 Header 
+          shrink-0: 禁止高度压缩
+        */}
+        <header className="shrink-0 bg-white border-b px-4 py-3 z-10 shadow-sm">
           <div className="flex items-center justify-between max-w-lg mx-auto">
             {/* 源语言 */}
             <div className="flex-1 min-w-0">
@@ -328,7 +330,12 @@ export default function TranslatorPage() {
           )}
         </header>
 
-        {/* 2. 中间滚动区域 (flex-1 自动占据剩余高度, min-h-0 防止溢出) */}
+        {/* 
+          2. 中间滚动区域 (核心)
+          flex-1: 自动填满 Header 和 Footer 之间的所有空间
+          min-h-0: 允许 Flex 子项收缩，这是滚动生效的关键
+          overflow-y-auto: 只在这里滚动
+        */}
         <main 
           ref={resultsRef}
           className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-gray-50 scroll-smooth w-full"
@@ -381,8 +388,13 @@ export default function TranslatorPage() {
           </div>
         </main>
 
-        {/* 3. 底部固定区域 (flex-shrink-0) */}
-        <footer className="flex-shrink-0 bg-white border-t border-gray-200 z-30 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        {/* 
+          3. 底部固定区域
+          shrink-0: 确保不被压缩
+          pb-safe: 适配 iPhone 底部
+          无需 fixed 定位，因为它是 Flex 容器的最后一个元素，自然在底部
+        */}
+        <footer className="shrink-0 bg-white border-t border-gray-200 z-30 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
           <div className="max-w-lg mx-auto px-4 py-2 w-full">
             {/* 工具栏 */}
             <div className="flex items-center justify-between mb-2">
