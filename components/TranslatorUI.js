@@ -107,10 +107,8 @@ export default function TranslatorPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: inputText,
-          // 传递语言代码或名称，后端会自动处理
           sourceLang: sourceLang, 
           targetLang: targetLang,
-          // 关键修正：将前端的 settings 映射为后端需要的 customConfig
           customConfig: {
             baseUrl: settings.apiEndpoint,
             apiKey: settings.apiKey,
@@ -125,8 +123,6 @@ export default function TranslatorPage() {
         throw new Error(data.error || data.details || '请求失败');
       }
 
-      // 构造符合前端渲染的数据结构
-      // 后端返回的 data.translations 是 [{label, translation, backTranslation}, ...]
       if (data.translations) {
         const newResult = {
           sourceText: data.sourceText,
@@ -168,7 +164,6 @@ export default function TranslatorPage() {
     }
 
     const recognition = new SpeechRecognition();
-    // 简单的语言映射
     const langMap = { 'zh': 'zh-CN', 'my': 'my-MM', 'en': 'en-US', 'th': 'th-TH' };
     recognition.lang = langMap[voiceLang] || 'zh-CN';
     recognition.continuous = false;
@@ -181,11 +176,7 @@ export default function TranslatorPage() {
       setInputText(transcript);
       
       if (event.results[0].isFinal && settings.autoSendVoice) {
-        // 稍微延迟确保状态更新
         setTimeout(() => {
-           // 这里直接调用翻译，需要确保 handleTranslate 能读取到最新的 inputText
-           // 由于闭包问题，最好重构 handleTranslate 接受参数，或者依赖 react 状态更新
-           // 为了简单有效，我们手动触发一次包含文本的请求逻辑
            triggerTranslateWithText(transcript);
         }, 500);
       }
@@ -199,7 +190,6 @@ export default function TranslatorPage() {
     setIsRecording(true);
   };
 
-  // 辅助：直接用文本触发翻译 (解决闭包中 state 不更新的问题)
   const triggerTranslateWithText = async (text) => {
     if (!text || !text.trim()) return;
     setIsLoading(true);
@@ -241,20 +231,16 @@ export default function TranslatorPage() {
 
   const speakText = (text, langName) => {
     const utterance = new SpeechSynthesisUtterance(text);
-    // 将中文名称转回代码
     let code = 'en-US';
     if (langName.includes('中')) code = 'zh-CN';
     else if (langName.includes('缅')) code = 'my-MM';
     else if (langName.includes('英')) code = 'en-US';
-    else if (langName.includes('泰')) code = 'th-TH';
     
     utterance.lang = code;
     window.speechSynthesis.speak(utterance);
   };
 
   const hasInput = inputText.trim().length > 0;
-  const mainLangs = LANGUAGES.slice(0, 2);
-  const moreLangs = LANGUAGES.slice(2);
 
   return (
     <>
@@ -264,27 +250,25 @@ export default function TranslatorPage() {
       </Head>
 
       {/* 
-        最外层容器：
-        fixed inset-0: 强制占满整个窗口，脱离所有父级 layout 限制
-        z-index-50: 确保在最上层
-        h-[100dvh]: 适配移动端动态高度
+        ★ 核心修复布局：
+        fixed inset-0: 强制占满可视窗口，忽略父级高度限制
+        z-[9999]: 确保盖在所有主题元素上面
+        flex flex-col: 垂直布局
       */}
-      <div className="fixed inset-0 z-50 flex flex-col bg-gray-50 h-[100dvh] w-full overflow-hidden text-slate-900 font-sans">
+      <div className="fixed inset-0 z-[9999] flex flex-col bg-gray-50 overflow-hidden text-slate-900 font-sans">
         
-        {/* --- 顶部 Header --- */}
-        <header className="bg-white border-b px-4 py-3 flex-shrink-0 z-10 shadow-sm">
+        {/* 1. 顶部 Header (flex-shrink-0 不可压缩) */}
+        <header className="flex-shrink-0 bg-white border-b px-4 py-3 z-10 shadow-sm">
           <div className="flex items-center justify-between max-w-lg mx-auto">
             {/* 源语言 */}
             <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap gap-1">
-                <button
-                  onClick={() => setShowMoreLangs(!showMoreLangs)}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 font-bold text-sm"
-                >
-                  {getLangFlag(sourceLang)} {getLangName(sourceLang)}
-                  {showMoreLangs ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                </button>
-              </div>
+              <button
+                onClick={() => setShowMoreLangs(!showMoreLangs)}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 font-bold text-sm whitespace-nowrap"
+              >
+                {getLangFlag(sourceLang)} {getLangName(sourceLang)}
+                {showMoreLangs ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
             </div>
 
             {/* 交换按钮 */}
@@ -297,9 +281,7 @@ export default function TranslatorPage() {
 
             {/* 目标语言 */}
             <div className="flex-1 min-w-0 flex justify-end">
-              <button
-                className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-green-50 text-green-600 font-bold text-sm"
-              >
+              <button className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-green-50 text-green-600 font-bold text-sm whitespace-nowrap">
                 {getLangFlag(targetLang)} {getLangName(targetLang)}
               </button>
             </div>
@@ -317,36 +299,25 @@ export default function TranslatorPage() {
           {showMoreLangs && (
             <div className="absolute top-14 left-0 right-0 bg-white border-b shadow-lg z-20 p-4 animate-in slide-in-from-top-2">
               <div className="max-w-lg mx-auto">
-                <p className="text-xs text-gray-400 mb-2 font-bold">源语言选择</p>
-                <div className="flex flex-wrap gap-2">
+                <p className="text-xs text-gray-400 mb-2 font-bold">源语言</p>
+                <div className="flex flex-wrap gap-2 mb-3">
                   {LANGUAGES.map(lang => (
                     <button
-                      key={lang.code}
-                      onClick={() => {
-                        setSourceLang(lang.code);
-                        setShowMoreLangs(false);
-                      }}
-                      className={`px-3 py-1.5 rounded-full text-xs border ${
-                        sourceLang === lang.code ? 'bg-blue-500 text-white border-blue-500' : 'bg-white border-gray-200'
-                      }`}
+                      key={`src-${lang.code}`}
+                      onClick={() => { setSourceLang(lang.code); setShowMoreLangs(false); }}
+                      className={`px-3 py-1.5 rounded-full text-xs border ${sourceLang === lang.code ? 'bg-blue-500 text-white' : 'bg-white'}`}
                     >
                       {lang.flag} {lang.name}
                     </button>
                   ))}
                 </div>
-                <div className="my-3 border-t border-gray-100"></div>
-                <p className="text-xs text-gray-400 mb-2 font-bold">目标语言选择</p>
+                <p className="text-xs text-gray-400 mb-2 font-bold">目标语言</p>
                 <div className="flex flex-wrap gap-2">
                   {LANGUAGES.map(lang => (
                     <button
-                      key={lang.code}
-                      onClick={() => {
-                        setTargetLang(lang.code);
-                        setShowMoreLangs(false);
-                      }}
-                      className={`px-3 py-1.5 rounded-full text-xs border ${
-                        targetLang === lang.code ? 'bg-green-500 text-white border-green-500' : 'bg-white border-gray-200'
-                      }`}
+                      key={`tgt-${lang.code}`}
+                      onClick={() => { setTargetLang(lang.code); setShowMoreLangs(false); }}
+                      className={`px-3 py-1.5 rounded-full text-xs border ${targetLang === lang.code ? 'bg-green-500 text-white' : 'bg-white'}`}
                     >
                       {lang.flag} {lang.name}
                     </button>
@@ -357,19 +328,16 @@ export default function TranslatorPage() {
           )}
         </header>
 
-        {/* --- 中间内容区 (flex-1 自动撑开, overflow-y-auto 允许滚动) --- */}
+        {/* 2. 中间滚动区域 (flex-1 自动占据剩余高度, min-h-0 防止溢出) */}
         <main 
           ref={resultsRef}
-          className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-50 scroll-smooth w-full"
+          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-gray-50 scroll-smooth w-full"
         >
-          <div className="max-w-lg mx-auto px-4 py-4 space-y-4 pb-4">
+          <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
             {translations.length === 0 ? (
               <div className="flex flex-col items-center justify-center mt-20 opacity-50">
-                <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mb-4 text-4xl">
-                  🌏
-                </div>
+                <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mb-4 text-4xl">🌏</div>
                 <p className="text-gray-500 font-medium">输入文字或语音开始翻译</p>
-                <p className="text-gray-400 text-sm mt-1">支持中缅双向互译</p>
               </div>
             ) : (
               translations.map((response, idx) => (
@@ -381,49 +349,22 @@ export default function TranslatorPage() {
                     </div>
                   </div>
                   
-                  {/* 翻译结果卡片 */}
+                  {/* 翻译结果 */}
                   <div className="space-y-3">
                     {response.results.map((result, rIdx) => (
-                      <div 
-                        key={rIdx}
-                        className="bg-white rounded-xl p-4 shadow-sm border border-gray-100"
-                      >
-                        {/* 标签 */}
+                      <div key={rIdx} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-bold text-gray-400 uppercase">{result.label}</span>
-                          {rIdx === 1 && ( // 通常第二个是自然直译(推荐)
-                            <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold border border-blue-100">
-                              推荐
-                            </span>
-                          )}
+                          <span className="text-xs font-bold text-gray-400">{result.label}</span>
+                          {rIdx === 1 && <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100">推荐</span>}
                         </div>
-                        
-                        {/* 译文 */}
-                        <p className="text-gray-800 text-lg leading-relaxed font-medium">
-                          {result.translation}
-                        </p>
-                        
-                        {/* 回译 */}
+                        <p className="text-gray-800 text-lg leading-relaxed font-medium">{result.translation}</p>
                         <div className="mt-2 pt-2 border-t border-gray-50">
-                           <p className="text-[10px] text-gray-400 mb-0.5">回译检测:</p>
-                           <p className="text-blue-500 text-sm font-mono">
-                             {result.backTranslation}
-                           </p>
+                           <p className="text-[10px] text-gray-400 mb-0.5">回译:</p>
+                           <p className="text-blue-500 text-sm font-mono">{result.backTranslation}</p>
                         </div>
-                        
-                        {/* 按钮栏 */}
                         <div className="flex justify-end gap-3 mt-3">
-                          <button
-                            onClick={() => speakText(result.translation, response.targetLang)}
-                            className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="朗读"
-                          >
-                            <Volume2 size={16} />
-                          </button>
-                          <button
-                            onClick={() => copyText(result.translation, `${idx}-${rIdx}`)}
-                            className="flex items-center gap-1 p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors text-xs font-bold"
-                          >
+                          <button onClick={() => speakText(result.translation, response.targetLang)} className="p-1.5 text-gray-400 hover:text-blue-500"><Volume2 size={16} /></button>
+                          <button onClick={() => copyText(result.translation, `${idx}-${rIdx}`)} className="flex items-center gap-1 p-1.5 text-gray-400 hover:text-green-600 text-xs">
                             {copiedId === `${idx}-${rIdx}` ? <Check size={16} /> : <Copy size={16} />}
                             {copiedId === `${idx}-${rIdx}` ? "已复制" : "复制"}
                           </button>
@@ -431,54 +372,36 @@ export default function TranslatorPage() {
                       </div>
                     ))}
                   </div>
-                  
-                  {/* 分割线 */}
                   <div className="my-6 border-t border-gray-200/50 w-1/2 mx-auto"></div>
                 </div>
               ))
             )}
-            {/* 底部垫片，防止内容被输入框遮挡 */}
-            <div className="h-2"></div>
+            {/* 底部垫片 */}
+            <div className="h-4 w-full"></div>
           </div>
         </main>
 
-        {/* --- 底部输入区域 (flex-shrink-0 确保不被压缩) --- */}
-        <footer className="flex-shrink-0 bg-white border-t border-gray-200 z-30 pb-safe">
+        {/* 3. 底部固定区域 (flex-shrink-0) */}
+        <footer className="flex-shrink-0 bg-white border-t border-gray-200 z-30 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
           <div className="max-w-lg mx-auto px-4 py-2 w-full">
-            
-            {/* 快速选项栏 */}
+            {/* 工具栏 */}
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
                 <span className="text-xs font-bold text-gray-400 flex-shrink-0">语音:</span>
-                {[
-                  {code:'zh', label:'中'}, 
-                  {code:'my', label:'缅'}, 
-                  {code:'en', label:'英'}
-                ].map(lang => (
+                {[{code:'zh', label:'中'}, {code:'my', label:'缅'}, {code:'en', label:'英'}].map(lang => (
                   <button
                     key={lang.code}
                     onClick={() => setVoiceLang(lang.code)}
-                    className={`px-2 py-1 rounded text-xs font-bold transition-colors ${
-                      voiceLang === lang.code
-                        ? 'bg-purple-100 text-purple-700'
-                        : 'bg-gray-100 text-gray-500'
-                    }`}
+                    className={`px-2 py-1 rounded text-xs font-bold ${voiceLang === lang.code ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-500'}`}
                   >
                     {lang.label}
                   </button>
                 ))}
               </div>
-
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-gray-400">模型:</span>
-                <select
-                  value={selectedModel}
-                  onChange={(e) => setSelectedModel(e.target.value)}
-                  className="text-xs bg-gray-100 border-none rounded py-1 pl-2 pr-6 text-gray-600 font-medium focus:ring-0"
-                >
-                  {MODELS.map(m => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  ))}
+                <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} className="text-xs bg-gray-100 border-none rounded py-1 pl-2 pr-6 text-gray-600 font-medium">
+                  {MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                 </select>
               </div>
             </div>
@@ -502,118 +425,47 @@ export default function TranslatorPage() {
                   style={{ maxHeight: '120px', minHeight: '48px' }}
                 />
               </div>
-
-              {/* 动态按钮 */}
               <button
                 onClick={hasInput ? handleTranslate : toggleRecording}
                 disabled={isLoading}
                 className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-md ${
-                  isLoading
-                    ? 'bg-gray-300 cursor-not-allowed'
-                    : hasInput
-                      ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-600/30'
-                      : isRecording
-                        ? 'bg-red-500 text-white animate-pulse shadow-red-500/30'
-                        : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'
+                  isLoading ? 'bg-gray-300' : hasInput ? 'bg-blue-600 text-white' : isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-white text-gray-500 border border-gray-200'
                 }`}
               >
-                {isLoading ? (
-                  <Loader2 size={24} className="animate-spin" />
-                ) : hasInput ? (
-                  <ArrowUp size={24} strokeWidth={3} />
-                ) : (
-                  <Mic size={24} />
-                )}
+                {isLoading ? <Loader2 size={24} className="animate-spin" /> : hasInput ? <ArrowUp size={24} strokeWidth={3} /> : <Mic size={24} />}
               </button>
             </div>
           </div>
         </footer>
 
-        {/* --- 设置弹窗 --- */}
+        {/* 设置弹窗 */}
         {showSettings && (
-          <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center animate-in fade-in">
+          <div className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center animate-in fade-in">
             <div className="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl animate-in slide-in-from-bottom-10 max-h-[80vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-6 border-b border-gray-100 pb-4">
+              <div className="flex items-center justify-between mb-6 border-b pb-4">
                 <h2 className="text-lg font-bold text-gray-800">设置</h2>
-                <button
-                  onClick={() => setShowSettings(false)}
-                  className="p-2 hover:bg-gray-100 rounded-full text-gray-500"
-                >
-                  <X size={20} />
-                </button>
+                <button onClick={() => setShowSettings(false)} className="p-2 bg-gray-100 rounded-full"><X size={20} /></button>
               </div>
-
-              <div className="space-y-5">
+              <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">
-                    API 接口地址
-                  </label>
-                  <input
-                    type="text"
-                    value={settings.apiEndpoint}
-                    onChange={(e) => saveSettings({ ...settings, apiEndpoint: e.target.value })}
-                    placeholder="https://api.openai.com/v1"
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <label className="block text-sm font-bold text-gray-700 mb-1">API 接口地址</label>
+                  <input type="text" value={settings.apiEndpoint} onChange={(e) => saveSettings({ ...settings, apiEndpoint: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border rounded-lg text-sm" />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">
-                    API Key
-                  </label>
-                  <input
-                    type="password"
-                    value={settings.apiKey}
-                    onChange={(e) => saveSettings({ ...settings, apiKey: e.target.value })}
-                    placeholder="sk-..."
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <label className="block text-sm font-bold text-gray-700 mb-1">API Key</label>
+                  <input type="password" value={settings.apiKey} onChange={(e) => saveSettings({ ...settings, apiKey: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border rounded-lg text-sm" />
                 </div>
-
-                <div>
-                   <label className="block text-sm font-bold text-gray-700 mb-1">
-                    自定义模型名
-                  </label>
-                  <input
-                    type="text"
-                    value={settings.model}
-                    onChange={(e) => {
-                      saveSettings({ ...settings, model: e.target.value });
-                      setSelectedModel(e.target.value);
-                    }}
-                    placeholder="例如: gpt-4, claude-3-opus"
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
                 <div className="flex items-center justify-between pt-2">
-                  <div>
-                    <p className="text-sm font-bold text-gray-700">语音自动发送</p>
-                    <p className="text-xs text-gray-400">说话结束后直接翻译</p>
-                  </div>
-                  <button
-                    onClick={() => saveSettings({ ...settings, autoSendVoice: !settings.autoSendVoice })}
-                    className={`w-12 h-6 rounded-full transition-colors relative ${
-                      settings.autoSendVoice ? 'bg-blue-500' : 'bg-gray-300'
-                    }`}
-                  >
-                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                      settings.autoSendVoice ? 'left-7' : 'left-1'
-                    }`} />
+                  <span className="text-sm font-bold text-gray-700">语音自动发送</span>
+                  <button onClick={() => saveSettings({ ...settings, autoSendVoice: !settings.autoSendVoice })} className={`w-12 h-6 rounded-full transition-colors relative ${settings.autoSendVoice ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${settings.autoSendVoice ? 'left-7' : 'left-1'}`} />
                   </button>
                 </div>
               </div>
-
-              <button
-                onClick={() => setShowSettings(false)}
-                className="w-full mt-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/20"
-              >
-                保存并关闭
-              </button>
+              <button onClick={() => setShowSettings(false)} className="w-full mt-8 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-600/20">保存</button>
             </div>
           </div>
         )}
-
       </div>
     </>
   );
