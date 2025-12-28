@@ -1,6 +1,6 @@
 // functions/api/translate.js
 
-// 您的核心提示词，作为模板安全地存放在后端
+// 您的核心提示词，作为模板安全地存放在后端 (未做任何修改)
 const TRANSLATION_PROMPT_TEMPLATE = `
 你是【中缅双语高保真翻译引擎】。
 
@@ -24,63 +24,59 @@ const TRANSLATION_PROMPT_TEMPLATE = `
 
 【输出格式】
 
-【① 直接翻译】
+【① 原结构直译】
 翻译：
 <<<T1>>>
 回译：
 <<<B1>>>
 
-【② 地道口语】
+【② 自然直译（推荐）】
 翻译：
 <<<T2>>>
 回译：
 <<<B2>>>
 
-【③ 自然意译】
+【③ 顺语直译】
 翻译：
 <<<T3>>>
 回译：
 <<<B3>>>
 
-【④ 社交语气】
+【④ 口语版】
 翻译：
 <<<T4>>>
 回译：
 <<<B4>>>
-`; // 修正 1：在这里正确地闭合了反引号，并删除了无效的分隔符行
+
+【⑤ 自然意译】
+翻译：
+<<<T5>>>
+回译：
+<<<B5>>>
+`;
 
 /**
- * 核心修正 2：新增一个解析函数，用于将 AI 返回的文本块转换为结构化 JSON。
- * @param {string} text - AI 返回的原始文本。
- * @returns {object} - 包含 direct, spoken, free, social 四个翻译版本的对象。
+ * [新增] AI 结果解析器
+ * 这个函数的作用是将 AI 返回的一整块文本，根据您在提示词中定义的 <<<TAG>>> 标记，
+ * 转换成前端需要的小卡片JSON数据结构。
+ * @param {string} text - AI返回的原始文本。
+ * @returns {object}
  */
 function parseAIOutput(text) {
-  // 辅助函数，用于安全地提取标记之间的内容
   const extract = (tag) => {
     const regex = new RegExp(`<<<${tag}>>>(.*?)<<<`, 's');
     const match = text.match(regex);
-    return match?.?.trim() || '';
+    return match?.[1]?.trim() || '';
   };
 
   return {
-    direct: {
-      translation: extract('T1'),
-      back: extract('B1'),
-    },
-    spoken: {
-      translation: extract('T2'),
-      back: extract('B2'),
-    },
-    free: {
-      translation: extract('T3'),
-      back: extract('B3'),
-    },
-    social: {
-      translation: extract('T4'),
-      back: extract('B4'),
-    },
+    direct: { translation: extract('T2'), back: extract('B2') }, // 自然直译（推荐）作为 direct
+    spoken: { translation: extract('T4'), back: extract('B4') }, // 口语版 作为 spoken
+    free: { translation: extract('T5'), back: extract('B5') },   // 自然意译 作为 free
+    social: { translation: extract('T3'), back: extract('B3') }  // 顺语直译 作为 social (可按需调整)
   };
 }
+
 
 /**
  * Cloudflare Functions API handler
@@ -98,7 +94,7 @@ export async function onRequestPost(context) {
       });
     }
 
-    // 2. 确定 API 配置
+    // 2. 确定 API 配置 (优先级: 前端传入 > 服务器环境变量 > 默认值)
     const apiKey = customConfig?.apiKey || context.env.IFLOW_API_KEY; 
     if (!apiKey) {
       return new Response(JSON.stringify({ error: 'API Key is missing.' }), {
@@ -140,16 +136,17 @@ export async function onRequestPost(context) {
     }
 
     const data = await apiResponse.json();
-    const aiGeneratedText = data.choices?.?.message?.content || "";
+    const aiGeneratedText = data.choices?.[0]?.message?.content || "";
 
-    // 5. 核心修正 3：使用解析器处理 AI 文本，并构建前端需要的响应结构
+    // 5. 【核心修改】格式化结果并返回给前端
+    // 使用上面新增的 parseAIOutput 函数来处理 AI 返回的文本
     const parsedData = parseAIOutput(aiGeneratedText);
     
-    // 你的前端代码现在可以正确接收这个结构了
+    // 构建前端期望的、能够渲染成小卡片的 JSON 结构
     const responsePayload = {
-      raw: aiGeneratedText, // 保留原始文本，方便调试
+      raw: aiGeneratedText, // 保留原始回复，方便调试
       parsed: parsedData,
-      quick_replies: [] // 如果需要，也可以让 AI 生成快捷回复
+      quick_replies: []
     };
 
     return new Response(JSON.stringify(responsePayload), {
