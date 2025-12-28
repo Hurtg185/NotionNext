@@ -1,3 +1,4 @@
+
 // pages/translator.js
 import React, { useState, useRef, useEffect } from 'react';
 import Head from 'next/head';
@@ -34,11 +35,9 @@ const MODELS = [
 ];
 
 export default function TranslatorPage() {
-  // --- 状态管理 ---
   const [inputText, setInputText] = useState('');
   const [sourceLang, setSourceLang] = useState('zh');
   const [targetLang, setTargetLang] = useState('my');
-
   const [translations, setTranslations] = useState([]);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -48,9 +47,6 @@ export default function TranslatorPage() {
   const [copiedId, setCopiedId] = useState(null);
   const [voiceLang, setVoiceLang] = useState('zh');
   const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
-
-  // iOS 键盘高度（visualViewport）
-  const [keyboardOffset, setKeyboardOffset] = useState(0);
 
   const [settings, setSettings] = useState({
     apiEndpoint: 'https://api.openai.com/v1',
@@ -64,7 +60,7 @@ export default function TranslatorPage() {
   const resultsRef = useRef(null);
   const recognitionRef = useRef(null);
 
-  // --- 初始化 ---
+  // 初始化设置
   useEffect(() => {
     const saved = localStorage.getItem('translator-settings');
     if (saved) {
@@ -74,29 +70,7 @@ export default function TranslatorPage() {
     }
   }, []);
 
-  // ✅ iOS/移动端键盘适配：监听 visualViewport
-  useEffect(() => {
-    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
-    if (!vv) return;
-
-    const handler = () => {
-      // keyboardHeight ≈ layoutViewportHeight - visualViewportHeight - offsetTop
-      // 取一个稳定值：window.innerHeight - vv.height - vv.offsetTop
-      const kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
-      setKeyboardOffset(kb);
-    };
-
-    vv.addEventListener('resize', handler);
-    vv.addEventListener('scroll', handler);
-    handler();
-
-    return () => {
-      vv.removeEventListener('resize', handler);
-      vv.removeEventListener('scroll', handler);
-    };
-  }, []);
-
-  // 监听输入框高度自动变化
+  // 输入框高度自适应
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -104,7 +78,6 @@ export default function TranslatorPage() {
     }
   }, [inputText]);
 
-  // --- 辅助函数 ---
   const saveSettings = (newSettings) => {
     setSettings(newSettings);
     localStorage.setItem('translator-settings', JSON.stringify(newSettings));
@@ -118,10 +91,9 @@ export default function TranslatorPage() {
   const getLangName = (code) => LANGUAGES.find(l => l.code === code)?.name || code;
   const getLangFlag = (code) => LANGUAGES.find(l => l.code === code)?.flag || '🌐';
 
-  // --- 核心功能: 翻译 ---
+  // 翻译
   const handleTranslate = async () => {
     if (!inputText.trim() || isLoading) return;
-
     setIsLoading(true);
 
     try {
@@ -130,8 +102,8 @@ export default function TranslatorPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: inputText,
-          sourceLang: sourceLang,
-          targetLang: targetLang,
+          sourceLang,
+          targetLang,
           customConfig: {
             baseUrl: settings.apiEndpoint,
             apiKey: settings.apiKey,
@@ -147,21 +119,20 @@ export default function TranslatorPage() {
       }
 
       if (data.translations) {
-        const newResult = {
+        setTranslations(prev => [{
           sourceText: data.sourceText,
           sourceLang: getLangName(data.sourceLang),
           targetLang: getLangName(data.targetLang),
           results: data.translations
-        };
+        }, ...prev]);
 
-        setTranslations(prev => [newResult, ...prev]);
         setInputText('');
 
-        // 滚动到顶部查看新结果
+        // 滚动到顶部看新结果
         if (resultsRef.current) {
           setTimeout(() => {
             resultsRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-          }, 100);
+          }, 50);
         }
       }
     } catch (error) {
@@ -172,7 +143,7 @@ export default function TranslatorPage() {
     }
   };
 
-  // --- 核心功能: 语音识别 ---
+  // 语音识别
   const toggleRecording = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -187,21 +158,17 @@ export default function TranslatorPage() {
     }
 
     const recognition = new SpeechRecognition();
-    const langMap = { 'zh': 'zh-CN', 'my': 'my-MM', 'en': 'en-US', 'th': 'th-TH' };
+    const langMap = { zh: 'zh-CN', my: 'my-MM', en: 'en-US', th: 'th-TH' };
     recognition.lang = langMap[voiceLang] || 'zh-CN';
     recognition.continuous = false;
     recognition.interimResults = true;
 
     recognition.onresult = (event) => {
-      const transcript = Array.from(event.results)
-        .map(result => result[0].transcript)
-        .join('');
+      const transcript = Array.from(event.results).map(r => r[0].transcript).join('');
       setInputText(transcript);
 
       if (event.results[0].isFinal && settings.autoSendVoice) {
-        setTimeout(() => {
-          triggerTranslateWithText(transcript);
-        }, 500);
+        setTimeout(() => triggerTranslateWithText(transcript), 400);
       }
     };
 
@@ -216,14 +183,15 @@ export default function TranslatorPage() {
   const triggerTranslateWithText = async (text) => {
     if (!text || !text.trim()) return;
     setIsLoading(true);
+
     try {
       const response = await fetch('/api/translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: text,
-          sourceLang: sourceLang,
-          targetLang: targetLang,
+          text,
+          sourceLang,
+          targetLang,
           customConfig: {
             baseUrl: settings.apiEndpoint,
             apiKey: settings.apiKey,
@@ -231,6 +199,7 @@ export default function TranslatorPage() {
           },
         }),
       });
+
       const data = await response.json();
       if (data.translations) {
         setTranslations(prev => [{
@@ -248,7 +217,7 @@ export default function TranslatorPage() {
     }
   };
 
-  // --- 核心功能: 复制 & 朗读 ---
+  // 复制 & 朗读
   const copyText = async (text, id) => {
     await navigator.clipboard.writeText(text);
     setCopiedId(id);
@@ -261,7 +230,6 @@ export default function TranslatorPage() {
     if (langName.includes('中')) code = 'zh-CN';
     else if (langName.includes('缅')) code = 'my-MM';
     else if (langName.includes('英')) code = 'en-US';
-
     utterance.lang = code;
     window.speechSynthesis.speak(utterance);
   };
@@ -278,12 +246,11 @@ export default function TranslatorPage() {
         />
       </Head>
 
-      {/* ✅ 不再 fixed + overflow-hidden，改为 min-h + flex */}
+      {/* ✅ 关键修复：不要 fixed inset-0 / 不要 overflow-hidden */}
       <div className="min-h-[100svh] flex flex-col bg-gray-50 text-slate-900 font-sans">
         {/* Header */}
         <header className="shrink-0 bg-white border-b px-4 py-3 z-10 shadow-sm sticky top-0">
           <div className="flex items-center justify-between max-w-lg mx-auto">
-            {/* 源语言 */}
             <div className="flex-1 min-w-0">
               <button
                 onClick={() => setShowMoreLangs(!showMoreLangs)}
@@ -294,7 +261,6 @@ export default function TranslatorPage() {
               </button>
             </div>
 
-            {/* 交换按钮 */}
             <button
               onClick={swapLanguages}
               className="mx-2 p-2 rounded-full bg-gray-100 text-gray-500 hover:bg-blue-50 hover:text-blue-500 transition-all"
@@ -302,23 +268,17 @@ export default function TranslatorPage() {
               <ArrowUpDown size={18} />
             </button>
 
-            {/* 目标语言 */}
             <div className="flex-1 min-w-0 flex justify-end">
               <button className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-green-50 text-green-600 font-bold text-sm whitespace-nowrap">
                 {getLangFlag(targetLang)} {getLangName(targetLang)}
               </button>
             </div>
 
-            {/* 设置按钮 */}
-            <button
-              onClick={() => setShowSettings(true)}
-              className="ml-3 p-2 text-gray-400 hover:text-gray-600"
-            >
+            <button onClick={() => setShowSettings(true)} className="ml-3 p-2 text-gray-400 hover:text-gray-600">
               <Settings size={20} />
             </button>
           </div>
 
-          {/* 更多语言下拉 */}
           {showMoreLangs && (
             <div className="absolute top-14 left-0 right-0 bg-white border-b shadow-lg z-20 p-4 animate-in slide-in-from-top-2">
               <div className="max-w-lg mx-auto">
@@ -351,12 +311,14 @@ export default function TranslatorPage() {
           )}
         </header>
 
-        {/* 中间滚动区域 */}
+        {/* 中间滚动区 */}
         <main
           ref={resultsRef}
           className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-gray-50 scroll-smooth w-full"
-          // ✅ 给底部留出空间，避免被 footer 覆盖（尤其在 iOS）
-          style={{ paddingBottom: 140 }}
+          style={{
+            // ✅ 防止内容被底部输入栏遮挡
+            paddingBottom: 140,
+          }}
         >
           <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
             {translations.length === 0 ? (
@@ -367,37 +329,46 @@ export default function TranslatorPage() {
             ) : (
               translations.map((response, idx) => (
                 <div key={idx} className="animate-in slide-in-from-bottom-2 duration-300">
-                  {/* 源文本气泡 */}
                   <div className="flex justify-end mb-2">
                     <div className="bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-2 shadow-sm max-w-[85%]">
                       <p className="text-sm">{response.sourceText}</p>
                     </div>
                   </div>
 
-                  {/* 翻译结果 */}
                   <div className="space-y-3">
                     {response.results.map((result, rIdx) => (
                       <div key={rIdx} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-xs font-bold text-gray-400">{result.label}</span>
-                          {rIdx === 1 && <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100">推荐</span>}
+                          {rIdx === 1 && (
+                            <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100">
+                              推荐
+                            </span>
+                          )}
                         </div>
                         <p className="text-gray-800 text-lg leading-relaxed font-medium">{result.translation}</p>
+
                         <div className="mt-2 pt-2 border-t border-gray-50">
                           <p className="text-[10px] text-gray-400 mb-0.5">回译:</p>
                           <p className="text-blue-500 text-sm font-mono">{result.backTranslation}</p>
                         </div>
+
                         <div className="flex justify-end gap-3 mt-3">
-                          <button onClick={() => speakText(result.translation, response.targetLang)} className="p-1.5 text-gray-400 hover:text-blue-500"><Volume2 size={16} /></button>
-                          <button onClick={() => copyText(result.translation, `${idx}-${rIdx}`)} className="flex items-center gap-1 p-1.5 text-gray-400 hover:text-green-600 text-xs">
+                          <button onClick={() => speakText(result.translation, response.targetLang)} className="p-1.5 text-gray-400 hover:text-blue-500">
+                            <Volume2 size={16} />
+                          </button>
+                          <button
+                            onClick={() => copyText(result.translation, `${idx}-${rIdx}`)}
+                            className="flex items-center gap-1 p-1.5 text-gray-400 hover:text-green-600 text-xs"
+                          >
                             {copiedId === `${idx}-${rIdx}` ? <Check size={16} /> : <Copy size={16} />}
-                            {copiedId === `${idx}-${rIdx}` ? "已复制" : "复制"}
+                            {copiedId === `${idx}-${rIdx}` ? '已复制' : '复制'}
                           </button>
                         </div>
                       </div>
                     ))}
                   </div>
-                  <div className="my-6 border-t border-gray-200/50 w-1/2 mx-auto"></div>
+                  <div className="my-6 border-t border-gray-200/50 w-1/2 mx-auto" />
                 </div>
               ))
             )}
@@ -405,30 +376,28 @@ export default function TranslatorPage() {
           </div>
         </main>
 
-        {/* ✅ Footer：sticky + visualViewport 抬升，解决“看不到输入框” */}
+        {/* ✅ 底部输入栏：sticky bottom-0，手机必可见 */}
         <footer
           className="shrink-0 bg-white border-t border-gray-200 z-30 sticky bottom-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]"
-          style={{
-            transform: keyboardOffset ? `translateY(-${keyboardOffset}px)` : undefined,
-            paddingBottom: 'max(env(safe-area-inset-bottom), 8px)',
-            willChange: 'transform'
-          }}
+          style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 8px)' }}
         >
           <div className="max-w-lg mx-auto px-4 py-2 w-full">
-            {/* 工具栏 */}
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
                 <span className="text-xs font-bold text-gray-400 flex-shrink-0">语音:</span>
-                {[{code:'zh', label:'中'}, {code:'my', label:'缅'}, {code:'en', label:'英'}].map(lang => (
+                {[{ code: 'zh', label: '中' }, { code: 'my', label: '缅' }, { code: 'en', label: '英' }].map(lang => (
                   <button
                     key={lang.code}
                     onClick={() => setVoiceLang(lang.code)}
-                    className={`px-2 py-1 rounded text-xs font-bold ${voiceLang === lang.code ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-500'}`}
+                    className={`px-2 py-1 rounded text-xs font-bold ${
+                      voiceLang === lang.code ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-500'
+                    }`}
                   >
                     {lang.label}
                   </button>
                 ))}
               </div>
+
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-gray-400">模型:</span>
                 <select
@@ -436,12 +405,13 @@ export default function TranslatorPage() {
                   onChange={(e) => setSelectedModel(e.target.value)}
                   className="text-xs bg-gray-100 border border-transparent rounded py-1 pl-2 pr-6 text-gray-600 font-medium"
                 >
-                  {MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  {MODELS.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
                 </select>
               </div>
             </div>
 
-            {/* 输入框主体 */}
             <div className="flex items-end gap-2 w-full">
               <div className="flex-1 bg-gray-100 rounded-2xl border border-transparent focus-within:border-blue-500 focus-within:bg-white transition-all">
                 <textarea
@@ -460,11 +430,18 @@ export default function TranslatorPage() {
                   style={{ maxHeight: '120px', minHeight: '48px' }}
                 />
               </div>
+
               <button
                 onClick={hasInput ? handleTranslate : toggleRecording}
                 disabled={isLoading}
                 className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-md ${
-                  isLoading ? 'bg-gray-300' : hasInput ? 'bg-blue-600 text-white' : isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-white text-gray-500 border border-gray-200'
+                  isLoading
+                    ? 'bg-gray-300'
+                    : hasInput
+                      ? 'bg-blue-600 text-white'
+                      : isRecording
+                        ? 'bg-red-500 text-white animate-pulse'
+                        : 'bg-white text-gray-500 border border-gray-200'
                 }`}
               >
                 {isLoading ? <Loader2 size={24} className="animate-spin" /> : hasInput ? <ArrowUp size={24} strokeWidth={3} /> : <Mic size={24} />}
@@ -479,8 +456,11 @@ export default function TranslatorPage() {
             <div className="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl animate-in slide-in-from-bottom-10 max-h-[80vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-6 border-b pb-4">
                 <h2 className="text-lg font-bold text-gray-800">设置</h2>
-                <button onClick={() => setShowSettings(false)} className="p-2 bg-gray-100 rounded-full"><X size={20} /></button>
+                <button onClick={() => setShowSettings(false)} className="p-2 bg-gray-100 rounded-full">
+                  <X size={20} />
+                </button>
               </div>
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">API 接口地址</label>
@@ -491,6 +471,7 @@ export default function TranslatorPage() {
                     className="w-full px-3 py-2 bg-gray-50 border rounded-lg text-sm"
                   />
                 </div>
+
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">API Key</label>
                   <input
@@ -500,6 +481,7 @@ export default function TranslatorPage() {
                     className="w-full px-3 py-2 bg-gray-50 border rounded-lg text-sm"
                   />
                 </div>
+
                 <div className="flex items-center justify-between pt-2">
                   <span className="text-sm font-bold text-gray-700">语音自动发送</span>
                   <button
@@ -510,6 +492,7 @@ export default function TranslatorPage() {
                   </button>
                 </div>
               </div>
+
               <button
                 onClick={() => setShowSettings(false)}
                 className="w-full mt-8 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-600/20"
