@@ -17,7 +17,7 @@ import { useSwipeable } from 'react-swipeable'; // 引入手势库
 // ==========================================
 
 // 引入全屏 AI 助手组件 (替换原有的 GlosbeSearchCard)
-import AIChatDrawer from './AIChatDrawer';
+import AIChatDrawer from './AiChatAssistant';
 
 // 动态导入 WordCard 组件
 const WordCard = dynamic(
