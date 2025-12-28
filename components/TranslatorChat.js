@@ -1,468 +1,428 @@
-// components/TranslatorChat.tsx
+// components/TranslatorChat.js
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Mic, Send, Settings, X, 
-  Volume2, Copy, ArrowRightLeft,
-  Loader2, Star, Check, Globe,
-  MicOff, RotateCcw, ChevronDown, Sparkles
+  Volume2, Copy, BrainCircuit, ChevronDown,
+  ExternalLink, Sparkles, ArrowRightLeft,
+  Loader2, Star, Languages, Check, Globe, 
+  Voicemail, ChevronUp, MicOff, Play, Pause, RotateCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// --- 语音配置 ---
-const VOICE_LIBRARY: Record<string, Array<{ name: string; id: string }>> = {
+// --- 语音配置 (移除类型注解) ---
+const VOICE_LIBRARY = {
   "中文": [
     { name: '小晓 (女声)', id: 'zh-CN-XiaoxiaoNeural' },
     { name: '云希 (男声)', id: 'zh-CN-YunxiNeural' },
     { name: '晓辰 (女声)', id: 'zh-CN-XiaochenNeural' },
     { name: '云健 (男声)', id: 'zh-CN-YunjianNeural' },
   ],
-  "缅甸语": [
-    { name: 'Thiha (男声)', id: 'my-MM-ThihaNeural' },
-    { name: 'Nilar (女声)', id: 'my-MM-NilarNeural' },
-  ],
   "英文": [
     { name: 'Jenny (女声)', id: 'en-US-JennyNeural' },
     { name: 'Guy (男声)', id: 'en-US-GuyNeural' },
+    { name: 'Aria (女声)', id: 'en-US-AriaNeural' },
+    { name: 'Davis (男声)', id: 'en-US-DavisNeural' },
   ],
+  "缅甸语": [
+    { name: 'Nilar (女声)', id: 'my-MM-NilarNeural' },
+    { name: 'Thiha (男声)', id: 'my-MM-ThihaNeural' },
+  ]
 };
 
-// --- 类型定义 ---
-interface Translation {
-  id: string;
-  name: string;
-  translation: string;
-  backTranslation: string;
-  recommended: boolean;
-}
+const DEFAULT_VOICES = {
+  "中文": 'zh-CN-XiaoxiaoNeural',
+  "英文": 'en-US-JennyNeural',
+  "缅甸语": 'my-MM-NilarNeural'
+};
 
-interface Message {
-  id: string;
-  type: 'user' | 'assistant';
-  originalText?: string;
-  translations?: Translation[];
-  timestamp: Date;
-  sourceLang?: string;
-  targetLang?: string;
-}
-
-interface TranslatorChatProps {
-  apiEndpoint?: string;
-}
+// --- 消息组件 ---
+const MessageBubble = ({ message, onCopy, onSpeak, isSpeaking }) => {
+  const isUser = message.role === 'user';
+  
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}
+    >
+      <div
+        className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+          isUser
+            ? 'bg-blue-600 text-white rounded-br-md'
+            : 'bg-gray-100 text-gray-800 rounded-bl-md'
+        }`}
+      >
+        <p className="whitespace-pre-wrap">{message.content}</p>
+        
+        {!isUser && (
+          <div className="flex gap-2 mt-2 pt-2 border-t border-gray-200">
+            <button
+              onClick={() => onCopy(message.content)}
+              className="p-1 hover:bg-gray-200 rounded transition-colors"
+              title="复制"
+            >
+              <Copy size={14} />
+            </button>
+            <button
+              onClick={() => onSpeak(message.content)}
+              className={`p-1 hover:bg-gray-200 rounded transition-colors ${
+                isSpeaking ? 'text-blue-600' : ''
+              }`}
+              title="朗读"
+            >
+              <Volume2 size={14} />
+            </button>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+};
 
 // --- 主组件 ---
-export default function TranslatorChat({ 
-  apiEndpoint = '/api/translate' 
-}: TranslatorChatProps) {
-  // 状态
+export default function TranslatorChat() {
+  // 状态管理
+  const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [sourceLang, setSourceLang] = useState<'zh' | 'my'>('zh');
-  const [targetLang, setTargetLang] = useState<'zh' | 'my'>('my');
+  const [sourceLang, setSourceLang] = useState('中文');
+  const [targetLang, setTargetLang] = useState('缅甸语');
   const [showSettings, setShowSettings] = useState(false);
-  const [selectedVoice, setSelectedVoice] = useState(VOICE_LIBRARY["中文"][0].id);
+  const [selectedVoice, setSelectedVoice] = useState(DEFAULT_VOICES);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [favoriteTranslations, setFavoriteTranslations] = useState<Set<string>>(new Set());
-
+  const [copied, setCopied] = useState(false);
+  
   // Refs
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-  const recognitionRef = useRef<any>(null);
-
-  // 语言配置
-  const languages = {
-    zh: { name: '中文', flag: '🇨🇳' },
-    my: { name: '缅甸语', flag: '🇲🇲' },
-  };
-
-  // 自动滚动
-  useEffect(() => {
+  const messagesEndRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const synthRef = useRef(null);
+  
+  // 自动滚动到底部
+  const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+  
+  useEffect(() => {
+    scrollToBottom();
   }, [messages]);
-
-  // 语音识别初始化
+  
+  // 初始化语音合成
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const SpeechRecognition = (window as any).SpeechRecognition || 
-                                 (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        recognitionRef.current = new SpeechRecognition();
-        recognitionRef.current.continuous = false;
-        recognitionRef.current.interimResults = true;
-        recognitionRef.current.lang = sourceLang === 'zh' ? 'zh-CN' : 'my-MM';
-
-        recognitionRef.current.onresult = (event: any) => {
-          const transcript = Array.from(event.results)
-            .map((result: any) => result[0].transcript)
-            .join('');
-          setInputText(transcript);
-        };
-
-        recognitionRef.current.onend = () => {
-          setIsListening(false);
-        };
-
-        recognitionRef.current.onerror = () => {
-          setIsListening(false);
-        };
-      }
+      synthRef.current = window.speechSynthesis;
     }
-  }, [sourceLang]);
-
-  // 切换语言
-  const swapLanguages = useCallback(() => {
+  }, []);
+  
+  // 交换语言
+  const swapLanguages = () => {
     setSourceLang(targetLang);
     setTargetLang(sourceLang);
-  }, [sourceLang, targetLang]);
-
-  // 开始/停止语音识别
-  const toggleListening = useCallback(() => {
-    if (!recognitionRef.current) {
+  };
+  
+  // 复制文本
+  const handleCopy = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('复制失败:', err);
+    }
+  };
+  
+  // 语音朗读
+  const handleSpeak = (text) => {
+    if (!synthRef.current) return;
+    
+    // 停止当前朗读
+    if (isSpeaking) {
+      synthRef.current.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    
+    // 设置语言
+    if (text.match(/[\u1000-\u109F]/)) {
+      utterance.lang = 'my-MM';
+    } else if (text.match(/[\u4e00-\u9fa5]/)) {
+      utterance.lang = 'zh-CN';
+    } else {
+      utterance.lang = 'en-US';
+    }
+    
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    
+    synthRef.current.speak(utterance);
+  };
+  
+  // 语音识别
+  const startListening = () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       alert('您的浏览器不支持语音识别');
       return;
     }
-
-    if (isListening) {
-      recognitionRef.current.stop();
-    } else {
-      recognitionRef.current.lang = sourceLang === 'zh' ? 'zh-CN' : 'my-MM';
-      recognitionRef.current.start();
-      setIsListening(true);
-    }
-  }, [isListening, sourceLang]);
-
-  // 发送翻译请求
-  const handleTranslate = useCallback(async () => {
-    if (!inputText.trim() || isLoading) return;
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      type: 'user',
-      originalText: inputText.trim(),
-      timestamp: new Date(),
-      sourceLang: languages[sourceLang].name,
-      targetLang: languages[targetLang].name,
+    
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognitionRef.current = new SpeechRecognition();
+    
+    recognitionRef.current.continuous = false;
+    recognitionRef.current.interimResults = true;
+    
+    // 根据源语言设置识别语言
+    const langMap = {
+      '中文': 'zh-CN',
+      '英文': 'en-US',
+      '缅甸语': 'my-MM'
     };
-
+    recognitionRef.current.lang = langMap[sourceLang] || 'zh-CN';
+    
+    recognitionRef.current.onstart = () => {
+      setIsListening(true);
+    };
+    
+    recognitionRef.current.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map(result => result[0].transcript)
+        .join('');
+      setInputText(transcript);
+    };
+    
+    recognitionRef.current.onend = () => {
+      setIsListening(false);
+    };
+    
+    recognitionRef.current.onerror = (event) => {
+      console.error('语音识别错误:', event.error);
+      setIsListening(false);
+    };
+    
+    recognitionRef.current.start();
+  };
+  
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+  };
+  
+  // 发送翻译请求
+  const handleSend = async () => {
+    if (!inputText.trim() || isLoading) return;
+    
+    const userMessage = {
+      id: Date.now(),
+      role: 'user',
+      content: inputText.trim()
+    };
+    
     setMessages(prev => [...prev, userMessage]);
     setInputText('');
     setIsLoading(true);
-
+    
     try {
-      const response = await fetch(apiEndpoint, {
+      const response = await fetch('/api/translate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          text: userMessage.originalText,
+          text: userMessage.content,
           sourceLang,
-          targetLang,
+          targetLang
         }),
       });
-
+      
       if (!response.ok) {
         throw new Error('翻译请求失败');
       }
-
+      
       const data = await response.json();
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        type: 'assistant',
-        originalText: userMessage.originalText,
-        translations: data.translations,
-        timestamp: new Date(),
-        sourceLang: languages[sourceLang].name,
-        targetLang: languages[targetLang].name,
+      
+      const assistantMessage = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: data.translation || data.result || '翻译完成'
       };
-
+      
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
-      console.error('Translation error:', error);
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        type: 'assistant',
-        translations: [{
-          id: 'error',
-          name: '错误',
-          translation: '翻译失败，请重试',
-          backTranslation: '',
-          recommended: false,
-        }],
-        timestamp: new Date(),
+      console.error('翻译错误:', error);
+      const errorMessage = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: `翻译失败: ${error.message}`
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
-  }, [inputText, isLoading, sourceLang, targetLang, apiEndpoint]);
-
-  // 复制文本
-  const copyToClipboard = useCallback(async (text: string, id: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
-    } catch (err) {
-      console.error('Copy failed:', err);
-    }
-  }, []);
-
-  // 朗读文本
-  const speakText = useCallback((text: string, lang: string) => {
-    if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = lang === '缅甸语' ? 'my-MM' : 'zh-CN';
-      window.speechSynthesis.speak(utterance);
-    }
-  }, []);
-
-  // 收藏翻译
-  const toggleFavorite = useCallback((id: string) => {
-    setFavoriteTranslations(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }, []);
-
-  // 按键处理
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+  };
+  
+  // 键盘事件处理
+  const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleTranslate();
+      handleSend();
     }
-  }, [handleTranslate]);
-
+  };
+  
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
       {/* 头部 */}
-      <header className="flex items-center justify-between px-4 py-3 bg-black/30 backdrop-blur-xl border-b border-white/10">
+      <header className="flex items-center justify-between px-4 py-3 bg-black/20 backdrop-blur-lg border-b border-white/10">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl">
-            <Globe className="w-6 h-6 text-white" />
+          <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl">
+            <Languages size={24} className="text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-white">中缅翻译</h1>
-            <p className="text-xs text-white/60">AI 智能翻译引擎</p>
+            <h1 className="text-xl font-bold text-white">中缅翻译助手</h1>
+            <p className="text-xs text-gray-400">AI 智能翻译</p>
           </div>
         </div>
-
-        {/* 语言切换器 */}
-        <div className="flex items-center gap-2 bg-white/10 rounded-full px-3 py-2">
-          <span className="text-sm font-medium text-white">
-            {languages[sourceLang].flag} {languages[sourceLang].name}
-          </span>
-          <button
-            onClick={swapLanguages}
-            className="p-1.5 hover:bg-white/20 rounded-full transition-colors"
-          >
-            <ArrowRightLeft className="w-4 h-4 text-white" />
-          </button>
-          <span className="text-sm font-medium text-white">
-            {languages[targetLang].flag} {languages[targetLang].name}
-          </span>
-        </div>
-
+        
         <button
           onClick={() => setShowSettings(!showSettings)}
-          className="p-2 hover:bg-white/10 rounded-xl transition-colors"
+          className="p-2 hover:bg-white/10 rounded-lg transition-colors"
         >
-          <Settings className="w-5 h-5 text-white/70" />
+          <Settings size={20} className="text-gray-300" />
         </button>
       </header>
-
-      {/* 消息列表 */}
+      
+      {/* 语言选择栏 */}
+      <div className="flex items-center justify-center gap-4 py-3 bg-black/10 border-b border-white/5">
+        <select
+          value={sourceLang}
+          onChange={(e) => setSourceLang(e.target.value)}
+          className="px-4 py-2 bg-white/10 text-white rounded-lg border border-white/20 focus:outline-none focus:border-blue-500"
+        >
+          <option value="中文" className="text-black">中文</option>
+          <option value="缅甸语" className="text-black">缅甸语</option>
+          <option value="英文" className="text-black">英文</option>
+        </select>
+        
+        <button
+          onClick={swapLanguages}
+          className="p-2 hover:bg-white/10 rounded-full transition-colors"
+          title="交换语言"
+        >
+          <ArrowRightLeft size={20} className="text-blue-400" />
+        </button>
+        
+        <select
+          value={targetLang}
+          onChange={(e) => setTargetLang(e.target.value)}
+          className="px-4 py-2 bg-white/10 text-white rounded-lg border border-white/20 focus:outline-none focus:border-blue-500"
+        >
+          <option value="缅甸语" className="text-black">缅甸语</option>
+          <option value="中文" className="text-black">中文</option>
+          <option value="英文" className="text-black">英文</option>
+        </select>
+      </div>
+      
+      {/* 消息区域 */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="p-4 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-2xl mb-4">
-              <Sparkles className="w-12 h-12 text-purple-400" />
+            <div className="p-4 bg-white/5 rounded-full mb-4">
+              <Sparkles size={48} className="text-purple-400" />
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">开始翻译</h2>
-            <p className="text-white/60 max-w-sm">
-              输入中文或缅甸语，获取5种不同风格的翻译结果
+            <h2 className="text-xl font-semibold text-white mb-2">开始翻译</h2>
+            <p className="text-gray-400 max-w-md">
+              输入中文或缅甸语文本，AI 将为您提供高质量翻译
             </p>
           </div>
         )}
-
-        <AnimatePresence>
-          {messages.map((message) => (
-            <motion.div
-              key={message.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              {message.type === 'user' ? (
-                // 用户消息
-                <div className="max-w-[85%] bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl rounded-tr-md px-4 py-3">
-                  <p className="text-white">{message.originalText}</p>
-                  <p className="text-xs text-white/70 mt-1">
-                    {message.sourceLang} → {message.targetLang}
-                  </p>
-                </div>
-              ) : (
-                // 翻译结果
-                <div className="max-w-[90%] space-y-3">
-                  {message.translations?.map((t) => (
-                    <motion.div
-                      key={t.id}
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className={`bg-white/10 backdrop-blur-xl rounded-2xl p-4 border ${
-                        t.recommended 
-                          ? 'border-purple-500/50 ring-1 ring-purple-500/30' 
-                          : 'border-white/10'
-                      }`}
-                    >
-                      {/* 标签 */}
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            t.recommended 
-                              ? 'bg-purple-500 text-white' 
-                              : 'bg-white/20 text-white/70'
-                          }`}>
-                            {t.name}
-                          </span>
-                          {t.recommended && (
-                            <span className="text-xs text-purple-400">✨ 推荐</span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => speakText(t.translation, message.targetLang || '')}
-                            className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
-                          >
-                            <Volume2 className="w-4 h-4 text-white/70" />
-                          </button>
-                          <button
-                            onClick={() => copyToClipboard(t.translation, t.id)}
-                            className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
-                          >
-                            {copiedId === t.id ? (
-                              <Check className="w-4 h-4 text-green-400" />
-                            ) : (
-                              <Copy className="w-4 h-4 text-white/70" />
-                            )}
-                          </button>
-                          <button
-                            onClick={() => toggleFavorite(t.id)}
-                            className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
-                          >
-                            <Star className={`w-4 h-4 ${
-                              favoriteTranslations.has(t.id) 
-                                ? 'text-yellow-400 fill-yellow-400' 
-                                : 'text-white/70'
-                            }`} />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* 翻译文本 */}
-                      <p className="text-white text-lg leading-relaxed">
-                        {t.translation}
-                      </p>
-
-                      {/* 回译 */}
-                      {t.backTranslation && (
-                        <div className="mt-3 pt-3 border-t border-white/10">
-                          <p className="text-xs text-white/50 mb-1">回译验证：</p>
-                          <p className="text-sm text-white/70">{t.backTranslation}</p>
-                        </div>
-                      )}
-                    </motion.div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          ))}
-        </AnimatePresence>
-
-        {/* 加载状态 */}
+        
+        {messages.map((message) => (
+          <MessageBubble
+            key={message.id}
+            message={message}
+            onCopy={handleCopy}
+            onSpeak={handleSpeak}
+            isSpeaking={isSpeaking}
+          />
+        ))}
+        
         {isLoading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex justify-start"
-          >
-            <div className="bg-white/10 backdrop-blur-xl rounded-2xl px-4 py-3">
+          <div className="flex justify-start mb-4">
+            <div className="bg-gray-100 rounded-2xl rounded-bl-md px-4 py-3">
               <div className="flex items-center gap-2">
-                <Loader2 className="w-5 h-5 text-purple-400 animate-spin" />
-                <span className="text-white/70">正在翻译...</span>
+                <Loader2 size={16} className="animate-spin text-blue-600" />
+                <span className="text-gray-600">翻译中...</span>
               </div>
             </div>
-          </motion.div>
+          </div>
         )}
-
+        
         <div ref={messagesEndRef} />
       </div>
-
+      
       {/* 输入区域 */}
-      <div className="p-4 bg-black/30 backdrop-blur-xl border-t border-white/10">
-        <div className="flex items-end gap-3">
-          {/* 语音按钮 */}
+      <div className="p-4 bg-black/20 backdrop-blur-lg border-t border-white/10">
+        <div className="flex items-end gap-3 max-w-4xl mx-auto">
           <button
-            onClick={toggleListening}
-            className={`p-3 rounded-xl transition-all ${
+            onClick={isListening ? stopListening : startListening}
+            className={`p-3 rounded-full transition-all ${
               isListening 
-                ? 'bg-red-500 animate-pulse' 
-                : 'bg-white/10 hover:bg-white/20'
+                ? 'bg-red-500 text-white animate-pulse' 
+                : 'bg-white/10 text-gray-300 hover:bg-white/20'
             }`}
+            title={isListening ? '停止录音' : '语音输入'}
           >
-            {isListening ? (
-              <MicOff className="w-5 h-5 text-white" />
-            ) : (
-              <Mic className="w-5 h-5 text-white/70" />
-            )}
+            {isListening ? <MicOff size={20} /> : <Mic size={20} />}
           </button>
-
-          {/* 输入框 */}
+          
           <div className="flex-1 relative">
             <textarea
-              ref={inputRef}
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={`输入${languages[sourceLang].name}...`}
+              onKeyPress={handleKeyPress}
+              placeholder={`输入${sourceLang}文本...`}
               rows={1}
-              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl 
-                         text-white placeholder-white/40 resize-none focus:outline-none 
-                         focus:ring-2 focus:ring-purple-500/50 focus:border-transparent"
+              className="w-full px-4 py-3 bg-white/10 text-white placeholder-gray-400 rounded-2xl border border-white/20 focus:outline-none focus:border-blue-500 resize-none"
               style={{ minHeight: '48px', maxHeight: '120px' }}
             />
           </div>
-
-          {/* 发送按钮 */}
+          
           <button
-            onClick={handleTranslate}
+            onClick={handleSend}
             disabled={!inputText.trim() || isLoading}
-            className={`p-3 rounded-xl transition-all ${
+            className={`p-3 rounded-full transition-all ${
               inputText.trim() && !isLoading
-                ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90'
-                : 'bg-white/10 opacity-50 cursor-not-allowed'
+                ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:opacity-90'
+                : 'bg-white/10 text-gray-500 cursor-not-allowed'
             }`}
           >
             {isLoading ? (
-              <Loader2 className="w-5 h-5 text-white animate-spin" />
+              <Loader2 size={20} className="animate-spin" />
             ) : (
-              <Send className="w-5 h-5 text-white" />
+              <Send size={20} />
             )}
           </button>
         </div>
-
-        {/* 提示 */}
-        <p className="text-xs text-white/40 mt-2 text-center">
-          按 Enter 发送，Shift+Enter 换行
-        </p>
       </div>
-
+      
+      {/* 复制成功提示 */}
+      <AnimatePresence>
+        {copied && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-24 left-1/2 transform -translate-x-1/2 px-4 py-2 bg-green-500 text-white rounded-lg flex items-center gap-2"
+          >
+            <Check size={16} />
+            已复制到剪贴板
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
       {/* 设置面板 */}
       <AnimatePresence>
         {showSettings && (
@@ -470,60 +430,67 @@ export default function TranslatorChat({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             onClick={() => setShowSettings(false)}
           >
             <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25 }}
-              className="absolute right-0 top-0 h-full w-80 bg-slate-900 p-6"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-slate-800 rounded-2xl p-6 max-w-md w-full"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-bold text-white">设置</h2>
+                <h2 className="text-xl font-bold text-white">设置</h2>
                 <button
                   onClick={() => setShowSettings(false)}
-                  className="p-2 hover:bg-white/10 rounded-lg"
+                  className="p-1 hover:bg-white/10 rounded-lg"
                 >
-                  <X className="w-5 h-5 text-white/70" />
+                  <X size={20} className="text-gray-400" />
                 </button>
               </div>
-
-              {/* 语音选择 */}
-              <div className="mb-6">
-                <label className="text-sm text-white/70 mb-2 block">朗读语音</label>
-                <select
-                  value={selectedVoice}
-                  onChange={(e) => setSelectedVoice(e.target.value)}
-                  className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg 
-                             text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                >
-                  {Object.entries(VOICE_LIBRARY).map(([lang, voices]) => (
-                    <optgroup key={lang} label={lang}>
-                      {voices.map((voice) => (
-                        <option key={voice.id} value={voice.id}>
-                          {voice.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-2">
+                    中文语音
+                  </label>
+                  <select
+                    value={selectedVoice['中文']}
+                    onChange={(e) => setSelectedVoice(prev => ({
+                      ...prev,
+                      '中文': e.target.value
+                    }))}
+                    className="w-full px-3 py-2 bg-white/10 text-white rounded-lg border border-white/20"
+                  >
+                    {VOICE_LIBRARY['中文'].map(voice => (
+                      <option key={voice.id} value={voice.id} className="text-black">
+                        {voice.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm text-gray-400 mb-2">
+                    缅甸语语音
+                  </label>
+                  <select
+                    value={selectedVoice['缅甸语']}
+                    onChange={(e) => setSelectedVoice(prev => ({
+                      ...prev,
+                      '缅甸语': e.target.value
+                    }))}
+                    className="w-full px-3 py-2 bg-white/10 text-white rounded-lg border border-white/20"
+                  >
+                    {VOICE_LIBRARY['缅甸语'].map(voice => (
+                      <option key={voice.id} value={voice.id} className="text-black">
+                        {voice.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-
-              {/* 清除历史 */}
-              <button
-                onClick={() => {
-                  setMessages([]);
-                  setShowSettings(false);
-                }}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 
-                           bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
-              >
-                <RotateCcw className="w-4 h-4" />
-                清除对话历史
-              </button>
             </motion.div>
           </motion.div>
         )}
