@@ -53,7 +53,7 @@ const TRANSLATION_PROMPT_TEMPLATE = `
 <<<T5>>>
 回译：
 <<<B5>>>
-
+`;
 ━━━━━━━━━━━━━━━━━━
 /**
  * Cloudflare Functions API handler
