@@ -2,21 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ============================================================
-   核心修复区域：确保翻译App布局正常 (全屏无滚动，底部固定)
-   ============================================================ */
-
-html, body {
+/* =======================================================
+   核心修复：强制占满屏幕，防止底部被遮挡
+   ======================================================= */
+html, body, #__next {
   height: 100%;
   width: 100%;
-  /* 关键：禁止浏览器窗口滚动，由 React 容器内部控制滚动 */
-  overflow: hidden; 
+  overflow: hidden; /* 禁止浏览器默认滚动 */
   margin: 0;
   padding: 0;
   -webkit-tap-highlight-color: transparent;
 }
 
-/* 工具类：隐藏滚动条但允许滚动 (用于语言切换栏) */
+/* 适配 iPhone 底部黑条 */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* 隐藏滚动条但允许滚动 (用于工具栏) */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -25,20 +28,15 @@ html, body {
   scrollbar-width: none;
 }
 
-/* 工具类：文本域滚动条美化 */
+/* 文本域滚动条美化 */
 textarea {
   scrollbar-width: thin;
-  scrollbar-color: #d1d5db transparent;
+  scrollbar-color: #cbd5e1 transparent;
 }
 
-/* 工具类：iPhone 底部安全区域适配 */
-.pb-safe {
-  padding-bottom: env(safe-area-inset-bottom);
-}
-
-/* ============================================================
-   原有样式区域 (保持不变)
-   ============================================================ */
+/* =======================================================
+   以下是你之前的项目样式，全部保留，但被 html/body 规则强制约束
+   ======================================================= */
 
 .wrapper {
   min-height: 100vh;
@@ -331,4 +329,4 @@ img {
   }
   @keyframes l1 {
   0% {background-position: right}
-  }
+}
