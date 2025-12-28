@@ -3,23 +3,25 @@ import {
   Mic, Send, Settings, X, 
   Volume2, Copy, BrainCircuit, ChevronDown,
   ExternalLink, Sparkles, ArrowRightLeft,
-  Loader2, Star, Languages, Check, Globe, Voicemail
+  Loader2, Star, Languages, Check, Globe, Voicemail, ChevronUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Head from 'next/head';
 import Link from 'next/link';
 
-// --- [重构] 发音人配置库 (包含显示名和ID) ---
+// --- 完整的发音人配置 ---
 const VOICE_LIBRARY = {
   "中文": [
     { name: '小晓 (女声)', id: 'zh-CN-XiaoxiaoNeural' },
     { name: '云希 (男声)', id: 'zh-CN-YunxiNeural' },
     { name: '晓辰 (女声)', id: 'zh-CN-XiaochenNeural' },
+    { name: '云健 (男声)', id: 'zh-CN-YunjianNeural' },
   ],
   "英文": [
     { name: 'Jenny (女声)', id: 'en-US-JennyNeural' },
     { name: 'Guy (男声)', id: 'en-US-GuyNeural' },
     { name: 'Aria (女声)', id: 'en-US-AriaNeural' },
+    { name: 'Davis (男声)', id: 'en-US-DavisNeural' },
   ],
   "缅文": [
     { name: 'Nilar (女声)', id: 'my-MM-NilarNeural' },
@@ -62,7 +64,12 @@ export default function TranslatorUI() {
   const [mounted, setMounted] = useState(false);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState([]);
+  
+  // --- 流式翻译核心状态 ---
+  const [streamingResult, setStreamingResult] = useState(null); 
+  const [finalResults, setFinalResults] = useState([]);
+  const [showAllResults, setShowAllResults] = useState(false);
+
   const [quickReplies, setQuickReplies] = useState([]);
   const [isListening, setIsListening] = useState(false);
   const [footerHeight, setFooterHeight] = useState(0);
@@ -72,9 +79,9 @@ export default function TranslatorUI() {
   const [showLangSelector, setShowLangSelector] = useState(false); 
   const [selectorType, setSelectorType] = useState('target');
   
-  // --- [新增] 用户配置 ---
+  // --- 用户配置 ---
   const [autoSendVoice, setAutoSendVoice] = useState(true);
-  const [autoSpeak, setAutoSpeak] = useState(false); // 默认关闭
+  const [autoSpeak, setAutoSpeak] = useState(false);
   const [voiceSelection, setVoiceSelection] = useState('my-MM-NilarNeural');
   
   const [apiKey, setApiKey] = useState('');
@@ -119,6 +126,7 @@ export default function TranslatorUI() {
     return () => ro.disconnect();
   }, []);
 
+  // 语音结束后自动发送逻辑
   useEffect(() => {
     if (autoSendVoice && !isListening && isVoiceInputRef.current && input.trim() && !loading) {
         handleTranslate();
@@ -129,17 +137,27 @@ export default function TranslatorUI() {
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
     }
   }, [input]);
 
+  // --- 核心：流式翻译处理函数 ---
   const handleTranslate = async (overrideInput) => {
     const textToTranslate = overrideInput || input;
     if (!textToTranslate.trim()) return;
+    
     setLoading(true);
-
-    const sourceLangLabel = SOURCE_LANGUAGES.find(l => l.code === (sourceLang === 'auto' ? 'zh' : sourceLang))?.label.split(' ')[1];
-    const targetLangLabel = TARGET_LANGUAGES.find(l => l.code === targetLang)?.label.split(' ')[1];
+    setShowAllResults(false);
+    setFinalResults([]);
+    // 初始化流式卡片，此时 translation 为空，触发 loading 动画
+    setStreamingResult({
+      id: 'streaming',
+      label: '自然直译',
+      translation: '',
+      back: '',
+      recommended: true,
+    });
+    isVoiceInputRef.current = false;
 
     try {
       const res = await fetch('/api/translate', {
@@ -149,23 +167,48 @@ export default function TranslatorUI() {
           text: textToTranslate, 
           sourceLang, 
           targetLang,
-          sourceLangForHint: sourceLangLabel,
-          targetLangForHint: targetLangLabel,
           customConfig: { apiKey, model, apiUrl }
         })
       });
-      if (!res.ok) throw new Error((await res.json()).error || '请求失败');
-      const data = await res.json();
+
+      if (!res.ok || !res.body) throw new Error('Request failed');
       
-      if (data.parsed && Array.isArray(data.parsed)) {
-        setResults(data.parsed);
-        if (autoSpeak && data.parsed.length > 0) {
-          speak(data.parsed.find(r => r.recommended)?.translation || data.parsed[0].translation);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      const streamDelimiter = "\n|||FINAL_JSON|||\n";
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const delimiterIndex = buffer.indexOf(streamDelimiter);
+        
+        if (delimiterIndex !== -1) {
+          // 1. 分离流式文本和最终JSON
+          const finalJsonPart = buffer.substring(delimiterIndex + streamDelimiter.length);
+          const finalData = JSON.parse(finalJsonPart);
+          
+          if (finalData.parsed && Array.isArray(finalData.parsed)) {
+            // 更新最终结果
+            const recommended = finalData.parsed.find(r => r.recommended) || finalData.parsed[0];
+            setStreamingResult(recommended);
+            setFinalResults(finalData.parsed);
+
+            if (autoSpeak && recommended) {
+              speak(recommended.translation);
+            }
+          }
+          break; 
+        } else {
+          // 2. 实时更新流式文本
+          setStreamingResult(prev => ({ ...prev, translation: buffer }));
         }
       }
-      setQuickReplies(data.quick_replies || []);
     } catch (e) {
       console.error(e);
+      setStreamingResult({ label: 'Error', translation: 'Translation failed. Please check network.' });
     } finally {
       setLoading(false);
     }
@@ -173,7 +216,7 @@ export default function TranslatorUI() {
 
   const toggleListening = () => {
     if (!recognitionRef.current) return;
-    isVoiceInputRef.current = true; // 标记为语音输入
+    isVoiceInputRef.current = true;
     if (isListening) {
       recognitionRef.current.stop();
     } else {
@@ -205,8 +248,11 @@ export default function TranslatorUI() {
 
       <div className="flex flex-col h-[100dvh] max-w-md mx-auto relative overflow-hidden bg-white sm:shadow-2xl sm:rounded-[2.5rem] sm:my-4 sm:h-[calc(100vh-2rem)] sm:border border-slate-200">
         
+        {/* 顶部导航 */}
         <header className="absolute top-0 left-0 right-0 z-40 p-3 flex justify-between items-start pointer-events-none">
-          <Link href="/"><a className="pointer-events-auto p-2 bg-white/90 backdrop-blur-md shadow-sm border border-slate-100 rounded-full text-slate-600"><Languages size={16} /></a></Link>
+          <Link href="/">
+            <a className="pointer-events-auto p-2 bg-white/90 backdrop-blur-md shadow-sm border border-slate-100 rounded-full text-slate-600"><Languages size={16} /></a>
+          </Link>
           <div className="pointer-events-auto flex items-center gap-0.5 bg-white/95 backdrop-blur-xl shadow-sm border border-slate-100 rounded-full p-1 pr-3 mt-0.5">
             <button onClick={() => { setSelectorType('source'); setShowLangSelector(true); }} className="px-3 py-1.5 rounded-full text-xs font-bold text-slate-600 hover:bg-slate-50">{getSourceLabel()}</button>
             <button onClick={() => { if(sourceLang !== 'auto'){ const temp = sourceLang; setSourceLang(targetLang); setTargetLang(temp);}}} className="p-1 rounded-full text-slate-300 hover:text-indigo-500 active:rotate-180 transition-transform"><ArrowRightLeft size={12} /></button>
@@ -215,65 +261,156 @@ export default function TranslatorUI() {
           <button onClick={()=>setShowSettings(true)} className="pointer-events-auto p-2 bg-white/90 backdrop-blur-md shadow-sm border border-slate-100 rounded-full text-slate-600"><Settings size={16} /></button>
         </header>
 
+        {/* 主内容区：翻译结果 */}
         <main className="flex-1 overflow-y-auto px-3 pt-20 no-scrollbar space-y-2" style={{ paddingBottom: footerHeight + 10 }}>
-            {results.length === 0 && !loading && (
+            {/* 空状态 */}
+            {!streamingResult && finalResults.length === 0 && (
               <div className="h-full flex flex-col items-center justify-center opacity-30 pointer-events-none select-none -mt-10">
                 <BrainCircuit size={60} className="text-slate-300 mb-3" strokeWidth={1} /><p className="font-bold text-slate-400 text-[10px] tracking-widest uppercase">AI TRANSLATOR</p>
               </div>
             )}
-            {loading && (
-                <div className="flex justify-center py-2">
-                    <div className="bg-white/90 backdrop-blur px-3 py-1 rounded-full shadow-sm border border-slate-100 flex items-center gap-2">
-                        <Loader2 size={12} className="animate-spin text-indigo-600" /><span className="text-[10px] font-bold text-indigo-600">Translating...</span>
-                    </div>
-                </div>
-            )}
-            <AnimatePresence>
-              {results.map((item) => (
-                <motion.div key={item.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-                    className={`bg-white rounded-xl p-3 border shadow-sm flex flex-col gap-2 group ${item.recommended ? 'border-indigo-100 shadow-indigo-50' : 'border-slate-100'}`}
+
+            {/* 1. 推荐/流式结果卡片 (始终显示) */}
+            {streamingResult && (
+                <motion.div
+                    key="streaming-card"
+                    layout
+                    className="bg-white rounded-xl p-3 border shadow-sm border-indigo-200 flex flex-col gap-2 relative overflow-hidden"
                 >
-                    <div className="flex-1">
-                        <div className="flex justify-between items-center mb-1.5">
-                            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${item.recommended ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>{item.label}</span>
-                            <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex justify-between items-center mb-1">
+                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 uppercase tracking-wider">{streamingResult.label}</span>
+                        {/* 仅在加载完成后显示操作按钮 */}
+                        {!loading && (
+                           <div className="flex items-center gap-3">
+                               <button onClick={() => speak(streamingResult.translation)} className="text-slate-400 hover:text-indigo-600"><Volume2 size={16} /></button>
+                               <button onClick={() => navigator.clipboard.writeText(streamingResult.translation)} className="text-slate-400 hover:text-emerald-600"><Copy size={16} /></button>
+                           </div>
+                        )}
+                    </div>
+                    
+                    <div className="text-base text-slate-800 font-bold leading-normal relative min-h-[24px]">
+                         {/* A. 加载且无文字：显示动态 ... 动画 */}
+                         {loading && !streamingResult.translation && (
+                            <span className="flex items-center gap-1 absolute top-0 left-0">
+                                <motion.span animate={{ opacity: [0.2, 1, 0.2] }} transition={{ duration: 1, repeat: Infinity, delay: 0 }} className="w-1.5 h-1.5 bg-indigo-600 rounded-full"/>
+                                <motion.span animate={{ opacity: [0.2, 1, 0.2] }} transition={{ duration: 1, repeat: Infinity, delay: 0.2 }} className="w-1.5 h-1.5 bg-indigo-600 rounded-full"/>
+                                <motion.span animate={{ opacity: [0.2, 1, 0.2] }} transition={{ duration: 1, repeat: Infinity, delay: 0.4 }} className="w-1.5 h-1.5 bg-indigo-600 rounded-full"/>
+                            </span>
+                         )}
+                         
+                         {/* B. 显示文字 (打字机效果) */}
+                         {streamingResult.translation}
+
+                         {/* C. 加载中有文字：显示光标 */}
+                         {loading && streamingResult.translation && (
+                           <span className="inline-block w-0.5 h-4 bg-indigo-600 ml-0.5 align-middle animate-pulse" />
+                         )}
+                    </div>
+
+                    {/* D. 回译 (流式结束后显示) */}
+                    {!loading && streamingResult.back && (
+                        <p className="text-xs text-slate-400 mt-0.5 flex items-start gap-1 leading-snug">
+                            <ArrowRightLeft size={10} className="mt-0.5 shrink-0"/> {streamingResult.back}
+                        </p>
+                    )}
+
+                    {/* E. 展开按钮 (流式结束后显示) */}
+                    {!loading && finalResults.length > 1 && (
+                      <button 
+                        onClick={() => setShowAllResults(!showAllResults)} 
+                        className="mt-2 pt-2 border-t border-slate-50 text-[10px] font-bold text-slate-400 flex items-center justify-center gap-1 hover:text-indigo-600 transition-colors w-full"
+                      >
+                         {showAllResults ? <><ChevronUp size={12}/> 收起</> : <><ChevronDown size={12}/> 查看其他 {finalResults.length - 1} 种译法</>}
+                      </button>
+                    )}
+                </motion.div>
+            )}
+
+            {/* 2. 更多结果 (点击展开) */}
+            <AnimatePresence>
+              {showAllResults && (
+                <motion.div className="space-y-2">
+                  {finalResults
+                    .filter(item => item.id !== streamingResult?.id) // 排除主卡片
+                    .map((item) => (
+                      <motion.div 
+                          key={item.id} 
+                          initial={{ opacity: 0, height: 0 }} 
+                          animate={{ opacity: 1, height: 'auto' }} 
+                          exit={{ opacity: 0, height: 0 }}
+                          className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col gap-1"
+                      >
+                         <div className="flex justify-between items-center mb-1">
+                            <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase">{item.label}</span>
+                            <div className="flex items-center gap-3">
                                 <button onClick={() => speak(item.translation)} className="text-slate-400 hover:text-indigo-600"><Volume2 size={14} /></button>
                                 <button onClick={() => navigator.clipboard.writeText(item.translation)} className="text-slate-400 hover:text-emerald-600"><Copy size={14} /></button>
                             </div>
-                        </div>
-                        <p className="text-base text-slate-800 font-medium leading-normal select-all">{item.translation}</p>
-                        {item.back && <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><ArrowRightLeft size={10}/> {item.back}</p>}
-                    </div>
+                         </div>
+                         <p className="text-sm text-slate-800 font-medium leading-relaxed">{item.translation}</p>
+                         {item.back && <p className="text-[10px] text-slate-400 flex items-center gap-1"><ArrowRightLeft size={8}/> {item.back}</p>}
+                      </motion.div>
+                  ))}
                 </motion.div>
-              ))}
+              )}
             </AnimatePresence>
         </main>
         
+        {/* 底部输入区 */}
         <div ref={footerRef} className="absolute bottom-0 left-0 right-0 z-30 pb-safe">
+           {/* 快捷回复 */}
            {quickReplies.length > 0 && (
                <div className="px-3 mb-2"><div className="flex gap-2 overflow-x-auto no-scrollbar mask-fade-sides py-1">
                   {quickReplies.map((q, i) => ( 
-                      <button key={i} onClick={() => { setInput(q); isVoiceInputRef.current = false; }} className="whitespace-nowrap px-3 py-1.5 bg-white border border-indigo-100 text-indigo-900 rounded-lg text-[10px] font-bold shadow-sm">{q}</button> 
+                      <button key={i} onClick={() => { setInput(q); isVoiceInputRef.current = false; handleTranslate(q); }} className="whitespace-nowrap px-3 py-1.5 bg-white border border-indigo-100 text-indigo-900 rounded-lg text-[10px] font-bold shadow-sm active:scale-95 transition-all">{q}</button> 
                   ))}
                </div></div>
            )}
-           <div className="bg-white/90 backdrop-blur-xl border-t border-slate-100 px-3 py-3 shadow-sm">
-              <div className="relative">
-                 <textarea ref={textareaRef} value={input} onChange={e => { setInput(e.target.value); isVoiceInputRef.current = false; }} placeholder={isListening ? "聆听中..." : "输入或说话..."} className="w-full bg-slate-100 rounded-2xl border-2 border-transparent p-4 pr-24 resize-none text-base font-medium text-slate-800 outline-none min-h-[56px] max-h-[120px] focus:bg-white focus:border-indigo-200 transition-all" rows={1} />
-                 <div className="absolute top-0 right-0 h-full flex items-center pr-3 gap-1">
-                     <button onClick={() => { setSelectorType('source'); setShowLangSelector(true); }} className="h-8 w-8 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center transition-colors hover:bg-slate-300"><Globe size={16} /></button>
-                     <button onClick={toggleListening} className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${isListening ? 'bg-rose-500 text-white' : 'bg-slate-800 text-white'}`}><Mic size={16} /></button>
+
+           {/* 输入面板 */}
+           <div className="bg-white/90 backdrop-blur-xl border-t border-slate-100 px-3 py-3 shadow-[0_-5px_20px_rgba(0,0,0,0.02)]">
+              <div className="relative w-full">
+                 {/* 大输入框 */}
+                 <textarea 
+                    ref={textareaRef} 
+                    value={input} 
+                    onChange={e => { setInput(e.target.value); isVoiceInputRef.current = false; }} 
+                    placeholder={isListening ? "正在聆听..." : "输入内容..."} 
+                    className="w-full bg-slate-100 rounded-2xl border-2 border-transparent p-4 pr-[88px] resize-none text-base font-medium text-slate-800 outline-none min-h-[64px] max-h-[140px] focus:bg-white focus:border-indigo-200 transition-all placeholder:text-slate-400" 
+                    rows={1} 
+                 />
+                 
+                 {/* 内嵌功能按钮组 (右侧) */}
+                 <div className="absolute top-2 right-2 h-[calc(100%-16px)] flex items-start gap-1.5">
+                     {/* 清空按钮 (仅有内容时显示) */}
+                     {input && (
+                         <button onClick={()=>setInput('')} className="p-1.5 text-slate-400 hover:text-rose-500 rounded-full transition-colors mt-1">
+                             <X size={16} />
+                         </button>
+                     )}
+
+                     {/* 语言选择按钮 */}
+                     <button 
+                        onClick={() => { setSelectorType('source'); setShowLangSelector(true); }} 
+                        className="h-9 w-9 rounded-xl bg-white border border-slate-200 text-slate-500 flex items-center justify-center transition-all hover:border-indigo-300 hover:text-indigo-600 active:scale-95 shadow-sm"
+                     >
+                        <Globe size={18} />
+                     </button>
+
+                     {/* 语音/发送按钮 (根据状态变化) */}
+                     <button 
+                        onClick={input.trim() ? () => handleTranslate() : toggleListening} 
+                        disabled={loading} 
+                        className={`h-9 w-9 rounded-xl flex items-center justify-center text-white shadow-md transition-all active:scale-95 ${input.trim() ? 'bg-indigo-600 shadow-indigo-200' : (isListening ? 'bg-rose-500 animate-pulse' : 'bg-slate-900 shadow-slate-200')}`}
+                     >
+                        {loading ? <Loader2 size={16} className="animate-spin"/> : (input.trim() ? <Send size={16} /> : <Mic size={18} />)}
+                     </button>
                  </div>
-              </div>
-              <div className="mt-2">
-                 <button onClick={() => handleTranslate()} disabled={loading || !input.trim()} className="w-full h-12 rounded-2xl bg-indigo-600 text-white font-bold flex items-center justify-center shadow-lg shadow-indigo-200 disabled:bg-slate-300 disabled:shadow-none transition-all active:scale-95">
-                    {loading ? <Loader2 className="animate-spin"/> : <Send/>}
-                 </button>
               </div>
            </div>
         </div>
 
-        {/* --- Modals --- */}
+        {/* 弹窗：语言选择 */}
         <AnimatePresence>
           {showLangSelector && (
             <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm flex items-end" onClick={()=>setShowLangSelector(false)}>
@@ -283,19 +420,25 @@ export default function TranslatorUI() {
                 <div className="grid grid-cols-2 gap-2 overflow-y-auto custom-scrollbar pb-2">
                     {(selectorType === 'source' ? SOURCE_LANGUAGES : TARGET_LANGUAGES).map(lang => {
                         const isSelected = (selectorType === 'source' ? sourceLang : targetLang) === lang.code;
-                        return <button key={lang.code} onClick={() => { const setter = selectorType === 'source' ? setSourceLang : setTargetLang; setter(lang.code); setShowLangSelector(false); }} className={`p-3 rounded-xl border flex items-center justify-between transition-all ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-50 hover:bg-slate-100'}`}><span className="font-bold text-xs">{lang.label}</span>{isSelected && <Check size={14} />}</button>
+                        return <button key={lang.code} onClick={() => { const setter = selectorType === 'source' ? setSourceLang : setTargetLang; setter(lang.code); setShowLangSelector(false); }} className={`p-3 rounded-xl border flex items-center justify-between transition-all ${isSelected ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'}`}><span className="font-bold text-xs">{lang.label}</span>{isSelected && <Check size={14} />}</button>
                     })}
                 </div>
               </motion.div>
             </motion.div>
           )}
+        </AnimatePresence>
+        
+        {/* 弹窗：设置 */}
+        <AnimatePresence>
           {showSettings && (
             <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center sm:justify-center" onClick={()=>setShowSettings(false)}>
               <motion.div initial={{y:"100%"}} animate={{y:0}} exit={{y:"100%"}} className="w-full sm:w-[90%] sm:max-w-sm bg-white rounded-t-[2rem] sm:rounded-[2rem] p-6 pb-safe" onClick={e=>e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-black text-slate-900">设置</h3><button onClick={()=>setShowSettings(false)} className="bg-slate-100 text-slate-500 p-2 rounded-full hover:bg-slate-200"><X size={18}/></button></div>
                 <div className="space-y-4">
+                  
+                  {/* 发音人选择 (具体人名) */}
                   <fieldset className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                    <legend className="flex items-center gap-2 px-1"><Voicemail size={14} className="text-indigo-600"/><span className="font-bold text-sm text-slate-700">发音人选择</span></legend>
+                    <legend className="flex items-center gap-2 px-1"><Voicemail size={14} className="text-indigo-600"/><span className="font-bold text-sm text-slate-700">发音人</span></legend>
                     <select value={voiceSelection} onChange={e => { setVoiceSelection(e.target.value); localStorage.setItem('tr_voice_selection', e.target.value); }} className="mt-2 w-full p-3 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none appearance-none">
                         {Object.entries(VOICE_LIBRARY).map(([lang, voices]) => (
                             <optgroup key={lang} label={lang}>
