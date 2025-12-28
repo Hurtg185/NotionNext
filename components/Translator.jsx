@@ -1,11 +1,13 @@
+// components/Translator.jsx
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Globe, ArrowRightLeft, Copy, Check, Volume2, 
   Loader2, Star, ChevronDown, ChevronUp, Settings, 
-  Mic, Send, X, MonitorSmartphone
+  Mic, Send, X
 } from 'lucide-react';
-import { clsx, type ClassValue } from "clsx";
+// 修复：去掉 type ClassValue，只引入 clsx
+import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
 // --- 工具函数 ---
@@ -20,7 +22,7 @@ const LANGUAGES = {
 };
 
 const DEFAULT_SETTINGS = {
-  apiUrl: '/api/translate', // 或者你的完整后端地址
+  apiUrl: '/api/translate', 
   apiKey: '',
   model: 'deepseek-chat',
   autoRead: true, // 自动朗读自然直译结果
@@ -65,8 +67,10 @@ export default function Translator() {
 
   // --- Effect: Load Settings ---
   useEffect(() => {
-    const saved = localStorage.getItem('app_settings');
-    if (saved) setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(saved) });
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('app_settings');
+      if (saved) setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(saved) });
+    }
   }, []);
 
   // --- Effect: Auto Scroll ---
@@ -106,7 +110,7 @@ export default function Translator() {
           customConfig: {
             apiKey: settings.apiKey,
             model: settings.model,
-            apiUrl: 'https://apis.iflow.cn/v1' // 这里的apiUrl是传给后端去调用的第三方API
+            apiUrl: 'https://apis.iflow.cn/v1' 
           }
         }),
       });
@@ -131,8 +135,8 @@ export default function Translator() {
         if (splitIndex !== -1) {
           // 前半部分是流式文本
           const streamPart = buffer.substring(0, splitIndex);
-          collectedText += streamPart; // 确保加上最后一点流
-          setStreamingText(prev => prev + streamPart); // 这里的逻辑可能多余，取决于你的后端是否在最后一次flush前已经发完了所有流
+          collectedText += streamPart; 
+          setStreamingText(prev => prev + streamPart);
 
           // 后半部分是 JSON
           const jsonPart = buffer.substring(splitIndex + '\n|||FINAL_JSON|||\n'.length);
@@ -166,8 +170,11 @@ export default function Translator() {
 
   // --- Logic: 语音识别 ---
   const startListening = () => {
-    if (!('webkitSpeechRecognition' in window)) {
-      alert('您的浏览器不支持语音识别');
+    // 兼容性检查
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+      alert('您的浏览器不支持语音识别，请使用 Chrome 或 Edge。');
       return;
     }
 
@@ -178,7 +185,7 @@ export default function Translator() {
       return;
     }
 
-    const recognition = new window.webkitSpeechRecognition();
+    const recognition = new SpeechRecognition();
     recognition.lang = voiceLang === 'zh' ? 'zh-CN' : 'my-MM';
     recognition.continuous = false;
     recognition.interimResults = true;
@@ -196,9 +203,14 @@ export default function Translator() {
       setIsListening(false);
       // 如果开启了语音自动发送且有内容
       if (settings.voiceAutoSend && inputText.trim().length > 0) {
-        // 使用 timeout 确保状态更新后再发送，避免闭包问题
+        // 使用 timeout 确保状态更新后再发送
         setTimeout(() => document.getElementById('send-btn')?.click(), 100);
       }
+    };
+
+    recognition.onerror = (event) => {
+      console.error("Speech recognition error", event.error);
+      setIsListening(false);
     };
 
     recognitionRef.current = recognition;
@@ -217,8 +229,17 @@ export default function Translator() {
   };
 
   const copyText = (text) => {
-    navigator.clipboard.writeText(text);
-    // 这里可以使用 toast 提示
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text);
+    } else {
+        // 移动端备用方案
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+    }
   };
 
   // --- UI Components ---
@@ -265,7 +286,6 @@ export default function Translator() {
               className="overflow-hidden bg-slate-50 border-t border-slate-100"
             >
               <div className="p-4 grid grid-cols-2 gap-4">
-                 {/* 这里可以添加更多语言选项，目前只做快速交换演示 */}
                  <div className="col-span-2 flex justify-center pb-2">
                     <button 
                       onClick={() => { swapLanguages(); setIsHeaderExpanded(false); }}
