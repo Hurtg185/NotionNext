@@ -1,7 +1,7 @@
 // pages/api/translate.js
 
 export const config = {
-  runtime: 'edge', // 使用 Edge Runtime 以支持流式传输 (类似 Cloudflare)
+  runtime: 'edge',
 };
 
 const TRANSLATION_PROMPT_TEMPLATE = `
@@ -54,118 +54,126 @@ const TRANSLATION_PROMPT_TEMPLATE = `
 <<<B5>>>
 `;
 
+// 解析 AI 输出
 function parseAIOutput(text) {
-  const extract = (tag) => {
-    const regex = new RegExp(`<<<${tag}>>>(.*?)(?:<<<|$)`, 's');
-    const match = text.match(regex);
+  const extractBetweenTags = (tag) => {
+    const regex = new RegExp(`<<<${tag}>>>([\\s\\S]*?)(?=<<<|【|$)`, 'g');
+    const match = regex.exec(text);
     return match?.[1]?.trim() || '';
   };
 
-  const types = [
+  const translationTypes = [
     { id: 'raw-direct', label: '原结构直译', tTag: 'T1', bTag: 'B1' },
     { id: 'natural-direct', label: '自然直译', tTag: 'T2', bTag: 'B2', recommended: true },
-    { id: 'fluent-direct', label: '顺语直译', tTag: 'T3', bTag: 'B3' },
-    { id: 'spoken', label: '口语版', tTag: 'T4', bTag: 'B4' },
-    { id: 'free', label: '自然意译', tTag: 'T5', bTag: 'B5' },
+    { id: 'smooth-direct', label: '顺语直译', tTag: 'T3', bTag: 'B3' },
+    { id: 'colloquial', label: '口语版', tTag: 'T4', bTag: 'B4' },
+    { id: 'natural-free', label: '自然意译', tTag: 'T5', bTag: 'B5' },
   ];
 
-  return types.map(type => ({
+  return translationTypes.map(type => ({
     id: type.id,
     label: type.label,
-    translation: extract(type.tTag),
-    back: extract(type.bTag),
     recommended: type.recommended || false,
-  })).filter(item => item.translation);
+    translation: extractBetweenTags(type.tTag),
+    backTranslation: extractBetweenTags(type.bTag),
+  })).filter(item => item.translation); // 过滤空结果
+}
+
+// 检测语言
+function detectLanguage(text) {
+  const myanmarRegex = /[\u1000-\u109F]/;
+  return myanmarRegex.test(text) ? 'my' : 'zh';
 }
 
 export default async function handler(req) {
-  if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 
   try {
-    const { text, sourceLang, targetLang, customConfig } = await req.json();
+    const { text, sourceLang, targetLang, stream = false } = await req.json();
 
-    const apiKey = customConfig?.apiKey || process.env.OPENAI_API_KEY; 
-    const apiUrl = customConfig?.apiUrl || 'https://apis.iflow.cn/v1'; // 注意这里
-    // 强制修正模型名称，防止用户配置了旧模型
-    let model = customConfig?.model || 'deepseek-chat';
-    if (model === 'deepseek-v3.2') model = 'deepseek-chat'; // 自动修正
+    if (!text?.trim()) {
+      return new Response(JSON.stringify({ error: '请输入要翻译的文本' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
-    const finalPrompt = TRANSLATION_PROMPT_TEMPLATE
-      .replace('{SOURCE_LANG}', sourceLang || 'auto')
-      .replace('{TARGET_LANG}', targetLang || '中文')
-      .replace('{USER_TEXT}', text);
+    // 自动检测语言
+    const detectedSourceLang = sourceLang || detectLanguage(text);
+    const detectedTargetLang = targetLang || (detectedSourceLang === 'zh' ? 'my' : 'zh');
 
-    const apiResponse = await fetch(`${apiUrl}/chat/completions`, {
+    const langNames = { zh: '中文', my: '缅甸语' };
+    
+    const prompt = TRANSLATION_PROMPT_TEMPLATE
+      .replace('{SOURCE_LANG}', langNames[detectedSourceLang])
+      .replace('{TARGET_LANG}', langNames[detectedTargetLang])
+      .replace('{USER_TEXT}', text.trim());
+
+    // 调用 AI API (这里以 OpenAI 为例，可替换为其他服务)
+    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: model,
-        messages: [{ role: 'system', content: finalPrompt }],
-        stream: true,
+        model: 'gpt-4o-mini', // 或 gpt-4
+        messages: [
+          { role: 'system', content: '你是专业的中缅双语翻译专家。' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 2000,
+        stream: stream,
       }),
     });
 
-    if (!apiResponse.ok) {
-        return new Response(JSON.stringify({ error: 'Upstream API Error' }), { status: 502 });
+    if (!aiResponse.ok) {
+      const error = await aiResponse.text();
+      throw new Error(`AI API Error: ${error}`);
     }
 
-    // --- 核心流式处理逻辑 (保留您的算法) ---
-    let fullResponseText = "";
-    let sentLength = 0;
-    const streamDelimiter = "\n|||FINAL_JSON|||\n";
+    // 流式响应
+    if (stream) {
+      return new Response(aiResponse.body, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        },
+      });
+    }
 
-    const transformStream = new TransformStream({
-      transform(chunk, controller) {
-        const chunkText = new TextDecoder().decode(chunk);
-        const lines = chunkText.split('\n').filter(line => line.startsWith('data: '));
-        
-        for (const line of lines) {
-          if (line.includes('[DONE]')) continue;
-          try {
-            const json = JSON.parse(line.substring(6));
-            const content = json.choices?.[0]?.delta?.content || "";
-            
-            if (content) {
-              fullResponseText += content;
+    // 非流式响应
+    const data = await aiResponse.json();
+    const aiContent = data.choices?.[0]?.message?.content || '';
+    const translations = parseAIOutput(aiContent);
 
-              const t2StartTag = "<<<T2>>>";
-              const t2EndTag = "<<<B2>>>";
-              const startIndex = fullResponseText.indexOf(t2StartTag);
-              
-              if (startIndex !== -1) {
-                  const contentStartIndex = startIndex + t2StartTag.length;
-                  const endIndex = fullResponseText.indexOf(t2EndTag);
-                  let currentValidText = endIndex !== -1 
-                    ? fullResponseText.substring(contentStartIndex, endIndex)
-                    : fullResponseText.substring(contentStartIndex);
-
-                  if (currentValidText.length > sentLength) {
-                      const newPart = currentValidText.substring(sentLength);
-                      controller.enqueue(new TextEncoder().encode(newPart));
-                      sentLength += newPart.length;
-                  }
-              }
-            }
-          } catch (e) { }
-        }
-      },
-      flush(controller) {
-        const parsedData = parseAIOutput(fullResponseText);
-        const finalPayload = { parsed: parsedData, quick_replies: [] };
-        controller.enqueue(new TextEncoder().encode(streamDelimiter));
-        controller.enqueue(new TextEncoder().encode(JSON.stringify(finalPayload)));
-      }
-    });
-
-    return new Response(apiResponse.body.pipeThrough(transformStream), {
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    return new Response(JSON.stringify({
+      success: true,
+      sourceText: text,
+      sourceLang: detectedSourceLang,
+      targetLang: detectedTargetLang,
+      translations,
+      rawOutput: aiContent, // 调试用，生产环境可移除
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
-    console.error(error);
-    return new Response(JSON.stringify({ error: 'Internal Error' }), { status: 500 });
+    console.error('Translation error:', error);
+    return new Response(JSON.stringify({ 
+      error: '翻译失败，请稍后重试',
+      details: error.message 
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }
