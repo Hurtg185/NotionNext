@@ -50,19 +50,8 @@ const vibrate = () => {
   } catch {}
 }
 
-/* ------------------------- Language ------------------------- */
+/* ------------------------- Prompt ------------------------- */
 
-const detectLanguage = (text) => {
-  if (/[ \u1000-\u109F]/.test(text)) return 'my-MM'
-  if (/[\u4e00-\u9fa5]/.test(text)) return 'zh-CN'
-  return 'en-US'
-}
-
-/* ------------------------- Prompt (替换为你给的) ------------------------- */
-/**
- * 注：你给的 JSON 示例存在不合法的地方（花括号/逗号），我这里修正成严格可解析版本；
- * 规则内容保持一致。
- */
 const TRANSLATION_PROMPT = {
   content: `你是一位【中缅双语翻译专家】，专门处理日常聊天场景的翻译。
 
@@ -96,37 +85,11 @@ const TRANSLATION_PROMPT = {
   ]
 }
 
-【四种风格详解】
-1. **自然直译**
-- 忠实原文语义，尽量不增不减
-- 语言自然、不刻意书面化
-
-2. **自然意译**
-- 在保留原文完整含义的基础上，让译文符合目标语言的表达习惯
-- 可调整语序，选择更自然的说法
-- 读起来流畅，像母语者说的话
-
-3. **口语化**
-- 采用日常对话的轻松表达方式
-- 使用简短句式和常用词汇
-- 可适当添加语气词（如：呢、啊、吧）
-- 更接地气、更亲切
-
-4. **保留原文结构**
-- 尽量保持原文的句式和词序
-- 确保关键词和表达的对应关系清晰
-- 译文准确但可能略显直译
-
 【翻译总原则】
 - ✅ 完整传达原文意思，不遗漏、不添加
-- ✅ 根据上下文判断语气（正式/随意、礼貌/亲密等）
-- ✅ 回译(back_translation)必须忠实翻译回源语言，用于验证准确性
-- ✅ 缅甸语使用现代日常口语表达
-- ✅ 中文使用自然流畅的口语
-- ❌ 避免过度文学化或书面语
-- ❌ 避免生僻俚语和过时网络用语
-
-现在请等待用户输入需要翻译的内容。`,
+- ✅ 回译(back_translation)必须忠实翻译回源语言
+- ✅ 缅甸语使用现代日常口语表达；中文使用自然流畅口语
+- ❌ 不要输出额外解释`,
   openingLine: '你好！请发送你需要翻译的中文或缅甸语，我会提供多种翻译版本供你选择。',
 }
 
@@ -151,8 +114,12 @@ const DEFAULT_SETTINGS = {
   apiConfig: { url: 'https://api.openai.com/v1', key: '' },
   chatModels: CHAT_MODELS_LIST,
   selectedModel: 'gpt-4o',
+  parallelModel: 'gpt-3.5-turbo', // 第二模型（设置里可改）
+  enableParallelModels: true, // 同时翻译两套结果
+
   ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural',
   autoReadFirstTranslation: true,
+
   chatBackgroundUrl: '',
   backgroundOpacity: 100,
   userAvatarUrl: '/images/user-avatar.png',
@@ -176,18 +143,14 @@ const SPEECH_RECOGNITION_LANGUAGES = [
 
 function extractJsonObject(text) {
   const s = String(text ?? '').trim()
-
-  // remove ``` blocks if any
   const stripped = s.startsWith('```')
     ? s.replace(/^```[a-zA-Z]*\n?/, '').replace(/```$/, '').trim()
     : s
 
-  // try direct parse
   try {
     return JSON.parse(stripped)
   } catch {}
 
-  // fallback: find first { ... last }
   const start = stripped.indexOf('{')
   const end = stripped.lastIndexOf('}')
   if (start !== -1 && end !== -1 && end > start) {
@@ -198,68 +161,66 @@ function extractJsonObject(text) {
   throw new Error('无法解析模型返回的 JSON。')
 }
 
-/* ------------------------- TTS ------------------------- */
+/* ------------------------- TTS (Leftsite cache) ------------------------- */
 
-async function ensureVoicesLoaded() {
-  if (!window.speechSynthesis) return []
-  const voices = window.speechSynthesis.getVoices()
-  if (voices && voices.length) return voices
+const ttsCache = new Map()
 
-  // wait for voiceschanged
-  return await new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(window.speechSynthesis.getVoices() || []), 800)
-    window.speechSynthesis.onvoiceschanged = () => {
-      clearTimeout(timer)
-      resolve(window.speechSynthesis.getVoices() || [])
-    }
-  })
+const preloadTTS = async (text, voiceName) => {
+  if (!text) return
+  const key = `${voiceName}::${text}`
+  if (ttsCache.has(key)) return
+  try {
+    const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(
+      text,
+    )}&v=${encodeURIComponent(voiceName || 'zh-CN-XiaoxiaoMultilingualNeural')}&r=-25`
+    const response = await fetch(url)
+    if (!response.ok) throw new Error('API Error')
+    const blob = await response.blob()
+    const audio = new Audio(URL.createObjectURL(blob))
+    ttsCache.set(key, audio)
+  } catch (e) {
+    console.error(`预加载 "${text}" 失败:`, e)
+  }
 }
 
-async function speakText(text, voiceName) {
-  if (!window.speechSynthesis || !text) return
-  window.speechSynthesis.cancel()
-
-  const utter = new SpeechSynthesisUtterance(text)
-  const lang = detectLanguage(text)
-  const voices = await ensureVoicesLoaded()
-
-  const hint = voiceName?.split('-')[2]?.replace('Neural', '') // Xiaoxiao...
-  const matched = voices.find((v) => (hint ? v.name.includes(hint) : false) && v.lang === lang)
-
-  if (matched) utter.voice = matched
-  else utter.lang = lang
-
-  window.speechSynthesis.speak(utter)
+const playCachedTTS = (text, voiceName) => {
+  if (!text) return
+  const key = `${voiceName}::${text}`
+  if (ttsCache.has(key)) {
+    const a = ttsCache.get(key)
+    try {
+      a.pause()
+      a.currentTime = 0
+    } catch {}
+    a.play().catch(() => {})
+  } else {
+    preloadTTS(text, voiceName).then(() => {
+      if (ttsCache.has(key)) {
+        const a = ttsCache.get(key)
+        try {
+          a.pause()
+          a.currentTime = 0
+        } catch {}
+        a.play().catch(() => {})
+      }
+    })
+  }
 }
 
 /* ------------------------- UI Subcomponents ------------------------- */
 
 const AiTtsButton = ({ text, voiceName }) => {
   const [isPlaying, setIsPlaying] = useState(false)
-
   const handleSpeak = async (e) => {
     e.stopPropagation()
-    if (!window.speechSynthesis) {
-      alert('您的浏览器不支持语音朗读功能')
-      return
+    if (!text) return
+    setIsPlaying(true)
+    try {
+      await preloadTTS(text, voiceName)
+      playCachedTTS(text, voiceName)
+    } finally {
+      setTimeout(() => setIsPlaying(false), 500)
     }
-    if (isPlaying) {
-      window.speechSynthesis.cancel()
-      setIsPlaying(false)
-      return
-    }
-    const utter = new SpeechSynthesisUtterance(text)
-    const lang = detectLanguage(text)
-    const voices = await ensureVoicesLoaded()
-    const hint = voiceName?.split('-')[2]?.replace('Neural', '')
-    const matched = voices.find((v) => (hint ? v.name.includes(hint) : false) && v.lang === lang)
-    if (matched) utter.voice = matched
-    else utter.lang = lang
-
-    utter.onstart = () => setIsPlaying(true)
-    utter.onend = () => setIsPlaying(false)
-    utter.onerror = () => setIsPlaying(false)
-    window.speechSynthesis.speak(utter)
   }
 
   return (
@@ -268,9 +229,9 @@ const AiTtsButton = ({ text, voiceName }) => {
       className={`w-10 h-10 flex items-center justify-center rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${
         isPlaying ? 'text-blue-500 animate-pulse' : 'text-gray-500 dark:text-gray-400'
       }`}
-      title={isPlaying ? '停止朗读' : '朗读'}
+      title="朗读"
     >
-      <i className={`fas ${isPlaying ? 'fa-stop-circle' : 'fa-volume-up'} text-xl`} />
+      <i className="fas fa-volume-up text-xl" />
     </button>
   )
 }
@@ -283,11 +244,10 @@ const TranslationCard = ({ result, voiceName }) => {
     setCopied(true)
     setTimeout(() => setCopied(false), 1200)
   }
+
   return (
     <div className="bg-white dark:bg-gray-800 border border-gray-200/50 dark:border-gray-700/50 shadow-md rounded-xl p-4 flex flex-col gap-2">
-      <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-        {result.style || '翻译'}
-      </div>
+      {/* UI 不显示 style */}
       <p className="text-gray-800 dark:text-gray-100 text-lg leading-relaxed flex-grow">
         {result.translation || ''}
       </p>
@@ -310,12 +270,116 @@ const TranslationCard = ({ result, voiceName }) => {
 }
 
 const TranslationResults = ({ results, voiceName }) => (
-  <div className="flex flex-col gap-3">
+  <div className="flex flex-col gap-3 mx-auto w-full max-w-[520px] px-2">
     {(results || []).map((r, idx) => (
       <TranslationCard key={idx} result={r} voiceName={voiceName} />
     ))}
   </div>
 )
+
+/**
+ * ✅ 新：两模型左右滑切换
+ * msg.modelPages = [{ modelName, modelValue, translations }]
+ */
+const ModelSwipeResults = ({ modelPages, voiceName }) => {
+  const scrollerRef = useRef(null)
+  const [page, setPage] = useState(0)
+
+  const pages = Array.isArray(modelPages) ? modelPages : []
+  const pageCount = pages.length
+
+  const onScroll = () => {
+    const el = scrollerRef.current
+    if (!el) return
+    const w = el.clientWidth || 1
+    const idx = Math.round(el.scrollLeft / w)
+    if (idx !== page) setPage(idx)
+  }
+
+  const scrollTo = (idx) => {
+    const el = scrollerRef.current
+    if (!el) return
+    const w = el.clientWidth
+    el.scrollTo({ left: idx * w, behavior: 'smooth' })
+  }
+
+  if (!pageCount) return null
+
+  return (
+    <div className="w-full">
+      {/* 顶部小标签 + 点点 */}
+      <div className="flex items-center justify-between px-2 mb-2">
+        <div className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+          {pages[page]?.modelName || '模型'}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* dots */}
+          <div className="flex items-center gap-1">
+            {pages.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  scrollTo(i)
+                }}
+                className={`w-2 h-2 rounded-full ${
+                  i === page ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+                }`}
+                title={`切换到 ${pages[i]?.modelName || `模型${i + 1}`}`}
+              />
+            ))}
+          </div>
+
+          {/* arrows */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              scrollTo(Math.max(0, page - 1))
+            }}
+            className="w-8 h-8 rounded-full hover:bg-black/10 dark:hover:bg-white/10"
+            title="上一页"
+            disabled={page === 0}
+          >
+            <i className="fas fa-chevron-left text-sm" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              scrollTo(Math.min(pageCount - 1, page + 1))
+            }}
+            className="w-8 h-8 rounded-full hover:bg-black/10 dark:hover:bg-white/10"
+            title="下一页"
+            disabled={page === pageCount - 1}
+          >
+            <i className="fas fa-chevron-right text-sm" />
+          </button>
+        </div>
+      </div>
+
+      {/* 横向滑动容器：snap */}
+      <div
+        ref={scrollerRef}
+        onScroll={onScroll}
+        className="w-full overflow-x-auto flex snap-x snap-mandatory scroll-smooth"
+        style={{ WebkitOverflowScrolling: 'touch' }}
+      >
+        {pages.map((p, idx) => (
+          <div key={idx} className="w-full shrink-0 snap-center">
+            <TranslationResults results={p.translations} voiceName={voiceName} />
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-2 text-center text-[11px] text-gray-500 dark:text-gray-400">
+        左右滑动切换不同模型翻译结果
+      </div>
+    </div>
+  )
+}
 
 const LoadingSpinner = () => {
   useEffect(() => {
@@ -325,10 +389,13 @@ const LoadingSpinner = () => {
     }, 500)
     return () => clearInterval(interval)
   }, [])
+
   return (
     <div className="flex my-4 justify-start">
-      <div className="p-3 rounded-2xl bg-white dark:bg-gray-700 shadow-md flex items-center justify-center w-20 h-14">
-        <div className="w-7 h-7 border-3 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+      <div className="px-4 py-3 rounded-2xl bg-white dark:bg-gray-700 shadow-md flex items-center gap-2">
+        <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.2s]" />
+        <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.1s]" />
+        <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" />
       </div>
     </div>
   )
@@ -337,6 +404,8 @@ const LoadingSpinner = () => {
 const MessageBubble = ({ msg }) => {
   const isUser = msg.role === 'user'
   const userBubbleClass = 'bg-blue-600 text-white rounded-br-none shadow-lg'
+
+  const hasModelPages = Array.isArray(msg.modelPages) && msg.modelPages.length > 0
   const hasTranslations = Array.isArray(msg.translations) && msg.translations.length > 0
 
   return (
@@ -345,9 +414,11 @@ const MessageBubble = ({ msg }) => {
         className={`text-left flex flex-col ${isUser ? userBubbleClass : ''} ${
           isUser && 'p-3 rounded-xl'
         }`}
-        style={{ maxWidth: '90%' }}
+        style={{ maxWidth: '92%' }}
       >
-        {hasTranslations ? (
+        {hasModelPages ? (
+          <ModelSwipeResults modelPages={msg.modelPages} voiceName={msg.voiceName} />
+        ) : hasTranslations ? (
           <TranslationResults results={msg.translations} voiceName={msg.voiceName} />
         ) : (
           <p className={`text-lg ${isUser ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`}>
@@ -359,7 +430,7 @@ const MessageBubble = ({ msg }) => {
   )
 }
 
-/* ------------------------- Settings Modal (保留你原逻辑) ------------------------- */
+/* ------------------------- Settings Modal ------------------------- */
 
 const ModelManager = ({ models, onChange, onAdd, onDelete }) => (
   <>
@@ -446,7 +517,7 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
     >
       <div
         className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg overflow-hidden relative text-gray-800 dark:text-gray-200 flex flex-col"
-        style={{ height: 'min(700px, 90vh)' }}
+        style={{ height: 'min(760px, 90vh)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-2xl font-bold p-6 shrink-0">设置</h3>
@@ -495,8 +566,36 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
             />
           </div>
 
+          <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg space-y-3">
+            <h4 className="font-bold text-lg">双模型翻译（左右滑切换）</h4>
+
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-medium">启用双模型同时翻译</label>
+              <input
+                type="checkbox"
+                checked={!!tempSettings.enableParallelModels}
+                onChange={(e) => handleChange('enableParallelModels', e.target.checked)}
+                className="h-5 w-5 text-blue-500 rounded"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium block">第二模型（Parallel Model）</label>
+              <input
+                type="text"
+                value={tempSettings.parallelModel || ''}
+                onChange={(e) => handleChange('parallelModel', e.target.value)}
+                placeholder="例如: gpt-3.5-turbo"
+                className="w-full mt-1 px-2 py-2 bg-white dark:bg-gray-800 border dark:border-gray-500 rounded-md text-sm"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                翻译结果区支持左右滑动切换两套模型输出。
+              </p>
+            </div>
+          </div>
+
           <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
-            <h4 className="font-bold mb-3 text-lg">发音人选择</h4>
+            <h4 className="font-bold mb-3 text-lg">发音人选择（TTS）</h4>
             <select
               value={tempSettings.ttsVoice}
               onChange={(e) => handleChange('ttsVoice', e.target.value)}
@@ -560,7 +659,10 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
           <button onClick={onClose} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">
             关闭
           </button>
-          <button onClick={() => onSave(tempSettings)} className="px-4 py-2 bg-blue-600 text-white rounded-md">
+          <button
+            onClick={() => onSave(tempSettings)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md"
+          >
             保存
           </button>
         </div>
@@ -614,9 +716,10 @@ const ModalSelector = ({ title, options, selectedValue, onSelect, onClose }) => 
 
 /* ------------------------- Core Chat ------------------------- */
 
-async function callChatCompletions({ apiUrl, apiKey, model, systemPrompt, userPrompt }) {
+async function callChatCompletions({ apiUrl, apiKey, model, systemPrompt, userPrompt, signal }) {
   const res = await fetch(`${apiUrl}/chat/completions`, {
     method: 'POST',
+    signal,
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
@@ -628,6 +731,7 @@ async function callChatCompletions({ apiUrl, apiKey, model, systemPrompt, userPr
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.2,
+      max_tokens: 700,
       response_format: { type: 'json_object' },
     }),
   })
@@ -645,6 +749,23 @@ async function callChatCompletions({ apiUrl, apiKey, model, systemPrompt, userPr
   const content = payload?.choices?.[0]?.message?.content
   if (!content) throw new Error('AI未能返回有效内容。')
   return content
+}
+
+async function translateWithModel({ apiUrl, apiKey, model, systemPrompt, userPrompt, signal }) {
+  const content = await callChatCompletions({
+    apiUrl,
+    apiKey,
+    model,
+    systemPrompt,
+    userPrompt,
+    signal,
+  })
+  const parsed = extractJsonObject(content)
+  const translations = parsed?.data
+  if (!Array.isArray(translations) || translations.length === 0) {
+    throw new Error(`模型(${model})返回JSON格式不正确或为空。`)
+  }
+  return translations
 }
 
 const AiChatContent = ({ onClose }) => {
@@ -668,10 +789,8 @@ const AiChatContent = ({ onClose }) => {
   const messagesEndRef = useRef(null)
   const recognitionRef = useRef(null)
 
-  // press-to-open-language modal (long press)
   const pressTimerRef = useRef(null)
 
-  // auto-send when silence
   const speechEndTimerRef = useRef(null)
   const speechCommittedRef = useRef(false)
 
@@ -680,10 +799,13 @@ const AiChatContent = ({ onClose }) => {
     latestUserInputRef.current = userInput
   }, [userInput])
 
+  const abortRef = useRef(null)
+
   const getLangName = useCallback(
     (code) => SUPPORTED_LANGUAGES.find((l) => l.code === code)?.name || code,
     [],
   )
+
   const getModelName = useCallback(
     (value) => (settings.chatModels || []).find((m) => m.value === value)?.name || value,
     [settings.chatModels],
@@ -718,7 +840,6 @@ const AiChatContent = ({ onClose }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isLoading])
 
-  // set speechLang based on sourceLang selection
   useEffect(() => {
     const lang = SUPPORTED_LANGUAGES.find((l) => l.code === sourceLang)
     if (lang) setSpeechLang(lang.speechCode)
@@ -743,6 +864,129 @@ const AiChatContent = ({ onClose }) => {
       recognitionRef.current?.stop()
     } catch {}
   }, [])
+
+  const fetchAiResponse = useCallback(
+    async (userText) => {
+      setIsLoading(true)
+      setError('')
+
+      try {
+        abortRef.current?.abort()
+      } catch {}
+      const controller = new AbortController()
+      abortRef.current = controller
+
+      const {
+        apiConfig,
+        selectedModel,
+        parallelModel,
+        enableParallelModels,
+        ttsVoice,
+      } = settings
+
+      try {
+        if (!apiConfig?.key) throw new Error('请在“设置”中配置您的 API 密钥。')
+
+        const userPrompt = `请将以下文本从 [${getLangName(sourceLang)}] 翻译成 [${getLangName(
+          targetLang,
+        )}]:\n\n${userText}`
+
+        // 1) 主模型翻译
+        const primaryPromise = translateWithModel({
+          apiUrl: apiConfig.url,
+          apiKey: apiConfig.key,
+          model: selectedModel,
+          systemPrompt: TRANSLATION_PROMPT.content,
+          userPrompt,
+          signal: controller.signal,
+        })
+
+        // 2) 第二模型翻译（可关闭）
+        const useSecond = enableParallelModels && parallelModel && parallelModel !== selectedModel
+        const secondaryPromise = useSecond
+          ? translateWithModel({
+              apiUrl: apiConfig.url,
+              apiKey: apiConfig.key,
+              model: parallelModel,
+              systemPrompt: TRANSLATION_PROMPT.content,
+              userPrompt,
+              signal: controller.signal,
+            })
+          : null
+
+        const [primaryTranslations, secondaryTranslations] = await Promise.all([
+          primaryPromise,
+          secondaryPromise,
+        ])
+
+        const pages = [
+          {
+            modelName: getModelName(selectedModel),
+            modelValue: selectedModel,
+            translations: primaryTranslations,
+          },
+        ]
+
+        if (useSecond && Array.isArray(secondaryTranslations)) {
+          pages.push({
+            modelName: getModelName(parallelModel),
+            modelValue: parallelModel,
+            translations: secondaryTranslations,
+          })
+        }
+
+        setMessages((prev) => [
+          ...prev,
+          { role: 'ai', timestamp: Date.now(), modelPages: pages, voiceName: ttsVoice },
+        ])
+
+        // 预加载所有 TTS（两模型所有卡片）
+        pages.forEach((p) => p.translations.forEach((t) => preloadTTS(t.translation, ttsVoice)))
+
+        // 自动朗读：默认读“第一页（主模型）第一条”
+        if (settings.autoReadFirstTranslation && pages[0]?.translations?.[0]?.translation) {
+          playCachedTTS(pages[0].translations[0].translation, ttsVoice)
+        }
+      } catch (err) {
+        if (err?.name === 'AbortError') return
+        const errorMessage = `请求错误: ${err.message}`
+        setMessages((prev) => [
+          ...prev,
+          { role: 'ai', content: `抱歉，出错了: ${errorMessage}`, timestamp: Date.now() },
+        ])
+        setError(errorMessage)
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [settings, getLangName, sourceLang, targetLang, getModelName],
+  )
+
+  const submitText = useCallback(
+    (text) => {
+      const t = (text || '').trim()
+      if (!t) {
+        setError('请输入要翻译的内容！')
+        return
+      }
+      const userMessage = { role: 'user', content: t, timestamp: Date.now() }
+      setMessages([userMessage])
+      setUserInput('')
+      fetchAiResponse(t)
+    },
+    [fetchAiResponse],
+  )
+
+  function handleSubmit(isRegenerate = false, textToSend = null) {
+    if (isRegenerate) {
+      const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
+      if (!lastUserMsg?.content) return
+      setMessages([lastUserMsg])
+      fetchAiResponse(lastUserMsg.content)
+      return
+    }
+    submitText(textToSend ?? userInput)
+  }
 
   const startListening = useCallback(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -770,7 +1014,6 @@ const AiChatContent = ({ onClose }) => {
     }
 
     recognition.onresult = (event) => {
-      // collect transcript
       clearTimeout(speechEndTimerRef.current)
 
       let finalText = ''
@@ -785,15 +1028,14 @@ const AiChatContent = ({ onClose }) => {
       const combined = (finalText + interimText).trim()
       setUserInput(combined)
 
-      // silence => auto send
       speechEndTimerRef.current = setTimeout(() => {
         if (speechCommittedRef.current) return
         const current = (latestUserInputRef.current || '').trim()
         if (!current) return
         speechCommittedRef.current = true
         stopListening()
-        handleSubmit(false, current)
-      }, 1200)
+        submitText(current)
+      }, 900)
     }
 
     recognition.onerror = (event) => {
@@ -807,7 +1049,7 @@ const AiChatContent = ({ onClose }) => {
     }
 
     recognition.start()
-  }, [speechLang, stopListening]) // handleSubmit defined below but hoisted via function declaration
+  }, [speechLang, stopListening, submitText])
 
   const handleMicPress = () => {
     pressTimerRef.current = setTimeout(() => {
@@ -817,78 +1059,6 @@ const AiChatContent = ({ onClose }) => {
   }
   const handleMicRelease = () => {
     clearTimeout(pressTimerRef.current)
-  }
-
-  const fetchAiResponse = useCallback(
-    async (userText) => {
-      setIsLoading(true)
-      setError('')
-
-      const { apiConfig, selectedModel, ttsVoice } = settings
-      try {
-        if (!apiConfig?.key) throw new Error('请在“设置”中配置您的 API 密钥。')
-
-        const userPrompt = `请将以下文本从 [${getLangName(sourceLang)}] 翻译成 [${getLangName(
-          targetLang,
-        )}]:\n\n${userText}`
-
-        const content = await callChatCompletions({
-          apiUrl: apiConfig.url,
-          apiKey: apiConfig.key,
-          model: selectedModel,
-          systemPrompt: TRANSLATION_PROMPT.content,
-          userPrompt,
-        })
-
-        const parsed = extractJsonObject(content)
-        const translations = parsed?.data
-
-        if (!Array.isArray(translations) || translations.length === 0) {
-          throw new Error('返回的JSON格式不正确或为空。')
-        }
-
-        setMessages((prev) => [
-          ...prev,
-          { role: 'ai', timestamp: Date.now(), translations, voiceName: ttsVoice },
-        ])
-
-        if (settings.autoReadFirstTranslation && translations[0]?.translation) {
-          speakText(translations[0].translation, ttsVoice)
-        }
-      } catch (err) {
-        const errorMessage = `请求错误: ${err.message}`
-        setMessages((prev) => [
-          ...prev,
-          { role: 'ai', content: `抱歉，出错了: ${errorMessage}`, timestamp: Date.now() },
-        ])
-        setError(errorMessage)
-      } finally {
-        setIsLoading(false)
-      }
-    },
-    [settings, getLangName, sourceLang, targetLang],
-  )
-
-  function handleSubmit(isRegenerate = false, textToSend = null) {
-    // regen: reuse last user
-    if (isRegenerate) {
-      const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
-      if (!lastUserMsg?.content) return
-      setMessages([lastUserMsg])
-      fetchAiResponse(lastUserMsg.content)
-      return
-    }
-
-    const text = (textToSend ?? userInput).trim()
-    if (!text) {
-      setError('请输入要翻译的内容！')
-      return
-    }
-
-    const userMessage = { role: 'user', content: text, timestamp: Date.now() }
-    setMessages([userMessage]) // 保持你原来的“单轮对话”体验
-    setUserInput('')
-    fetchAiResponse(text)
   }
 
   if (!isMounted) return null
@@ -955,6 +1125,7 @@ const AiChatContent = ({ onClose }) => {
                 onClick={handleSwapLanguages}
                 className="w-9 h-9 rounded-full flex items-center justify-center bg-white/60 dark:bg-gray-700/60 backdrop-blur-sm hover:bg-white/80 dark:hover:bg-gray-600/80 border border-black/10 dark:border-white/10 transition-transform active:rotate-180 disabled:opacity-50"
                 disabled={sourceLang === 'auto'}
+                title="交换语言"
               >
                 <i className="fas fa-exchange-alt text-gray-800 dark:text-gray-200" />
               </button>
@@ -973,9 +1144,10 @@ const AiChatContent = ({ onClose }) => {
 
               <button
                 onClick={() => setShowModelSelector(true)}
-                className="bg-white/60 dark:bg-gray-700/60 backdrop-blur-sm rounded-full px-4 py-2 text-sm font-semibold border border-black/10 dark:border-white/10 outline-none focus:ring-2 focus:ring-blue-500 text-gray-800 dark:text-gray-200"
+                className="w-10 h-10 rounded-full flex items-center justify-center bg-white/60 dark:bg-gray-700/60 backdrop-blur-sm border border-black/10 dark:border-white/10 hover:bg-white/80 dark:hover:bg-gray-600/80"
+                title={`切换主模型（当前：${getModelName(settings.selectedModel)}）`}
               >
-                {getModelName(settings.selectedModel)}
+                <i className="fas fa-robot text-gray-800 dark:text-gray-200" />
               </button>
             </div>
 
@@ -990,6 +1162,7 @@ const AiChatContent = ({ onClose }) => {
                   setShowSettings(true)
                 }}
                 className="w-12 h-12 flex items-center justify-center shrink-0 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                title="设置"
               >
                 <i className="fas fa-cog text-gray-600 dark:text-gray-300" />
               </button>
@@ -1022,6 +1195,7 @@ const AiChatContent = ({ onClose }) => {
                       ? 'bg-red-500 text-white scale-110 animate-pulse'
                       : 'bg-blue-500 text-white'
                 }`}
+                title={showSendButton ? '发送' : isListening ? '停止录音' : '语音输入'}
               >
                 <i
                   className={`fas ${
@@ -1037,14 +1211,17 @@ const AiChatContent = ({ onClose }) => {
       {showSettings && (
         <SettingsModal
           settings={settings}
-          onSave={handleSaveSettings}
+          onSave={(newSettings) => {
+            setSettings(newSettings)
+            setShowSettings(false)
+          }}
           onClose={() => setShowSettings(false)}
         />
       )}
 
       {showModelSelector && (
         <ModalSelector
-          title="切换模型"
+          title="切换主模型"
           options={(settings.chatModels || []).map((m) => ({ name: m.name, value: m.value }))}
           selectedValue={settings.selectedModel}
           onSelect={(val) => setSettings((s) => ({ ...s, selectedModel: val }))}
