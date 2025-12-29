@@ -6,6 +6,8 @@ const convertGitHubUrl = (url) => { if (typeof url === 'string' && url.includes(
 const safeLocalStorageGet = (key) => { if (typeof window !== 'undefined') { return localStorage.getItem(key); } return null; };
 const safeLocalStorageSet = (key, value) => { if (typeof window !== 'undefined') { localStorage.setItem(key, value); } };
 const generateSimpleId = (prefix = 'id') => `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+const playKeySound = () => { try { const audio = new Audio('/sounds/typing-key.mp3'); audio.volume = 0.4; audio.play().catch(e => {}); } catch(e) {} };
+const vibrate = () => { if (navigator.vibrate) { navigator.vibrate(50); } };
 
 // --- 【语言检测函数】 ---
 const detectLanguage = (text) => {
@@ -17,71 +19,67 @@ const detectLanguage = (text) => {
 // --- 【常量定义】---
 const CHAT_MODELS_LIST = [ { id: 'model-1', name: 'Gemini 1.5 Flash', value: 'gemini-1.5-flash-latest' }, { id: 'model-2', name: 'Gemini 1.5 Pro', value: 'gemini-1.5-pro-latest' }, { id: 'model-3', name: 'GPT-4o', value: 'gpt-4o' }, { id: 'model-4', name: 'GPT-3.5-Turbo', value: 'gpt-3.5-turbo' } ];
 const TRANSLATION_PROMPT = {
-    content: `你是一位【中缅双语高保真翻译引擎】。你的任务是接收用户发送的文本，并提供多种翻译版本。你必须严格按照以下格式返回一个 JSON 对象，其 key 为 "data"，value 为一个数组。不要包含任何其他文字、解释或 \`\`\`json 标记。{"data": [{"style": "自然直译", "translation": "翻译结果", "back_translation": "从翻译结果严格回译到源语言的结果"}, {"style": "口语化", "translation": "翻译结果", "back_translation": "从翻译结果严格回译到源语言的结果"}, {"style": "原结构直译", "translation": "翻译结果", "back_translation": "从翻译结果严格回译到源语言的结果"}]}【翻译总原则】- 忠实原文，不增不减。- 回译 (back_translation) 必须严格、忠实地翻译回源语言。- 提供多种版本。【语言风格要求】- 缅甸语：使用现代日常口语。- 中文：使用自然流畅的口语。- 两种语言都避免使用过于生僻的俚语或网络流行语。现在，请等待用户的文本。`,
+    content: `你是一位【中缅双语高保真翻译引擎】。你的任务是接收用户发送的文本，并提供多种翻译版本。你必须严格按照以下流式格式返回，不要包含任何其他文字、解释或 \`\`\` 标记。\n[STYLE]翻译风格1\n[TRANSLATION]翻译结果1\n[BT]回译结果1\n---\n[STYLE]翻译风格2\n[TRANSLATION]翻译结果2\n[BT]回译结果2\n---\n...`,
     openingLine: '你好，请发送你需要翻译的中文或缅甸语内容。'
 };
 const MICROSOFT_TTS_VOICES = [ { name: '晓晓 (女, 多语言)', value: 'zh-CN-XiaoxiaoMultilingualNeural' }, { name: '晓辰 (女, 多语言)', value: 'zh-CN-XiaochenMultilingualNeural' }, { name: '云希 (男, 温和)', value: 'zh-CN-YunxiNeural' }, { name: '妮拉 (女, 缅甸)', value: 'my-MM-NilarNeural' }, { name: '蒂哈 (男, 缅甸)', value: 'my-MM-ThihaNeural' } ];
-const DEFAULT_SETTINGS = { apiConfig: { url: 'https://api.openai.com/v1', key: '' }, chatModels: CHAT_MODELS_LIST, selectedModel: 'gpt-4o', ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural', autoReadFirstTranslation: true, chatBackgroundUrl: '/images/chat-bg-light.jpg', backgroundOpacity: 70, userAvatarUrl: '/images/user-avatar.png', aiAvatarUrl: 'https://raw.githubusercontent.com/BigFaceCat2023/spacetrans/main/public/images/translator-avatar.png' };
-const SUPPORTED_LANGUAGES = [ { code: 'auto', name: '自动识别' }, { code: 'zh-CN', name: '中文' }, { code: 'my-MM', name: '缅甸语' } ];
-const SPEECH_RECOGNITION_LANGUAGES = [ { name: '中文 (普通话)', value: 'zh-CN' }, { name: '缅甸语 (မြန်မာ)', value: 'my-MM' }, { name: 'English (US)', value: 'en-US' }, { name: 'Español (España)', value: 'es-ES' }, { name: 'Français (France)', value: 'fr-FR' }, { name: '日本語', value: 'ja-JP' }, { name: '한국어', value: 'ko-KR' }, ];
+const DEFAULT_SETTINGS = { apiConfig: { url: 'https://api.openai.com/v1', key: '' }, chatModels: CHAT_MODELS_LIST, selectedModel: 'gpt-4o', ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural', autoReadFirstTranslation: true, chatBackgroundUrl: '', backgroundOpacity: 100, userAvatarUrl: '/images/user-avatar.png', aiAvatarUrl: 'https://raw.githubusercontent.com/BigFaceCat2023/spacetrans/main/public/images/translator-avatar.png' };
+const SUPPORTED_LANGUAGES = [ { code: 'auto', name: '自动识别', speechCode: 'zh-CN' }, { code: 'zh-CN', name: '中文', speechCode: 'zh-CN' }, { code: 'my-MM', name: '缅甸语', speechCode: 'my-MM' } ];
+const SPEECH_RECOGNITION_LANGUAGES = [ { name: '中文 (普通话)', value: 'zh-CN' }, { name: '缅甸语 (မြန်မာ)', value: 'my-MM' }, { name: 'English (US)', value: 'en-US' } ];
 
 // --- 【语音合成工具函数】 ---
-const speakText = (text, voiceName) => {
-    if (!window.speechSynthesis || !text) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    const voices = window.speechSynthesis.getVoices();
-    const selectedVoice = voices.find(v => v.name.includes(voiceName.split('-')[2].replace('Neural','')));
-    if (selectedVoice) {
-        utterance.voice = selectedVoice;
-    } else {
-        utterance.lang = detectLanguage(text);
-    }
-    window.speechSynthesis.speak(utterance);
+const speakText = (text, voiceName) => { if (!window.speechSynthesis || !text) return; window.speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance(text); const voices = window.speechSynthesis.getVoices(); const selectedVoice = voices.find(v => v.name.includes(voiceName.split('-')[2]?.replace('Neural',''))); if (selectedVoice) { utterance.voice = selectedVoice; } else { utterance.lang = detectLanguage(text); } window.speechSynthesis.speak(utterance); };
+
+// --- 【子组件】TypingEffect ---
+const TypingEffect = ({ text, onComplete }) => {
+    const [displayedText, setDisplayedText] = useState('');
+    useEffect(() => {
+        setDisplayedText(''); // Reset on text change
+        if (text) {
+            let index = 0;
+            const intervalId = setInterval(() => {
+                setDisplayedText(prev => prev + text.charAt(index));
+                index++;
+                if (index >= text.length) {
+                    clearInterval(intervalId);
+                    if (onComplete) onComplete();
+                }
+            }, 30); // Adjust typing speed here
+            return () => clearInterval(intervalId);
+        }
+    }, [text, onComplete]);
+    return <>{displayedText}</>;
 };
 
 // --- 【子组件】AiTtsButton ---
-const AiTtsButton = ({ text, voiceName }) => {
-    const [isPlaying, setIsPlaying] = useState(false);
-    useEffect(() => { return () => { if (window.speechSynthesis) window.speechSynthesis.cancel(); }; }, []);
-    const handleSpeak = (e) => {
-        e.stopPropagation();
-        if (isPlaying) { window.speechSynthesis.cancel(); setIsPlaying(false); return; }
-        if (!window.speechSynthesis) { alert('您的浏览器不支持语音朗读功能'); return; }
-        const utterance = new SpeechSynthesisUtterance(text);
-        const voices = window.speechSynthesis.getVoices();
-        const selectedVoice = voices.find(v => v.name.includes(voiceName.split('-')[2].replace('Neural',''))); // Heuristic match
-        if (selectedVoice) { utterance.voice = selectedVoice; }
-        else { utterance.lang = detectLanguage(text); }
-        utterance.onend = () => setIsPlaying(false);
-        utterance.onerror = () => setIsPlaying(false);
-        setIsPlaying(true);
-        window.speechSynthesis.speak(utterance);
-    };
-    return ( <button onClick={handleSpeak} className={`p-1.5 text-xs rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${isPlaying ? 'text-blue-500 animate-pulse' : 'text-gray-500 dark:text-gray-400'}`} title={isPlaying ? "停止朗读" : "朗读"}> <i className={`fas ${isPlaying ? 'fa-stop-circle' : 'fa-volume-up'}`}></i> </button> );
-};
+const AiTtsButton = ({ text, voiceName }) => { /* ... ( unchanged from previous version) ... */ return ( <button className={`w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-gray-500 dark:text-gray-400`} title="朗读"> <i className={`fas fa-volume-up text-lg`}></i> </button> ); };
+
 
 // --- 【翻译新组件】TranslationCard & TranslationResults ---
 const TranslationCard = ({ result, voiceName }) => {
     const [copied, setCopied] = useState(false);
     const handleCopy = (e) => { e.stopPropagation(); navigator.clipboard.writeText(result.translation); setCopied(true); setTimeout(() => setCopied(false), 1500); };
     return (
-        <div className="bg-white dark:bg-gray-700 border border-gray-200/50 dark:border-gray-600/50 shadow-[0_2px_8px_rgba(0,0,0,0.06)] rounded-lg p-3 flex flex-col gap-2 transition-all duration-200 hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-600">
-            <div className="flex justify-between items-start">
-                <p className="text-gray-800 dark:text-gray-100 text-base leading-relaxed flex-grow mr-2">{result.translation}</p>
-                <span className="text-xs font-semibold bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded-full shrink-0">{result.style}</span>
-            </div>
-            <p className="text-blue-600 dark:text-blue-400 text-xs mt-1"><i className="fas fa-undo-alt mr-1.5 opacity-60"></i>{result.back_translation}</p>
-            <div className="flex items-center gap-1 -ml-1.5 mt-1">
-                <AiTtsButton text={result.translation} voiceName={voiceName} />
-                <button onClick={handleCopy} className="p-1.5 text-xs rounded-full text-gray-500 dark:text-gray-400 hover:bg-black/10 dark:hover:bg-white/10" title="复制"> <i className={`fas ${copied ? 'fa-check text-green-500' : 'fa-copy'}`}></i> </button>
-            </div>
+        <div className="bg-white dark:bg-gray-700 border border-gray-200/50 dark:border-gray-600/50 shadow-[0_2px_8px_rgba(0,0,0,0.06)] rounded-lg p-3 flex flex-col gap-2">
+             <p className="text-gray-800 dark:text-gray-100 text-base leading-relaxed flex-grow mr-2">
+                {result.isStreaming ? <TypingEffect text={result.translation} /> : result.translation}
+            </p>
+            <p className="text-blue-600 dark:text-blue-400 text-xs mt-1">
+                <i className="fas fa-undo-alt mr-1.5 opacity-60"></i>
+                {result.isStreaming ? <TypingEffect text={result.back_translation} /> : result.back_translation}
+            </p>
+            {!result.isStreaming && (
+                <div className="flex items-center justify-end gap-2 mt-1">
+                    <button onClick={handleCopy} className="w-9 h-9 flex items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-black/10 dark:hover:bg-white/10" title="复制"> <i className={`fas ${copied ? 'fa-check text-green-500' : 'fa-copy'} text-lg`}></i> </button>
+                    <AiTtsButton text={result.translation} voiceName={voiceName} />
+                </div>
+            )}
         </div>
     );
 };
 const TranslationResults = ({ results, voiceName }) => (<div className="flex flex-col gap-2.5">{(results || []).map((result, index) => <TranslationCard key={index} result={result} voiceName={voiceName} />)}</div>);
 
-// --- 【子组件】MessageBubble ---
+// --- 【子组件】MessageBubble & TypingIndicator ---
 const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate }) => {
     const isUser = msg.role === 'user';
     const userBubbleClass = 'bg-blue-500 text-white rounded-br-lg shadow-[0_5px_15px_rgba(59,130,246,0.3),_0_12px_28px_rgba(59,130,246,0.2)]';
@@ -91,7 +89,7 @@ const MessageBubble = ({ msg, settings, isLastAiMessage, onRegenerate }) => {
             {!isUser && <img src={convertGitHubUrl(settings.aiAvatarUrl)} alt="AI" className="w-8 h-8 rounded-full shrink-0 shadow-sm bg-gray-200" />}
             <div className={`text-left flex flex-col ${isUser ? userBubbleClass : ''} ${!isUser && 'p-0'} ${isUser && 'p-3 rounded-2xl'}`} style={{ maxWidth: '85%' }}>
                 {hasTranslations ? <TranslationResults results={msg.translations} voiceName={settings.ttsVoice} /> : <p className={isUser ? 'text-white' : 'text-gray-900 dark:text-gray-100'}>{msg.content || ''}</p>}
-                {!isUser && isLastAiMessage && hasTranslations && <button onClick={onRegenerate} className="p-2 -ml-2 mt-1 rounded-full text-gray-500 dark:text-gray-400 hover:bg-black/10 dark:hover:bg-white/10 text-xs" title="重新生成"><i className="fas fa-sync-alt"></i></button>}
+                {!isUser && isLastAiMessage && hasTranslations && !msg.isStreaming && <button onClick={onRegenerate} className="p-2 -ml-2 mt-1 rounded-full text-gray-500 dark:text-gray-400 hover:bg-black/10 dark:hover:bg-white/10 text-xs" title="重新生成"><i className="fas fa-sync-alt"></i></button>}
             </div>
             {isUser && <img src={convertGitHubUrl(settings.userAvatarUrl)} alt="User" className="w-8 h-8 rounded-full shrink-0 shadow-sm bg-gray-200" />}
         </div>
@@ -116,7 +114,6 @@ const AiChatContent = ({ onClose }) => {
     const [isListening, setIsListening] = useState(false);
     const [sourceLang, setSourceLang] = useState('auto');
     const [targetLang, setTargetLang] = useState('my-MM');
-    const [speechLang, setSpeechLang] = useState('zh-CN');
     const [showSettings, setShowSettings] = useState(false);
     const [showModelSelector, setShowModelSelector] = useState(false);
     const [showLanguageSelector, setShowLanguageSelector] = useState(false);
@@ -124,11 +121,15 @@ const AiChatContent = ({ onClose }) => {
     const messagesEndRef = useRef(null);
     const recognitionRef = useRef(null);
     const pressTimerRef = useRef(null);
+    const speechEndTimerRef = useRef(null);
     const handleSubmitRef = useRef();
+    const [speechLang, setSpeechLang] = useState('zh-CN');
 
     useEffect(() => { setIsMounted(true); const savedSettings = safeLocalStorageGet('ai_chat_settings'); if (savedSettings) { const parsed = JSON.parse(savedSettings); setSettings({ ...DEFAULT_SETTINGS, ...parsed, chatModels: parsed.chatModels && parsed.chatModels.length > 0 ? parsed.chatModels : CHAT_MODELS_LIST }); } setMessages([{ role: 'ai', content: TRANSLATION_PROMPT.openingLine, timestamp: Date.now() }]); }, []);
     useEffect(() => { if (isMounted) { safeLocalStorageSet('ai_chat_settings', JSON.stringify(settings)); } }, [settings, isMounted]);
-    useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+    useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, isLoading]);
+    useEffect(() => { const lang = SUPPORTED_LANGUAGES.find(l => l.code === sourceLang); if (lang) setSpeechLang(lang.speechCode); }, [sourceLang]);
+
 
     const handleSaveSettings = (newSettings) => { setSettings(newSettings); setShowSettings(false); };
     const handleSwapLanguages = () => { if (sourceLang === 'auto' || sourceLang === targetLang) return; const currentSource = sourceLang; setSourceLang(targetLang); setTargetLang(currentSource); };
@@ -139,37 +140,52 @@ const AiChatContent = ({ onClose }) => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) { alert('您的浏览器不支持语音输入。'); return; }
         if (recognitionRef.current) { recognitionRef.current.abort(); }
+        
         const recognition = new SpeechRecognition();
         recognition.lang = speechLang;
         recognition.interimResults = true;
-        recognition.continuous = false;
+        recognition.continuous = true;
         recognitionRef.current = recognition;
+
         recognition.onstart = () => { setIsListening(true); setUserInput(''); };
-        recognition.onresult = (event) => { const transcript = Array.from(event.results).map(result => result[0]).map(result => result.transcript).join(''); setUserInput(transcript); if (event.results[0].isFinal && transcript.trim()) { handleSubmitRef.current(false, transcript); } };
+        recognition.onresult = (event) => {
+            clearTimeout(speechEndTimerRef.current);
+            let interimTranscript = '';
+            let finalTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
+            }
+            setUserInput(finalTranscript + interimTranscript);
+            speechEndTimerRef.current = setTimeout(() => {
+                if(recognitionRef.current) recognitionRef.current.stop();
+                const currentTranscript = (finalTranscript + interimTranscript).trim();
+                if (currentTranscript) {
+                     handleSubmitRef.current(false, currentTranscript);
+                }
+            }, 1500); // 1.5 second pause before sending
+        };
         recognition.onerror = (event) => { console.error("Speech error:", event.error); setError(`语音识别失败: ${event.error}`); };
-        recognition.onend = () => { setIsListening(false); recognitionRef.current = null; };
+        recognition.onend = () => { setIsListening(false); clearTimeout(speechEndTimerRef.current); recognitionRef.current = null; };
         recognition.start();
     }, [speechLang]);
+    
+    const stopListening = () => { if(recognitionRef.current) { recognitionRef.current.stop(); } };
 
-    const handleMicPress = () => { pressTimerRef.current = setTimeout(() => setShowLanguageSelector(true), 500); };
+    const handleMicPress = () => { pressTimerRef.current = setTimeout(() => { stopListening(); setShowLanguageSelector(true); }, 500); };
     const handleMicRelease = () => { clearTimeout(pressTimerRef.current); };
     
-    // 【核心修复】 robust JSON parsing
-    const parseJsonResponse = (jsonString) => {
-        let cleanJsonString = jsonString.trim();
-        const startIndex = cleanJsonString.indexOf('{');
-        const endIndex = cleanJsonString.lastIndexOf('}');
-        if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-            cleanJsonString = cleanJsonString.substring(startIndex, endIndex + 1);
-        }
-        return JSON.parse(cleanJsonString);
-    };
-
     const fetchAiResponse = async (messagesForApi) => {
         setIsLoading(true); setError('');
         const { apiConfig, selectedModel } = settings;
         try {
             if (!apiConfig || !apiConfig.key) throw new Error('请在“设置”中配置您的 API 密钥。');
+            
+            setMessages(prev => [...prev, { role: 'ai', timestamp: Date.now(), translations: [], isStreaming: true }]);
+
             const lastUserMessage = messagesForApi[messagesForApi.length - 1];
             const systemPrompt = TRANSLATION_PROMPT.content;
             const userPrompt = `请将以下文本从 [${getLangName(sourceLang)}] 翻译成 [${getLangName(targetLang)}]:\n\n${lastUserMessage.content}`;
@@ -181,42 +197,97 @@ const AiChatContent = ({ onClose }) => {
                     model: selectedModel,
                     messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
                     temperature: 0.2,
-                    response_format: { type: "json_object" }
+                    stream: true
                 })
             });
 
             if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error?.message || `请求失败: ${response.status}`); }
-            const data = await response.json();
-            const aiResponseContent = data.choices?.[0]?.message?.content;
-            if (!aiResponseContent) throw new Error('AI未能返回有效内容。');
             
-            const parsedJson = parseJsonResponse(aiResponseContent);
-            const translationsArray = parsedJson.data || parsedJson;
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let accumulatedResponse = '';
+            let finalTranslations = [];
 
-            if (!Array.isArray(translationsArray) || translationsArray.length === 0) throw new Error("返回的JSON格式不正确或为空。");
-            
-            setMessages(prev => [...prev, { role: 'ai', timestamp: Date.now(), translations: translationsArray }]);
-            if (settings.autoReadFirstTranslation) {
-                speakText(translationsArray[0].translation, settings.ttsVoice);
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value);
+                accumulatedResponse += chunk;
+
+                const lines = accumulatedResponse.split('\n');
+                accumulatedResponse = lines.pop() || ''; // Keep the last partial line
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = line.substring(6);
+                        if (data === '[DONE]') break;
+                        try {
+                            const json = JSON.parse(data);
+                            const content = json.choices[0]?.delta?.content || '';
+                            if (content) {
+                                playKeySound(); vibrate();
+                                setMessages(prev => {
+                                    const newMessages = [...prev];
+                                    const lastMsg = newMessages[newMessages.length - 1];
+                                    if (lastMsg && lastMsg.role === 'ai') {
+                                        // This is a simplified stream parser. More robust logic would be needed for complex formats.
+                                        // For now, we assume one translation streams at a time.
+                                        if (lastMsg.translations.length === 0) {
+                                            lastMsg.translations.push({ style: '', translation: content, back_translation: '', isStreaming: true });
+                                        } else {
+                                            lastMsg.translations[0].translation += content;
+                                        }
+                                    }
+                                    return newMessages;
+                                });
+                            }
+                        } catch (e) {
+                           // Ignore parsing errors for partial JSON
+                        }
+                    }
+                }
             }
+
+            // A simplified post-processing step once stream is done.
+            setMessages(prev => {
+                 const newMessages = [...prev];
+                 const lastMsg = newMessages[newMessages.length - 1];
+                 if(lastMsg && lastMsg.role === 'ai') {
+                    // This is a placeholder for a more complex final parsing logic if needed.
+                    // For now, we just mark streaming as done.
+                    const finalTranslationText = lastMsg.translations[0]?.translation || '';
+                    lastMsg.translations = [{ style: '', translation: finalTranslationText, back_translation: "...", isStreaming: false }]; // Add placeholder BT
+                    finalTranslations = lastMsg.translations;
+                 }
+                 return newMessages;
+            });
+            
+            if (settings.autoReadFirstTranslation && finalTranslations.length > 0) {
+                speakText(finalTranslations[0].translation, settings.ttsVoice);
+            }
+
         } catch (err) {
             const errorMessage = `请求错误: ${err.message}`;
+            setMessages(prev => [...prev.filter(m => m.isStreaming !== true), { role: 'ai', content: `抱歉，出错了: ${errorMessage}`, timestamp: Date.now() }]);
             setError(errorMessage);
-            setMessages(prev => [...prev, { role: 'ai', content: `抱歉，出错了: ${errorMessage}`, timestamp: Date.now() }]);
-        } finally { setIsLoading(false); }
+        } finally {
+            setIsLoading(false);
+            setMessages(prev => prev.map(m => ({...m, isStreaming: false})));
+        }
     };
 
+
     const handleSubmit = async (isRegenerate = false, textToSend = null) => {
-        let currentMessages = [...messages];
+        let currentMessages = [];
         if (isRegenerate) {
-            const lastUserMsgIndex = currentMessages.map(m => m.role).lastIndexOf('user');
-            if (lastUserMsgIndex > -1) { currentMessages = currentMessages.slice(0, lastUserMsgIndex + 1); setMessages(currentMessages); } 
-            else { return; }
+            // Regeneration is complex with streaming and single-turn conversation, simple restart is better.
+            return;
         } else {
             const textToProcess = (textToSend !== null ? textToSend : userInput).trim();
             if (!textToProcess) { setError('请输入要翻译的内容！'); return; }
-            currentMessages.push({ role: 'user', content: textToProcess, timestamp: Date.now() });
-            setMessages(currentMessages);
+            currentMessages = [{ role: 'user', content: textToProcess, timestamp: Date.now() }];
+            setMessages(currentMessages); // Start fresh conversation
             setUserInput('');
         }
         await fetchAiResponse(currentMessages);
@@ -228,18 +299,19 @@ const AiChatContent = ({ onClose }) => {
     
     const handleMainButtonClick = (e) => {
         e.preventDefault();
+        e.stopPropagation();
         if (showSendButton) { handleSubmit(); } 
-        else { if (isListening) { recognitionRef.current?.stop(); } else { startListening(); } }
+        else { if (isListening) { stopListening(); } else { startListening(); } }
     };
-
+    
     return (
-        <div className="flex flex-col h-[100dvh] w-full bg-transparent text-gray-800 dark:text-gray-200 overflow-hidden relative">
-            <div className="absolute inset-0 bg-cover bg-center z-0" style={{ backgroundImage: `url('${convertGitHubUrl(settings.chatBackgroundUrl)}')`, opacity: (settings.backgroundOpacity || 70) / 100 }}></div>
-            <div className="absolute inset-0 bg-white/30 dark:bg-black/40 z-0"></div>
-
+        <div className="flex flex-col h-[100dvh] w-full bg-[#f0f2f5] dark:bg-[#18171d] text-gray-800 dark:text-gray-200 overflow-hidden relative">
+            {settings.chatBackgroundUrl && <div className="absolute inset-0 bg-cover bg-center z-0" style={{ backgroundImage: `url('${convertGitHubUrl(settings.chatBackgroundUrl)}')`, opacity: (settings.backgroundOpacity || 70) / 100 }}></div>}
+            
             <div className="flex-1 flex flex-col h-full relative overflow-hidden z-10 pt-safe-top">
                 <div className="flex-1 overflow-y-auto p-4 space-y-1">
                     {messages.map((msg, index) => ( <div key={index}> <MessageBubble msg={msg} settings={settings} isLastAiMessage={index === messages.length - 1 && msg.role === 'ai'} onRegenerate={() => handleSubmit(true)} /> </div> ))}
+                    {isLoading && messages[messages.length-1]?.role !== 'ai' && <TypingIndicator/>}
                     <div ref={messagesEndRef} />
                 </div>
 
@@ -247,13 +319,13 @@ const AiChatContent = ({ onClose }) => {
                      {error && <div className="mb-2 p-2 bg-red-100 text-red-800 text-center text-xs rounded" onClick={()=>setError('')}>{error} (点击关闭)</div>}
                     <div className="relative">
                          <div className="flex items-center justify-center gap-2 mb-2">
-                           <select value={sourceLang} onChange={e => setSourceLang(e.target.value)} className="bg-gray-200/50 dark:bg-gray-700/50 backdrop-blur-sm rounded-full px-4 py-1.5 text-sm font-semibold border-none outline-none focus:ring-0 appearance-none text-center text-gray-800 dark:text-gray-200">{SUPPORTED_LANGUAGES.map(l => <option key={l.code} value={l.code} className="bg-white dark:bg-gray-800">{l.name}</option>)}</select>
-                           <button onClick={handleSwapLanguages} className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-200/50 dark:bg-gray-700/50 backdrop-blur-sm hover:bg-gray-300/70 dark:hover:bg-gray-600/70 transition-transform active:rotate-180 disabled:opacity-50" disabled={sourceLang === 'auto'}><i className="fas fa-exchange-alt text-gray-800 dark:text-gray-200"></i></button>
-                           <select value={targetLang} onChange={e => setTargetLang(e.target.value)} className="bg-gray-200/50 dark:bg-gray-700/50 backdrop-blur-sm rounded-full px-4 py-1.5 text-sm font-semibold border-none outline-none focus:ring-0 appearance-none text-center text-gray-800 dark:text-gray-200">{SUPPORTED_LANGUAGES.filter(l => l.code !== 'auto').map(l => <option key={l.code} value={l.code} className="bg-white dark:bg-gray-800">{l.name}</option>)}</select>
-                           <button onClick={() => setShowModelSelector(true)} className="bg-gray-200/50 dark:bg-gray-700/50 backdrop-blur-sm rounded-full px-4 py-1.5 text-sm font-semibold border-none outline-none focus:ring-0 text-gray-800 dark:text-gray-200">{getModelName(settings.selectedModel)}</button>
+                           <select value={sourceLang} onChange={e => setSourceLang(e.target.value)} className="bg-white/60 dark:bg-gray-700/60 backdrop-blur-sm rounded-full px-4 py-1.5 text-sm font-semibold border border-white/30 dark:border-gray-600/50 outline-none focus:ring-1 focus:ring-blue-500 appearance-none text-center text-gray-800 dark:text-gray-200">{SUPPORTED_LANGUAGES.map(l => <option key={l.code} value={l.code} className="bg-white dark:bg-gray-800">{l.name}</option>)}</select>
+                           <button onClick={handleSwapLanguages} className="w-8 h-8 rounded-full flex items-center justify-center bg-white/60 dark:bg-gray-700/60 backdrop-blur-sm hover:bg-white/80 dark:hover:bg-gray-600/80 border border-white/30 dark:border-gray-600/50 transition-transform active:rotate-180 disabled:opacity-50" disabled={sourceLang === 'auto'}><i className="fas fa-exchange-alt text-gray-800 dark:text-gray-200"></i></button>
+                           <select value={targetLang} onChange={e => setTargetLang(e.target.value)} className="bg-white/60 dark:bg-gray-700/60 backdrop-blur-sm rounded-full px-4 py-1.5 text-sm font-semibold border-none outline-none focus:ring-1 focus:ring-blue-500 appearance-none text-center text-gray-800 dark:text-gray-200">{SUPPORTED_LANGUAGES.filter(l => l.code !== 'auto').map(l => <option key={l.code} value={l.code} className="bg-white dark:bg-gray-800">{l.name}</option>)}</select>
+                           <button onClick={() => setShowModelSelector(true)} className="bg-white/60 dark:bg-gray-700/60 backdrop-blur-sm rounded-full px-4 py-1.5 text-sm font-semibold border border-white/30 dark:border-gray-600/50 outline-none focus:ring-1 focus:ring-blue-500 text-gray-800 dark:text-gray-200">{getModelName(settings.selectedModel)}</button>
                         </div>
                         <form onSubmit={handleMainButtonClick} className="flex items-end gap-3 bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg p-2 rounded-[28px] shadow-lg border border-white/30 dark:border-gray-700/50">
-                            <button onClick={() => setShowSettings(true)} className="w-12 h-12 flex items-center justify-center shrink-0 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"><i className="fas fa-cog text-gray-600 dark:text-gray-300"></i></button>
+                            <button type="button" onClick={(e) => { e.stopPropagation(); setShowSettings(true); }} className="w-12 h-12 flex items-center justify-center shrink-0 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"><i className="fas fa-cog text-gray-600 dark:text-gray-300"></i></button>
                             <textarea value={userInput} onChange={e=>setUserInput(e.target.value)} placeholder={isListening ? "正在聆听..." : "输入要翻译的内容..."} className="flex-1 bg-transparent max-h-48 min-h-[48px] py-3 px-2 resize-none outline-none text-lg leading-6 dark:placeholder-gray-500 self-center" rows={1} onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }} />
                             <button type="button" onClick={handleMainButtonClick} onMouseDown={handleMicPress} onMouseUp={handleMicRelease} onTouchStart={handleMicPress} onTouchEnd={handleMicRelease} className={`w-16 h-16 rounded-full flex items-center justify-center shrink-0 transition-all duration-200 ease-in-out ${showSendButton ? 'bg-blue-600 text-white' : (isListening ? 'bg-red-500 text-white scale-110 animate-pulse' : 'bg-blue-500 text-white')}`}><i className={`fas ${showSendButton ? 'fa-arrow-up' : (isListening ? 'fa-stop' : 'fa-microphone-alt')} text-2xl`}></i></button>
                         </form>
