@@ -14,8 +14,17 @@ export type CheatDict = {
   items: CheatItem[]
 }
 
-// 严格匹配：只 trim，不做标点/空格归一
-const normalizeStrict = (s: string) => (s ?? '').trim()
+/**
+ * 归一化：忽略标点/符号/空白
+ * - 去掉所有 Unicode 标点(P) + 符号(S) + 空白
+ * - 中文/缅文/越文/泰文/老挝文/俄文等字母文字保留
+ */
+const normalizeLoose = (s: string) => {
+  const t = (s ?? '').trim()
+  // 需要 ES2018+ 支持 unicode property escapes（Next.js 默认 ok）
+  // \p{P} 标点, \p{S} 符号, \s 空白
+  return t.replace(/[\p{P}\p{S}\s]+/gu, '').toLowerCase()
+}
 
 export async function loadCheatDict(sourceLang: string): Promise<CheatDict | null> {
   try {
@@ -31,22 +40,23 @@ export async function loadCheatDict(sourceLang: string): Promise<CheatDict | nul
   }
 }
 
-export function matchCheatStrict(
+export function matchCheatLoose(
   dict: CheatDict | null,
   input: string,
   targetLang: string
 ): CheatTranslation[] | null {
   if (!dict) return null
-  const key = normalizeStrict(input)
+
+  const key = normalizeLoose(input)
   if (!key) return null
 
-  const hit = dict.items.find((it) => normalizeStrict(it.source) === key)
+  const hit = dict.items.find((it) => normalizeLoose(it.source) === key)
   if (!hit) return null
 
   const arr = hit.targets?.[targetLang]
   if (!Array.isArray(arr) || arr.length === 0) return null
 
-  // 清洗
+  // 清洗成有效数组
   const cleaned: CheatTranslation[] = arr
     .map((x) => ({
       translation: String(x?.translation ?? ''),
@@ -54,15 +64,13 @@ export function matchCheatStrict(
     }))
     .filter((x) => x.translation || x.back_translation)
 
-  // 确保至少一条，避免 TS 推断 undefined
-  const base: CheatTranslation[] =
-    cleaned.length > 0 ? cleaned : [{ translation: '（字典数据为空）', back_translation: '' }]
+  // fallback 用“明确常量”，避免 out[0] 的 undefined 类型问题
+  const FALLBACK: CheatTranslation = { translation: '（字典数据为空）', back_translation: '' }
 
-  // 补足到 4 条
+  const base: CheatTranslation[] = cleaned.length > 0 ? cleaned : [FALLBACK]
+
   const out: CheatTranslation[] = base.slice(0, 4)
-  const fallback: CheatTranslation = out[0] // 必然存在
-
-  while (out.length < 4) out.push(fallback)
+  while (out.length < 4) out.push(out[out.length - 1] ?? FALLBACK)
 
   return out
 }
