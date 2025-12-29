@@ -1,6 +1,6 @@
 import { Transition, Dialog } from '@headlessui/react';
 import React, { useState, useEffect, useRef, useCallback, Fragment, memo } from 'react';
-import { loadCheatDict, matchCheatStrict } from '@/lib/cheatDict';
+import { loadCheatDict, matchCheatLoose } from '@/lib/cheatDict';
 
 // ----------------- helpers -----------------
 const convertGitHubUrl = (url) => {
@@ -615,7 +615,7 @@ const AiChatContent = ({ onClose }) => {
     try {
       // 作弊字典：严格匹配优先
       const dict = await loadCheatDict(sourceLang);
-      const hit = matchCheatStrict(dict, text, targetLang);
+      const hit = matchCheatLoose(dict, text, targetLang);
       if (hit) {
         const translations = normalizeTranslations(hit);
         setResult({ translations, from: 'dict' });
