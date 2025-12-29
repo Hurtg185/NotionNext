@@ -18,17 +18,14 @@ const darkModeScript = `
     if (defaultAppearance === 'dark') {
       shouldBeDark = true
     } else if (defaultAppearance === 'auto') {
-      // 检查是否在深色模式时间范围内
       const date = new Date()
       const hours = date.getHours()
       const darkTimeStart = ${BLOG.APPEARANCE_DARK_TIME ? BLOG.APPEARANCE_DARK_TIME[0] : 18}
       const darkTimeEnd = ${BLOG.APPEARANCE_DARK_TIME ? BLOG.APPEARANCE_DARK_TIME[1] : 6}
-      
       shouldBeDark = prefersDark || (hours >= darkTimeStart || hours < darkTimeEnd)
     }
   }
-  
-  // 立即设置 html 元素的类
+
   document.documentElement.classList.add(shouldBeDark ? 'dark' : 'light')
 })()
 `
@@ -40,9 +37,30 @@ class MyDocument extends Document {
   }
 
   render() {
+    // 状态栏/地址栏配色：浅色主题建议白色；深色主题在 PWA 下可由脚本切换 theme-color（更复杂）
+    // 这里先用白色，至少保证 iOS/Android 视觉一致
+    const themeColor = '#ffffff'
+
     return (
       <Html lang={BLOG.LANG}>
         <Head>
+          {/* 让 iPhone 刘海屏可用全屏安全区 */}
+          <meta
+            name='viewport'
+            content='width=device-width, initial-scale=1, viewport-fit=cover'
+          />
+
+          {/* PWA / 尽量隐藏浏览器 UI（需要“添加到主屏幕”才接近真正无地址栏） */}
+          <meta name='apple-mobile-web-app-capable' content='yes' />
+          <meta name='apple-mobile-web-app-status-bar-style' content='black-translucent' />
+          <meta name='mobile-web-app-capable' content='yes' />
+
+          {/* 状态栏/浏览器 UI 颜色（Android Chrome / 部分浏览器） */}
+          <meta name='theme-color' content={themeColor} />
+
+          {/* iOS 避免把数字当电话、地址当链接导致 UI 错位 */}
+          <meta name='format-detection' content='telephone=no' />
+
           {/* 预加载字体 */}
           {BLOG.FONT_AWESOME && (
             <>
