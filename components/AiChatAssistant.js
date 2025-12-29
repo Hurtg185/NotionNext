@@ -9,22 +9,41 @@ import React, {
 } from 'react';
 import { loadCheatDict, matchCheatLoose } from '@/lib/cheatDict';
 
-// ----------------- 全局样式 (细滚动条) -----------------
+// ----------------- 全局样式 -----------------
 const GlobalStyles = () => (
   <style>{`
+    /* 隐藏滚动条但保留功能 */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    
+    /* 细滚动条 (用于设置页) */
     .slim-scrollbar::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
+      width: 4px;
     }
     .slim-scrollbar::-webkit-scrollbar-track {
       background: transparent;
     }
     .slim-scrollbar::-webkit-scrollbar-thumb {
-      background: rgba(0, 0, 0, 0.15);
-      border-radius: 3px;
+      background: rgba(0, 0, 0, 0.1);
+      border-radius: 4px;
     }
-    .slim-scrollbar::-webkit-scrollbar-thumb:hover {
-      background: rgba(0, 0, 0, 0.25);
+
+    /* 追问气泡的横向滚动容器 */
+    .chip-scroll-container {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 4px 10px;
+      -webkit-overflow-scrolling: touch;
+      cursor: grab;
+    }
+    .chip-scroll-container:active {
+      cursor: grabbing;
     }
   `}</style>
 );
@@ -40,412 +59,274 @@ const safeLocalStorageSet = (key, value) => {
 const nowId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 const cx = (...arr) => arr.filter(Boolean).join(' ');
 
-// ----------------- Prompt -----------------
-const DEFAULT_TRANSLATION_PROMPT = {
-  content: `你是一位【多语种翻译专家】，专门处理日常聊天场景的翻译。
+// ----------------- Data & Config -----------------
+const SUPPORTED_LANGUAGES = [
+  { code: 'zh-CN', name: '中文', flag: '🇨🇳' },
+  { code: 'en-US', name: 'English', flag: '🇺🇸' },
+  { code: 'ja-JP', name: '日本語', flag: '🇯🇵' },
+  { code: 'ko-KR', name: '한국어', flag: '🇰🇷' },
+  { code: 'my-MM', name: '缅甸语', flag: '🇲🇲' },
+  { code: 'vi-VN', name: '越南语', flag: '🇻🇳' },
+  { code: 'th-TH', name: '泰语', flag: '🇹🇭' },
+  { code: 'lo-LA', name: '老挝语', flag: '🇱🇦' },
+  { code: 'ru-RU', name: '俄语', flag: '🇷🇺' },
+  { code: 'km-KH', name: '柬埔寨语', flag: '🇰🇭' },
+  { code: 'id-ID', name: '印尼语', flag: '🇮🇩' },
+  { code: 'fr-FR', name: 'Français', flag: '🇫🇷' },
+  { code: 'es-ES', name: 'Español', flag: '🇪🇸' },
+];
 
-【核心任务】
-接收用户发送的源语言文本，把它翻译成目标语言，输出4种不同版本供用户选择：
-1) 贴近原文：逐句翻译尽量在保留原文意思下做必要的语法调整。
-2) 自然直译：在保留原文结构和含义的基础上，让译文符合目标语言的表达习惯，读起来流畅自然，不生硬。
-3) 自然意译：保留原文完整含义，充分适应目标语言表达习惯，读起来流畅自然，像母语表达
-4) 口语化：用当地人最自然流畅的社交表达方式。
-
-【输出格式】
-严格返回以下JSON，不要有任何额外文字：
-{
-  "data": [
-    { "style": "贴近原文", "translation": "...", "back_translation": "..." },
-    { "style": "自然直译", "translation": "...", "back_translation": "..." },
-    { "style": "自然意译", "translation": "...", "back_translation": "..." },
-    { "style": "口语化", "translation": "...", "back_translation": "..." }
-  ]
-}
-
-【要求】
-- 目标语言必须使用现代日常表达
-- 回译(back_translation)必须忠实翻译回源语言
-- 保持人称、时态、数字准确`,
-  openingLine: '请发送你需要翻译的内容（支持语音输入）。'
-};
-
-// ----------------- Default Data -----------------
 const DEFAULT_PROVIDERS = [
   { id: 'p1', name: '默认接口', url: 'https://apis.iflow.cn/v1', key: '' }
 ];
 
 const DEFAULT_MODELS = [
-  { id: 'm1', providerId: 'p1', name: 'DeepSeek V3.2', value: 'deepseek-v3.2' },
-  { id: 'm2', providerId: 'p1', name: 'GLM-4.6', value: 'glm-4.6' },
-  { id: 'm3', providerId: 'p1', name: 'Qwen3-Max', value: 'qwen3-max' }
+  { id: 'm1', providerId: 'p1', name: 'DeepSeek V3', value: 'deepseek-chat' },
+  { id: 'm2', providerId: 'p1', name: 'Qwen Max', value: 'qwen-max' },
+  { id: 'm3', providerId: 'p1', name: 'GPT-4o', value: 'gpt-4o' }
 ];
+
+// 默认提示词模板（对用户隐藏 JSON 结构，只展示核心指令）
+const BASE_SYSTEM_INSTRUCTION = `你是一位翻译专家。将用户文本翻译成目标语言。
+要求：
+1. 输出4种风格：贴近原文、自然直译、自然意译、口语化。
+2. 即使源文本简短，也要凑齐4种略有不同的表达。
+3. 回译 (back_translation) 必须翻译回【源语言】，用于核对意思。
+4. 译文和回译不要包含"翻译："或"回译："等前缀。`;
+
+// 追问生成提示词
+const REPLY_SYSTEM_INSTRUCTION = `你是一个聊天助手。根据用户输入的【原文】（对方发来的话），生成 3 到 8 个简短、自然的【回复建议】（我该怎么回）。
+要求：
+1. 回复建议使用【源语言】。
+2. 场景为日常聊天，回复要口语化，覆盖：肯定、否定、忙碌、询问等不同角度。
+3. 只返回 JSON 数组字符串，格式：["回复1", "回复2", ...]，不要 markdown 标记。`;
 
 const DEFAULT_SETTINGS = {
   providers: DEFAULT_PROVIDERS,
   models: DEFAULT_MODELS,
-  activeProviderId: 'p1',
-  activeModelId: 'm1',
   
-  // TTS 设置
-  ttsSpeed: 1.0, // 0.5 ~ 2.0
-  ttsGenderPref: 'female', // female, male
+  // 模型分配
+  mainModelId: 'm1',      // 翻译用的模型
+  followUpModelId: 'm1',  // 追问/回复建议用的模型 (通常用便宜快速的)
+  
+  // 语音 & 播放
+  ttsConfig: {}, // { 'zh-CN': 'xiaoyou', 'en-US': 'jenny' } 映射表
+  ttsSpeed: 1.0,
 
-  // 背景设置
-  backgroundOverlay: 0.92, // 浅粉色底，不需要太透明，这里用高不透明度覆盖背景图
-  chatBackgroundUrl: '', // 默认为空，使用纯色
-  
-  prompt: DEFAULT_TRANSLATION_PROMPT.content
+  // 背景
+  backgroundOverlay: 0.95, 
+  chatBackgroundUrl: '',
+
+  // 提示词
+  useCustomPrompt: false,
+  customPromptText: '', // 用户输入的纯文本指令
 };
 
-// ----------------- UI Constants -----------------
-const SUPPORTED_LANGUAGES = [
-  { code: 'auto', name: '自动识别' },
-  { code: 'zh-CN', name: '中文' },
-  { code: 'en-US', name: 'English' },
-  { code: 'my-MM', name: '缅甸语' },
-  { code: 'vi-VN', name: '越南语' },
-  { code: 'th-TH', name: '泰语' },
-  { code: 'lo-LA', name: '老挝语' },
-  { code: 'ru-RU', name: '俄语' },
-  { code: 'ja-JP', name: '日语' },
-  { code: 'ko-KR', name: '韩语' },
-  { code: 'km-KH', name: '柬埔寨语' },
-  { code: 'id-ID', name: '印尼语' },
-];
-
-const SPEECH_LANGS = [
-  { name: '中文', value: 'zh-CN', flag: '🇨🇳' },
-  { name: 'မြန်မာ', value: 'my-MM', flag: '🇲🇲' },
-  { name: 'Tiếng Việt', value: 'vi-VN', flag: '🇻🇳' },
-  { name: 'ไทย', value: 'th-TH', flag: '🇹🇭' },
-  { name: 'ລາວ', value: 'lo-LA', flag: '🇱🇦' },
-  { name: 'English', value: 'en-US', flag: '🇺🇸' },
-  { name: 'Русский', value: 'ru-RU', flag: '🇷🇺' },
-  { name: '日本語', value: 'ja-JP', flag: '🇯🇵' },
-  { name: '한국어', value: 'ko-KR', flag: '🇰🇷' }
-];
-
-// ----------------- TTS Implementation -----------------
+// ----------------- TTS Engine -----------------
 const ttsCache = new Map();
 
-const pickTtsVoice = (lang, genderPref) => {
-  // 简化的映射策略，实际可扩展
-  const isMale = genderPref === 'male';
-  if (lang === 'my-MM') return isMale ? 'my-MM-ThihaNeural' : 'my-MM-NilarNeural';
-  if (lang === 'vi-VN') return isMale ? 'vi-VN-NamMinhNeural' : 'vi-VN-HoaiMyNeural';
-  if (lang === 'th-TH') return isMale ? 'th-TH-NiwatNeural' : 'th-TH-PremwadeeNeural';
-  if (lang === 'ru-RU') return isMale ? 'ru-RU-DmitryNeural' : 'ru-RU-SvetlanaNeural';
-  if (lang === 'en-US') return isMale ? 'en-US-GuyNeural' : 'en-US-JennyNeural';
-  if (lang === 'zh-CN') return isMale ? 'zh-CN-YunxiNeural' : 'zh-CN-XiaoyouNeural';
-  return isMale ? 'zh-CN-YunxiNeural' : 'zh-CN-XiaoyouNeural'; // fallback
+// 简单的发音人列表（实际应从 API 获取，这里模拟）
+const AVAILABLE_VOICES = {
+  'zh-CN': [
+    { id: 'zh-CN-XiaoyouNeural', name: '小悠 (女)' },
+    { id: 'zh-CN-YunxiNeural', name: '云希 (男)' }
+  ],
+  'en-US': [
+    { id: 'en-US-JennyNeural', name: 'Jenny (女)' },
+    { id: 'en-US-GuyNeural', name: 'Guy (男)' }
+  ],
+  // ... 其他语言默认取第一个
 };
 
-const preloadTTS = async (text, lang, settings) => {
+const getVoiceForLang = (lang, config) => {
+  // 1. 用户配置的
+  if (config && config[lang]) return config[lang];
+  // 2. 默认列表的第一个
+  if (AVAILABLE_VOICES[lang]) return AVAILABLE_VOICES[lang][0].id;
+  // 3. 硬编码兜底
+  if (lang === 'my-MM') return 'my-MM-NilarNeural';
+  if (lang === 'vi-VN') return 'vi-VN-HoaiMyNeural';
+  if (lang === 'th-TH') return 'th-TH-PremwadeeNeural';
+  return 'zh-CN-XiaoyouNeural'; 
+};
+
+const playTTS = async (text, lang, settings) => {
   if (!text) return;
-  const voice = pickTtsVoice(lang, settings.ttsGenderPref || 'female');
+  const voice = getVoiceForLang(lang, settings.ttsConfig);
   const speed = settings.ttsSpeed || 1.0;
-  // 转换 speed 0.5~2.0 到 API 的 rate 格式 (例如 -50% 到 +100%)
-  // 这里简化处理，直接拼参数，假设后端支持 r 参数作为 rate
-  // 注意：演示用API可能参数不同，这里沿用之前逻辑
   const key = `${voice}_${speed}_${text}`;
-  if (ttsCache.has(key)) return;
 
   try {
-    const rateVal = Math.floor((speed - 1) * 50); // 简单映射
-    const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${encodeURIComponent(voice)}&r=${rateVal}`;
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('TTS API Error');
-    const blob = await response.blob();
-    const audio = new Audio(URL.createObjectURL(blob));
-    audio.preload = 'auto';
-    ttsCache.set(key, audio);
+    let audio = ttsCache.get(key);
+    if (!audio) {
+      const rateVal = Math.floor((speed - 1) * 50);
+      const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${encodeURIComponent(voice)}&r=${rateVal}`;
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const blob = await res.blob();
+      audio = new Audio(URL.createObjectURL(blob));
+      ttsCache.set(key, audio);
+    }
+    audio.currentTime = 0;
+    audio.playbackRate = speed;
+    await audio.play();
   } catch (e) {
-    console.error('TTS preload failed', e);
+    console.error('TTS Play Error:', e);
   }
 };
 
-const playCachedTTS = async (text, lang, settings) => {
-  if (!text) return;
-  const voice = pickTtsVoice(lang, settings.ttsGenderPref || 'female');
-  const speed = settings.ttsSpeed || 1.0;
-  const key = `${voice}_${speed}_${text}`;
-  
-  if (!ttsCache.has(key)) await preloadTTS(text, lang, settings);
-  const audio = ttsCache.get(key);
-  if (!audio) return;
-  audio.currentTime = 0;
-  // HTML5 Audio playbackRate
-  audio.playbackRate = speed; 
-  await audio.play().catch(console.error);
-};
-
-// ----------------- Parsing & Normalize -----------------
-const safeParseAiJson = (raw) => {
-  const s = (raw || '').trim();
-  const start = s.indexOf('{');
-  const end = s.lastIndexOf('}');
-  if (start < 0 || end < 0) throw new Error('Invalid JSON');
-  return JSON.parse(s.slice(start, end + 1));
-};
-
-const normalizeTranslations = (arr) => {
-  const list = Array.isArray(arr) ? arr : [];
-  const mapped = list.map((x, i) => ({
-    style: x?.style || `方案 ${i + 1}`,
-    translation: x?.translation || '',
-    back_translation: x?.back_translation || ''
-  })).filter(x => x.translation);
-  
-  if (!mapped.length) return [{ style: '错误', translation: '无法解析译文', back_translation: '' }];
-  
-  // 补齐4个
-  const out = [...mapped];
-  while(out.length < 4) {
-    out.push({ ...out[0], style: `${out[0].style} (变体)` });
+// ----------------- Logic Helpers -----------------
+const normalizeTranslations = (raw) => {
+  let data = [];
+  try {
+    // 尝试解析
+    const json = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    data = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
+  } catch {
+    return [{ translation: raw || '解析失败', back_translation: '' }];
   }
-  return out.slice(0, 4);
+
+  // 过滤无效并在 UI 上不显示 style 字段
+  return data
+    .filter(x => x.translation)
+    .slice(0, 4); 
+    // UI上我们不渲染 "style" 名字，只渲染内容
 };
+
+const getLangName = (c) => SUPPORTED_LANGUAGES.find(l => l.code === c)?.name || c;
+const getLangFlag = (c) => SUPPORTED_LANGUAGES.find(l => l.code === c)?.flag || '';
 
 // ----------------- Components -----------------
 
-// 1. 朗读按钮
-const AiTtsButton = memo(({ text, lang, settings }) => (
-  <button
-    type="button"
-    onClick={(e) => { e.stopPropagation(); playCachedTTS(text, lang, settings); }}
-    className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-    title="朗读"
-  >
-    <i className="fas fa-volume-up text-sm" />
-  </button>
-));
-AiTtsButton.displayName = 'AiTtsButton';
-
-// 2. 翻译卡片
-const TranslationCard = memo(({ result, targetLang, settings }) => {
+// 1. 结果卡片 (无 Style 标题，居中，点击复制)
+const TranslationCard = memo(({ data, onPlay }) => {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = async (e) => {
-    e.stopPropagation();
+  const handleClick = async () => {
     try {
-      await navigator.clipboard.writeText(result.translation || '');
+      await navigator.clipboard.writeText(data.translation);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
-    } catch (err) {
-      // fallback
-    }
+      setTimeout(() => setCopied(false), 800);
+    } catch {}
   };
 
   return (
-    <div className="w-full bg-white border border-gray-100 rounded-2xl px-5 py-4 shadow-sm hover:shadow-md transition-shadow mb-3">
-      <div className="flex items-start gap-4">
-        {/* 内容区 */}
-        <div className="flex-1 min-w-0">
-          <div className="text-xs font-bold text-blue-600 mb-1.5 uppercase tracking-wide opacity-80">
-            {result.style}
-          </div>
-          <div className="text-[17px] leading-relaxed text-gray-900 font-medium break-words">
-            {result.translation}
-          </div>
-          {!!result.back_translation && (
-            <div className="mt-2 text-[13px] leading-snug text-gray-500 break-words bg-gray-50 p-2 rounded-lg">
-              回译: {result.back_translation}
-            </div>
-          )}
+    <div 
+      onClick={handleClick}
+      className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm active:scale-[0.98] transition-all cursor-pointer relative overflow-hidden group mb-3 text-center"
+    >
+      {/* 复制成功提示遮罩 */}
+      {copied && (
+        <div className="absolute inset-0 bg-black/5 flex items-center justify-center z-10">
+          <span className="bg-black/70 text-white text-xs px-2 py-1 rounded-md">已复制</span>
         </div>
-
-        {/* 按钮区 */}
-        <div className="flex flex-col gap-1 shrink-0">
-          <AiTtsButton text={result.translation} lang={targetLang} settings={settings} />
-          <button
-            onClick={handleCopy}
-            className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${copied ? 'text-green-600 bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
-            title="复制"
-          >
-            <i className={`fas ${copied ? 'fa-check' : 'fa-copy'} text-sm`} />
-          </button>
-        </div>
+      )}
+      
+      <div className="text-[18px] leading-relaxed font-medium text-gray-800 break-words select-none">
+        {data.translation}
       </div>
+      
+      {!!data.back_translation && (
+        <div className="mt-2.5 text-[13px] text-gray-400 break-words leading-snug">
+          {data.back_translation}
+        </div>
+      )}
+
+      {/* 隐藏的播放按钮，为了逻辑保留，实际通过点击卡片复制，长按或额外按钮播放? 
+          需求说“翻译图标换成网址图标”，这里我们在卡片角落加个小喇叭 */}
+      <button 
+        onClick={(e) => { e.stopPropagation(); onPlay(); }}
+        className="absolute bottom-2 right-2 p-2 text-gray-300 hover:text-blue-500 opacity-50 hover:opacity-100"
+      >
+        <i className="fas fa-volume-up" />
+      </button>
     </div>
   );
 });
-TranslationCard.displayName = 'TranslationCard';
 
-// 3. 结果列表
-const TranslationResults = memo(({ results, targetLang, settings }) => (
-  <div className="w-full flex flex-col pb-4">
-    {(results || []).map((r, i) => (
-      <TranslationCard key={i} result={r} targetLang={targetLang} settings={settings} />
-    ))}
-  </div>
-));
-TranslationResults.displayName = 'TranslationResults';
+// 2. 追问气泡 (Draggable Chips)
+const ReplyChips = ({ suggestions, onClick }) => {
+  const scrollRef = useRef(null);
+  
+  // 简单的鼠标拖拽模拟
+  const [isDown, setIsDown] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
 
-// 4. 加载动画
-const FancyLoading = () => (
-  <div className="w-full max-w-[800px] mx-auto mt-6 px-2">
-    <div className="flex items-center justify-center gap-2 text-sm text-gray-500 mb-6 animate-pulse">
-      <i className="fas fa-circle-notch fa-spin" />
-      <span>AI 正在思考中...</span>
-    </div>
-    <div className="space-y-4">
-      {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="bg-white/60 border border-white rounded-2xl p-4 shadow-sm relative overflow-hidden">
-          <div className="h-4 w-24 bg-gray-200/50 rounded mb-3" />
-          <div className="h-5 w-3/4 bg-gray-200/50 rounded mb-2" />
-          <div className="h-4 w-1/2 bg-gray-200/50 rounded" />
-          <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent animate-[shimmer_1.5s_infinite]" />
-        </div>
-      ))}
-    </div>
-    <style>{`@keyframes shimmer { 100% { transform: translateX(100%); } }`}</style>
-  </div>
-);
+  const handleDown = (e) => {
+    setIsDown(true);
+    setStartX(e.pageX || e.touches[0].pageX);
+    setScrollLeft(scrollRef.current.scrollLeft);
+  };
+  const handleLeave = () => setIsDown(false);
+  const handleUp = () => setIsDown(false);
+  const handleMove = (e) => {
+    if(!isDown) return;
+    e.preventDefault();
+    const x = e.pageX || e.touches[0].pageX;
+    const walk = (x - startX) * 2; 
+    scrollRef.current.scrollLeft = scrollLeft - walk;
+  };
 
-// ----------------- Modals -----------------
-
-// 1. 通用全屏/弹窗外壳
-const ModalWrapper = ({ children, title, onClose, className = "max-w-lg" }) => (
-  <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10001] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
-    <div className={`w-full ${className} bg-white rounded-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden`} onClick={e => e.stopPropagation()}>
-      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white z-10">
-        <div className="font-bold text-lg text-gray-800">{title}</div>
-        <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 text-gray-500 transition-colors">
-          <i className="fas fa-times text-lg" />
-        </button>
-      </div>
-      <div className="flex-1 overflow-y-auto slim-scrollbar bg-gray-50/50 p-2">
-        {children}
-      </div>
-    </div>
-  </div>
-);
-
-// 2. 供应商 & 模型选择器 (双栏布局)
-const ProviderModelModal = ({ settings, onSelect, onClose }) => {
-  const [activeProvId, setActiveProvId] = useState(settings.activeProviderId);
-  const providers = settings.providers || [];
-  const models = (settings.models || []).filter(m => m.providerId === activeProvId);
+  if (!suggestions || suggestions.length === 0) return null;
 
   return (
-    <ModalWrapper title="切换模型" onClose={onClose} className="max-w-2xl h-[600px]">
-      <div className="flex h-full gap-2">
-        {/* 左侧：供应商 */}
-        <div className="w-1/3 border-r border-gray-200 pr-2 overflow-y-auto slim-scrollbar">
-          <div className="text-xs text-gray-400 font-bold px-2 py-1 mb-1">供应商</div>
-          {providers.map(p => (
-            <button
-              key={p.id}
-              onClick={() => setActiveProvId(p.id)}
-              className={cx(
-                "w-full text-left px-3 py-3 rounded-xl text-sm font-medium mb-1 transition-all",
-                activeProvId === p.id ? "bg-blue-600 text-white shadow-md" : "hover:bg-gray-200 text-gray-700"
-              )}
-            >
-              <div className="truncate">{p.name}</div>
-            </button>
-          ))}
-        </div>
-        
-        {/* 右侧：模型 */}
-        <div className="flex-1 pl-2 overflow-y-auto slim-scrollbar">
-          <div className="text-xs text-gray-400 font-bold px-2 py-1 mb-1">可用模型</div>
-          {models.length === 0 ? (
-            <div className="text-center text-gray-400 text-sm mt-10">该供应商下暂无模型配置</div>
-          ) : (
-            models.map(m => (
-              <button
-                key={m.id}
-                onClick={() => {
-                  onSelect(activeProvId, m.id);
-                  onClose();
-                }}
-                className={cx(
-                  "w-full text-left px-4 py-3 rounded-xl border mb-2 transition-all group",
-                  settings.activeModelId === m.id && settings.activeProviderId === activeProvId
-                    ? "border-blue-500 bg-blue-50 ring-1 ring-blue-500"
-                    : "border-gray-200 bg-white hover:border-blue-300"
-                )}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="font-bold text-gray-800 text-sm">{m.name}</div>
-                  {(settings.activeModelId === m.id && settings.activeProviderId === activeProvId) && <i className="fas fa-check text-blue-600" />}
-                </div>
-                <div className="text-xs text-gray-500 mt-1 opacity-70 group-hover:opacity-100">{m.value}</div>
-              </button>
-            ))
-          )}
-        </div>
+    <div className="mt-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+      <div className="text-[10px] text-gray-400 text-center mb-2">快捷回复 (点击自动填入)</div>
+      <div 
+        ref={scrollRef}
+        className="chip-scroll-container no-scrollbar"
+        onMouseDown={handleDown} onMouseLeave={handleLeave} onMouseUp={handleUp} onMouseMove={handleMove}
+        onTouchStart={handleDown} onTouchEnd={handleUp} onTouchMove={handleMove}
+      >
+        {suggestions.map((text, i) => (
+          <button
+            key={i}
+            onClick={() => onClick(text)}
+            className="shrink-0 bg-white border border-pink-100 text-gray-600 px-3 py-1.5 rounded-full text-sm shadow-sm hover:bg-pink-50 active:scale-95 transition-transform"
+          >
+            {text}
+          </button>
+        ))}
       </div>
-    </ModalWrapper>
+    </div>
   );
 };
 
-// 3. 复杂设置面板 (包含供应商管理、Prompt、TTS、背景)
+// 3. 设置弹窗
 const SettingsModal = ({ settings, onSave, onClose }) => {
-  const [formData, setFormData] = useState(JSON.parse(JSON.stringify(settings)));
-  const [tab, setTab] = useState('provider'); // provider, prompt, style
+  const [data, setData] = useState(settings);
+  const [tab, setTab] = useState('model'); // model, prompt, voice
 
-  // 供应商 CRUD
-  const updateProvider = (idx, field, val) => {
-    const arr = [...formData.providers];
-    arr[idx] = { ...arr[idx], [field]: val };
-    setFormData({ ...formData, providers: arr });
-  };
-  const addProvider = () => {
-    const newId = nowId();
-    setFormData(prev => ({
-      ...prev,
-      providers: [...prev.providers, { id: newId, name: '新供应商', url: '', key: '' }]
-    }));
-  };
-  const delProvider = (id) => {
-    if (formData.providers.length <= 1) return alert('至少保留一个供应商');
-    setFormData(prev => ({
-      ...prev,
-      providers: prev.providers.filter(p => p.id !== id),
-      // 如果删除了当前选中的，重置选中
-      activeProviderId: prev.activeProviderId === id ? prev.providers.find(p => p.id !== id).id : prev.activeProviderId
-    }));
-  };
-
-  // 模型 CRUD
-  const getModelsByProv = (pid) => formData.models.filter(m => m.providerId === pid);
-  const addModel = (pid) => {
-    setFormData(prev => ({
-      ...prev,
-      models: [...prev.models, { id: nowId(), providerId: pid, name: '新模型', value: '' }]
-    }));
-  };
-  const updateModel = (mid, field, val) => {
-    setFormData(prev => ({
-      ...prev,
-      models: prev.models.map(m => m.id === mid ? { ...m, [field]: val } : m)
-    }));
-  };
-  const delModel = (mid) => {
-    setFormData(prev => ({
-      ...prev,
-      models: prev.models.filter(m => m.id !== mid)
-    }));
+  // 简易的 CRUD helper
+  const updateProvider = (idx, key, val) => {
+    const p = [...data.providers];
+    p[idx] = { ...p[idx], [key]: val };
+    setData({ ...data, providers: p });
   };
 
   return (
-    <ModalWrapper title="全局设置" onClose={onClose} className="max-w-3xl h-[80vh]">
-      <div className="flex flex-col h-full">
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10002] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+          <div className="font-bold text-gray-800">设置</div>
+          <button onClick={onClose} className="w-8 h-8 bg-gray-200 rounded-full text-gray-500"><i className="fas fa-times"/></button>
+        </div>
+
         {/* Tabs */}
-        <div className="flex gap-2 px-2 pb-2 border-b border-gray-100">
+        <div className="flex p-2 gap-1 border-b border-gray-100">
           {[
-            { id: 'provider', label: '供应商管理' },
-            { id: 'style', label: '样式与语音' },
-            { id: 'prompt', label: '系统提示词' }
+            { id: 'model', label: '模型与接口' },
+            { id: 'voice', label: '发音人管理' },
+            { id: 'prompt', label: '提示词' },
           ].map(t => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
               className={cx(
-                "px-4 py-2 rounded-lg text-sm font-bold transition-all",
-                tab === t.id ? "bg-blue-100 text-blue-700" : "text-gray-500 hover:bg-gray-100"
+                "flex-1 py-2 text-xs font-bold rounded-lg transition-colors",
+                tab === t.id ? "bg-pink-50 text-pink-600" : "text-gray-500 hover:bg-gray-50"
               )}
             >
               {t.label}
@@ -453,523 +334,610 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
           ))}
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto slim-scrollbar p-4 bg-gray-50">
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto slim-scrollbar p-5 bg-white">
           
-          {tab === 'provider' && (
+          {tab === 'model' && (
             <div className="space-y-6">
-              {formData.providers.map((p, idx) => (
-                <div key={p.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
-                  <div className="flex items-center justify-between mb-3">
-                    <input
-                      className="font-bold text-gray-900 border-none focus:ring-0 bg-transparent text-lg p-0"
-                      value={p.name}
-                      onChange={e => updateProvider(idx, 'name', e.target.value)}
+              {/* 供应商配置 */}
+              <div>
+                <div className="text-xs font-bold text-gray-400 mb-2 uppercase">API 供应商</div>
+                {data.providers.map((p, i) => (
+                  <div key={p.id} className="bg-gray-50 p-3 rounded-xl mb-3 border border-gray-200">
+                    <input 
+                      className="bg-transparent font-bold text-gray-800 w-full mb-2 outline-none" 
+                      value={p.name} 
+                      onChange={e => updateProvider(i, 'name', e.target.value)} 
                     />
-                    <button onClick={() => delProvider(p.id)} className="text-red-500 text-xs px-2 py-1 bg-red-50 rounded">删除供应商</button>
+                    <input 
+                      className="bg-white text-xs w-full p-2 rounded border border-gray-200 mb-2" 
+                      placeholder="Base URL" 
+                      value={p.url} 
+                      onChange={e => updateProvider(i, 'url', e.target.value)} 
+                    />
+                    <input 
+                      className="bg-white text-xs w-full p-2 rounded border border-gray-200" 
+                      type="password" 
+                      placeholder="API Key" 
+                      value={p.key} 
+                      onChange={e => updateProvider(i, 'key', e.target.value)} 
+                    />
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                    <div>
-                      <label className="text-xs text-gray-400 block mb-1">API URL (Base URL)</label>
-                      <input className="w-full text-xs p-2 border rounded bg-gray-50" value={p.url} onChange={e => updateProvider(idx, 'url', e.target.value)} placeholder="https://..." />
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-400 block mb-1">API Key</label>
-                      <input className="w-full text-xs p-2 border rounded bg-gray-50" type="password" value={p.key} onChange={e => updateProvider(idx, 'key', e.target.value)} placeholder="sk-..." />
-                    </div>
-                  </div>
+                ))}
+                <div className="text-[10px] text-gray-400 text-center">如需添加模型，请直接修改代码配置 (DEFAULT_MODELS)</div>
+              </div>
 
-                  {/* 模型列表 */}
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-gray-500">关联模型列表</span>
-                      <button onClick={() => addModel(p.id)} className="text-xs bg-blue-600 text-white px-2 py-1 rounded">+ 添加模型</button>
-                    </div>
-                    <div className="space-y-2">
-                      {getModelsByProv(p.id).map(m => (
-                        <div key={m.id} className="flex gap-2 items-center">
-                          <input className="flex-1 text-xs p-1.5 border rounded" placeholder="显示名" value={m.name} onChange={e => updateModel(m.id, 'name', e.target.value)} />
-                          <input className="flex-1 text-xs p-1.5 border rounded font-mono" placeholder="模型Value (如 gpt-4)" value={m.value} onChange={e => updateModel(m.id, 'value', e.target.value)} />
-                          <button onClick={() => delModel(m.id)} className="text-gray-400 hover:text-red-500"><i className="fas fa-times" /></button>
-                        </div>
-                      ))}
-                    </div>
+              {/* 模型选择 */}
+              <div>
+                <div className="text-xs font-bold text-gray-400 mb-2 uppercase">默认用途</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs block mb-1">主翻译模型</label>
+                    <select 
+                      className="w-full text-sm bg-gray-50 border border-gray-200 rounded-lg p-2"
+                      value={data.mainModelId}
+                      onChange={e => setData({...data, mainModelId: e.target.value})}
+                    >
+                      {data.models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs block mb-1">追问/建议模型</label>
+                    <select 
+                      className="w-full text-sm bg-gray-50 border border-gray-200 rounded-lg p-2"
+                      value={data.followUpModelId}
+                      onChange={e => setData({...data, followUpModelId: e.target.value})}
+                    >
+                      {data.models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </select>
                   </div>
                 </div>
-              ))}
-              <button onClick={addProvider} className="w-full py-3 bg-white border border-dashed border-gray-300 rounded-xl text-gray-500 hover:bg-gray-50">
-                + 添加新供应商
-              </button>
+              </div>
             </div>
           )}
 
-          {tab === 'style' && (
+          {tab === 'voice' && (
             <div className="space-y-4">
-              <div className="bg-white p-4 rounded-xl shadow-sm">
-                <div className="font-bold text-gray-800 mb-4">TTS 语音设置</div>
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-sm text-gray-600">默认音色偏好</span>
-                  <div className="flex bg-gray-100 rounded-lg p-1">
-                    {['male', 'female'].map(g => (
-                      <button
-                        key={g}
-                        onClick={() => setFormData({...formData, ttsGenderPref: g})}
-                        className={`px-3 py-1 text-xs rounded-md transition-all ${formData.ttsGenderPref === g ? 'bg-white shadow text-blue-600 font-bold' : 'text-gray-500'}`}
-                      >
-                        {g === 'male' ? '男声' : '女声'}
-                      </button>
+              <div className="text-xs text-gray-500 mb-2">为不同语言指定特定的发音人 (TTS)</div>
+              {SUPPORTED_LANGUAGES.map(lang => (
+                <div key={lang.code} className="flex items-center justify-between border-b border-gray-50 py-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <span>{lang.flag}</span>
+                    <span>{lang.name}</span>
+                  </div>
+                  <select
+                    className="text-xs bg-gray-50 border border-gray-200 rounded px-2 py-1 max-w-[140px]"
+                    value={(data.ttsConfig || {})[lang.code] || ''}
+                    onChange={(e) => {
+                      const cfg = { ...(data.ttsConfig || {}) };
+                      cfg[lang.code] = e.target.value;
+                      setData({ ...data, ttsConfig: cfg });
+                    }}
+                  >
+                    <option value="">默认</option>
+                    {(AVAILABLE_VOICES[lang.code] || []).map(v => (
+                      <option key={v.id} value={v.id}>{v.name}</option>
                     ))}
-                  </div>
+                  </select>
                 </div>
-                <div>
-                  <div className="flex justify-between text-sm text-gray-600 mb-1">
-                    <span>语速调节</span>
-                    <span>{formData.ttsSpeed}x</span>
-                  </div>
-                  <input
-                    type="range" min="0.5" max="2.0" step="0.1"
-                    className="w-full accent-blue-600"
-                    value={formData.ttsSpeed}
-                    onChange={e => setFormData({...formData, ttsSpeed: parseFloat(e.target.value)})}
-                  />
-                </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-xl shadow-sm">
-                <div className="font-bold text-gray-800 mb-4">背景设置</div>
-                <label className="block text-xs text-gray-500 mb-1">背景图 URL (留空则纯色)</label>
-                <input
-                  className="w-full text-sm p-2 border rounded mb-3"
-                  value={formData.chatBackgroundUrl}
-                  onChange={e => setFormData({...formData, chatBackgroundUrl: e.target.value})}
-                  placeholder="https://..."
-                />
+              ))}
+              <div className="pt-2">
+                 <label className="text-xs text-gray-500">全局语速: {data.ttsSpeed}x</label>
+                 <input 
+                   type="range" min="0.5" max="2.0" step="0.1" 
+                   className="w-full accent-pink-500 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer mt-2"
+                   value={data.ttsSpeed}
+                   onChange={e => setData({...data, ttsSpeed: parseFloat(e.target.value)})}
+                 />
               </div>
             </div>
           )}
 
           {tab === 'prompt' && (
-            <div className="bg-white p-4 rounded-xl shadow-sm h-full flex flex-col">
-              <div className="text-sm text-gray-500 mb-2">如果不清楚请勿随意修改，必须保持 JSON 输出约束。</div>
+            <div className="h-full flex flex-col">
+              <div className="flex items-center gap-2 mb-4">
+                 <input 
+                   type="checkbox" 
+                   id="useCustomPrompt"
+                   checked={data.useCustomPrompt}
+                   onChange={e => setData({...data, useCustomPrompt: e.target.checked})}
+                   className="w-4 h-4 accent-pink-500"
+                 />
+                 <label htmlFor="useCustomPrompt" className="text-sm font-bold">启用自定义指令</label>
+              </div>
+              
               <textarea
-                className="flex-1 w-full border border-gray-200 rounded-lg p-3 text-sm font-mono leading-relaxed resize-none focus:ring-1 focus:ring-blue-500 outline-none"
-                value={formData.prompt}
-                onChange={e => setFormData({...formData, prompt: e.target.value})}
+                className={`w-full flex-1 border rounded-xl p-3 text-sm resize-none focus:ring-1 focus:ring-pink-500 outline-none ${!data.useCustomPrompt ? 'bg-gray-100 text-gray-400' : 'bg-white'}`}
+                placeholder="在此输入您的额外要求，例如：'所有译文都要带上敬语' 或 '翻译成莎士比亚风格'。系统会自动处理 JSON 格式，您只需关注内容。"
+                value={data.customPromptText}
+                onChange={e => setData({...data, customPromptText: e.target.value})}
+                disabled={!data.useCustomPrompt}
               />
+              <div className="mt-2 text-[10px] text-gray-400">
+                注意：请勿输入复杂的 JSON 代码，仅输入自然语言指令即可。
+              </div>
             </div>
           )}
 
         </div>
 
-        <div className="p-4 bg-white border-t border-gray-200 flex justify-end gap-3">
-          <button onClick={onClose} className="px-5 py-2 rounded-xl bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">取消</button>
-          <button onClick={() => { onSave(formData); onClose(); }} className="px-5 py-2 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-lg shadow-blue-200">保存设置</button>
+        {/* Footer */}
+        <div className="p-4 border-t border-gray-100 flex justify-end gap-3">
+           <button onClick={onClose} className="px-5 py-2 rounded-xl bg-gray-100 text-sm font-bold text-gray-600">取消</button>
+           <button onClick={() => { onSave(data); onClose(); }} className="px-5 py-2 rounded-xl bg-pink-500 text-sm font-bold text-white shadow-lg shadow-pink-200">保存</button>
         </div>
       </div>
-    </ModalWrapper>
+    </div>
   );
 };
 
 // ----------------- Main Chat Logic -----------------
 const AiChatContent = ({ onClose }) => {
-  // --- States ---
+  // --- State ---
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
-  const [isMounted, setIsMounted] = useState(false);
   
-  // 语言 & 输入
-  const [speechLang, setSpeechLang] = useState('zh-CN');
-  const [sourceLang, setSourceLang] = useState('auto');
-  const [targetLang, setTargetLang] = useState('my-MM');
+  const [sourceLang, setSourceLang] = useState('zh-CN');
+  const [targetLang, setTargetLang] = useState('en-US');
   
-  const [userInput, setUserInput] = useState('');
-  const [currentMessage, setCurrentMessage] = useState(null); // 单轮对话：仅存最新一条 { text, translations, error, ... }
+  const [inputVal, setInputVal] = useState('');
+  const [history, setHistory] = useState([]); // [{ type: 'user'|'ai', ... }]
+  // 为了实现“只显示结果，下拉看历史”，我们其实只需要渲染最新的结果，
+  // 历史记录可以放在一个折叠区域或者 ScrollView 的上方。
+  // 但用户的需求是：翻译出结果后，自动滚频把用户消息滚上去不显示。
+  // 这意味着所有消息都在一个列表中，只是 ScrollTop 位置调整。
+
   const [isLoading, setIsLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
+  const [loadingMsg, setLoadingMsg] = useState('');
 
-  // 语音识别状态
-  const [isListening, setIsListening] = useState(false);
+  // 语音录制
+  const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef(null);
+  
+  // 追问建议
+  const [suggestions, setSuggestions] = useState([]);
+  const [isSuggesting, setIsSuggesting] = useState(false);
 
-  // 弹窗控制
-  const [modalState, setModalState] = useState({ type: null }); // type: 'providerModel', 'settings', 'speechLang', 'sourceLang', 'targetLang'
+  const scrollRef = useRef(null);
+  const settingsEndRef = useRef(null);
 
-  // --- Effects ---
+  // 弹窗状态
+  const [showSettings, setShowSettings] = useState(false);
+  const [showSrcPicker, setShowSrcPicker] = useState(false);
+  const [showTgtPicker, setShowTgtPicker] = useState(false);
+
+  // --- Effect: Load/Save ---
   useEffect(() => {
-    setIsMounted(true);
-    // 加载设置
-    const saved = safeLocalStorageGet('ai_886_settings');
-    if (saved) {
-      try {
-        const p = JSON.parse(saved);
-        // Merge to ensure new fields exist
-        setSettings(prev => ({ ...prev, ...p }));
-      } catch (e) { console.error(e); }
-    }
-    
-    // 加载上次语言偏好
-    const lastLangs = safeLocalStorageGet('ai_886_langs');
-    if (lastLangs) {
-      try {
-        const { s, t, sp } = JSON.parse(lastLangs);
-        if (s) setSourceLang(s);
-        if (t) setTargetLang(t);
-        if (sp) setSpeechLang(sp);
-      } catch {}
+    const s = safeLocalStorageGet('ai886_settings');
+    if (s) {
+      try { setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(s) }); } catch {}
     }
   }, []);
 
   useEffect(() => {
-    if (!isMounted) return;
-    safeLocalStorageSet('ai_886_settings', JSON.stringify(settings));
-  }, [settings, isMounted]);
+    safeLocalStorageSet('ai886_settings', JSON.stringify(settings));
+  }, [settings]);
 
-  useEffect(() => {
-    if (!isMounted) return;
-    safeLocalStorageSet('ai_886_langs', JSON.stringify({ s: sourceLang, t: targetLang, sp: speechLang }));
-  }, [sourceLang, targetLang, speechLang, isMounted]);
-
-  // --- Logic: Fetch AI ---
-  const fetchTranslation = async (text) => {
-    const { activeProviderId, activeModelId, providers, models, prompt } = settings;
-    const provider = providers.find(p => p.id === activeProviderId);
-    const model = models.find(m => m.id === activeModelId);
-
-    if (!provider || !provider.key) throw new Error('请先在设置中配置有效的 API Key');
-    if (!model) throw new Error('未选择有效模型');
-
-    const systemPrompt = prompt || DEFAULT_TRANSLATION_PROMPT.content;
-    const userPrompt = `Source: ${sourceLang}\nTarget: ${targetLang}\nContent:\n${text}`;
-
-    const res = await fetch(`${provider.url}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${provider.key}` },
-      body: JSON.stringify({
-        model: model.value,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        response_format: { type: 'json_object' }
-      })
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err?.error?.message || `API 请求失败 ${res.status}`);
-    }
-    
-    const data = await res.json();
-    const raw = data.choices?.[0]?.message?.content;
-    const parsed = safeParseAiJson(raw);
-    return normalizeTranslations(parsed.data || parsed);
+  // --- Logic: Scroll ---
+  const scrollToResult = () => {
+    if (!scrollRef.current) return;
+    // 简单的滚动到底部，如果内容不多，可能用户消息还在上面。
+    // 如果要强制隐藏用户消息，需要计算高度。
+    // 这里采用：平滑滚动到底部
+    setTimeout(() => {
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }, 100);
   };
 
-  const handleSubmit = async (overrideText = null) => {
-    const text = (overrideText || userInput).trim();
+  // --- Logic: API Calls ---
+  const getProviderAndModel = (modelId) => {
+    const model = settings.models.find(m => m.id === modelId);
+    if (!model) return null;
+    const provider = settings.providers.find(p => p.id === model.providerId);
+    return { provider, model };
+  };
+
+  const fetchAi = async (messages, modelId, jsonMode = true) => {
+    const pm = getProviderAndModel(modelId);
+    if (!pm || !pm.provider.key) throw new Error('API Key 未配置');
+
+    const body = {
+      model: pm.model.value,
+      messages,
+      stream: false
+    };
+    if (jsonMode) body.response_format = { type: 'json_object' };
+
+    const res = await fetch(`${pm.provider.url}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${pm.provider.key}`
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!res.ok) throw new Error('Request failed');
+    const data = await res.json();
+    return data.choices[0].message.content;
+  };
+
+  const handleTranslate = async (textOverride = null) => {
+    const text = (textOverride || inputVal).trim();
     if (!text) return;
 
-    // 清空历史，开始新的一轮
-    setCurrentMessage({ role: 'user', text, ts: Date.now() }); 
-    setErrorMsg('');
     setIsLoading(true);
-    setUserInput(''); // 清空输入框
+    setLoadingMsg('翻译中...');
+    setSuggestions([]); // 清空旧建议
+    
+    // Optimistic UI: Add user message
+    const userMsg = { id: nowId(), role: 'user', text, ts: Date.now() };
+    setHistory(prev => [...prev, userMsg]);
+    setInputVal('');
+    scrollToResult();
+
+    // Prepare Prompt
+    let sysPrompt = BASE_SYSTEM_INSTRUCTION;
+    if (settings.useCustomPrompt && settings.customPromptText) {
+      sysPrompt += `\n额外要求: ${settings.customPromptText}`;
+    }
+    // 强制 JSON 约束
+    sysPrompt += `\n必须返回严格的 JSON 格式: { "data": [ { "translation": "...", "back_translation": "..." }, ... ] }`;
+    // 强制回译语言
+    sysPrompt += `\nback_translation 必须翻译回: ${getLangName(sourceLang)}`;
+
+    const userPrompt = `Source Language: ${getLangName(sourceLang)}\nTarget Language: ${getLangName(targetLang)}\nContent:\n${text}`;
 
     try {
       // 1. 查字典
       const dict = await loadCheatDict(sourceLang);
       const hit = matchCheatLoose(dict, text, targetLang);
       
+      let results;
+      let from = 'ai';
+
       if (hit) {
-        const trans = normalizeTranslations(hit);
-        setCurrentMessage(prev => ({ ...prev, role: 'ai', translations: trans, from: 'dict' }));
-        preloadTTS(trans[0].translation, targetLang, settings);
+        results = normalizeTranslations(hit);
+        from = 'dict';
       } else {
-        // 2. AI 请求
-        const trans = await fetchTranslation(text);
-        setCurrentMessage(prev => ({ ...prev, role: 'ai', translations: trans, from: 'ai' }));
-        preloadTTS(trans[0].translation, targetLang, settings);
+        const raw = await fetchAi([
+          { role: 'system', content: sysPrompt },
+          { role: 'user', content: userPrompt }
+        ], settings.mainModelId, true);
+        results = normalizeTranslations(raw);
       }
+
+      // Add AI Response
+      const aiMsg = { id: nowId(), role: 'ai', results, from, ts: Date.now() };
+      setHistory(prev => [...prev, aiMsg]);
+      scrollToResult();
+
+      // Auto Play TTS (Default Result)
+      playTTS(results[0]?.translation, targetLang, settings);
+
+      // 2. 触发追问建议 (Parallel)
+      fetchSuggestions(text);
+
     } catch (e) {
-      setErrorMsg(e.message);
-      setCurrentMessage(prev => ({ ...prev, error: true }));
+      setHistory(prev => [...prev, { id: nowId(), role: 'error', text: e.message || '翻译失败' }]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // --- Logic: Speech ---
-  const toggleSpeech = useCallback(() => {
-    if (isListening) {
-      recognitionRef.current?.stop();
-      return;
-    }
+  const fetchSuggestions = async (originalText) => {
+    setIsSuggesting(true);
+    try {
+      const pm = getProviderAndModel(settings.followUpModelId);
+      if (!pm) return;
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert('您的浏览器不支持语音识别，请尝试使用 Chrome 或 Safari。');
-      return;
+      const raw = await fetchAi([
+        { role: 'system', content: REPLY_SYSTEM_INSTRUCTION },
+        { role: 'user', content: `原文: ${originalText}` }
+      ], settings.followUpModelId, true); // Some models might not support json_object, handled in try/catch if needed
+
+      const list = JSON.parse(raw);
+      if (Array.isArray(list)) setSuggestions(list);
+    } catch (e) {
+      console.log('Suggestion failed', e);
+    } finally {
+      setIsSuggesting(false);
     }
+  };
+
+  // --- Logic: Speech ---
+  const startRecording = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return alert('不支持语音识别');
+    
+    // 停止当前
+    if (recognitionRef.current) recognitionRef.current.stop();
 
     const recognition = new SpeechRecognition();
-    recognition.lang = speechLang;
+    // 语音识别使用源语言
+    recognition.lang = sourceLang; 
     recognition.interimResults = true;
-    recognition.continuous = false;
+    recognition.continuous = true; // 允许长按
 
     recognition.onstart = () => {
-      setIsListening(true);
-      setErrorMsg('');
+      setIsRecording(true);
+      setInputVal(''); // 清空开始录
     };
     recognition.onresult = (e) => {
-      const trans = Array.from(e.results).map(r => r[0].transcript).join('');
-      setUserInput(trans);
-      if (e.results[0].isFinal && trans.trim()) {
-        handleSubmit(trans);
-      }
+      const t = Array.from(e.results).map(r => r[0].transcript).join('');
+      setInputVal(t);
     };
-    recognition.onerror = (e) => {
-      console.error(e);
-      if (e.error === 'not-allowed') alert('请允许麦克风权限');
-      setIsListening(false);
-    };
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-
+    recognition.onend = () => setIsRecording(false);
+    
     recognitionRef.current = recognition;
     recognition.start();
-  }, [isListening, speechLang, settings]); // eslint-disable-line
+  };
 
-  // --- Helpers for Display ---
-  const activeModelName = settings.models.find(m => m.id === settings.activeModelId)?.name || '选择模型';
-  const getLangName = c => SUPPORTED_LANGUAGES.find(l => l.code === c)?.name || c;
+  const stopRecordingAndSend = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      // 稍微延迟等待最后结果填入 inputVal
+      setTimeout(() => {
+        handleTranslate(); 
+      }, 500);
+    }
+  };
 
-  if (!isMounted) return null;
+  // --- Logic: Language Swap ---
+  const swapLangs = () => {
+    const t = sourceLang;
+    setSourceLang(targetLang);
+    setTargetLang(t);
+  };
 
+  // --- Render ---
   return (
-    <div className="flex flex-col w-full h-[100dvh] text-gray-900 relative overflow-hidden bg-[#FFF0F5]">
+    <div className="flex flex-col w-full h-[100dvh] bg-[#FFF0F5] relative text-gray-800">
       <GlobalStyles />
       
-      {/* Background Image Layer (Optional) */}
+      {/* Background */}
       {settings.chatBackgroundUrl && (
-        <div 
-          className="absolute inset-0 bg-cover bg-center z-0 transition-opacity duration-500"
-          style={{ backgroundImage: `url('${settings.chatBackgroundUrl}')`, opacity: 1 - settings.backgroundOverlay }}
-        />
+         <div 
+           className="absolute inset-0 bg-cover bg-center z-0 transition-opacity duration-500 pointer-events-none"
+           style={{ backgroundImage: `url('${settings.chatBackgroundUrl}')`, opacity: 1 - settings.backgroundOverlay }}
+         />
       )}
-      
-      {/* Top Bar */}
-      <div className="relative z-10 bg-white/80 backdrop-blur-md border-b border-pink-100 pt-safe-top shadow-sm">
-        <div className="w-full max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
+
+      {/* Header */}
+      <div className="relative z-10 pt-safe-top bg-white/60 backdrop-blur-md shadow-sm border-b border-pink-100/50">
+        <div className="flex items-center justify-center h-12 relative px-4">
+          {/* Logo Title */}
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-pink-500 rounded-lg flex items-center justify-center text-white font-bold text-lg">
-              <i className="fas fa-language" />
-            </div>
-            <div className="flex flex-col">
-              <span className="font-extrabold text-gray-900 text-[15px] leading-tight">886.best</span>
-              <span className="text-[10px] text-pink-600 font-medium">Ai翻译支持100多种语言</span>
-            </div>
+            <img src="/favicon.ico" alt="logo" className="w-5 h-5 rounded-full opacity-80" onError={(e) => e.target.style.display='none'} />
+            <span className="font-extrabold text-gray-800 text-lg tracking-tight">886.best</span>
+            <span className="text-[10px] bg-pink-100 text-pink-600 px-1.5 py-0.5 rounded ml-1 font-medium">Ai翻译</span>
           </div>
           
+          {/* Settings Button (Right) */}
           <button 
-            onClick={() => setModalState({ type: 'settings' })}
-            className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
+            onClick={() => setShowSettings(true)}
+            className="absolute right-4 w-8 h-8 flex items-center justify-center rounded-full active:bg-gray-200 transition-colors text-gray-600"
           >
             <i className="fas fa-cog" />
           </button>
         </div>
       </div>
 
-      {/* Main Content (Scrollable) */}
-      <div className="flex-1 overflow-y-auto slim-scrollbar relative z-10 px-4 py-6">
-        <div className="w-full max-w-[800px] mx-auto min-h-full flex flex-col justify-end pb-40">
-          
-          {/* Default Welcome */}
-          {!currentMessage && !isLoading && (
-            <div className="flex flex-col items-center justify-center opacity-40 mt-20">
-              <i className="fas fa-comments text-6xl mb-4 text-pink-300" />
-              <p className="text-gray-500">开始新的对话...</p>
-            </div>
-          )}
+      {/* Main Scroll Area */}
+      <div 
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto no-scrollbar relative z-10 px-4 pt-4 pb-32 scroll-smooth"
+      >
+        <div className="w-full max-w-[600px] mx-auto min-h-full flex flex-col justify-end">
+           {history.length === 0 && !isLoading && (
+             <div className="text-center text-gray-400 mb-20 opacity-60">
+                <div className="text-4xl mb-2">💬</div>
+                <div className="text-sm">支持 100+ 种语言互译</div>
+             </div>
+           )}
 
-          {/* User Message Bubble */}
-          {currentMessage && (
-            <div className="flex justify-center mb-8 animate-in slide-in-from-bottom-4 duration-300">
-              <div className="bg-white border-2 border-pink-100 px-6 py-4 rounded-[24px] shadow-sm max-w-full text-center">
-                 <div className="text-lg md:text-xl font-medium text-gray-800 break-words">{currentMessage.text}</div>
-              </div>
-            </div>
-          )}
+           {history.map((item, idx) => {
+             // User Message
+             if (item.role === 'user') {
+               return (
+                 <div key={item.id} className="flex justify-end mb-6 opacity-60 scale-90 origin-right">
+                   <div className="bg-gray-200 text-gray-700 px-4 py-2 rounded-2xl rounded-tr-sm text-sm max-w-[85%] break-words shadow-inner">
+                     {item.text}
+                   </div>
+                 </div>
+               );
+             }
+             // Error
+             if (item.role === 'error') {
+               return (
+                 <div key={item.id} className="bg-red-50 text-red-500 text-xs p-3 rounded-xl text-center mb-6">
+                   {item.text}
+                 </div>
+               );
+             }
+             // AI Result
+             return (
+               <div key={item.id} className="mb-6 animate-in slide-in-from-bottom-4 duration-500">
+                  {item.results.map((res, i) => (
+                    <TranslationCard 
+                      key={i} 
+                      data={res} 
+                      onPlay={() => playTTS(res.translation, targetLang, settings)} 
+                    />
+                  ))}
+                  
+                  {/* Dictionary Hit Indicator */}
+                  {item.from === 'dict' && (
+                    <div className="text-center text-[10px] text-green-600/50 mb-2">- 字典严格匹配 -</div>
+                  )}
 
-          {/* AI Results */}
-          {isLoading && <FancyLoading />}
-          
-          {currentMessage?.translations && (
-            <div className="animate-in fade-in zoom-in-95 duration-300">
-               <TranslationResults results={currentMessage.translations} targetLang={targetLang} settings={settings} />
-               
-               {/* Regenerate Button */}
-               <div className="flex justify-center mt-4">
-                 <button 
-                   onClick={() => handleSubmit(currentMessage.text)}
-                   className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-full text-xs font-bold text-gray-500 hover:text-blue-600 hover:border-blue-200 shadow-sm transition-all"
-                 >
-                   <i className="fas fa-sync-alt" />
-                   重新生成
-                 </button>
+                  {/* Reply Suggestions (Only for the latest message) */}
+                  {idx === history.length - 1 && (
+                    isSuggesting ? (
+                      <div className="h-8 flex items-center justify-center gap-1">
+                        <span className="w-1.5 h-1.5 bg-pink-300 rounded-full animate-bounce"/>
+                        <span className="w-1.5 h-1.5 bg-pink-300 rounded-full animate-bounce delay-100"/>
+                        <span className="w-1.5 h-1.5 bg-pink-300 rounded-full animate-bounce delay-200"/>
+                      </div>
+                    ) : (
+                      <ReplyChips 
+                        suggestions={suggestions} 
+                        onClick={(reply) => {
+                          setInputVal(reply);
+                          handleTranslate(reply);
+                        }}
+                      />
+                    )
+                  )}
                </div>
-            </div>
-          )}
+             );
+           })}
 
-          {/* Error */}
-          {errorMsg && (
-            <div className="bg-red-50 text-red-600 p-4 rounded-xl text-center text-sm border border-red-100 shadow-sm mx-auto w-full max-w-md mt-4">
-              <div className="font-bold mb-1">出错了</div>
-              {errorMsg}
-            </div>
-          )}
+           {/* Loading State */}
+           {isLoading && (
+             <div className="flex justify-center mb-8">
+               <div className="bg-white/80 px-4 py-2 rounded-full shadow-sm flex items-center gap-2 text-sm text-pink-500 animate-pulse">
+                 <i className="fas fa-spinner fa-spin" />
+                 <span>{loadingMsg}</span>
+               </div>
+             </div>
+           )}
         </div>
       </div>
 
-      {/* Bottom Fixed Area */}
-      <div className="fixed bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-white via-white to-white/90 backdrop-blur-lg pt-2 pb-[max(16px,env(safe-area-inset-bottom))] border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.02)]">
-        <div className="w-full max-w-[800px] mx-auto px-4">
+      {/* Bottom Bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-white via-white/95 to-white/0 pt-6 pb-[max(12px,env(safe-area-inset-bottom))]">
+        <div className="w-full max-w-[600px] mx-auto px-4">
           
-          {/* Tool Bar */}
-          <div className="flex items-center justify-between mb-3 px-1">
-            {/* 语音语言选择 */}
-            <button
-              onClick={() => setModalState({ type: 'speechLang' })}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-200 transition-colors"
-            >
-              <i className="fas fa-microphone" />
-              <span>{SPEECH_LANGS.find(s => s.value === speechLang)?.name || speechLang}</span>
-            </button>
-
-            {/* 翻译方向 */}
-            <div className="flex items-center bg-gray-100 rounded-lg p-1 gap-1">
-              <button onClick={() => setModalState({ type: 'sourceLang' })} className="px-3 py-1 rounded-md text-xs font-bold text-gray-700 hover:bg-white shadow-sm transition-all">
-                {getLangName(sourceLang)}
+          {/* Controls */}
+          <div className="flex items-center justify-between mb-2 px-1">
+            {/* Lang Switcher */}
+            <div className="flex items-center gap-2 bg-white/40 backdrop-blur-sm rounded-full p-1 border border-white/50 shadow-sm">
+              <button 
+                onClick={() => setShowSrcPicker(true)} 
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-transparent hover:bg-white/50 rounded-full transition-all"
+              >
+                <span className="text-lg">{getLangFlag(sourceLang)}</span>
+                <span className="text-xs font-bold text-gray-700">{getLangName(sourceLang)}</span>
               </button>
-              <i className="fas fa-arrow-right text-[10px] text-gray-400" />
-              <button onClick={() => setModalState({ type: 'targetLang' })} className="px-3 py-1 rounded-md text-xs font-bold text-gray-700 hover:bg-white shadow-sm transition-all">
-                {getLangName(targetLang)}
+              
+              <button onClick={swapLangs} className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-pink-500">
+                <i className="fas fa-exchange-alt text-xs" />
+              </button>
+
+              <button 
+                onClick={() => setShowTgtPicker(true)} 
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-transparent hover:bg-white/50 rounded-full transition-all"
+              >
+                <span className="text-lg">{getLangFlag(targetLang)}</span>
+                <span className="text-xs font-bold text-gray-700">{getLangName(targetLang)}</span>
               </button>
             </div>
 
-            {/* 模型切换 */}
+            {/* Model Icon */}
             <button 
-              onClick={() => setModalState({ type: 'providerModel' })}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors"
+               onClick={() => setShowSettings(true)}
+               className="w-8 h-8 flex items-center justify-center text-pink-400 hover:text-pink-600 hover:bg-pink-50 rounded-full transition-colors"
+               title="切换模型"
             >
               <i className="fas fa-robot" />
-              <span className="max-w-[80px] truncate">{activeModelName}</span>
             </button>
           </div>
 
-          {/* Input Bar */}
-          <div className="flex items-end gap-3 bg-gray-50 border border-gray-200 rounded-[24px] p-2 focus-within:ring-2 focus-within:ring-pink-200 focus-within:border-pink-300 transition-all shadow-inner">
+          {/* Input Area */}
+          <div className="relative flex items-end gap-2 bg-white border border-pink-100 rounded-[28px] p-1.5 shadow-[0_4px_20px_rgba(236,72,153,0.08)]">
             <textarea
-              value={userInput}
-              onChange={(e) => setUserInput(e.target.value)}
-              placeholder="输入文字或语音..."
+              className="flex-1 bg-transparent border-none outline-none resize-none px-4 py-3 max-h-32 min-h-[48px] text-[16px] leading-6 no-scrollbar"
+              placeholder="输入内容..."
               rows={1}
-              className="flex-1 bg-transparent border-none outline-none resize-none py-3 px-3 min-h-[48px] max-h-32 text-[16px] leading-6"
+              value={inputVal}
+              onChange={e => setInputVal(e.target.value)}
               onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) {
+                if(e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  handleSubmit();
+                  handleTranslate();
                 }
               }}
             />
-            
-            {userInput.trim() ? (
-              <button
-                onClick={() => handleSubmit()}
-                className="w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all mb-0.5"
+
+            {/* Action Button: Send or Mic */}
+            {inputVal.trim() ? (
+              <button 
+                onClick={() => handleTranslate()}
+                className="w-11 h-11 rounded-full bg-pink-500 text-white shadow-md shadow-pink-200 flex items-center justify-center mb-0.5 active:scale-90 transition-transform"
               >
-                <i className="fas fa-arrow-up text-lg" />
+                <i className="fas fa-arrow-up" />
               </button>
             ) : (
               <button
-                onClick={toggleSpeech}
+                onMouseDown={startRecording}
+                onMouseUp={stopRecordingAndSend}
+                onTouchStart={(e) => { e.preventDefault(); startRecording(); }}
+                onTouchEnd={(e) => { e.preventDefault(); stopRecordingAndSend(); }}
                 className={cx(
-                  "w-12 h-12 rounded-full flex items-center justify-center shadow-md transition-all mb-0.5",
-                  isListening ? "bg-red-500 text-white animate-pulse scale-110" : "bg-white text-gray-600 hover:bg-gray-100"
+                  "w-11 h-11 rounded-full flex items-center justify-center mb-0.5 transition-all select-none touch-none",
+                  isRecording 
+                    ? "bg-red-500 text-white scale-110 shadow-lg shadow-red-200" 
+                    : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                 )}
               >
-                <i className={`fas ${isListening ? 'fa-square' : 'fa-microphone'} text-lg`} />
+                <i className={`fas ${isRecording ? 'fa-waveform' : 'fa-microphone'}`} />
               </button>
+            )}
+
+            {/* Recording Indicator Overlay */}
+            {isRecording && (
+               <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-black/70 text-white text-xs px-3 py-1.5 rounded-full animate-bounce">
+                 松开发送...
+               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Render Modals */}
-      {modalState.type === 'settings' && (
-        <SettingsModal settings={settings} onSave={setSettings} onClose={() => setModalState({ type: null })} />
-      )}
+      {/* Language Pickers */}
+      <Dialog open={showSrcPicker} onClose={() => setShowSrcPicker(false)} className="relative z-[10003]">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <Dialog.Panel className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl max-h-[70vh] overflow-y-auto slim-scrollbar">
+            <div className="text-center font-bold mb-3 text-gray-800">选择源语言</div>
+            <div className="grid grid-cols-2 gap-2">
+              {SUPPORTED_LANGUAGES.map(l => (
+                <button key={l.code} onClick={() => { setSourceLang(l.code); setShowSrcPicker(false); }} className={`p-3 rounded-xl border text-left ${sourceLang===l.code ? 'border-pink-500 bg-pink-50': 'border-gray-100'}`}>
+                   <span className="mr-2">{l.flag}</span>{l.name}
+                </button>
+              ))}
+            </div>
+          </Dialog.Panel>
+        </div>
+      </Dialog>
       
-      {modalState.type === 'providerModel' && (
-        <ProviderModelModal 
+      <Dialog open={showTgtPicker} onClose={() => setShowTgtPicker(false)} className="relative z-[10003]">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <Dialog.Panel className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl max-h-[70vh] overflow-y-auto slim-scrollbar">
+            <div className="text-center font-bold mb-3 text-gray-800">选择目标语言</div>
+            <div className="grid grid-cols-2 gap-2">
+              {SUPPORTED_LANGUAGES.map(l => (
+                <button key={l.code} onClick={() => { setTargetLang(l.code); setShowTgtPicker(false); }} className={`p-3 rounded-xl border text-left ${targetLang===l.code ? 'border-pink-500 bg-pink-50': 'border-gray-100'}`}>
+                   <span className="mr-2">{l.flag}</span>{l.name}
+                </button>
+              ))}
+            </div>
+          </Dialog.Panel>
+        </div>
+      </Dialog>
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <SettingsModal 
           settings={settings} 
-          onSelect={(pid, mid) => setSettings(p => ({ ...p, activeProviderId: pid, activeModelId: mid }))} 
-          onClose={() => setModalState({ type: null })} 
+          onSave={setSettings} 
+          onClose={() => setShowSettings(false)} 
         />
       )}
-
-      {(['sourceLang', 'targetLang'].includes(modalState.type)) && (
-        <ModalWrapper title={modalState.type === 'sourceLang' ? '源语言' : '目标语言'} onClose={() => setModalState({ type: null })}>
-          <div className="grid grid-cols-2 gap-2">
-            {SUPPORTED_LANGUAGES.map(l => (
-              <button
-                key={l.code}
-                onClick={() => {
-                  if (modalState.type === 'sourceLang') setSourceLang(l.code);
-                  else setTargetLang(l.code);
-                  setModalState({ type: null });
-                }}
-                className={`p-3 rounded-xl text-left border ${
-                  (modalState.type === 'sourceLang' ? sourceLang : targetLang) === l.code 
-                  ? 'bg-blue-50 border-blue-400 text-blue-700 font-bold' 
-                  : 'bg-white border-gray-100 hover:bg-gray-50'
-                }`}
-              >
-                <div className="text-sm">{l.name}</div>
-                <div className="text-[10px] opacity-50">{l.code}</div>
-              </button>
-            ))}
-          </div>
-        </ModalWrapper>
-      )}
-
-      {modalState.type === 'speechLang' && (
-        <ModalWrapper title="语音识别语言" onClose={() => setModalState({ type: null })}>
-          <div className="grid grid-cols-2 gap-2">
-            {SPEECH_LANGS.map(l => (
-              <button
-                key={l.value}
-                onClick={() => {
-                  setSpeechLang(l.value);
-                  setModalState({ type: null });
-                }}
-                className={`p-3 rounded-xl text-left border flex items-center gap-2 ${
-                  speechLang === l.value ? 'bg-blue-50 border-blue-400' : 'bg-white border-gray-100 hover:bg-gray-50'
-                }`}
-              >
-                <span className="text-xl">{l.flag}</span>
-                <div>
-                  <div className="text-sm font-bold text-gray-800">{l.name}</div>
-                  <div className="text-[10px] text-gray-500">{l.value}</div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </ModalWrapper>
-      )}
-
-      <button onClick={onClose} className="fixed top-4 right-4 z-50 w-8 h-8 flex items-center justify-center rounded-full bg-black/10 text-white md:hidden">
-        <i className="fas fa-times" />
-      </button>
     </div>
   );
 };
