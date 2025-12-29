@@ -7,7 +7,6 @@ const safeLocalStorageGet = (key) => { if (typeof window !== 'undefined') { retu
 const safeLocalStorageSet = (key, value) => { if (typeof window !== 'undefined') { localStorage.setItem(key, value); } };
 const generateSimpleId = (prefix = 'id') => `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 const playKeySound = () => { try { const audio = new Audio('/sounds/typing-key.mp3'); audio.volume = 0.4; audio.play().catch(e => {}); } catch(e) {} };
-const vibrate = () => { if (navigator.vibrate) { navigator.vibrate(50); } };
 
 // --- 【语言检测函数】 ---
 const detectLanguage = (text) => {
@@ -27,42 +26,93 @@ const DEFAULT_SETTINGS = { apiConfig: { url: 'https://api.openai.com/v1', key: '
 const SUPPORTED_LANGUAGES = [ { code: 'auto', name: '自动识别', speechCode: 'zh-CN' }, { code: 'zh-CN', name: '中文', speechCode: 'zh-CN' }, { code: 'my-MM', name: '缅甸语', speechCode: 'my-MM' } ];
 const SPEECH_RECOGNITION_LANGUAGES = [ { name: '中文 (普通话)', value: 'zh-CN' }, { name: '缅甸语 (မြန်မာ)', value: 'my-MM' }, { name: 'English (US)', value: 'en-US' } ];
 
-// --- 【语音合成工具函数】 ---
-const speakText = (text, voiceName) => {
-    if (!window.speechSynthesis || !text) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    const voices = window.speechSynthesis.getVoices();
-    const lang = detectLanguage(text);
-    const selectedVoice = voices.find(v => v.name.includes(voiceName.split('-')[2]?.replace('Neural','')) && v.lang === lang);
-    if (selectedVoice) {
-        utterance.voice = selectedVoice;
-    } else {
-        utterance.lang = lang;
+// --- 【语音合成工具】 ---
+const ttsCache = new Map();
+let currentPlayingAudio = null;
+
+const preloadTTS = async (text, voiceName) => {
+    const cacheKey = `${text}|${voiceName}`;
+    if (ttsCache.has(cacheKey) || !text) return;
+    try {
+        const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${voiceName}&r=0`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('TTS API Error');
+        const blob = await response.blob();
+        const audio = new Audio(URL.createObjectURL(blob));
+        ttsCache.set(cacheKey, audio);
+    } catch (e) {
+        console.error(`预加载 "${text}" 失败:`, e);
     }
-    window.speechSynthesis.speak(utterance);
+};
+
+const playCachedTTS = (text, voiceName, onStart, onEnd) => {
+    const cacheKey = `${text}|${voiceName}`;
+    const playAudio = () => {
+        const audio = ttsCache.get(cacheKey);
+        if (!audio) { onEnd(); return; }
+
+        if (currentPlayingAudio) {
+            currentPlayingAudio.pause();
+            currentPlayingAudio.currentTime = 0;
+        }
+        currentPlayingAudio = audio;
+        
+        audio.onplay = onStart;
+        audio.onended = () => { onEnd(); currentPlayingAudio = null; };
+        audio.onerror = () => { onEnd(); currentPlayingAudio = null; };
+        
+        audio.play().catch(onEnd);
+    };
+
+    if (ttsCache.has(cacheKey)) {
+        playAudio();
+    } else {
+        onStart();
+        preloadTTS(text, voiceName).then(() => {
+            if (ttsCache.has(cacheKey)) {
+                playAudio();
+            } else {
+                onEnd();
+            }
+        });
+    }
+};
+
+const stopCachedTTS = () => {
+    if (currentPlayingAudio) {
+        currentPlayingAudio.pause();
+        currentPlayingAudio.currentTime = 0;
+        if (currentPlayingAudio.onended) {
+            currentPlayingAudio.onended();
+        }
+        currentPlayingAudio = null;
+    }
 };
 
 // --- 【子组件】AiTtsButton ---
 const AiTtsButton = ({ text, voiceName }) => {
     const [isPlaying, setIsPlaying] = useState(false);
+    
     const handleSpeak = (e) => {
         e.stopPropagation();
-        if (isPlaying) { window.speechSynthesis.cancel(); setIsPlaying(false); return; }
-        if (!window.speechSynthesis) { alert('您的浏览器不支持语音朗读功能'); return; }
-        
-        const utterance = new SpeechSynthesisUtterance(text);
-        const voices = window.speechSynthesis.getVoices();
-        const lang = detectLanguage(text);
-        const selectedVoice = voices.find(v => v.name.includes(voiceName.split('-')[2]?.replace('Neural','')) && v.lang === lang);
-        if (selectedVoice) { utterance.voice = selectedVoice; }
-        else { utterance.lang = lang; }
-        
-        utterance.onstart = () => setIsPlaying(true);
-        utterance.onend = () => setIsPlaying(false);
-        utterance.onerror = () => setIsPlaying(false);
-        window.speechSynthesis.speak(utterance);
+        if (isPlaying) {
+            stopCachedTTS();
+        } else {
+            playCachedTTS(
+                text,
+                voiceName,
+                () => setIsPlaying(true),
+                () => setIsPlaying(false)
+            );
+        }
     };
+    
+    useEffect(() => {
+        return () => {
+            stopCachedTTS();
+        };
+    }, []);
+
     return ( <button onClick={handleSpeak} className={`w-10 h-10 flex items-center justify-center rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${isPlaying ? 'text-blue-500 animate-pulse' : 'text-gray-500 dark:text-gray-400'}`} title={isPlaying ? "停止朗读" : "朗读"}> <i className={`fas ${isPlaying ? 'fa-stop-circle' : 'fa-volume-up'} text-xl`}></i> </button> );
 };
 
@@ -86,11 +136,11 @@ const TranslationResults = ({ results, voiceName }) => (<div className="flex fle
 // --- 【子组件】MessageBubble & LoadingSpinner ---
 const LoadingSpinner = () => {
     useEffect(() => {
-        const interval = setInterval(() => { playKeySound(); vibrate(); }, 500);
+        const interval = setInterval(() => { playKeySound(); }, 500);
         return () => clearInterval(interval);
     }, []);
     return (
-        <div className="flex my-4 justify-start">
+        <div className="flex my-4 justify-center">
             <div className="p-3 rounded-2xl bg-white dark:bg-gray-700 shadow-md flex items-center justify-center w-20 h-14">
                 <div className="w-7 h-7 border-3 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
             </div>
@@ -100,16 +150,24 @@ const LoadingSpinner = () => {
 
 const MessageBubble = ({ msg, onRegenerate }) => {
     const isUser = msg.role === 'user';
-    const userBubbleClass = 'bg-blue-600 text-white rounded-br-none shadow-lg';
     const hasTranslations = msg.translations && msg.translations.length > 0;
+
+    const containerClass = isUser ? 'justify-end' : (hasTranslations ? 'justify-center' : 'justify-start');
+    const userBubbleClass = 'bg-blue-600 text-white rounded-br-none shadow-lg';
+    const bubbleClass = isUser ? userBubbleClass : '';
+
     return (
-        <div className={`flex my-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
-            <div className={`text-left flex flex-col ${isUser ? userBubbleClass : ''} ${isUser && 'p-3 rounded-xl'}`} style={{ maxWidth: '90%' }}>
-                {hasTranslations ? <TranslationResults results={msg.translations} voiceName={msg.voiceName} /> : <p className={`text-lg ${isUser ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`}>{msg.content || ''}</p>}
+        <div className={`flex my-3 ${containerClass}`}>
+            <div className={`text-left flex flex-col ${isUser ? 'p-3 rounded-xl' : ''} ${bubbleClass}`} style={{ maxWidth: '90%' }}>
+                {hasTranslations 
+                    ? <TranslationResults results={msg.translations} voiceName={msg.voiceName} /> 
+                    : <div className="p-3 rounded-2xl bg-white dark:bg-gray-700 shadow-md"><p className={`text-lg ${isUser ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`}>{msg.content || ''}</p></div>
+                }
             </div>
         </div>
     );
 };
+
 
 // --- 【子组件】SettingsModal ---
 const ModelManager = ({ models, onChange, onAdd, onDelete }) => ( <> {(models || []).map(m => ( <div key={m.id} className="p-3 mb-3 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600 space-y-2"> <div className="flex items-center justify-between"> <input type="text" value={m.name} onChange={(e) => onChange(m.id, 'name', e.target.value)} placeholder="模型显示名称" className="font-semibold bg-transparent w-full text-base" /> <button onClick={() => onDelete(m.id)} className="p-2 ml-2 text-sm text-red-500 rounded-full hover:bg-red-500/10"><i className="fas fa-trash"></i></button> </div> <div> <label className="text-xs font-medium">模型值 (Value)</label> <input type="text" value={m.value} onChange={(e) => onChange(m.id, 'value', e.target.value)} placeholder="例如: gpt-4o" className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border dark:border-gray-500 rounded-md text-xs" /> </div> </div> ))} <button onClick={onAdd} className="w-full mt-2 py-2 bg-blue-500 text-white rounded-md text-sm"><i className="fas fa-plus mr-2"></i>添加新模型</button> </> );
@@ -237,7 +295,7 @@ const AiChatContent = ({ onClose }) => {
             
             setMessages(prev => [...prev, { role: 'ai', timestamp: Date.now(), translations: translationsArray, voiceName: ttsVoice }]);
             if (settings.autoReadFirstTranslation) {
-                speakText(translationsArray[0].translation, ttsVoice);
+                playCachedTTS(translationsArray[0].translation, ttsVoice, () => {}, () => {});
             }
         } catch (err) {
             const errorMessage = `请求错误: ${err.message}`;
@@ -252,12 +310,12 @@ const AiChatContent = ({ onClose }) => {
             const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
             if (!lastUserMsg) return;
             userMessage = lastUserMsg;
-            setMessages([userMessage]);
+            setMessages(prev => prev.filter(m => m.role === 'user' && m.timestamp === userMessage.timestamp));
         } else {
             const textToProcess = (textToSend !== null ? textToSend : userInput).trim();
             if (!textToProcess) { setError('请输入要翻译的内容！'); return; }
             userMessage = { role: 'user', content: textToProcess, timestamp: Date.now() };
-            setMessages([userMessage]);
+            setMessages(prev => [...prev, userMessage]);
             setUserInput('');
         }
         await fetchAiResponse([userMessage]);
@@ -280,7 +338,7 @@ const AiChatContent = ({ onClose }) => {
             
             <div className="flex-1 flex flex-col h-full relative overflow-hidden z-10 pt-safe-top">
                 <div className="flex-1 overflow-y-auto p-4 space-y-1">
-                    {messages.map((msg, index) => ( <div key={msg.timestamp}> <MessageBubble msg={msg} onRegenerate={() => handleSubmit(true)} /> </div> ))}
+                    {messages.map((msg, index) => ( <MessageBubble key={`${msg.timestamp}-${index}`} msg={msg} onRegenerate={() => handleSubmit(true)} /> ))}
                     {isLoading && <LoadingSpinner/>}
                     <div ref={messagesEndRef} />
                 </div>
@@ -292,7 +350,7 @@ const AiChatContent = ({ onClose }) => {
                            <select value={sourceLang} onChange={e => setSourceLang(e.target.value)} className="bg-white/60 dark:bg-gray-700/60 backdrop-blur-sm rounded-full px-4 py-2 text-sm font-semibold border border-black/10 dark:border-white/10 outline-none focus:ring-2 focus:ring-blue-500 appearance-none text-center text-gray-800 dark:text-gray-200">{SUPPORTED_LANGUAGES.map(l => <option key={l.code} value={l.code} className="bg-white dark:bg-gray-800">{l.name}</option>)}</select>
                            <button onClick={handleSwapLanguages} className="w-9 h-9 rounded-full flex items-center justify-center bg-white/60 dark:bg-gray-700/60 backdrop-blur-sm hover:bg-white/80 dark:hover:bg-gray-600/80 border border-black/10 dark:border-white/10 transition-transform active:rotate-180 disabled:opacity-50" disabled={sourceLang === 'auto'}><i className="fas fa-exchange-alt text-gray-800 dark:text-gray-200"></i></button>
                            <select value={targetLang} onChange={e => setTargetLang(e.target.value)} className="bg-white/60 dark:bg-gray-700/60 backdrop-blur-sm rounded-full px-4 py-2 text-sm font-semibold border-none outline-none focus:ring-2 focus:ring-blue-500 appearance-none text-center text-gray-800 dark:text-gray-200">{SUPPORTED_LANGUAGES.filter(l => l.code !== 'auto').map(l => <option key={l.code} value={l.code} className="bg-white dark:bg-gray-800">{l.name}</option>)}</select>
-                           <button onClick={() => setShowModelSelector(true)} className="bg-white/60 dark:bg-gray-700/60 backdrop-blur-sm rounded-full px-4 py-2 text-sm font-semibold border border-black/10 dark:border-white/10 outline-none focus:ring-2 focus:ring-blue-500 text-gray-800 dark:text-gray-200">{getModelName(settings.selectedModel)}</button>
+                           <button onClick={() => setShowModelSelector(true)} title={`当前模型: ${getModelName(settings.selectedModel)}`} className="w-9 h-9 rounded-full flex items-center justify-center bg-white/60 dark:bg-gray-700/60 backdrop-blur-sm hover:bg-white/80 dark:hover:bg-gray-600/80 border border-black/10 dark:border-white/10 transition-colors"><i className="fas fa-robot text-gray-800 dark:text-gray-200"></i></button>
                         </div>
                         <form onSubmit={handleMainButtonClick} className="flex items-end gap-3 bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg p-2 rounded-[28px] shadow-lg border border-black/10 dark:border-white/10">
                             <button type="button" onClick={(e) => { e.stopPropagation(); setShowSettings(true); }} className="w-12 h-12 flex items-center justify-center shrink-0 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"><i className="fas fa-cog text-gray-600 dark:text-gray-300"></i></button>
