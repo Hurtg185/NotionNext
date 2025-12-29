@@ -90,18 +90,6 @@ const SUPPORTED_LANGUAGES = [
   { code: 'es-ES', name: 'Español', flag: '🇪🇸' },
 ];
 
-const SPEECH_LANGS = [
-  { name: '中文', value: 'zh-CN', flag: '🇨🇳' },
-  { name: 'English', value: 'en-US', flag: '🇺🇸' },
-  { name: '日本語', value: 'ja-JP', flag: '🇯🇵' },
-  { name: '한국어', value: 'ko-KR', flag: '🇰🇷' },
-  { name: 'မြန်မာ', value: 'my-MM', flag: '🇲🇲' },
-  { name: 'Tiếng Việt', value: 'vi-VN', flag: '🇻🇳' },
-  { name: 'ไทย', value: 'th-TH', flag: '🇹🇭' },
-  { name: 'ລາວ', value: 'lo-LA', flag: '🇱🇦' },
-  { name: 'Русский', value: 'ru-RU', flag: '🇷🇺' },
-];
-
 const DEFAULT_PROVIDERS = [
   { id: 'p1', name: '默认接口', url: 'https://apis.iflow.cn/v1', key: '' }
 ];
@@ -194,12 +182,34 @@ const playTTS = async (text, lang, settings) => {
 const normalizeTranslations = (raw) => {
   let data = [];
   try {
-    const json = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    // 增强解析：去除可能存在的 Markdown 代码块标记
+    let cleanRaw = typeof raw === 'string' ? raw.trim() : '';
+    // 如果包含 ```json ... ```，去除
+    if (cleanRaw.includes('```')) {
+      cleanRaw = cleanRaw.replace(/```json/g, '').replace(/```/g, '').trim();
+    }
+    
+    // 尝试寻找 JSON 对象
+    const start = cleanRaw.indexOf('{');
+    const end = cleanRaw.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      cleanRaw = cleanRaw.slice(start, end + 1);
+    }
+
+    const json = cleanRaw ? JSON.parse(cleanRaw) : raw;
     data = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
-  } catch {
-    return [{ translation: typeof raw === 'string' ? raw : '解析失败', back_translation: '' }];
+  } catch (e) {
+    console.warn("JSON Parse Failed", e);
+    // 即使解析失败，也构建一个默认卡片，防止不显示
+    return [{ style: '默认', translation: typeof raw === 'string' ? raw : '解析失败', back_translation: '' }];
   }
-  return data.filter(x => x && x.translation).slice(0, 4); 
+
+  // 过滤无效项并确保至少有一个
+  const validData = data.filter(x => x && x.translation);
+  if (validData.length === 0) {
+     return [{ style: '结果', translation: typeof raw === 'string' ? raw : '（无译文）', back_translation: '' }];
+  }
+  return validData.slice(0, 4); 
 };
 
 const getLangName = (c) => SUPPORTED_LANGUAGES.find(l => l.code === c)?.name || c;
@@ -347,7 +357,7 @@ const ModelSelectorModal = ({ settings, onClose, onSelect }) => {
   );
 };
 
-// 4. 设置弹窗 (恢复了供应商和模型管理)
+// 4. 设置弹窗
 const SettingsModal = ({ settings, onSave, onClose }) => {
   const [data, setData] = useState(settings);
   const [tab, setTab] = useState('provider'); 
@@ -459,7 +469,6 @@ const AiChatContent = ({ onClose }) => {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [sourceLang, setSourceLang] = useState('zh-CN');
   const [targetLang, setTargetLang] = useState('en-US');
-  const [speechLang, setSpeechLang] = useState('zh-CN');
   
   const [inputVal, setInputVal] = useState('');
   const [history, setHistory] = useState([]); 
@@ -468,8 +477,7 @@ const AiChatContent = ({ onClose }) => {
 
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef(null);
-  const inputRef = useRef(null);
-  const longPressTimerRef = useRef(null);
+  const silenceTimerRef = useRef(null); // 静音检测定时器
   
   const [suggestions, setSuggestions] = useState([]);
   const [isSuggesting, setIsSuggesting] = useState(false);
@@ -480,7 +488,6 @@ const AiChatContent = ({ onClose }) => {
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [showSrcPicker, setShowSrcPicker] = useState(false);
   const [showTgtPicker, setShowTgtPicker] = useState(false);
-  const [showSpeechPicker, setShowSpeechPicker] = useState(false);
 
   useEffect(() => {
     const s = safeLocalStorageGet('ai886_settings');
@@ -490,6 +497,14 @@ const AiChatContent = ({ onClose }) => {
   useEffect(() => {
     safeLocalStorageSet('ai886_settings', JSON.stringify(settings));
   }, [settings]);
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      if (recognitionRef.current) recognitionRef.current.stop();
+    };
+  }, []);
 
   const scrollToResult = () => {
     if (!scrollRef.current) return;
@@ -599,71 +614,95 @@ const AiChatContent = ({ onClose }) => {
     }
   };
 
-  // --- Voice Logic (Pseudo-Input) ---
+  // --- Voice Logic (Click to Toggle + Auto Send on Silence) ---
+  
+  // 停止录音
+  const stopRecording = useCallback(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    setIsRecording(false);
+  }, []);
+
+  // 停止录音并发送 (用于自动发送)
+  const stopAndSend = useCallback(() => {
+    // 此时 inputVal 的状态可能不是最新的，因为在闭包中
+    // 我们依赖 recognition 的 onresult 更新了 inputVal 状态
+    // 但在定时器回调中直接取 inputVal 可能会旧。
+    // 更好的方式是：在 onresult 中更新 ref，或者在 onend 事件中触发发送
+    stopRecording();
+    // 稍微延迟，确保状态同步，然后发送
+    setTimeout(() => {
+        // 由于闭包问题，这里用 setState 获取最新值
+        setInputVal(current => {
+            if (current && current.trim()) {
+                handleTranslate(current);
+            }
+            return ''; // 清空
+        });
+    }, 200);
+  }, [stopRecording]); // eslint-disable-line
+
   const startRecording = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return alert('当前浏览器不支持语音识别');
 
-    if (recognitionRef.current) recognitionRef.current.stop();
+    // 如果正在录音，点击则停止并发送（手动打断）
+    if (isRecording) {
+      stopAndSend();
+      return;
+    }
+
     const recognition = new SpeechRecognition();
-    recognition.lang = speechLang; 
+    recognition.lang = sourceLang; // 跟随源语言
     recognition.interimResults = true;
     recognition.continuous = true; 
 
     recognition.onstart = () => {
       setIsRecording(true);
-      if (navigator.vibrate) navigator.vibrate(50); // Haptic feedback
+      if (navigator.vibrate) navigator.vibrate(50); 
       setInputVal(''); 
+      // 启动静音检测定时器
+      resetSilenceTimer();
     };
+
     recognition.onresult = (e) => {
       const t = Array.from(e.results).map(r => r[0].transcript).join('');
       setInputVal(t);
+      // 有声音输入，重置定时器
+      resetSilenceTimer();
     };
+
+    recognition.onerror = (e) => {
+      console.error(e);
+      stopRecording();
+    };
+
     recognition.onend = () => {
-      setIsRecording(false);
+        // 如果非手动触发的 stop (比如浏览器自动断开)，也要清理状态
+        // 注意：onend 在 manual stop 时也会触发
+        if (isRecording) {
+            setIsRecording(false);
+        }
     };
+
     recognitionRef.current = recognition;
     recognition.start();
   };
 
-  const stopRecordingAndSend = () => {
-    if (recognitionRef.current && isRecording) {
-      recognitionRef.current.stop();
-      // 等待一点时间确保最后的 onresult 写入
-      setTimeout(() => {
-        handleTranslate();
-      }, 300);
-    }
-  };
-
-  const handleTouchStart = (e) => {
-    // 如果已有内容且不是在录音，可能是想编辑，不触发长按逻辑
-    if (inputVal.trim().length > 0 && !isRecording) return;
-    
-    // 设置长按定时器
-    longPressTimerRef.current = setTimeout(() => {
-      startRecording();
-    }, 400); // 400ms 判定为长按
-  };
-
-  const handleTouchEnd = (e) => {
-    // 清除长按定时器
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-
-    if (isRecording) {
-      // 如果正在录音，松开即发送
-      e.preventDefault();
-      stopRecordingAndSend();
-    } else {
-      // 如果没在录音（短按），则聚焦输入框
-      if (inputVal.trim().length === 0) {
-        // 只有为空时才强制聚焦，避免编辑时误操作
-        inputRef.current?.focus();
-      }
-    }
+  const resetSilenceTimer = () => {
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    // 1.5秒无声音则触发发送
+    silenceTimerRef.current = setTimeout(() => {
+        if (recognitionRef.current) {
+            stopAndSend();
+        }
+    }, 1500);
   };
 
   const swapLangs = () => {
@@ -698,7 +737,7 @@ const AiChatContent = ({ onClose }) => {
             </div>
           </div>
           <div className="mt-8 text-white text-lg font-bold tracking-wider animate-pulse">正在倾听...</div>
-          <div className="mt-2 text-white/80 text-sm">松开手指发送</div>
+          <div className="mt-2 text-white/80 text-sm">说话停止1.5秒后自动发送</div>
         </div>
       </Transition>
 
@@ -723,7 +762,7 @@ const AiChatContent = ({ onClose }) => {
              <div className="text-center text-gray-400 mb-20 opacity-60">
                 <div className="text-4xl mb-2">💬</div>
                 <div className="text-sm">支持 100+ 种语言互译</div>
-                <div className="text-xs mt-4">长按下方输入框即可说话</div>
+                <div className="text-xs mt-4">点击麦克风，说完自动发送</div>
              </div>
            )}
 
@@ -782,15 +821,6 @@ const AiChatContent = ({ onClose }) => {
               </button>
             </div>
 
-            {/* Speech Lang (Left) */}
-             <button
-              onClick={() => setShowSpeechPicker(true)}
-              className="absolute left-0 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-pink-500 bg-white/50 rounded-full transition-colors"
-              title="语音语言"
-            >
-              <i className="fas fa-microphone-alt" />
-            </button>
-
             {/* Model Icon (Right) */}
             <button 
                onClick={() => setShowModelSelector(true)}
@@ -801,50 +831,41 @@ const AiChatContent = ({ onClose }) => {
             </button>
           </div>
 
-          {/* Pseudo-Input Bar (Press to Talk) */}
-          <div 
-            className={`relative flex items-end gap-2 border rounded-[28px] p-1.5 shadow-sm transition-all duration-200 select-none ${isRecording ? 'bg-pink-100 border-pink-300 scale-[1.02]' : 'bg-white border-pink-100 shadow-[0_4px_20px_rgba(236,72,153,0.08)]'}`}
-            // 绑定事件到容器
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-            onMouseDown={handleTouchStart} // 兼容PC鼠标长按
-            onMouseUp={handleTouchEnd}
-          >
+          {/* Input Bar */}
+          <div className={`relative flex items-end gap-2 bg-white border rounded-[28px] p-1.5 shadow-sm transition-all duration-200 ${isRecording ? 'border-pink-300 ring-2 ring-pink-100' : 'border-pink-100'}`}>
             <textarea
-              ref={inputRef}
-              className={`flex-1 bg-transparent border-none outline-none resize-none px-4 py-3 max-h-32 min-h-[48px] text-[16px] leading-6 no-scrollbar placeholder-gray-400 ${isRecording ? 'text-pink-700' : 'text-gray-800'}`}
-              placeholder={isRecording ? "正在录音..." : "按住说话 / 短按输入"}
+              className="flex-1 bg-transparent border-none outline-none resize-none px-4 py-3 max-h-32 min-h-[48px] text-[16px] leading-6 no-scrollbar placeholder-gray-400 text-gray-800"
+              placeholder={isRecording ? "正在听..." : "输入内容..."}
               rows={1}
               value={inputVal}
               onChange={e => setInputVal(e.target.value)}
-              // 阻止默认回车，改为发送
               onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleTranslate(); } }}
-              readOnly={isRecording} // 录音时禁止键盘输入
+              disabled={isRecording}
             />
             
-            {/* 右侧指示图标：录音中显示波形，有文字显示发送，空闲显示麦克风 */}
-            <div className="w-11 h-11 flex items-center justify-center shrink-0">
+            {/* Action Button */}
+            <div className="w-11 h-11 flex items-center justify-center shrink-0 mb-0.5">
                {isRecording ? (
-                 <div className="flex gap-0.5 items-end h-5">
-                   <div className="w-1 bg-pink-500 animate-[bounce_0.8s_infinite] h-3"/>
-                   <div className="w-1 bg-pink-500 animate-[bounce_0.8s_infinite_0.1s] h-5"/>
-                   <div className="w-1 bg-pink-500 animate-[bounce_0.8s_infinite_0.2s] h-4"/>
-                   <div className="w-1 bg-pink-500 animate-[bounce_0.8s_infinite_0.3s] h-3"/>
-                 </div>
+                 <button 
+                   onClick={stopAndSend}
+                   className="w-10 h-10 rounded-full bg-red-500 text-white shadow-md flex items-center justify-center animate-pulse"
+                 >
+                   <i className="fas fa-stop" />
+                 </button>
                ) : (inputVal.trim().length > 0 ? (
                  <button 
-                   // 阻止冒泡防止触发长按逻辑
-                   onMouseDown={e => e.stopPropagation()}
-                   onTouchStart={e => e.stopPropagation()}
                    onClick={() => handleTranslate()} 
                    className="w-10 h-10 rounded-full bg-pink-500 text-white shadow-md flex items-center justify-center active:scale-90 transition-transform"
                  >
                    <i className="fas fa-arrow-up" />
                  </button>
                ) : (
-                 <div className="text-gray-300">
-                   <i className="fas fa-microphone text-xl" />
-                 </div>
+                 <button 
+                   onClick={startRecording}
+                   className="w-10 h-10 rounded-full bg-gray-100 text-gray-500 hover:bg-pink-50 hover:text-pink-500 transition-colors flex items-center justify-center"
+                 >
+                   <i className="fas fa-microphone text-lg" />
+                 </button>
                ))}
             </div>
           </div>
@@ -868,16 +889,6 @@ const AiChatContent = ({ onClose }) => {
           <Dialog.Panel className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl max-h-[70vh] overflow-y-auto slim-scrollbar">
             <div className="text-center font-bold mb-3 text-gray-800">选择目标语言</div>
             <div className="grid grid-cols-2 gap-2">{SUPPORTED_LANGUAGES.map(l => <button key={l.code} onClick={() => { setTargetLang(l.code); setShowTgtPicker(false); }} className={`p-3 rounded-xl border text-left ${targetLang===l.code?'border-pink-500 bg-pink-50':'border-gray-100'}`}><span className="mr-2">{l.flag}</span>{l.name}</button>)}</div>
-          </Dialog.Panel>
-        </div>
-      </Dialog>
-
-      <Dialog open={showSpeechPicker} onClose={() => setShowSpeechPicker(false)} className="relative z-[10003]">
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm" aria-hidden="true" />
-        <div className="fixed inset-0 flex items-center justify-center p-4">
-          <Dialog.Panel className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl max-h-[70vh] overflow-y-auto slim-scrollbar">
-            <div className="text-center font-bold mb-3 text-gray-800">选择语音识别语言</div>
-            <div className="grid grid-cols-2 gap-2">{SPEECH_LANGS.map(l => <button key={l.value} onClick={() => { setSpeechLang(l.value); setShowSpeechPicker(false); }} className={`p-3 rounded-xl border text-left ${speechLang===l.value?'border-pink-500 bg-pink-50':'border-gray-100'}`}><span className="mr-2">{l.flag}</span>{l.name}</button>)}</div>
           </Dialog.Panel>
         </div>
       </Dialog>
