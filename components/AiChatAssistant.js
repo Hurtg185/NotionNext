@@ -1,12 +1,5 @@
 import { Transition, Dialog } from '@headlessui/react'
-import React, {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  useMemo,
-  Fragment,
-} from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo, Fragment } from 'react'
 
 /* ------------------------- Utils ------------------------- */
 
@@ -40,13 +33,8 @@ const generateSimpleId = (prefix = 'id') =>
 const playKeySound = () => {
   try {
     const audio = new Audio('/sounds/typing-key.mp3')
-    audio.volume = 0.4
+    audio.volume = 0.25
     audio.play().catch(() => {})
-  } catch {}
-}
-const vibrate = () => {
-  try {
-    if (navigator.vibrate) navigator.vibrate(50)
   } catch {}
 }
 
@@ -96,10 +84,10 @@ const TRANSLATION_PROMPT = {
 /* ------------------------- Constants ------------------------- */
 
 const CHAT_MODELS_LIST = [
-  { id: 'model-1', name: 'Gemini 1.5 Flash', value: 'gemini-1.5-flash-latest' },
-  { id: 'model-2', name: 'Gemini 1.5 Pro', value: 'gemini-1.5-pro-latest' },
-  { id: 'model-3', name: 'GPT-4o', value: 'gpt-4o' },
-  { id: 'model-4', name: 'GPT-3.5-Turbo', value: 'gpt-3.5-turbo' },
+  { id: 'model-1', name: 'GPT-4o', value: 'gpt-4o' },
+  { id: 'model-2', name: 'GPT-4o mini', value: 'gpt-4o-mini' },
+  { id: 'model-3', name: 'GPT-3.5-Turbo', value: 'gpt-3.5-turbo' },
+  // 你可以保留 Gemini 作为“可添加”，但如果不是 OpenAI 模型不要选
 ]
 
 const MICROSOFT_TTS_VOICES = [
@@ -111,21 +99,22 @@ const MICROSOFT_TTS_VOICES = [
 ]
 
 const DEFAULT_SETTINGS = {
-  apiConfig: { url: 'https://api.openai.com/v1', key: '' },
+  apiConfig: { url: 'https://api.openai.com/v1', key: '' }, // ✅ 固定官方
   chatModels: CHAT_MODELS_LIST,
   selectedModel: 'gpt-4o',
-  parallelModel: 'gpt-3.5-turbo', // 第二模型（设置里可改）
-  enableParallelModels: true, // 同时翻译两套结果
+  secondModel: 'gpt-4o-mini', // ✅ 第二模型：从 models 列表里选
 
+  enableSecondModel: true, // ✅ 双模型左右滑开关
+
+  // ✅ 默认晓晓多语言
   ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural',
   autoReadFirstTranslation: true,
 
   chatBackgroundUrl: '',
   backgroundOpacity: 100,
-  userAvatarUrl: '/images/user-avatar.png',
-  aiAvatarUrl:
-    'https://raw.githubusercontent.com/BigFaceCat2023/spacetrans/main/public/images/translator-avatar.png',
 }
+
+/* ------------------------- Languages ------------------------- */
 
 const SUPPORTED_LANGUAGES = [
   { code: 'auto', name: '自动识别', speechCode: 'zh-CN' },
@@ -143,6 +132,7 @@ const SPEECH_RECOGNITION_LANGUAGES = [
 
 function extractJsonObject(text) {
   const s = String(text ?? '').trim()
+
   const stripped = s.startsWith('```')
     ? s.replace(/^```[a-zA-Z]*\n?/, '').replace(/```$/, '').trim()
     : s
@@ -207,7 +197,7 @@ const playCachedTTS = (text, voiceName) => {
   }
 }
 
-/* ------------------------- UI Subcomponents ------------------------- */
+/* ------------------------- UI Components ------------------------- */
 
 const AiTtsButton = ({ text, voiceName }) => {
   const [isPlaying, setIsPlaying] = useState(false)
@@ -236,6 +226,15 @@ const AiTtsButton = ({ text, voiceName }) => {
   )
 }
 
+const SkeletonCard = () => (
+  <div className="bg-white dark:bg-gray-800 border border-gray-200/50 dark:border-gray-700/50 shadow-md rounded-xl p-4">
+    <div className="h-4 w-4/5 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mb-3" />
+    <div className="h-4 w-3/5 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mb-3" />
+    <div className="h-4 w-2/5 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mb-6" />
+    <div className="h-3 w-1/2 bg-blue-100 dark:bg-blue-900/30 rounded animate-pulse" />
+  </div>
+)
+
 const TranslationCard = ({ result, voiceName }) => {
   const [copied, setCopied] = useState(false)
   const handleCopy = (e) => {
@@ -247,7 +246,7 @@ const TranslationCard = ({ result, voiceName }) => {
 
   return (
     <div className="bg-white dark:bg-gray-800 border border-gray-200/50 dark:border-gray-700/50 shadow-md rounded-xl p-4 flex flex-col gap-2">
-      {/* UI 不显示 style */}
+      {/* ✅ UI 不显示风格 */}
       <p className="text-gray-800 dark:text-gray-100 text-lg leading-relaxed flex-grow">
         {result.translation || ''}
       </p>
@@ -269,18 +268,17 @@ const TranslationCard = ({ result, voiceName }) => {
   )
 }
 
-const TranslationResults = ({ results, voiceName }) => (
+const TranslationResultsWithSkeleton = ({ results, voiceName, skeletonCount = 0 }) => (
   <div className="flex flex-col gap-3 mx-auto w-full max-w-[520px] px-2">
     {(results || []).map((r, idx) => (
-      <TranslationCard key={idx} result={r} voiceName={voiceName} />
+      <TranslationCard key={`r-${idx}`} result={r} voiceName={voiceName} />
+    ))}
+    {Array.from({ length: skeletonCount }).map((_, i) => (
+      <SkeletonCard key={`s-${i}`} />
     ))}
   </div>
 )
 
-/**
- * ✅ 新：两模型左右滑切换
- * msg.modelPages = [{ modelName, modelValue, translations }]
- */
 const ModelSwipeResults = ({ modelPages, voiceName }) => {
   const scrollerRef = useRef(null)
   const [page, setPage] = useState(0)
@@ -307,14 +305,12 @@ const ModelSwipeResults = ({ modelPages, voiceName }) => {
 
   return (
     <div className="w-full">
-      {/* 顶部小标签 + 点点 */}
       <div className="flex items-center justify-between px-2 mb-2">
         <div className="text-xs font-semibold text-gray-600 dark:text-gray-300">
           {pages[page]?.modelName || '模型'}
         </div>
 
         <div className="flex items-center gap-2">
-          {/* dots */}
           <div className="flex items-center gap-1">
             {pages.map((_, i) => (
               <button
@@ -332,16 +328,15 @@ const ModelSwipeResults = ({ modelPages, voiceName }) => {
             ))}
           </div>
 
-          {/* arrows */}
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation()
               scrollTo(Math.max(0, page - 1))
             }}
-            className="w-8 h-8 rounded-full hover:bg-black/10 dark:hover:bg-white/10"
-            title="上一页"
+            className="w-8 h-8 rounded-full hover:bg-black/10 dark:hover:bg-white/10 disabled:opacity-40"
             disabled={page === 0}
+            title="上一页"
           >
             <i className="fas fa-chevron-left text-sm" />
           </button>
@@ -351,27 +346,34 @@ const ModelSwipeResults = ({ modelPages, voiceName }) => {
               e.stopPropagation()
               scrollTo(Math.min(pageCount - 1, page + 1))
             }}
-            className="w-8 h-8 rounded-full hover:bg-black/10 dark:hover:bg-white/10"
-            title="下一页"
+            className="w-8 h-8 rounded-full hover:bg-black/10 dark:hover:bg-white/10 disabled:opacity-40"
             disabled={page === pageCount - 1}
+            title="下一页"
           >
             <i className="fas fa-chevron-right text-sm" />
           </button>
         </div>
       </div>
 
-      {/* 横向滑动容器：snap */}
       <div
         ref={scrollerRef}
         onScroll={onScroll}
         className="w-full overflow-x-auto flex snap-x snap-mandatory scroll-smooth"
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
-        {pages.map((p, idx) => (
-          <div key={idx} className="w-full shrink-0 snap-center">
-            <TranslationResults results={p.translations} voiceName={voiceName} />
-          </div>
-        ))}
+        {pages.map((p, idx) => {
+          const results = p?.translations || []
+          const skeletonCount = Math.max(0, 4 - results.length)
+          return (
+            <div key={idx} className="w-full shrink-0 snap-center">
+              <TranslationResultsWithSkeleton
+                results={results}
+                voiceName={voiceName}
+                skeletonCount={skeletonCount}
+              />
+            </div>
+          )
+        })}
       </div>
 
       <div className="mt-2 text-center text-[11px] text-gray-500 dark:text-gray-400">
@@ -385,8 +387,8 @@ const LoadingSpinner = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       playKeySound()
-      vibrate()
-    }, 500)
+      // ✅ 去掉震动
+    }, 600)
     return () => clearInterval(interval)
   }, [])
 
@@ -419,7 +421,7 @@ const MessageBubble = ({ msg }) => {
         {hasModelPages ? (
           <ModelSwipeResults modelPages={msg.modelPages} voiceName={msg.voiceName} />
         ) : hasTranslations ? (
-          <TranslationResults results={msg.translations} voiceName={msg.voiceName} />
+          <TranslationResultsWithSkeleton results={msg.translations} voiceName={msg.voiceName} />
         ) : (
           <p className={`text-lg ${isUser ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`}>
             {msg.content || ''}
@@ -510,6 +512,8 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
       (tempSettings.chatModels || []).map((m) => (m.id === id ? { ...m, [field]: value } : m)),
     )
 
+  const modelOptions = (tempSettings.chatModels || []).filter((m) => !!m.value)
+
   return (
     <div
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10002] p-4"
@@ -517,14 +521,14 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
     >
       <div
         className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg overflow-hidden relative text-gray-800 dark:text-gray-200 flex flex-col"
-        style={{ height: 'min(760px, 90vh)' }}
+        style={{ height: 'min(780px, 90vh)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-2xl font-bold p-6 shrink-0">设置</h3>
 
         <div className="space-y-6 flex-grow overflow-y-auto px-6">
           <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg space-y-3">
-            <h4 className="font-bold text-lg">API 设置 (OpenAI 兼容)</h4>
+            <h4 className="font-bold text-lg">API 设置（OpenAI 官方）</h4>
             <div>
               <label className="text-xs font-medium block">接口地址 (Endpoint)</label>
               <input
@@ -567,29 +571,33 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
           </div>
 
           <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg space-y-3">
-            <h4 className="font-bold text-lg">双模型翻译（左右滑切换）</h4>
+            <h4 className="font-bold text-lg">双模型（左右滑切换）</h4>
 
             <div className="flex items-center justify-between">
-              <label className="block text-sm font-medium">启用双模型同时翻译</label>
+              <label className="block text-sm font-medium">启用第二模型</label>
               <input
                 type="checkbox"
-                checked={!!tempSettings.enableParallelModels}
-                onChange={(e) => handleChange('enableParallelModels', e.target.checked)}
+                checked={!!tempSettings.enableSecondModel}
+                onChange={(e) => handleChange('enableSecondModel', e.target.checked)}
                 className="h-5 w-5 text-blue-500 rounded"
               />
             </div>
 
             <div>
-              <label className="text-xs font-medium block">第二模型（Parallel Model）</label>
-              <input
-                type="text"
-                value={tempSettings.parallelModel || ''}
-                onChange={(e) => handleChange('parallelModel', e.target.value)}
-                placeholder="例如: gpt-3.5-turbo"
+              <label className="text-xs font-medium block">第二模型</label>
+              <select
+                value={tempSettings.secondModel}
+                onChange={(e) => handleChange('secondModel', e.target.value)}
                 className="w-full mt-1 px-2 py-2 bg-white dark:bg-gray-800 border dark:border-gray-500 rounded-md text-sm"
-              />
+              >
+                {modelOptions.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.name} ({m.value})
+                  </option>
+                ))}
+              </select>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                翻译结果区支持左右滑动切换两套模型输出。
+                翻译完成后可左右滑动查看两个模型结果。
               </p>
             </div>
           </div>
@@ -607,6 +615,16 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                 </option>
               ))}
             </select>
+
+            <div className="flex items-center justify-between mt-3">
+              <label className="block text-sm font-medium">自动朗读首个翻译结果</label>
+              <input
+                type="checkbox"
+                checked={tempSettings.autoReadFirstTranslation}
+                onChange={(e) => handleChange('autoReadFirstTranslation', e.target.checked)}
+                className="h-5 w-5 text-blue-500 rounded"
+              />
+            </div>
           </div>
 
           <div className="space-y-4">
@@ -642,16 +660,6 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                 className="w-full"
               />
             </div>
-
-            <div className="flex items-center justify-between">
-              <label className="block text-sm font-medium">自动朗读首个翻译结果</label>
-              <input
-                type="checkbox"
-                checked={tempSettings.autoReadFirstTranslation}
-                onChange={(e) => handleChange('autoReadFirstTranslation', e.target.checked)}
-                className="h-5 w-5 text-blue-500 rounded"
-              />
-            </div>
           </div>
         </div>
 
@@ -671,7 +679,7 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
   )
 }
 
-/* ------------------------- Generic Modal Selector ------------------------- */
+/* ------------------------- Modal Selector (kept) ------------------------- */
 
 const ModalSelector = ({ title, options, selectedValue, onSelect, onClose }) => (
   <div
@@ -714,7 +722,7 @@ const ModalSelector = ({ title, options, selectedValue, onSelect, onClose }) => 
   </div>
 )
 
-/* ------------------------- Core Chat ------------------------- */
+/* ------------------------- Core Chat API ------------------------- */
 
 async function callChatCompletions({ apiUrl, apiKey, model, systemPrompt, userPrompt, signal }) {
   const res = await fetch(`${apiUrl}/chat/completions`, {
@@ -732,7 +740,9 @@ async function callChatCompletions({ apiUrl, apiKey, model, systemPrompt, userPr
       ],
       temperature: 0.2,
       max_tokens: 700,
-      response_format: { type: 'json_object' },
+
+      // ✅ 关键修复：不使用 response_format（更兼容、更接近“以前都能用”的方式）
+      // response_format: { type: 'json_object' },
     }),
   })
 
@@ -746,12 +756,21 @@ async function callChatCompletions({ apiUrl, apiKey, model, systemPrompt, userPr
     throw new Error(msg)
   }
 
-  const content = payload?.choices?.[0]?.message?.content
-  if (!content) throw new Error('AI未能返回有效内容。')
+  const content =
+    payload?.choices?.[0]?.message?.content ??
+    payload?.choices?.[0]?.text ??
+    payload?.output_text ??
+    ''
+
+  if (!content) {
+    const snippet = payload ? JSON.stringify(payload).slice(0, 600) : '(empty json)'
+    throw new Error(`AI未能返回有效数据。响应片段: ${snippet}`)
+  }
+
   return content
 }
 
-async function translateWithModel({ apiUrl, apiKey, model, systemPrompt, userPrompt, signal }) {
+async function translatePhase({ apiUrl, apiKey, model, systemPrompt, userPrompt, signal }) {
   const content = await callChatCompletions({
     apiUrl,
     apiKey,
@@ -763,10 +782,12 @@ async function translateWithModel({ apiUrl, apiKey, model, systemPrompt, userPro
   const parsed = extractJsonObject(content)
   const translations = parsed?.data
   if (!Array.isArray(translations) || translations.length === 0) {
-    throw new Error(`模型(${model})返回JSON格式不正确或为空。`)
+    throw new Error('返回的JSON格式不正确或为空。')
   }
   return translations
 }
+
+/* ------------------------- Core Chat UI ------------------------- */
 
 const AiChatContent = ({ onClose }) => {
   const [messages, setMessages] = useState([])
@@ -791,15 +812,16 @@ const AiChatContent = ({ onClose }) => {
 
   const pressTimerRef = useRef(null)
 
-  const speechEndTimerRef = useRef(null)
-  const speechCommittedRef = useRef(false)
+  const abortRef = useRef(null)
+
+  // voice final-driven silence timer
+  const finalSilenceTimerRef = useRef(null)
+  const lastFinalRef = useRef('')
 
   const latestUserInputRef = useRef('')
   useEffect(() => {
     latestUserInputRef.current = userInput
   }, [userInput])
-
-  const abortRef = useRef(null)
 
   const getLangName = useCallback(
     (code) => SUPPORTED_LANGUAGES.find((l) => l.code === code)?.name || code,
@@ -821,6 +843,7 @@ const AiChatContent = ({ onClose }) => {
         setSettings({
           ...DEFAULT_SETTINGS,
           ...parsed,
+          apiConfig: { ...DEFAULT_SETTINGS.apiConfig, ...(parsed.apiConfig || {}) },
           chatModels: parsed.chatModels?.length ? parsed.chatModels : CHAT_MODELS_LIST,
         })
       } catch {
@@ -847,11 +870,6 @@ const AiChatContent = ({ onClose }) => {
 
   const showSendButton = useMemo(() => userInput.trim().length > 0, [userInput])
 
-  const handleSaveSettings = (newSettings) => {
-    setSettings(newSettings)
-    setShowSettings(false)
-  }
-
   const handleSwapLanguages = () => {
     if (sourceLang === 'auto' || sourceLang === targetLang) return
     const cur = sourceLang
@@ -865,6 +883,31 @@ const AiChatContent = ({ onClose }) => {
     } catch {}
   }, [])
 
+  // ✅ 稳定提交
+  const submitText = useCallback(
+    (text) => {
+      const t = (text || '').trim()
+      if (!t) {
+        setError('请输入要翻译的内容！')
+        return
+      }
+      const userMessage = { role: 'user', content: t, timestamp: Date.now() }
+      setMessages([userMessage]) // 单轮对话
+      setUserInput('')
+      fetchAiResponse(t)
+    },
+    // fetchAiResponse declared below via useCallback; React hook requires it in deps, so we wrap with ref:
+    // We'll define fetchAiResponse first? easier: useRef pattern
+    // (implemented below)
+    [],
+  )
+
+  // We need fetchAiResponse but submitText uses it; use a ref to avoid circular deps cleanly.
+  const fetchRef = useRef(null)
+  useEffect(() => {
+    // set later
+  }, [])
+
   const fetchAiResponse = useCallback(
     async (userText) => {
       setIsLoading(true)
@@ -876,77 +919,117 @@ const AiChatContent = ({ onClose }) => {
       const controller = new AbortController()
       abortRef.current = controller
 
-      const {
-        apiConfig,
-        selectedModel,
-        parallelModel,
-        enableParallelModels,
-        ttsVoice,
-      } = settings
+      const { apiConfig, selectedModel, enableSecondModel, secondModel, ttsVoice } = settings
 
       try {
         if (!apiConfig?.key) throw new Error('请在“设置”中配置您的 API 密钥。')
 
-        const userPrompt = `请将以下文本从 [${getLangName(sourceLang)}] 翻译成 [${getLangName(
+        const base = `请将以下文本从 [${getLangName(sourceLang)}] 翻译成 [${getLangName(
           targetLang,
-        )}]:\n\n${userText}`
+        )}]:\n\n${userText}\n\n`
 
-        // 1) 主模型翻译
-        const primaryPromise = translateWithModel({
-          apiUrl: apiConfig.url,
-          apiKey: apiConfig.key,
-          model: selectedModel,
-          systemPrompt: TRANSLATION_PROMPT.content,
-          userPrompt,
-          signal: controller.signal,
-        })
-
-        // 2) 第二模型翻译（可关闭）
-        const useSecond = enableParallelModels && parallelModel && parallelModel !== selectedModel
-        const secondaryPromise = useSecond
-          ? translateWithModel({
-              apiUrl: apiConfig.url,
-              apiKey: apiConfig.key,
-              model: parallelModel,
-              systemPrompt: TRANSLATION_PROMPT.content,
-              userPrompt,
-              signal: controller.signal,
-            })
-          : null
-
-        const [primaryTranslations, secondaryTranslations] = await Promise.all([
-          primaryPromise,
-          secondaryPromise,
-        ])
-
-        const pages = [
-          {
-            modelName: getModelName(selectedModel),
-            modelValue: selectedModel,
-            translations: primaryTranslations,
-          },
+        // 初始化：先放一个“占位”AI消息（两页都 skeleton）
+        const msgId = `ai-${Date.now()}-${Math.random().toString(16).slice(2)}`
+        const initialPages = [
+          { modelValue: selectedModel, modelName: getModelName(selectedModel), translations: [] },
         ]
-
-        if (useSecond && Array.isArray(secondaryTranslations)) {
-          pages.push({
-            modelName: getModelName(parallelModel),
-            modelValue: parallelModel,
-            translations: secondaryTranslations,
+        const useSecond = !!enableSecondModel && !!secondModel && secondModel !== selectedModel
+        if (useSecond) {
+          initialPages.push({
+            modelValue: secondModel,
+            modelName: getModelName(secondModel),
+            translations: [],
           })
         }
 
         setMessages((prev) => [
           ...prev,
-          { role: 'ai', timestamp: Date.now(), modelPages: pages, voiceName: ttsVoice },
+          { id: msgId, role: 'ai', timestamp: Date.now(), modelPages: initialPages, voiceName: ttsVoice },
         ])
 
-        // 预加载所有 TTS（两模型所有卡片）
-        pages.forEach((p) => p.translations.forEach((t) => preloadTTS(t.translation, ttsVoice)))
-
-        // 自动朗读：默认读“第一页（主模型）第一条”
-        if (settings.autoReadFirstTranslation && pages[0]?.translations?.[0]?.translation) {
-          playCachedTTS(pages[0].translations[0].translation, ttsVoice)
+        const updatePage = (modelValue, patch) => {
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (m.id !== msgId) return m
+              const pages = (m.modelPages || []).map((p) =>
+                p.modelValue === modelValue ? { ...p, ...patch } : p,
+              )
+              return { ...m, modelPages: pages }
+            }),
+          )
         }
+
+        // Phase 1: 只要第一条（自然直译）——更快
+        const phase1Prompt =
+          base +
+          `【阶段1】只输出 JSON，且 data 数组只包含 1 个对象（自然直译）。不要输出多余文字。`
+
+        const doModelPhase1 = async (modelValue) => {
+          const t1 = await translatePhase({
+            apiUrl: apiConfig.url,
+            apiKey: apiConfig.key,
+            model: modelValue,
+            systemPrompt: TRANSLATION_PROMPT.content,
+            userPrompt: phase1Prompt,
+            signal: controller.signal,
+          })
+          // 只保留第一条
+          const first = t1?.[0] ? [t1[0]] : []
+          updatePage(modelValue, { translations: first })
+
+          // auto TTS: 只对主模型读第一条
+          if (settings.autoReadFirstTranslation && modelValue === selectedModel && first[0]?.translation) {
+            preloadTTS(first[0].translation, ttsVoice)
+            playCachedTTS(first[0].translation, ttsVoice)
+          }
+        }
+
+        // Phase 2: 补齐剩余 3 条
+        const phase2Prompt =
+          base +
+          `【阶段2】只输出 JSON，且 data 数组只包含 3 个对象，分别对应：自然意译、口语化、保留原文结构（不要再输出自然直译）。不要输出多余文字。`
+
+        const doModelPhase2 = async (modelValue) => {
+          const t2 = await translatePhase({
+            apiUrl: apiConfig.url,
+            apiKey: apiConfig.key,
+            model: modelValue,
+            systemPrompt: TRANSLATION_PROMPT.content,
+            userPrompt: phase2Prompt,
+            signal: controller.signal,
+          })
+
+          updatePage(modelValue, (prevPage) => prevPage)
+
+          // 合并：把现有第一条 + 这三条凑成 4 条
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (m.id !== msgId) return m
+              const pages = (m.modelPages || []).map((p) => {
+                if (p.modelValue !== modelValue) return p
+                const first = Array.isArray(p.translations) && p.translations[0] ? [p.translations[0]] : []
+                const merged = [...first, ...(Array.isArray(t2) ? t2.slice(0, 3) : [])]
+                return { ...p, translations: merged }
+              })
+              return { ...m, modelPages: pages }
+            }),
+          )
+
+          // 预加载 TTS（该模型四条）
+          setTimeout(() => {
+            // 从 state 取不方便，这里直接按返回合并后的文本预加载 t2
+            ;(Array.isArray(t2) ? t2 : []).forEach((x) => preloadTTS(x.translation, ttsVoice))
+          }, 0)
+        }
+
+        // 执行：phase1 并发，phase2 也并发（但 phase2 等 phase1 完成后开始更稳）
+        const phase1Tasks = [doModelPhase1(selectedModel)]
+        if (useSecond) phase1Tasks.push(doModelPhase1(secondModel))
+        await Promise.all(phase1Tasks)
+
+        const phase2Tasks = [doModelPhase2(selectedModel)]
+        if (useSecond) phase2Tasks.push(doModelPhase2(secondModel))
+        await Promise.all(phase2Tasks)
       } catch (err) {
         if (err?.name === 'AbortError') return
         const errorMessage = `请求错误: ${err.message}`
@@ -962,30 +1045,31 @@ const AiChatContent = ({ onClose }) => {
     [settings, getLangName, sourceLang, targetLang, getModelName],
   )
 
-  const submitText = useCallback(
-    (text) => {
-      const t = (text || '').trim()
-      if (!t) {
-        setError('请输入要翻译的内容！')
-        return
-      }
-      const userMessage = { role: 'user', content: t, timestamp: Date.now() }
-      setMessages([userMessage])
-      setUserInput('')
-      fetchAiResponse(t)
-    },
-    [fetchAiResponse],
-  )
+  // wire ref for submitText
+  useEffect(() => {
+    fetchRef.current = fetchAiResponse
+  }, [fetchAiResponse])
 
-  function handleSubmit(isRegenerate = false, textToSend = null) {
-    if (isRegenerate) {
-      const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
-      if (!lastUserMsg?.content) return
-      setMessages([lastUserMsg])
-      fetchAiResponse(lastUserMsg.content)
+  // redefine submitText with fetchRef (stable)
+  const submitTextStable = useCallback((text) => {
+    const t = (text || '').trim()
+    if (!t) {
+      setError('请输入要翻译的内容！')
       return
     }
-    submitText(textToSend ?? userInput)
+    const userMessage = { role: 'user', content: t, timestamp: Date.now() }
+    setMessages([userMessage])
+    setUserInput('')
+    fetchRef.current?.(t)
+  }, [])
+
+  function handleSubmit(isRegenerate = false, textToSend = null) {
+    const text = (textToSend ?? userInput).trim()
+    if (!text) {
+      setError('请输入要翻译的内容！')
+      return
+    }
+    submitTextStable(text)
   }
 
   const startListening = useCallback(() => {
@@ -999,8 +1083,8 @@ const AiChatContent = ({ onClose }) => {
       recognitionRef.current?.abort()
     } catch {}
 
-    speechCommittedRef.current = false
     setError('')
+    lastFinalRef.current = ''
 
     const recognition = new SpeechRecognition()
     recognition.lang = speechLang
@@ -1014,8 +1098,7 @@ const AiChatContent = ({ onClose }) => {
     }
 
     recognition.onresult = (event) => {
-      clearTimeout(speechEndTimerRef.current)
-
+      // collect transcript
       let finalText = ''
       let interimText = ''
 
@@ -1028,14 +1111,18 @@ const AiChatContent = ({ onClose }) => {
       const combined = (finalText + interimText).trim()
       setUserInput(combined)
 
-      speechEndTimerRef.current = setTimeout(() => {
-        if (speechCommittedRef.current) return
-        const current = (latestUserInputRef.current || '').trim()
-        if (!current) return
-        speechCommittedRef.current = true
-        stopListening()
-        submitText(current)
-      }, 900)
+      // ✅ 关键：只在出现 final 时启动“静默提交”
+      if (finalText.trim()) {
+        lastFinalRef.current = (lastFinalRef.current + ' ' + finalText).trim()
+
+        clearTimeout(finalSilenceTimerRef.current)
+        finalSilenceTimerRef.current = setTimeout(() => {
+          const toSend = (latestUserInputRef.current || '').trim()
+          if (!toSend) return
+          stopListening()
+          submitTextStable(toSend)
+        }, 850)
+      }
     }
 
     recognition.onerror = (event) => {
@@ -1044,12 +1131,12 @@ const AiChatContent = ({ onClose }) => {
 
     recognition.onend = () => {
       setIsListening(false)
-      clearTimeout(speechEndTimerRef.current)
+      clearTimeout(finalSilenceTimerRef.current)
       recognitionRef.current = null
     }
 
     recognition.start()
-  }, [speechLang, stopListening, submitText])
+  }, [speechLang, stopListening, submitTextStable])
 
   const handleMicPress = () => {
     pressTimerRef.current = setTimeout(() => {
@@ -1067,7 +1154,7 @@ const AiChatContent = ({ onClose }) => {
     e.preventDefault()
     e.stopPropagation()
 
-    if (showSendButton) handleSubmit()
+    if (showSendButton) handleSubmit(false)
     else {
       if (isListening) stopListening()
       else startListening()
@@ -1089,7 +1176,7 @@ const AiChatContent = ({ onClose }) => {
       <div className="flex-1 flex flex-col h-full relative overflow-hidden z-10 pt-safe-top">
         <div className="flex-1 overflow-y-auto p-4 space-y-1">
           {messages.map((msg) => (
-            <div key={msg.timestamp}>
+            <div key={msg.id || msg.timestamp}>
               <MessageBubble msg={msg} />
             </div>
           ))}
@@ -1142,12 +1229,13 @@ const AiChatContent = ({ onClose }) => {
                 ))}
               </select>
 
+              {/* ✅ 模型按钮改图标（打开设置即可改两个模型，这里只保留图标入口） */}
               <button
-                onClick={() => setShowModelSelector(true)}
+                onClick={() => setShowSettings(true)}
                 className="w-10 h-10 rounded-full flex items-center justify-center bg-white/60 dark:bg-gray-700/60 backdrop-blur-sm border border-black/10 dark:border-white/10 hover:bg-white/80 dark:hover:bg-gray-600/80"
-                title={`切换主模型（当前：${getModelName(settings.selectedModel)}）`}
+                title="模型/设置"
               >
-                <i className="fas fa-robot text-gray-800 dark:text-gray-200" />
+                <i className="fas fa-sliders-h text-gray-800 dark:text-gray-200" />
               </button>
             </div>
 
@@ -1176,7 +1264,7 @@ const AiChatContent = ({ onClose }) => {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
-                    handleSubmit()
+                    handleSubmit(false)
                   }
                 }}
               />
@@ -1212,7 +1300,12 @@ const AiChatContent = ({ onClose }) => {
         <SettingsModal
           settings={settings}
           onSave={(newSettings) => {
-            setSettings(newSettings)
+            // ✅ 固定官方 URL（防止被改坏）
+            const fixed = {
+              ...newSettings,
+              apiConfig: { ...newSettings.apiConfig, url: 'https://api.openai.com/v1' },
+            }
+            setSettings(fixed)
             setShowSettings(false)
           }}
           onClose={() => setShowSettings(false)}
@@ -1221,7 +1314,7 @@ const AiChatContent = ({ onClose }) => {
 
       {showModelSelector && (
         <ModalSelector
-          title="切换主模型"
+          title="切换模型"
           options={(settings.chatModels || []).map((m) => ({ name: m.name, value: m.value }))}
           selectedValue={settings.selectedModel}
           onSelect={(val) => setSettings((s) => ({ ...s, selectedModel: val }))}
