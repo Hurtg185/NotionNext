@@ -21,7 +21,7 @@ const GlobalStyles = () => (
       scrollbar-width: none;
     }
     
-    /* 细滚动条 (用于设置页) */
+    /* 细滚动条 (用于设置页/模型列表) */
     .slim-scrollbar::-webkit-scrollbar {
       width: 4px;
     }
@@ -86,7 +86,7 @@ const DEFAULT_MODELS = [
   { id: 'm3', providerId: 'p1', name: 'GPT-4o', value: 'gpt-4o' }
 ];
 
-// 默认提示词模板（对用户隐藏 JSON 结构，只展示核心指令）
+// 默认提示词模板
 const BASE_SYSTEM_INSTRUCTION = `你是一位翻译专家。将用户文本翻译成目标语言。
 要求：
 1. 输出4种风格：贴近原文、自然直译、自然意译、口语化。
@@ -106,11 +106,11 @@ const DEFAULT_SETTINGS = {
   models: DEFAULT_MODELS,
   
   // 模型分配
-  mainModelId: 'm1',      // 翻译用的模型
-  followUpModelId: 'm1',  // 追问/回复建议用的模型 (通常用便宜快速的)
+  mainModelId: 'm1',      
+  followUpModelId: 'm1', 
   
   // 语音 & 播放
-  ttsConfig: {}, // { 'zh-CN': 'xiaoyou', 'en-US': 'jenny' } 映射表
+  ttsConfig: {}, 
   ttsSpeed: 1.0,
 
   // 背景
@@ -119,13 +119,11 @@ const DEFAULT_SETTINGS = {
 
   // 提示词
   useCustomPrompt: false,
-  customPromptText: '', // 用户输入的纯文本指令
+  customPromptText: '', 
 };
 
 // ----------------- TTS Engine -----------------
 const ttsCache = new Map();
-
-// 简单的发音人列表（实际应从 API 获取，这里模拟）
 const AVAILABLE_VOICES = {
   'zh-CN': [
     { id: 'zh-CN-XiaoyouNeural', name: '小悠 (女)' },
@@ -134,16 +132,12 @@ const AVAILABLE_VOICES = {
   'en-US': [
     { id: 'en-US-JennyNeural', name: 'Jenny (女)' },
     { id: 'en-US-GuyNeural', name: 'Guy (男)' }
-  ],
-  // ... 其他语言默认取第一个
+  ]
 };
 
 const getVoiceForLang = (lang, config) => {
-  // 1. 用户配置的
   if (config && config[lang]) return config[lang];
-  // 2. 默认列表的第一个
   if (AVAILABLE_VOICES[lang]) return AVAILABLE_VOICES[lang][0].id;
-  // 3. 硬编码兜底
   if (lang === 'my-MM') return 'my-MM-NilarNeural';
   if (lang === 'vi-VN') return 'vi-VN-HoaiMyNeural';
   if (lang === 'th-TH') return 'th-TH-PremwadeeNeural';
@@ -179,18 +173,13 @@ const playTTS = async (text, lang, settings) => {
 const normalizeTranslations = (raw) => {
   let data = [];
   try {
-    // 尝试解析
     const json = typeof raw === 'string' ? JSON.parse(raw) : raw;
     data = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
   } catch {
-    return [{ translation: raw || '解析失败', back_translation: '' }];
+    // 这里如果解析失败，直接返回原始文本作为第一种翻译，避免报错
+    return [{ translation: typeof raw === 'string' ? raw : '解析失败', back_translation: '' }];
   }
-
-  // 过滤无效并在 UI 上不显示 style 字段
-  return data
-    .filter(x => x.translation)
-    .slice(0, 4); 
-    // UI上我们不渲染 "style" 名字，只渲染内容
+  return data.filter(x => x && x.translation).slice(0, 4); 
 };
 
 const getLangName = (c) => SUPPORTED_LANGUAGES.find(l => l.code === c)?.name || c;
@@ -198,7 +187,7 @@ const getLangFlag = (c) => SUPPORTED_LANGUAGES.find(l => l.code === c)?.flag || 
 
 // ----------------- Components -----------------
 
-// 1. 结果卡片 (无 Style 标题，居中，点击复制)
+// 1. 结果卡片
 const TranslationCard = memo(({ data, onPlay }) => {
   const [copied, setCopied] = useState(false);
 
@@ -215,25 +204,19 @@ const TranslationCard = memo(({ data, onPlay }) => {
       onClick={handleClick}
       className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm active:scale-[0.98] transition-all cursor-pointer relative overflow-hidden group mb-3 text-center"
     >
-      {/* 复制成功提示遮罩 */}
       {copied && (
         <div className="absolute inset-0 bg-black/5 flex items-center justify-center z-10">
           <span className="bg-black/70 text-white text-xs px-2 py-1 rounded-md">已复制</span>
         </div>
       )}
-      
       <div className="text-[18px] leading-relaxed font-medium text-gray-800 break-words select-none">
         {data.translation}
       </div>
-      
       {!!data.back_translation && (
         <div className="mt-2.5 text-[13px] text-gray-400 break-words leading-snug">
           {data.back_translation}
         </div>
       )}
-
-      {/* 隐藏的播放按钮，为了逻辑保留，实际通过点击卡片复制，长按或额外按钮播放? 
-          需求说“翻译图标换成网址图标”，这里我们在卡片角落加个小喇叭 */}
       <button 
         onClick={(e) => { e.stopPropagation(); onPlay(); }}
         className="absolute bottom-2 right-2 p-2 text-gray-300 hover:text-blue-500 opacity-50 hover:opacity-100"
@@ -244,11 +227,9 @@ const TranslationCard = memo(({ data, onPlay }) => {
   );
 });
 
-// 2. 追问气泡 (Draggable Chips)
+// 2. 追问气泡
 const ReplyChips = ({ suggestions, onClick }) => {
   const scrollRef = useRef(null);
-  
-  // 简单的鼠标拖拽模拟
   const [isDown, setIsDown] = useState(false);
   const [startX, setStartX] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
@@ -262,7 +243,6 @@ const ReplyChips = ({ suggestions, onClick }) => {
   const handleUp = () => setIsDown(false);
   const handleMove = (e) => {
     if(!isDown) return;
-    e.preventDefault();
     const x = e.pageX || e.touches[0].pageX;
     const walk = (x - startX) * 2; 
     scrollRef.current.scrollLeft = scrollLeft - walk;
@@ -293,12 +273,107 @@ const ReplyChips = ({ suggestions, onClick }) => {
   );
 };
 
-// 3. 设置弹窗
+// 3. 独立模型选择器 (双栏：左供应商，右模型)
+const ModelSelectorModal = ({ settings, onClose, onSelect }) => {
+  const [activeProvId, setActiveProvId] = useState(null);
+  const [tab, setTab] = useState('main'); // 'main' or 'followup'
+
+  useEffect(() => {
+    // 默认选中当前主模型对应的供应商
+    const currentModel = settings.models.find(m => m.id === settings.mainModelId);
+    if (currentModel) setActiveProvId(currentModel.providerId);
+    else if (settings.providers.length > 0) setActiveProvId(settings.providers[0].id);
+  }, []);
+
+  const currentModels = settings.models.filter(m => m.providerId === activeProvId);
+
+  const handleSelectModel = (modelId) => {
+    onSelect(tab, modelId);
+    // 不自动关闭，允许用户继续切换另一个用途的模型，或者点击关闭
+  };
+
+  return (
+    <Dialog open={true} onClose={onClose} className="relative z-[10005]">
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" aria-hidden="true" />
+      <div className="fixed inset-0 flex items-center justify-center p-4">
+        <Dialog.Panel className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden h-[500px] flex flex-col">
+          <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+             <div className="font-bold text-gray-800">切换模型</div>
+             <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 text-gray-500"><i className="fas fa-times"/></button>
+          </div>
+          
+          {/* 用途切换 Tab */}
+          <div className="flex p-2 gap-2 border-b border-gray-100 bg-gray-50">
+            <button 
+              onClick={() => setTab('main')}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg ${tab==='main' ? 'bg-white shadow text-pink-600' : 'text-gray-500'}`}
+            >
+              主翻译模型
+            </button>
+            <button 
+              onClick={() => setTab('followup')}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg ${tab==='followup' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}
+            >
+              追问/建议模型
+            </button>
+          </div>
+
+          <div className="flex flex-1 overflow-hidden">
+             {/* 左侧：供应商 */}
+             <div className="w-1/3 bg-gray-50 border-r border-gray-100 overflow-y-auto slim-scrollbar p-2">
+               <div className="text-[10px] text-gray-400 mb-2 px-2">供应商</div>
+               {settings.providers.map(p => (
+                 <button
+                   key={p.id}
+                   onClick={() => setActiveProvId(p.id)}
+                   className={`w-full text-left px-3 py-3 rounded-xl text-xs font-bold mb-1 transition-all ${
+                     activeProvId === p.id ? 'bg-white shadow-sm text-gray-900 border-l-4 border-pink-500' : 'text-gray-500 hover:bg-gray-200'
+                   }`}
+                 >
+                   {p.name}
+                 </button>
+               ))}
+             </div>
+
+             {/* 右侧：模型 */}
+             <div className="flex-1 overflow-y-auto slim-scrollbar p-3">
+               <div className="text-[10px] text-gray-400 mb-2 px-2">
+                 {tab === 'main' ? '选择用于翻译的模型' : '选择用于生成追问的模型'}
+               </div>
+               {currentModels.length === 0 && <div className="text-center text-gray-400 text-xs mt-10">无可用模型</div>}
+               {currentModels.map(m => {
+                 const isSelected = (tab === 'main' ? settings.mainModelId : settings.followUpModelId) === m.id;
+                 return (
+                   <button
+                     key={m.id}
+                     onClick={() => handleSelectModel(m.id)}
+                     className={`w-full text-left px-4 py-3 rounded-xl border mb-2 transition-all flex items-center justify-between group ${
+                       isSelected 
+                         ? (tab === 'main' ? 'border-pink-500 bg-pink-50 text-pink-700' : 'border-blue-500 bg-blue-50 text-blue-700')
+                         : 'border-gray-100 bg-white hover:border-gray-300'
+                     }`}
+                   >
+                     <div>
+                       <div className="font-bold text-sm">{m.name}</div>
+                       <div className="text-[10px] opacity-60 font-mono">{m.value}</div>
+                     </div>
+                     {isSelected && <i className="fas fa-check" />}
+                   </button>
+                 );
+               })}
+             </div>
+          </div>
+        </Dialog.Panel>
+      </div>
+    </Dialog>
+  );
+};
+
+// 4. 设置弹窗 (保留 API Key 管理、Prompt、TTS)
 const SettingsModal = ({ settings, onSave, onClose }) => {
   const [data, setData] = useState(settings);
-  const [tab, setTab] = useState('model'); // model, prompt, voice
+  const [tab, setTab] = useState('provider'); 
 
-  // 简易的 CRUD helper
   const updateProvider = (idx, key, val) => {
     const p = [...data.providers];
     p[idx] = { ...p[idx], [key]: val };
@@ -306,232 +381,106 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10002] flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-          <div className="font-bold text-gray-800">设置</div>
-          <button onClick={onClose} className="w-8 h-8 bg-gray-200 rounded-full text-gray-500"><i className="fas fa-times"/></button>
-        </div>
+    <Dialog open={true} onClose={onClose} className="relative z-[10002]">
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" aria-hidden="true" />
+      <div className="fixed inset-0 flex items-center justify-center p-4">
+        <Dialog.Panel className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+          <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+            <div className="font-bold text-gray-800">设置</div>
+            <button onClick={onClose} className="w-8 h-8 bg-gray-200 rounded-full text-gray-500"><i className="fas fa-times"/></button>
+          </div>
 
-        {/* Tabs */}
-        <div className="flex p-2 gap-1 border-b border-gray-100">
-          {[
-            { id: 'model', label: '模型与接口' },
-            { id: 'voice', label: '发音人管理' },
-            { id: 'prompt', label: '提示词' },
-          ].map(t => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={cx(
-                "flex-1 py-2 text-xs font-bold rounded-lg transition-colors",
-                tab === t.id ? "bg-pink-50 text-pink-600" : "text-gray-500 hover:bg-gray-50"
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+          <div className="flex p-2 gap-1 border-b border-gray-100">
+            {[{id:'provider',label:'API配置'}, {id:'voice',label:'发音人'}, {id:'prompt',label:'提示词'}].map(t => (
+              <button key={t.id} onClick={() => setTab(t.id)} className={`flex-1 py-2 text-xs font-bold rounded-lg ${tab===t.id ? 'bg-pink-50 text-pink-600':'text-gray-500 hover:bg-gray-50'}`}>{t.label}</button>
+            ))}
+          </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto slim-scrollbar p-5 bg-white">
-          
-          {tab === 'model' && (
-            <div className="space-y-6">
-              {/* 供应商配置 */}
-              <div>
-                <div className="text-xs font-bold text-gray-400 mb-2 uppercase">API 供应商</div>
+          <div className="flex-1 overflow-y-auto slim-scrollbar p-5 bg-white">
+            {tab === 'provider' && (
+              <div className="space-y-4">
                 {data.providers.map((p, i) => (
-                  <div key={p.id} className="bg-gray-50 p-3 rounded-xl mb-3 border border-gray-200">
-                    <input 
-                      className="bg-transparent font-bold text-gray-800 w-full mb-2 outline-none" 
-                      value={p.name} 
-                      onChange={e => updateProvider(i, 'name', e.target.value)} 
-                    />
-                    <input 
-                      className="bg-white text-xs w-full p-2 rounded border border-gray-200 mb-2" 
-                      placeholder="Base URL" 
-                      value={p.url} 
-                      onChange={e => updateProvider(i, 'url', e.target.value)} 
-                    />
-                    <input 
-                      className="bg-white text-xs w-full p-2 rounded border border-gray-200" 
-                      type="password" 
-                      placeholder="API Key" 
-                      value={p.key} 
-                      onChange={e => updateProvider(i, 'key', e.target.value)} 
-                    />
+                  <div key={p.id} className="bg-gray-50 p-3 rounded-xl border border-gray-200">
+                    <input className="bg-transparent font-bold text-gray-800 w-full mb-2 outline-none" value={p.name} onChange={e => updateProvider(i, 'name', e.target.value)} />
+                    <input className="bg-white text-xs w-full p-2 rounded border border-gray-200 mb-2" placeholder="Base URL" value={p.url} onChange={e => updateProvider(i, 'url', e.target.value)} />
+                    <input className="bg-white text-xs w-full p-2 rounded border border-gray-200" type="password" placeholder="API Key" value={p.key} onChange={e => updateProvider(i, 'key', e.target.value)} />
                   </div>
                 ))}
-                <div className="text-[10px] text-gray-400 text-center">如需添加模型，请直接修改代码配置 (DEFAULT_MODELS)</div>
               </div>
-
-              {/* 模型选择 */}
-              <div>
-                <div className="text-xs font-bold text-gray-400 mb-2 uppercase">默认用途</div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs block mb-1">主翻译模型</label>
-                    <select 
-                      className="w-full text-sm bg-gray-50 border border-gray-200 rounded-lg p-2"
-                      value={data.mainModelId}
-                      onChange={e => setData({...data, mainModelId: e.target.value})}
-                    >
-                      {data.models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+            )}
+            {tab === 'voice' && (
+              <div className="space-y-4">
+                {SUPPORTED_LANGUAGES.map(lang => (
+                  <div key={lang.code} className="flex items-center justify-between border-b border-gray-50 py-2">
+                    <div className="flex items-center gap-2 text-sm"><span>{lang.flag}</span><span>{lang.name}</span></div>
+                    <select className="text-xs bg-gray-50 border border-gray-200 rounded px-2 py-1 max-w-[140px]" value={(data.ttsConfig||{})[lang.code]||''} onChange={(e)=>{
+                      const cfg={...(data.ttsConfig||{})}; cfg[lang.code]=e.target.value; setData({...data,ttsConfig:cfg});
+                    }}>
+                      <option value="">默认</option>
+                      {(AVAILABLE_VOICES[lang.code]||[]).map(v=><option key={v.id} value={v.id}>{v.name}</option>)}
                     </select>
                   </div>
-                  <div>
-                    <label className="text-xs block mb-1">追问/建议模型</label>
-                    <select 
-                      className="w-full text-sm bg-gray-50 border border-gray-200 rounded-lg p-2"
-                      value={data.followUpModelId}
-                      onChange={e => setData({...data, followUpModelId: e.target.value})}
-                    >
-                      {data.models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                    </select>
-                  </div>
-                </div>
+                ))}
+                <div className="pt-2"><label className="text-xs text-gray-500">全局语速: {data.ttsSpeed}x</label><input type="range" min="0.5" max="2.0" step="0.1" className="w-full accent-pink-500 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer mt-2" value={data.ttsSpeed} onChange={e=>setData({...data,ttsSpeed:parseFloat(e.target.value)})}/></div>
               </div>
-            </div>
-          )}
-
-          {tab === 'voice' && (
-            <div className="space-y-4">
-              <div className="text-xs text-gray-500 mb-2">为不同语言指定特定的发音人 (TTS)</div>
-              {SUPPORTED_LANGUAGES.map(lang => (
-                <div key={lang.code} className="flex items-center justify-between border-b border-gray-50 py-2">
-                  <div className="flex items-center gap-2 text-sm">
-                    <span>{lang.flag}</span>
-                    <span>{lang.name}</span>
-                  </div>
-                  <select
-                    className="text-xs bg-gray-50 border border-gray-200 rounded px-2 py-1 max-w-[140px]"
-                    value={(data.ttsConfig || {})[lang.code] || ''}
-                    onChange={(e) => {
-                      const cfg = { ...(data.ttsConfig || {}) };
-                      cfg[lang.code] = e.target.value;
-                      setData({ ...data, ttsConfig: cfg });
-                    }}
-                  >
-                    <option value="">默认</option>
-                    {(AVAILABLE_VOICES[lang.code] || []).map(v => (
-                      <option key={v.id} value={v.id}>{v.name}</option>
-                    ))}
-                  </select>
-                </div>
-              ))}
-              <div className="pt-2">
-                 <label className="text-xs text-gray-500">全局语速: {data.ttsSpeed}x</label>
-                 <input 
-                   type="range" min="0.5" max="2.0" step="0.1" 
-                   className="w-full accent-pink-500 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer mt-2"
-                   value={data.ttsSpeed}
-                   onChange={e => setData({...data, ttsSpeed: parseFloat(e.target.value)})}
-                 />
+            )}
+            {tab === 'prompt' && (
+              <div className="h-full flex flex-col">
+                <div className="flex items-center gap-2 mb-4"><input type="checkbox" id="useCustomPrompt" checked={data.useCustomPrompt} onChange={e=>setData({...data,useCustomPrompt:e.target.checked})} className="w-4 h-4 accent-pink-500"/><label htmlFor="useCustomPrompt" className="text-sm font-bold">启用自定义指令</label></div>
+                <textarea className={`w-full flex-1 border rounded-xl p-3 text-sm resize-none focus:ring-1 focus:ring-pink-500 outline-none ${!data.useCustomPrompt?'bg-gray-100 text-gray-400':'bg-white'}`} placeholder="在此输入额外要求..." value={data.customPromptText} onChange={e=>setData({...data,customPromptText:e.target.value})} disabled={!data.useCustomPrompt}/>
               </div>
-            </div>
-          )}
-
-          {tab === 'prompt' && (
-            <div className="h-full flex flex-col">
-              <div className="flex items-center gap-2 mb-4">
-                 <input 
-                   type="checkbox" 
-                   id="useCustomPrompt"
-                   checked={data.useCustomPrompt}
-                   onChange={e => setData({...data, useCustomPrompt: e.target.checked})}
-                   className="w-4 h-4 accent-pink-500"
-                 />
-                 <label htmlFor="useCustomPrompt" className="text-sm font-bold">启用自定义指令</label>
-              </div>
-              
-              <textarea
-                className={`w-full flex-1 border rounded-xl p-3 text-sm resize-none focus:ring-1 focus:ring-pink-500 outline-none ${!data.useCustomPrompt ? 'bg-gray-100 text-gray-400' : 'bg-white'}`}
-                placeholder="在此输入您的额外要求，例如：'所有译文都要带上敬语' 或 '翻译成莎士比亚风格'。系统会自动处理 JSON 格式，您只需关注内容。"
-                value={data.customPromptText}
-                onChange={e => setData({...data, customPromptText: e.target.value})}
-                disabled={!data.useCustomPrompt}
-              />
-              <div className="mt-2 text-[10px] text-gray-400">
-                注意：请勿输入复杂的 JSON 代码，仅输入自然语言指令即可。
-              </div>
-            </div>
-          )}
-
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-gray-100 flex justify-end gap-3">
-           <button onClick={onClose} className="px-5 py-2 rounded-xl bg-gray-100 text-sm font-bold text-gray-600">取消</button>
-           <button onClick={() => { onSave(data); onClose(); }} className="px-5 py-2 rounded-xl bg-pink-500 text-sm font-bold text-white shadow-lg shadow-pink-200">保存</button>
-        </div>
+            )}
+          </div>
+          <div className="p-4 border-t border-gray-100 flex justify-end gap-3">
+             <button onClick={onClose} className="px-5 py-2 rounded-xl bg-gray-100 text-sm font-bold text-gray-600">取消</button>
+             <button onClick={()=>{onSave(data);onClose();}} className="px-5 py-2 rounded-xl bg-pink-500 text-sm font-bold text-white shadow-lg shadow-pink-200">保存</button>
+          </div>
+        </Dialog.Panel>
       </div>
-    </div>
+    </Dialog>
   );
 };
 
 // ----------------- Main Chat Logic -----------------
 const AiChatContent = ({ onClose }) => {
-  // --- State ---
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
-  
   const [sourceLang, setSourceLang] = useState('zh-CN');
   const [targetLang, setTargetLang] = useState('en-US');
   
   const [inputVal, setInputVal] = useState('');
-  const [history, setHistory] = useState([]); // [{ type: 'user'|'ai', ... }]
-  // 为了实现“只显示结果，下拉看历史”，我们其实只需要渲染最新的结果，
-  // 历史记录可以放在一个折叠区域或者 ScrollView 的上方。
-  // 但用户的需求是：翻译出结果后，自动滚频把用户消息滚上去不显示。
-  // 这意味着所有消息都在一个列表中，只是 ScrollTop 位置调整。
-
+  const [history, setHistory] = useState([]); 
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState('');
 
-  // 语音录制
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef(null);
   
-  // 追问建议
   const [suggestions, setSuggestions] = useState([]);
   const [isSuggesting, setIsSuggesting] = useState(false);
 
   const scrollRef = useRef(null);
-  const settingsEndRef = useRef(null);
-
-  // 弹窗状态
+  
   const [showSettings, setShowSettings] = useState(false);
+  const [showModelSelector, setShowModelSelector] = useState(false); // 新增
   const [showSrcPicker, setShowSrcPicker] = useState(false);
   const [showTgtPicker, setShowTgtPicker] = useState(false);
 
-  // --- Effect: Load/Save ---
   useEffect(() => {
     const s = safeLocalStorageGet('ai886_settings');
-    if (s) {
-      try { setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(s) }); } catch {}
-    }
+    if (s) { try { setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(s) }); } catch {} }
   }, []);
 
   useEffect(() => {
     safeLocalStorageSet('ai886_settings', JSON.stringify(settings));
   }, [settings]);
 
-  // --- Logic: Scroll ---
   const scrollToResult = () => {
     if (!scrollRef.current) return;
-    // 简单的滚动到底部，如果内容不多，可能用户消息还在上面。
-    // 如果要强制隐藏用户消息，需要计算高度。
-    // 这里采用：平滑滚动到底部
     setTimeout(() => {
-      scrollRef.current.scrollTo({
-        top: scrollRef.current.scrollHeight,
-        behavior: 'smooth'
-      });
+      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
     }, 100);
   };
 
-  // --- Logic: API Calls ---
   const getProviderAndModel = (modelId) => {
     const model = settings.models.find(m => m.id === modelId);
     if (!model) return null;
@@ -541,26 +490,28 @@ const AiChatContent = ({ onClose }) => {
 
   const fetchAi = async (messages, modelId, jsonMode = true) => {
     const pm = getProviderAndModel(modelId);
-    if (!pm || !pm.provider.key) throw new Error('API Key 未配置');
+    if (!pm) throw new Error('未找到模型配置');
+    if (!pm.provider.key) throw new Error('请在设置中配置 API Key');
 
-    const body = {
-      model: pm.model.value,
-      messages,
-      stream: false
-    };
+    const body = { model: pm.model.value, messages, stream: false };
     if (jsonMode) body.response_format = { type: 'json_object' };
 
     const res = await fetch(`${pm.provider.url}/chat/completions`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${pm.provider.key}`
-      },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${pm.provider.key}` },
       body: JSON.stringify(body)
     });
 
-    if (!res.ok) throw new Error('Request failed');
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData?.error?.message || `API 请求失败: ${res.status}`);
+    }
+    
     const data = await res.json();
+    // 严谨检查
+    if (!data || !data.choices || !data.choices.length) {
+      throw new Error('API 返回数据格式异常 (No choices)');
+    }
     return data.choices[0].message.content;
   };
 
@@ -570,28 +521,23 @@ const AiChatContent = ({ onClose }) => {
 
     setIsLoading(true);
     setLoadingMsg('翻译中...');
-    setSuggestions([]); // 清空旧建议
+    setSuggestions([]); 
     
-    // Optimistic UI: Add user message
     const userMsg = { id: nowId(), role: 'user', text, ts: Date.now() };
     setHistory(prev => [...prev, userMsg]);
     setInputVal('');
     scrollToResult();
 
-    // Prepare Prompt
     let sysPrompt = BASE_SYSTEM_INSTRUCTION;
     if (settings.useCustomPrompt && settings.customPromptText) {
       sysPrompt += `\n额外要求: ${settings.customPromptText}`;
     }
-    // 强制 JSON 约束
     sysPrompt += `\n必须返回严格的 JSON 格式: { "data": [ { "translation": "...", "back_translation": "..." }, ... ] }`;
-    // 强制回译语言
     sysPrompt += `\nback_translation 必须翻译回: ${getLangName(sourceLang)}`;
 
-    const userPrompt = `Source Language: ${getLangName(sourceLang)}\nTarget Language: ${getLangName(targetLang)}\nContent:\n${text}`;
+    const userPrompt = `Source: ${getLangName(sourceLang)}\nTarget: ${getLangName(targetLang)}\nContent:\n${text}`;
 
     try {
-      // 1. 查字典
       const dict = await loadCheatDict(sourceLang);
       const hit = matchCheatLoose(dict, text, targetLang);
       
@@ -609,19 +555,14 @@ const AiChatContent = ({ onClose }) => {
         results = normalizeTranslations(raw);
       }
 
-      // Add AI Response
       const aiMsg = { id: nowId(), role: 'ai', results, from, ts: Date.now() };
       setHistory(prev => [...prev, aiMsg]);
       scrollToResult();
-
-      // Auto Play TTS (Default Result)
       playTTS(results[0]?.translation, targetLang, settings);
-
-      // 2. 触发追问建议 (Parallel)
       fetchSuggestions(text);
 
     } catch (e) {
-      setHistory(prev => [...prev, { id: nowId(), role: 'error', text: e.message || '翻译失败' }]);
+      setHistory(prev => [...prev, { id: nowId(), role: 'error', text: e.message || '未知错误' }]);
     } finally {
       setIsLoading(false);
     }
@@ -630,47 +571,35 @@ const AiChatContent = ({ onClose }) => {
   const fetchSuggestions = async (originalText) => {
     setIsSuggesting(true);
     try {
-      const pm = getProviderAndModel(settings.followUpModelId);
-      if (!pm) return;
-
       const raw = await fetchAi([
         { role: 'system', content: REPLY_SYSTEM_INSTRUCTION },
         { role: 'user', content: `原文: ${originalText}` }
-      ], settings.followUpModelId, true); // Some models might not support json_object, handled in try/catch if needed
-
+      ], settings.followUpModelId, true); // 尝试用 JSON 模式，如果模型不支持可能会报错，这里 catch 住
       const list = JSON.parse(raw);
       if (Array.isArray(list)) setSuggestions(list);
     } catch (e) {
-      console.log('Suggestion failed', e);
+      console.log('Suggestion failed/skipped:', e);
     } finally {
       setIsSuggesting(false);
     }
   };
 
-  // --- Logic: Speech ---
   const startRecording = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return alert('不支持语音识别');
-    
-    // 停止当前
     if (recognitionRef.current) recognitionRef.current.stop();
 
     const recognition = new SpeechRecognition();
-    // 语音识别使用源语言
     recognition.lang = sourceLang; 
     recognition.interimResults = true;
-    recognition.continuous = true; // 允许长按
+    recognition.continuous = true; 
 
-    recognition.onstart = () => {
-      setIsRecording(true);
-      setInputVal(''); // 清空开始录
-    };
+    recognition.onstart = () => { setIsRecording(true); setInputVal(''); };
     recognition.onresult = (e) => {
       const t = Array.from(e.results).map(r => r[0].transcript).join('');
       setInputVal(t);
     };
     recognition.onend = () => setIsRecording(false);
-    
     recognitionRef.current = recognition;
     recognition.start();
   };
@@ -678,58 +607,37 @@ const AiChatContent = ({ onClose }) => {
   const stopRecordingAndSend = () => {
     if (recognitionRef.current) {
       recognitionRef.current.stop();
-      // 稍微延迟等待最后结果填入 inputVal
-      setTimeout(() => {
-        handleTranslate(); 
-      }, 500);
+      setTimeout(() => { handleTranslate(); }, 500);
     }
   };
 
-  // --- Logic: Language Swap ---
   const swapLangs = () => {
-    const t = sourceLang;
-    setSourceLang(targetLang);
-    setTargetLang(t);
+    const t = sourceLang; setSourceLang(targetLang); setTargetLang(t);
   };
 
-  // --- Render ---
   return (
     <div className="flex flex-col w-full h-[100dvh] bg-[#FFF0F5] relative text-gray-800">
       <GlobalStyles />
-      
-      {/* Background */}
       {settings.chatBackgroundUrl && (
-         <div 
-           className="absolute inset-0 bg-cover bg-center z-0 transition-opacity duration-500 pointer-events-none"
-           style={{ backgroundImage: `url('${settings.chatBackgroundUrl}')`, opacity: 1 - settings.backgroundOverlay }}
-         />
+         <div className="absolute inset-0 bg-cover bg-center z-0 transition-opacity duration-500 pointer-events-none" style={{ backgroundImage: `url('${settings.chatBackgroundUrl}')`, opacity: 1 - settings.backgroundOverlay }} />
       )}
 
       {/* Header */}
       <div className="relative z-10 pt-safe-top bg-white/60 backdrop-blur-md shadow-sm border-b border-pink-100/50">
         <div className="flex items-center justify-center h-12 relative px-4">
-          {/* Logo Title */}
           <div className="flex items-center gap-2">
             <img src="/favicon.ico" alt="logo" className="w-5 h-5 rounded-full opacity-80" onError={(e) => e.target.style.display='none'} />
             <span className="font-extrabold text-gray-800 text-lg tracking-tight">886.best</span>
             <span className="text-[10px] bg-pink-100 text-pink-600 px-1.5 py-0.5 rounded ml-1 font-medium">Ai翻译</span>
           </div>
-          
-          {/* Settings Button (Right) */}
-          <button 
-            onClick={() => setShowSettings(true)}
-            className="absolute right-4 w-8 h-8 flex items-center justify-center rounded-full active:bg-gray-200 transition-colors text-gray-600"
-          >
+          <button onClick={() => setShowSettings(true)} className="absolute right-4 w-8 h-8 flex items-center justify-center rounded-full active:bg-gray-200 transition-colors text-gray-600">
             <i className="fas fa-cog" />
           </button>
         </div>
       </div>
 
       {/* Main Scroll Area */}
-      <div 
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto no-scrollbar relative z-10 px-4 pt-4 pb-32 scroll-smooth"
-      >
+      <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar relative z-10 px-4 pt-4 pb-32 scroll-smooth">
         <div className="w-full max-w-[600px] mx-auto min-h-full flex flex-col justify-end">
            {history.length === 0 && !isLoading && (
              <div className="text-center text-gray-400 mb-20 opacity-60">
@@ -739,70 +647,36 @@ const AiChatContent = ({ onClose }) => {
            )}
 
            {history.map((item, idx) => {
-             // User Message
              if (item.role === 'user') {
                return (
                  <div key={item.id} className="flex justify-end mb-6 opacity-60 scale-90 origin-right">
-                   <div className="bg-gray-200 text-gray-700 px-4 py-2 rounded-2xl rounded-tr-sm text-sm max-w-[85%] break-words shadow-inner">
-                     {item.text}
-                   </div>
+                   <div className="bg-gray-200 text-gray-700 px-4 py-2 rounded-2xl rounded-tr-sm text-sm max-w-[85%] break-words shadow-inner">{item.text}</div>
                  </div>
                );
              }
-             // Error
              if (item.role === 'error') {
                return (
-                 <div key={item.id} className="bg-red-50 text-red-500 text-xs p-3 rounded-xl text-center mb-6">
-                   {item.text}
-                 </div>
+                 <div key={item.id} className="bg-red-50 text-red-500 text-xs p-3 rounded-xl text-center mb-6">{item.text}</div>
                );
              }
-             // AI Result
              return (
                <div key={item.id} className="mb-6 animate-in slide-in-from-bottom-4 duration-500">
                   {item.results.map((res, i) => (
-                    <TranslationCard 
-                      key={i} 
-                      data={res} 
-                      onPlay={() => playTTS(res.translation, targetLang, settings)} 
-                    />
+                    <TranslationCard key={i} data={res} onPlay={() => playTTS(res.translation, targetLang, settings)} />
                   ))}
-                  
-                  {/* Dictionary Hit Indicator */}
-                  {item.from === 'dict' && (
-                    <div className="text-center text-[10px] text-green-600/50 mb-2">- 字典严格匹配 -</div>
-                  )}
-
-                  {/* Reply Suggestions (Only for the latest message) */}
+                  {item.from === 'dict' && <div className="text-center text-[10px] text-green-600/50 mb-2">- 字典严格匹配 -</div>}
                   {idx === history.length - 1 && (
                     isSuggesting ? (
-                      <div className="h-8 flex items-center justify-center gap-1">
-                        <span className="w-1.5 h-1.5 bg-pink-300 rounded-full animate-bounce"/>
-                        <span className="w-1.5 h-1.5 bg-pink-300 rounded-full animate-bounce delay-100"/>
-                        <span className="w-1.5 h-1.5 bg-pink-300 rounded-full animate-bounce delay-200"/>
-                      </div>
+                      <div className="h-8 flex items-center justify-center gap-1"><span className="w-1.5 h-1.5 bg-pink-300 rounded-full animate-bounce"/><span className="w-1.5 h-1.5 bg-pink-300 rounded-full animate-bounce delay-100"/><span className="w-1.5 h-1.5 bg-pink-300 rounded-full animate-bounce delay-200"/></div>
                     ) : (
-                      <ReplyChips 
-                        suggestions={suggestions} 
-                        onClick={(reply) => {
-                          setInputVal(reply);
-                          handleTranslate(reply);
-                        }}
-                      />
+                      <ReplyChips suggestions={suggestions} onClick={(reply) => { setInputVal(reply); handleTranslate(reply); }} />
                     )
                   )}
                </div>
              );
            })}
-
-           {/* Loading State */}
            {isLoading && (
-             <div className="flex justify-center mb-8">
-               <div className="bg-white/80 px-4 py-2 rounded-full shadow-sm flex items-center gap-2 text-sm text-pink-500 animate-pulse">
-                 <i className="fas fa-spinner fa-spin" />
-                 <span>{loadingMsg}</span>
-               </div>
-             </div>
+             <div className="flex justify-center mb-8"><div className="bg-white/80 px-4 py-2 rounded-full shadow-sm flex items-center gap-2 text-sm text-pink-500 animate-pulse"><i className="fas fa-spinner fa-spin" /><span>{loadingMsg}</span></div></div>
            )}
         </div>
       </div>
@@ -811,35 +685,26 @@ const AiChatContent = ({ onClose }) => {
       <div className="fixed bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-white via-white/95 to-white/0 pt-6 pb-[max(12px,env(safe-area-inset-bottom))]">
         <div className="w-full max-w-[600px] mx-auto px-4">
           
-          {/* Controls */}
-          <div className="flex items-center justify-between mb-2 px-1">
-            {/* Lang Switcher */}
-            <div className="flex items-center gap-2 bg-white/40 backdrop-blur-sm rounded-full p-1 border border-white/50 shadow-sm">
-              <button 
-                onClick={() => setShowSrcPicker(true)} 
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-transparent hover:bg-white/50 rounded-full transition-all"
-              >
+          {/* Controls: Center Language, Right Model */}
+          <div className="flex items-center justify-center mb-2 px-1 relative">
+            
+            {/* Lang Switcher (Centered) */}
+            <div className="flex items-center gap-2 bg-white/40 backdrop-blur-sm rounded-full p-1 border border-white/50 shadow-sm mx-auto">
+              <button onClick={() => setShowSrcPicker(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-transparent hover:bg-white/50 rounded-full transition-all">
                 <span className="text-lg">{getLangFlag(sourceLang)}</span>
                 <span className="text-xs font-bold text-gray-700">{getLangName(sourceLang)}</span>
               </button>
-              
-              <button onClick={swapLangs} className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-pink-500">
-                <i className="fas fa-exchange-alt text-xs" />
-              </button>
-
-              <button 
-                onClick={() => setShowTgtPicker(true)} 
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-transparent hover:bg-white/50 rounded-full transition-all"
-              >
+              <button onClick={swapLangs} className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-pink-500"><i className="fas fa-exchange-alt text-xs" /></button>
+              <button onClick={() => setShowTgtPicker(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-transparent hover:bg-white/50 rounded-full transition-all">
                 <span className="text-lg">{getLangFlag(targetLang)}</span>
                 <span className="text-xs font-bold text-gray-700">{getLangName(targetLang)}</span>
               </button>
             </div>
 
-            {/* Model Icon */}
+            {/* Model Icon (Right aligned absolute) */}
             <button 
-               onClick={() => setShowSettings(true)}
-               className="w-8 h-8 flex items-center justify-center text-pink-400 hover:text-pink-600 hover:bg-pink-50 rounded-full transition-colors"
+               onClick={() => setShowModelSelector(true)}
+               className="absolute right-0 w-8 h-8 flex items-center justify-center text-pink-400 hover:text-pink-600 hover:bg-pink-50 rounded-full transition-colors"
                title="切换模型"
             >
               <i className="fas fa-robot" />
@@ -854,62 +719,33 @@ const AiChatContent = ({ onClose }) => {
               rows={1}
               value={inputVal}
               onChange={e => setInputVal(e.target.value)}
-              onKeyDown={e => {
-                if(e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleTranslate();
-                }
-              }}
+              onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleTranslate(); } }}
             />
-
-            {/* Action Button: Send or Mic */}
             {inputVal.trim() ? (
-              <button 
-                onClick={() => handleTranslate()}
-                className="w-11 h-11 rounded-full bg-pink-500 text-white shadow-md shadow-pink-200 flex items-center justify-center mb-0.5 active:scale-90 transition-transform"
-              >
-                <i className="fas fa-arrow-up" />
-              </button>
+              <button onClick={() => handleTranslate()} className="w-11 h-11 rounded-full bg-pink-500 text-white shadow-md shadow-pink-200 flex items-center justify-center mb-0.5 active:scale-90 transition-transform"><i className="fas fa-arrow-up" /></button>
             ) : (
               <button
                 onMouseDown={startRecording}
                 onMouseUp={stopRecordingAndSend}
                 onTouchStart={(e) => { e.preventDefault(); startRecording(); }}
                 onTouchEnd={(e) => { e.preventDefault(); stopRecordingAndSend(); }}
-                className={cx(
-                  "w-11 h-11 rounded-full flex items-center justify-center mb-0.5 transition-all select-none touch-none",
-                  isRecording 
-                    ? "bg-red-500 text-white scale-110 shadow-lg shadow-red-200" 
-                    : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                )}
+                className={cx("w-11 h-11 rounded-full flex items-center justify-center mb-0.5 transition-all select-none touch-none", isRecording ? "bg-red-500 text-white scale-110 shadow-lg shadow-red-200" : "bg-gray-100 text-gray-500 hover:bg-gray-200")}
               >
                 <i className={`fas ${isRecording ? 'fa-waveform' : 'fa-microphone'}`} />
               </button>
             )}
-
-            {/* Recording Indicator Overlay */}
-            {isRecording && (
-               <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-black/70 text-white text-xs px-3 py-1.5 rounded-full animate-bounce">
-                 松开发送...
-               </div>
-            )}
+            {isRecording && <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-black/70 text-white text-xs px-3 py-1.5 rounded-full animate-bounce">松开发送...</div>}
           </div>
         </div>
       </div>
 
-      {/* Language Pickers */}
+      {/* Pickers */}
       <Dialog open={showSrcPicker} onClose={() => setShowSrcPicker(false)} className="relative z-[10003]">
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm" aria-hidden="true" />
         <div className="fixed inset-0 flex items-center justify-center p-4">
           <Dialog.Panel className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl max-h-[70vh] overflow-y-auto slim-scrollbar">
             <div className="text-center font-bold mb-3 text-gray-800">选择源语言</div>
-            <div className="grid grid-cols-2 gap-2">
-              {SUPPORTED_LANGUAGES.map(l => (
-                <button key={l.code} onClick={() => { setSourceLang(l.code); setShowSrcPicker(false); }} className={`p-3 rounded-xl border text-left ${sourceLang===l.code ? 'border-pink-500 bg-pink-50': 'border-gray-100'}`}>
-                   <span className="mr-2">{l.flag}</span>{l.name}
-                </button>
-              ))}
-            </div>
+            <div className="grid grid-cols-2 gap-2">{SUPPORTED_LANGUAGES.map(l => <button key={l.code} onClick={() => { setSourceLang(l.code); setShowSrcPicker(false); }} className={`p-3 rounded-xl border text-left ${sourceLang===l.code?'border-pink-500 bg-pink-50':'border-gray-100'}`}><span className="mr-2">{l.flag}</span>{l.name}</button>)}</div>
           </Dialog.Panel>
         </div>
       </Dialog>
@@ -919,23 +755,23 @@ const AiChatContent = ({ onClose }) => {
         <div className="fixed inset-0 flex items-center justify-center p-4">
           <Dialog.Panel className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl max-h-[70vh] overflow-y-auto slim-scrollbar">
             <div className="text-center font-bold mb-3 text-gray-800">选择目标语言</div>
-            <div className="grid grid-cols-2 gap-2">
-              {SUPPORTED_LANGUAGES.map(l => (
-                <button key={l.code} onClick={() => { setTargetLang(l.code); setShowTgtPicker(false); }} className={`p-3 rounded-xl border text-left ${targetLang===l.code ? 'border-pink-500 bg-pink-50': 'border-gray-100'}`}>
-                   <span className="mr-2">{l.flag}</span>{l.name}
-                </button>
-              ))}
-            </div>
+            <div className="grid grid-cols-2 gap-2">{SUPPORTED_LANGUAGES.map(l => <button key={l.code} onClick={() => { setTargetLang(l.code); setShowTgtPicker(false); }} className={`p-3 rounded-xl border text-left ${targetLang===l.code?'border-pink-500 bg-pink-50':'border-gray-100'}`}><span className="mr-2">{l.flag}</span>{l.name}</button>)}</div>
           </Dialog.Panel>
         </div>
       </Dialog>
 
-      {/* Settings Modal */}
-      {showSettings && (
-        <SettingsModal 
+      {/* Settings Modals */}
+      {showSettings && <SettingsModal settings={settings} onSave={setSettings} onClose={() => setShowSettings(false)} />}
+      
+      {/* Model Selector Modal */}
+      {showModelSelector && (
+        <ModelSelectorModal 
           settings={settings} 
-          onSave={setSettings} 
-          onClose={() => setShowSettings(false)} 
+          onClose={() => setShowModelSelector(false)} 
+          onSelect={(tab, mid) => {
+            if (tab === 'main') setSettings(s => ({ ...s, mainModelId: mid }));
+            else setSettings(s => ({ ...s, followUpModelId: mid }));
+          }}
         />
       )}
     </div>
@@ -947,35 +783,8 @@ const AIChatDrawer = ({ isOpen, onClose }) => {
   return (
     <Transition show={isOpen} as={Fragment}>
       <Dialog as="div" className="relative z-[9999]" onClose={onClose}>
-        <Transition.Child
-          as={Fragment}
-          enter="ease-out duration-300"
-          enterFrom="opacity-0"
-          enterTo="opacity-100"
-          leave="ease-in duration-200"
-          leaveFrom="opacity-100"
-          leaveTo="opacity-0"
-        >
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
-        </Transition.Child>
-
-        <div className="fixed inset-0 overflow-hidden">
-          <div className="absolute inset-0 overflow-hidden">
-            <Transition.Child
-              as={Fragment}
-              enter="transform transition ease-in-out duration-300"
-              enterFrom="translate-y-full"
-              enterTo="translate-y-0"
-              leave="transform transition ease-in-out duration-300"
-              leaveFrom="translate-y-0"
-              leaveTo="translate-y-full"
-            >
-              <Dialog.Panel className="pointer-events-auto w-screen h-full">
-                <AiChatContent onClose={onClose} />
-              </Dialog.Panel>
-            </Transition.Child>
-          </div>
-        </div>
+        <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0"><div className="fixed inset-0 bg-black/30 backdrop-blur-sm" /></Transition.Child>
+        <div className="fixed inset-0 overflow-hidden"><div className="absolute inset-0 overflow-hidden"><Transition.Child as={Fragment} enter="transform transition ease-in-out duration-300" enterFrom="translate-y-full" enterTo="translate-y-0" leave="transform transition ease-in-out duration-300" leaveFrom="translate-y-0" leaveTo="translate-y-full"><Dialog.Panel className="pointer-events-auto w-screen h-full"><AiChatContent onClose={onClose} /></Dialog.Panel></Transition.Child></div></div>
       </Dialog>
     </Transition>
   );
