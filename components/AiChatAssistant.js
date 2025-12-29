@@ -30,11 +30,22 @@ const SPEECH_RECOGNITION_LANGUAGES = [ { name: '中文 (普通话)', value: 'zh-
 const ttsCache = new Map();
 let currentPlayingAudio = null;
 
+// 根据文本内容自动选择最佳发音人
+const getSmartVoice = (text, defaultVoice) => {
+    const lang = detectLanguage(text);
+    if (lang === 'my-MM') return 'my-MM-NilarNeural'; // 缅甸语强制使用 Nilar
+    if (lang === 'zh-CN') return 'zh-CN-XiaoxiaoMultilingualNeural'; // 中文强制使用晓晓
+    return defaultVoice; // 其他情况使用默认
+};
+
 const preloadTTS = async (text, voiceName) => {
-    const cacheKey = `${text}|${voiceName}`;
+    // 智能切换发音人
+    const actualVoice = getSmartVoice(text, voiceName);
+    const cacheKey = `${text}|${actualVoice}`;
     if (ttsCache.has(cacheKey) || !text) return;
     try {
-        const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${voiceName}&r=0`;
+        // r=-20 减慢语速
+        const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=${actualVoice}&r=-20`;
         const response = await fetch(url);
         if (!response.ok) throw new Error('TTS API Error');
         const blob = await response.blob();
@@ -46,7 +57,9 @@ const preloadTTS = async (text, voiceName) => {
 };
 
 const playCachedTTS = (text, voiceName, onStart, onEnd) => {
-    const cacheKey = `${text}|${voiceName}`;
+    const actualVoice = getSmartVoice(text, voiceName);
+    const cacheKey = `${text}|${actualVoice}`;
+    
     const playAudio = () => {
         const audio = ttsCache.get(cacheKey);
         if (!audio) { onEnd(); return; }
@@ -109,7 +122,7 @@ const AiTtsButton = ({ text, voiceName }) => {
     
     useEffect(() => {
         return () => {
-            stopCachedTTS();
+            if (isPlaying) stopCachedTTS();
         };
     }, []);
 
@@ -122,27 +135,25 @@ const TranslationCard = ({ result, voiceName }) => {
     const handleCopy = (e) => { e.stopPropagation(); navigator.clipboard.writeText(result.translation); setCopied(true); setTimeout(() => setCopied(false), 1500); };
     return (
         <div className="bg-white dark:bg-gray-800 border border-gray-200/50 dark:border-gray-700/50 shadow-md rounded-xl p-4 flex flex-col gap-2">
-            <p className="text-gray-800 dark:text-gray-100 text-lg leading-relaxed flex-grow">{result.translation}</p>
-            <p className="text-blue-600 dark:text-blue-400 text-sm mt-1"><i className="fas fa-undo-alt mr-2 opacity-60"></i>{result.back_translation}</p>
-            <div className="flex items-center justify-end gap-2 mt-2">
+            <p className="text-gray-800 dark:text-gray-100 text-lg leading-relaxed flex-grow text-center">{result.translation}</p>
+            <p className="text-blue-600 dark:text-blue-400 text-sm mt-1 text-center"><i className="fas fa-undo-alt mr-2 opacity-60"></i>{result.back_translation}</p>
+            <div className="flex items-center justify-center gap-4 mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50">
                 <button onClick={handleCopy} className="w-10 h-10 flex items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600" title="复制"> <i className={`fas ${copied ? 'fa-check text-green-500' : 'fa-copy'} text-xl`}></i> </button>
                 <AiTtsButton text={result.translation} voiceName={voiceName} />
             </div>
         </div>
     );
 };
-const TranslationResults = ({ results, voiceName }) => (<div className="flex flex-col gap-3">{(results || []).map((result, index) => <TranslationCard key={index} result={result} voiceName={voiceName} />)}</div>);
+const TranslationResults = ({ results, voiceName }) => (<div className="flex flex-col gap-3 w-full">{(results || []).map((result, index) => <TranslationCard key={index} result={result} voiceName={voiceName} />)}</div>);
 
-// --- 【子组件】MessageBubble & LoadingSpinner ---
+// --- 【子组件】LoadingSpinner (新样式：跳动的三点) ---
 const LoadingSpinner = () => {
-    useEffect(() => {
-        const interval = setInterval(() => { playKeySound(); }, 500);
-        return () => clearInterval(interval);
-    }, []);
     return (
-        <div className="flex my-4 justify-center">
-            <div className="p-3 rounded-2xl bg-white dark:bg-gray-700 shadow-md flex items-center justify-center w-20 h-14">
-                <div className="w-7 h-7 border-3 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
+        <div className="flex my-6 justify-center w-full">
+            <div className="bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm rounded-full px-4 py-2 shadow-sm flex items-center space-x-2">
+                <div className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
+                <div className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                <div className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
             </div>
         </div>
     );
@@ -152,16 +163,15 @@ const MessageBubble = ({ msg, onRegenerate }) => {
     const isUser = msg.role === 'user';
     const hasTranslations = msg.translations && msg.translations.length > 0;
 
-    const containerClass = isUser ? 'justify-end' : (hasTranslations ? 'justify-center' : 'justify-start');
-    const userBubbleClass = 'bg-blue-600 text-white rounded-br-none shadow-lg';
-    const bubbleClass = isUser ? userBubbleClass : '';
+    const containerClass = isUser ? 'justify-end' : 'justify-center'; 
+    const bubbleClass = isUser ? 'bg-blue-600 text-white rounded-2xl rounded-br-sm shadow-md' : 'w-full';
 
     return (
         <div className={`flex my-3 ${containerClass}`}>
-            <div className={`text-left flex flex-col ${isUser ? 'p-3 rounded-xl' : ''} ${bubbleClass}`} style={{ maxWidth: '90%' }}>
+            <div className={`text-left flex flex-col ${isUser ? 'p-3 px-4' : ''} ${bubbleClass}`} style={{ maxWidth: isUser ? '85%' : '100%' }}>
                 {hasTranslations 
                     ? <TranslationResults results={msg.translations} voiceName={msg.voiceName} /> 
-                    : <div className="p-3 rounded-2xl bg-white dark:bg-gray-700 shadow-md"><p className={`text-lg ${isUser ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`}>{msg.content || ''}</p></div>
+                    : <div className={!isUser ? "p-4 rounded-xl bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700" : ""}><p className={`text-lg leading-normal ${isUser ? 'text-white' : 'text-gray-800 dark:text-gray-100'}`}>{msg.content || ''}</p></div>
                 }
             </div>
         </div>
@@ -169,12 +179,41 @@ const MessageBubble = ({ msg, onRegenerate }) => {
 };
 
 
-// --- 【子组件】SettingsModal ---
-const ModelManager = ({ models, onChange, onAdd, onDelete }) => ( <> {(models || []).map(m => ( <div key={m.id} className="p-3 mb-3 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600 space-y-2"> <div className="flex items-center justify-between"> <input type="text" value={m.name} onChange={(e) => onChange(m.id, 'name', e.target.value)} placeholder="模型显示名称" className="font-semibold bg-transparent w-full text-base" /> <button onClick={() => onDelete(m.id)} className="p-2 ml-2 text-sm text-red-500 rounded-full hover:bg-red-500/10"><i className="fas fa-trash"></i></button> </div> <div> <label className="text-xs font-medium">模型值 (Value)</label> <input type="text" value={m.value} onChange={(e) => onChange(m.id, 'value', e.target.value)} placeholder="例如: gpt-4o" className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border dark:border-gray-500 rounded-md text-xs" /> </div> </div> ))} <button onClick={onAdd} className="w-full mt-2 py-2 bg-blue-500 text-white rounded-md text-sm"><i className="fas fa-plus mr-2"></i>添加新模型</button> </> );
-const SettingsModal = ({ settings, onSave, onClose }) => { const [tempSettings, setTempSettings] = useState(settings); const [isKeyVisible, setKeyVisible] = useState(false); const fileInputRef = useRef(null); const handleChange = (key, value) => setTempSettings(prev => ({ ...prev, [key]: value })); const handleApiChange = (field, value) => setTempSettings(p => ({ ...p, apiConfig: { ...p.apiConfig, [field]: value } })); const handleBgImageSelect = (event) => { const file = event.target.files[0]; if (file && file.type.startsWith('image/')) { const reader = new FileReader(); reader.onload = (e) => handleChange('chatBackgroundUrl', e.target.result); reader.readAsDataURL(file); } event.target.value = null; }; const handleAddModel = () => handleChange('chatModels', [...(tempSettings.chatModels || []), { id: generateSimpleId('model'), name: '新模型', value: '' }]); const handleDeleteModel = (id) => { if (!window.confirm('确定删除吗？')) return; handleChange('chatModels', (tempSettings.chatModels || []).filter(m => m.id !== id)); }; const handleModelChange = (id, field, value) => handleChange('chatModels', (tempSettings.chatModels || []).map(m => m.id === id ? { ...m, [field]: value } : m)); return ( <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10002] p-4" onClick={onClose}> <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg overflow-hidden relative text-gray-800 dark:text-gray-200 flex flex-col" style={{ height: 'min(700px, 90vh)' }} onClick={e => e.stopPropagation()}> <h3 className="text-2xl font-bold p-6 shrink-0">设置</h3> <div className="space-y-6 flex-grow overflow-y-auto px-6"> <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg space-y-3"> <h4 className="font-bold text-lg">API 设置 (OpenAI 兼容)</h4> <div> <label className="text-xs font-medium block">接口地址 (Endpoint)</label> <input type="text" value={tempSettings.apiConfig.url} onChange={(e) => handleApiChange('url', e.target.value)} placeholder="例如: https://api.openai.com/v1" className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border dark:border-gray-500 rounded-md text-sm" /> </div> <div> <label className="text-xs font-medium block">密钥 (Key)</label> <div className="relative"><input type={isKeyVisible ? 'text' : 'password'} value={tempSettings.apiConfig.key} onChange={(e) => handleApiChange('key', e.target.value)} placeholder="请输入密钥" className="w-full mt-1 px-2 py-1 pr-8 bg-white dark:bg-gray-800 border dark:border-gray-500 rounded-md text-sm" /><button type='button' onClick={()=>setKeyVisible(p=>!p)} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><i className={`fas ${isKeyVisible ? 'fa-eye-slash' : 'fa-eye'}`}></i></button></div></div> </div> <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg"><h4 className="font-bold mb-3 text-lg">模型管理</h4><ModelManager models={tempSettings.chatModels} onChange={handleModelChange} onAdd={handleAddModel} onDelete={handleDeleteModel} /></div> <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg"> <h4 className="font-bold mb-3 text-lg">发音人选择</h4> <select value={tempSettings.ttsVoice} onChange={(e) => handleChange('ttsVoice', e.target.value)} className="w-full mt-1 px-2 py-2 bg-white dark:bg-gray-800 border dark:border-gray-500 rounded-md text-sm">{MICROSOFT_TTS_VOICES.map(v => <option key={v.value} value={v.value}>{v.name}</option>)}</select> </div> <div className="space-y-4"> <div><label className="block text-sm font-medium mb-1">聊天背景</label><button type="button" onClick={() => fileInputRef.current?.click()} className="px-4 py-2 bg-gray-600 text-white rounded-md shrink-0 hover:bg-gray-700">上传背景图</button><input type="file" ref={fileInputRef} onChange={handleBgImageSelect} accept="image/*" className="hidden" /></div> <div className="flex items-center gap-4"><label className="text-sm shrink-0">背景图透明度: {tempSettings.backgroundOpacity}%</label><input type="range" min="0" max="100" step="1" value={tempSettings.backgroundOpacity} onChange={(e) => handleChange('backgroundOpacity', parseInt(e.target.value, 10))} className="w-full"/></div> <div className="flex items-center justify-between"><label className="block text-sm font-medium">自动朗读首个翻译结果</label><input type="checkbox" checked={tempSettings.autoReadFirstTranslation} onChange={(e) => handleChange('autoReadFirstTranslation', e.target.checked)} className="h-5 w-5 text-blue-500 rounded" /></div> </div> </div> <div className="flex justify-end gap-3 mt-4 p-6 shrink-0 border-t border-gray-200 dark:border-gray-700"><button onClick={onClose} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">关闭</button><button onClick={() => onSave(tempSettings)} className="px-4 py-2 bg-blue-600 text-white rounded-md">保存</button></div> </div> </div> ); };
+// --- 【子组件】SettingsModal (模型列表折叠) ---
+const ModelManager = ({ models, onChange, onAdd, onDelete }) => {
+    const [isOpen, setIsOpen] = useState(false);
+
+    return (
+        <div className="bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-md overflow-hidden">
+             <button onClick={() => setIsOpen(!isOpen)} className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                <span className="font-medium text-sm">已配置模型 ({models?.length || 0})</span>
+                <i className={`fas fa-chevron-down transition-transform ${isOpen ? 'rotate-180' : ''}`}></i>
+            </button>
+            {isOpen && (
+                <div className="p-2 space-y-2 animate-fade-in">
+                    {(models || []).map(m => ( 
+                        <div key={m.id} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600 space-y-2"> 
+                            <div className="flex items-center justify-between"> 
+                                <input type="text" value={m.name} onChange={(e) => onChange(m.id, 'name', e.target.value)} placeholder="模型显示名称" className="font-semibold bg-transparent w-full text-base outline-none focus:text-blue-500" /> 
+                                <button onClick={() => onDelete(m.id)} className="p-2 ml-2 text-sm text-red-500 rounded-full hover:bg-red-500/10"><i className="fas fa-trash"></i></button> 
+                            </div> 
+                            <div> 
+                                <label className="text-xs font-medium text-gray-500">模型值 (Value)</label> 
+                                <input type="text" value={m.value} onChange={(e) => onChange(m.id, 'value', e.target.value)} placeholder="例如: gpt-4o" className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border dark:border-gray-500 rounded-md text-xs font-mono" /> 
+                            </div> 
+                        </div> 
+                    ))} 
+                    <button onClick={onAdd} className="w-full mt-2 py-2 bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 rounded-md text-sm font-medium transition-colors"><i className="fas fa-plus mr-2"></i>添加新模型</button> 
+                </div>
+            )}
+        </div>
+    );
+};
+
+const SettingsModal = ({ settings, onSave, onClose }) => { const [tempSettings, setTempSettings] = useState(settings); const [isKeyVisible, setKeyVisible] = useState(false); const fileInputRef = useRef(null); const handleChange = (key, value) => setTempSettings(prev => ({ ...prev, [key]: value })); const handleApiChange = (field, value) => setTempSettings(p => ({ ...p, apiConfig: { ...p.apiConfig, [field]: value } })); const handleBgImageSelect = (event) => { const file = event.target.files[0]; if (file && file.type.startsWith('image/')) { const reader = new FileReader(); reader.onload = (e) => handleChange('chatBackgroundUrl', e.target.result); reader.readAsDataURL(file); } event.target.value = null; }; const handleAddModel = () => handleChange('chatModels', [...(tempSettings.chatModels || []), { id: generateSimpleId('model'), name: '新模型', value: '' }]); const handleDeleteModel = (id) => { if (!window.confirm('确定删除吗？')) return; handleChange('chatModels', (tempSettings.chatModels || []).filter(m => m.id !== id)); }; const handleModelChange = (id, field, value) => handleChange('chatModels', (tempSettings.chatModels || []).map(m => m.id === id ? { ...m, [field]: value } : m)); return ( <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10002] p-4" onClick={onClose}> <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg overflow-hidden relative text-gray-800 dark:text-gray-200 flex flex-col" style={{ height: 'min(700px, 90vh)' }} onClick={e => e.stopPropagation()}> <h3 className="text-2xl font-bold p-6 shrink-0 border-b dark:border-gray-700">设置</h3> <div className="space-y-6 flex-grow overflow-y-auto px-6 py-6"> <div className="space-y-3"> <h4 className="font-bold text-lg flex items-center gap-2"><i className="fas fa-key text-blue-500"></i> API 配置</h4> <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg space-y-3 border dark:border-gray-700"> <div> <label className="text-xs font-medium block">接口地址</label> <input type="text" value={tempSettings.apiConfig.url} onChange={(e) => handleApiChange('url', e.target.value)} placeholder="例如: https://api.openai.com/v1" className="w-full mt-1 px-2 py-2 bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-md text-sm outline-none focus:border-blue-500" /> </div> <div> <label className="text-xs font-medium block">API Key</label> <div className="relative"><input type={isKeyVisible ? 'text' : 'password'} value={tempSettings.apiConfig.key} onChange={(e) => handleApiChange('key', e.target.value)} placeholder="sk-..." className="w-full mt-1 px-2 py-2 pr-8 bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-md text-sm outline-none focus:border-blue-500" /><button type='button' onClick={()=>setKeyVisible(p=>!p)} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><i className={`fas ${isKeyVisible ? 'fa-eye-slash' : 'fa-eye'}`}></i></button></div></div> </div> </div> <div className="space-y-3"><h4 className="font-bold text-lg flex items-center gap-2"><i className="fas fa-robot text-purple-500"></i> 模型管理</h4><ModelManager models={tempSettings.chatModels} onChange={handleModelChange} onAdd={handleAddModel} onDelete={handleDeleteModel} /></div> <div className="space-y-3"> <h4 className="font-bold text-lg flex items-center gap-2"><i className="fas fa-paint-brush text-pink-500"></i> 个性化</h4> <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg space-y-4 border dark:border-gray-700"> <div><label className="block text-sm font-medium mb-1">聊天背景</label><div className="flex gap-2"><button type="button" onClick={() => fileInputRef.current?.click()} className="px-4 py-2 bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-md text-sm hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex-1">选择图片...</button><input type="file" ref={fileInputRef} onChange={handleBgImageSelect} accept="image/*" className="hidden" />{tempSettings.chatBackgroundUrl && <button onClick={()=>handleChange('chatBackgroundUrl', '')} className="px-3 py-2 text-red-500 bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-md hover:bg-red-50"><i className="fas fa-times"></i></button>}</div></div> <div className="flex items-center gap-4"><label className="text-sm shrink-0 w-24">背景透明度</label><input type="range" min="0" max="100" step="1" value={tempSettings.backgroundOpacity} onChange={(e) => handleChange('backgroundOpacity', parseInt(e.target.value, 10))} className="flex-1 accent-blue-500"/> <span className="text-xs w-8 text-right">{tempSettings.backgroundOpacity}%</span></div> <div className="flex items-center justify-between pt-2 border-t dark:border-gray-600"><label className="block text-sm font-medium">自动朗读翻译</label><div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in"><input type="checkbox" checked={tempSettings.autoReadFirstTranslation} onChange={(e) => handleChange('autoReadFirstTranslation', e.target.checked)} className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-green-400" style={{right: tempSettings.autoReadFirstTranslation ? '0' : 'auto', left: tempSettings.autoReadFirstTranslation ? 'auto' : '0'}}/><label className={`toggle-label block overflow-hidden h-5 rounded-full cursor-pointer ${tempSettings.autoReadFirstTranslation ? 'bg-green-400' : 'bg-gray-300'}`}></label></div></div> </div> </div> </div> <div className="flex justify-end gap-3 p-4 shrink-0 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"><button onClick={onClose} className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600">取消</button><button onClick={() => onSave(tempSettings)} className="px-6 py-2 bg-blue-600 text-white rounded-md shadow-sm hover:bg-blue-700 transition-colors font-medium">保存设置</button></div> </div> </div> ); };
 
 // --- 【子组件】模态框 (模型/语言选择) ---
-const ModalSelector = ({ title, options, selectedValue, onSelect, onClose }) => ( <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[10001] flex flex-col p-4 animate-fade-in" onClick={onClose}> <div className="w-full max-w-md m-auto bg-white dark:bg-gray-800 rounded-xl shadow-lg flex flex-col" onClick={e => e.stopPropagation()}> <div className="p-4 border-b border-gray-200 dark:border-gray-700 text-center relative"> <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200">{title}</h3> <button onClick={onClose} className="absolute top-2 right-2 p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"><i className="fas fa-times"></i></button> </div> <div className="p-2 overflow-y-auto max-h-[60vh]"> {options.map(opt => ( <button key={opt.value} type="button" onClick={() => { onSelect(opt.value); onClose(); }} className={`w-full text-left px-4 py-3 text-sm rounded-lg hover:bg-blue-500/10 ${selectedValue === opt.value ? 'text-blue-600 dark:text-blue-400 font-bold bg-blue-500/10' : 'text-gray-800 dark:text-gray-200'}`}>{opt.name}</button> ))} </div> </div> </div> );
+const ModalSelector = ({ title, options, selectedValue, onSelect, onClose }) => ( <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[10001] flex flex-col p-4 animate-fade-in" onClick={onClose}> <div className="w-full max-w-md m-auto bg-white dark:bg-gray-800 rounded-xl shadow-lg flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}> <div className="p-4 border-b border-gray-200 dark:border-gray-700 text-center relative bg-gray-50 dark:bg-gray-900"> <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200">{title}</h3> <button onClick={onClose} className="absolute top-1/2 -translate-y-1/2 right-4 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"><i className="fas fa-times"></i></button> </div> <div className="p-2 overflow-y-auto max-h-[60vh] space-y-1"> {options.map(opt => ( <button key={opt.value} type="button" onClick={() => { onSelect(opt.value); onClose(); }} className={`w-full text-left px-4 py-3 text-sm rounded-lg transition-colors flex items-center justify-between ${selectedValue === opt.value ? 'text-blue-600 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-900/20' : 'text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}`}> <span>{opt.name}</span> {selectedValue === opt.value && <i className="fas fa-check"></i>} </button> ))} </div> </div> </div> );
 
 // --- 【核心组件】AiChatContent ---
 const AiChatContent = ({ onClose }) => {
@@ -208,6 +247,7 @@ const AiChatContent = ({ onClose }) => {
     const getLangName = (code) => SUPPORTED_LANGUAGES.find(l => l.code === code)?.name || code;
     const getModelName = (value) => (settings.chatModels || []).find(m => m.value === value)?.name || value;
 
+    // --- 语音识别逻辑 ---
     const startListening = useCallback(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) { alert('您的浏览器不支持语音输入。'); return; }
@@ -231,14 +271,21 @@ const AiChatContent = ({ onClose }) => {
                     interimTranscript += event.results[i][0].transcript;
                 }
             }
-            setUserInput(finalTranscript + interimTranscript);
-            speechEndTimerRef.current = setTimeout(() => {
-                if(recognitionRef.current) recognitionRef.current.stop();
-                const currentTranscript = (finalTranscript + interimTranscript).trim();
-                if (currentTranscript) {
-                     handleSubmitRef.current(false, currentTranscript);
-                }
-            }, 1500); // 1.5 second pause before sending
+            
+            const currentFullText = finalTranscript + interimTranscript;
+            setUserInput(currentFullText);
+
+            // 只有当有最终结果，且当前没有临时结果时，才启动自动发送倒计时
+            if (finalTranscript && !interimTranscript) {
+                 speechEndTimerRef.current = setTimeout(() => {
+                    if (recognitionRef.current) recognitionRef.current.stop();
+                    // 这里直接使用闭包中的 finalTranscript 可能会有问题，重新获取最新的 userInput 状态最好
+                    // 但由于 setTimeOut 执行时闭包已定，我们直接传递 finalTranscript 即可，因为它就是我们要发的内容
+                    if (finalTranscript.trim()) {
+                         handleSubmitRef.current(false, finalTranscript.trim());
+                    }
+                }, 1200); // 1.2秒无语音输入则发送
+            }
         };
         recognition.onerror = (event) => { console.error("Speech error:", event.error); setError(`语音识别失败: ${event.error}`); };
         recognition.onend = () => { setIsListening(false); clearTimeout(speechEndTimerRef.current); recognitionRef.current = null; };
@@ -295,6 +342,7 @@ const AiChatContent = ({ onClose }) => {
             
             setMessages(prev => [...prev, { role: 'ai', timestamp: Date.now(), translations: translationsArray, voiceName: ttsVoice }]);
             if (settings.autoReadFirstTranslation) {
+                // 使用修正后的 playCachedTTS，它内部会自动判断语言
                 playCachedTTS(translationsArray[0].translation, ttsVoice, () => {}, () => {});
             }
         } catch (err) {
@@ -333,30 +381,78 @@ const AiChatContent = ({ onClose }) => {
     };
     
     return (
-        <div className="flex flex-col h-[100dvh] w-full bg-[#f0f2f5] dark:bg-[#121212] text-gray-800 dark:text-gray-200 overflow-hidden relative">
+        <div className="flex flex-col h-[100dvh] w-full bg-[#f0f2f5] dark:bg-[#121212] text-gray-800 dark:text-gray-200 overflow-hidden relative font-sans">
             {settings.chatBackgroundUrl && <div className="absolute inset-0 bg-cover bg-center z-0" style={{ backgroundImage: `url('${convertGitHubUrl(settings.chatBackgroundUrl)}')`, opacity: (settings.backgroundOpacity || 70) / 100 }}></div>}
             
             <div className="flex-1 flex flex-col h-full relative overflow-hidden z-10 pt-safe-top">
-                <div className="flex-1 overflow-y-auto p-4 space-y-1">
+                {/* 消息列表区域 */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-2">
                     {messages.map((msg, index) => ( <MessageBubble key={`${msg.timestamp}-${index}`} msg={msg} onRegenerate={() => handleSubmit(true)} /> ))}
                     {isLoading && <LoadingSpinner/>}
                     <div ref={messagesEndRef} />
                 </div>
 
-                <footer className="shrink-0 p-3 pb-[max(12px,env(safe-area-inset-bottom))]">
-                     {error && <div className="mb-2 p-2 bg-red-100 text-red-800 text-center text-xs rounded" onClick={()=>setError('')}>{error} (点击关闭)</div>}
-                    <div className="relative">
-                         <div className="flex items-center justify-center gap-2 mb-2">
-                           <select value={sourceLang} onChange={e => setSourceLang(e.target.value)} className="bg-white/60 dark:bg-gray-700/60 backdrop-blur-sm rounded-full px-4 py-2 text-sm font-semibold border border-black/10 dark:border-white/10 outline-none focus:ring-2 focus:ring-blue-500 appearance-none text-center text-gray-800 dark:text-gray-200">{SUPPORTED_LANGUAGES.map(l => <option key={l.code} value={l.code} className="bg-white dark:bg-gray-800">{l.name}</option>)}</select>
-                           <button onClick={handleSwapLanguages} className="w-9 h-9 rounded-full flex items-center justify-center bg-white/60 dark:bg-gray-700/60 backdrop-blur-sm hover:bg-white/80 dark:hover:bg-gray-600/80 border border-black/10 dark:border-white/10 transition-transform active:rotate-180 disabled:opacity-50" disabled={sourceLang === 'auto'}><i className="fas fa-exchange-alt text-gray-800 dark:text-gray-200"></i></button>
-                           <select value={targetLang} onChange={e => setTargetLang(e.target.value)} className="bg-white/60 dark:bg-gray-700/60 backdrop-blur-sm rounded-full px-4 py-2 text-sm font-semibold border-none outline-none focus:ring-2 focus:ring-blue-500 appearance-none text-center text-gray-800 dark:text-gray-200">{SUPPORTED_LANGUAGES.filter(l => l.code !== 'auto').map(l => <option key={l.code} value={l.code} className="bg-white dark:bg-gray-800">{l.name}</option>)}</select>
-                           <button onClick={() => setShowModelSelector(true)} title={`当前模型: ${getModelName(settings.selectedModel)}`} className="w-9 h-9 rounded-full flex items-center justify-center bg-white/60 dark:bg-gray-700/60 backdrop-blur-sm hover:bg-white/80 dark:hover:bg-gray-600/80 border border-black/10 dark:border-white/10 transition-colors"><i className="fas fa-robot text-gray-800 dark:text-gray-200"></i></button>
+                {/* 底部操作区域 */}
+                <footer className="shrink-0 p-4 pb-[max(16px,env(safe-area-inset-bottom))] bg-gradient-to-t from-gray-100 via-gray-100 to-transparent dark:from-[#121212] dark:via-[#121212]">
+                     {error && <div className="mb-2 p-2 bg-red-100/90 backdrop-blur text-red-800 text-center text-xs rounded-lg border border-red-200 shadow-sm animate-fade-in" onClick={()=>setError('')}>{error} (点击关闭)</div>}
+                    <div className="flex flex-col gap-3 max-w-3xl mx-auto w-full">
+                         {/* 顶部工具栏：语言切换 + 模型选择 */}
+                         <div className="flex items-center justify-between px-2">
+                            <div className="flex items-center gap-1 bg-white/70 dark:bg-gray-800/70 backdrop-blur-md rounded-full p-1 shadow-sm border border-gray-200 dark:border-gray-700">
+                                <select value={sourceLang} onChange={e => setSourceLang(e.target.value)} className="bg-transparent text-sm font-semibold text-gray-700 dark:text-gray-200 py-1.5 pl-3 pr-1 outline-none cursor-pointer hover:text-blue-600 transition-colors appearance-none">
+                                    {SUPPORTED_LANGUAGES.map(l => <option key={l.code} value={l.code} className="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200">{l.name}</option>)}
+                                </select>
+                                <button onClick={handleSwapLanguages} className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 text-gray-500 transition-transform active:rotate-180 disabled:opacity-30" disabled={sourceLang === 'auto'}>
+                                    <i className="fas fa-arrow-right text-xs"></i>
+                                </button>
+                                <select value={targetLang} onChange={e => setTargetLang(e.target.value)} className="bg-transparent text-sm font-semibold text-gray-700 dark:text-gray-200 py-1.5 pl-1 pr-3 outline-none cursor-pointer hover:text-blue-600 transition-colors appearance-none">
+                                    {SUPPORTED_LANGUAGES.filter(l => l.code !== 'auto').map(l => <option key={l.code} value={l.code} className="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200">{l.name}</option>)}
+                                </select>
+                            </div>
+                            
+                            <button onClick={() => setShowModelSelector(true)} className="flex items-center gap-2 bg-white/70 dark:bg-gray-800/70 backdrop-blur-md rounded-full px-3 py-1.5 shadow-sm border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 transition-all">
+                                <i className="fas fa-robot text-blue-500"></i>
+                                <span className="max-w-[80px] truncate">{getModelName(settings.selectedModel)}</span>
+                            </button>
                         </div>
-                        <form onSubmit={handleMainButtonClick} className="flex items-end gap-3 bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg p-2 rounded-[28px] shadow-lg border border-black/10 dark:border-white/10">
-                            <button type="button" onClick={(e) => { e.stopPropagation(); setShowSettings(true); }} className="w-12 h-12 flex items-center justify-center shrink-0 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"><i className="fas fa-cog text-gray-600 dark:text-gray-300"></i></button>
-                            <textarea value={userInput} onChange={e=>setUserInput(e.target.value)} placeholder={isListening ? "正在聆听..." : "输入要翻译的内容..."} className="flex-1 bg-transparent max-h-48 min-h-[48px] py-3 px-2 resize-none outline-none text-lg leading-6 dark:placeholder-gray-500 self-center" rows={1} onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }} />
-                            <button type="button" onClick={handleMainButtonClick} onMouseDown={handleMicPress} onMouseUp={handleMicRelease} onTouchStart={handleMicPress} onTouchEnd={handleMicRelease} className={`w-16 h-16 rounded-full flex items-center justify-center shrink-0 transition-all duration-200 ease-in-out ${showSendButton ? 'bg-blue-600 text-white' : (isListening ? 'bg-red-500 text-white scale-110 animate-pulse' : 'bg-blue-500 text-white')}`}><i className={`fas ${showSendButton ? 'fa-arrow-up' : (isListening ? 'fa-stop' : 'fa-microphone-alt')} text-2xl`}></i></button>
-                        </form>
+
+                        {/* 输入栏：设置 + 输入框 + 麦克风/发送 */}
+                        <div className="flex items-end gap-3">
+                            <button onClick={() => setShowSettings(true)} className="w-10 h-10 mb-1 flex items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors shadow-sm shrink-0">
+                                <i className="fas fa-sliders-h"></i>
+                            </button>
+                            
+                            <div className="flex-1 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex items-center min-h-[50px] transition-shadow focus-within:shadow-md focus-within:border-blue-400">
+                                <textarea 
+                                    value={userInput} 
+                                    onChange={e=>setUserInput(e.target.value)} 
+                                    placeholder={isListening ? "正在聆听..." : "输入要翻译的内容..."} 
+                                    className="w-full bg-transparent border-none outline-none py-3 px-4 text-base resize-none max-h-32 placeholder-gray-400 dark:placeholder-gray-500 leading-normal" 
+                                    rows={1}
+                                    style={{ height: userInput ? 'auto' : '50px' }}
+                                    onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 128) + 'px'; }}
+                                    onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }} 
+                                />
+                            </div>
+
+                            <button 
+                                type="button" 
+                                onClick={handleMainButtonClick} 
+                                onMouseDown={handleMicPress} 
+                                onMouseUp={handleMicRelease} 
+                                onTouchStart={handleMicPress} 
+                                onTouchEnd={handleMicRelease} 
+                                className={`w-12 h-12 mb-0.5 rounded-full flex items-center justify-center shrink-0 shadow-md transition-all duration-200 ${
+                                    showSendButton 
+                                        ? 'bg-blue-600 text-white hover:bg-blue-700 transform hover:scale-105' 
+                                        : (isListening 
+                                            ? 'bg-red-500 text-white animate-pulse shadow-red-500/50' 
+                                            : 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600')
+                                }`}
+                            >
+                                <i className={`fas ${showSendButton ? 'fa-paper-plane' : (isListening ? 'fa-square' : 'fa-microphone')} text-lg`}></i>
+                            </button>
+                        </div>
                     </div>
                 </footer>
             </div>
