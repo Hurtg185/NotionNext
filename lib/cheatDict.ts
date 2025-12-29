@@ -15,15 +15,20 @@ export type CheatDict = {
 }
 
 /**
- * 归一化：忽略标点/符号/空白
- * - 去掉所有 Unicode 标点(P) + 符号(S) + 空白
- * - 中文/缅文/越文/泰文/老挝文/俄文等字母文字保留
+ * 归一化：忽略常见标点/符号/空白（不使用 /u 和 \p{}，兼容低 target）
+ * - 移除空白
+ * - 移除中英文常见标点、全角半角符号
+ * - 英文字母转小写（俄语/泰语/越南语不受影响）
  */
 const normalizeLoose = (s: string) => {
-  const t = (s ?? '').trim()
-  // 需要 ES2018+ 支持 unicode property escapes（Next.js 默认 ok）
-  // \p{P} 标点, \p{S} 符号, \s 空白
-  return t.replace(/[\p{P}\p{S}\s]+/gu, '').toLowerCase()
+  const t = (s ?? '').trim().toLowerCase()
+
+  // 注意：这里是“实用型”符号表，足够覆盖聊天输入常见标点。
+  // 如果你后面发现某些符号没去掉，再把它加进来即可。
+  const PUNCT_RE =
+    /[\s\r\n\t]+|[~`!@#$%^&*()_\-+=$${}\\|;:'",.<>/?，。！？、；：“”‘’（）【】《》〈〉…·—–―「」『』﹏￥]+/g
+
+  return t.replace(PUNCT_RE, '')
 }
 
 export async function loadCheatDict(sourceLang: string): Promise<CheatDict | null> {
@@ -56,7 +61,6 @@ export function matchCheatLoose(
   const arr = hit.targets?.[targetLang]
   if (!Array.isArray(arr) || arr.length === 0) return null
 
-  // 清洗成有效数组
   const cleaned: CheatTranslation[] = arr
     .map((x) => ({
       translation: String(x?.translation ?? ''),
@@ -64,13 +68,11 @@ export function matchCheatLoose(
     }))
     .filter((x) => x.translation || x.back_translation)
 
-  // fallback 用“明确常量”，避免 out[0] 的 undefined 类型问题
   const FALLBACK: CheatTranslation = { translation: '（字典数据为空）', back_translation: '' }
-
-  const base: CheatTranslation[] = cleaned.length > 0 ? cleaned : [FALLBACK]
+  const base: CheatTranslation[] = cleaned.length ? cleaned : [FALLBACK]
 
   const out: CheatTranslation[] = base.slice(0, 4)
-  while (out.length < 4) out.push(out[out.length - 1] ?? FALLBACK)
+  while (out.length < 4) out.push(out[out.length - 1] || FALLBACK)
 
   return out
 }
