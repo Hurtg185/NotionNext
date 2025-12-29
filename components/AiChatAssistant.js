@@ -37,24 +37,91 @@ const detectLanguage = (text) => {
 
 // --- 【常量定义】---
 const CHAT_MODELS_LIST = [
-    { id: 'model-1', name: 'Gemini 1.5 Flash (最新)', value: 'gemini-1.5-flash-latest', maxContextTokens: 8192 },
-    { id: 'model-2', name: 'Gemini 1.5 Pro (最新)', value: 'gemini-1.5-pro-latest', maxContextTokens: 8192 },
-    { id: 'model-3', name: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash', maxContextTokens: 8192 },
-    { id: 'model-4', name: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro', maxContextTokens: 8192 },
+    { id: 'model-1', name: 'DeepSeek v3.2', value: 'deepseek-v3.2', maxContextTokens: 8192 },
+    { id: 'model-2', name: 'GLM 4.6', value: 'glm-4.6', maxContextTokens: 8192 },
+    { id: 'model-3', name: 'Qwen3 235B', value: 'qwen3-235b', maxContextTokens: 8192 },
+    { id: 'model-4', name: 'Qwen3 Max', value: 'qwen3-max', maxContextTokens: 8192 },
 ];
 
 const TRANSLATION_PROMPT = {
     id: 'default-translator-v2',
-    name: '中缅翻译引擎',
-    content: `你是一位【中缅双语高保真翻译引擎】。你的任务是接收用户发送的文本，并提供多种翻译版本。你必须严格按照以下格式返回一个 JSON 数组，不要包含任何其他文字、解释或 \`\`\`json 标记。[{"style": "自然直译", "translation": "翻译结果", "back_translation": "从翻译结果严格回译到源语言的结果"}, {"style": "口语化", "translation": "翻译结果", "back_translation": "从翻译结果严格回译到源语言的结果"}, {"style": "原结构直译", "translation": "翻译结果", "back_translation": "从翻译结果严格回译到源语言的结果"}]【翻译总原则】- 忠实原文，不增不减。- 回译 (back_translation) 必须严格、忠实地翻译回源语言。- 提供多种版本。【语言风格要求】- 缅甸语：使用现代日常口语。- 中文：使用自然流畅的口语。- 两种语言都避免使用过于生僻的俚语或网络流行语。现在，请等待用户的文本。`,
-    openingLine: '你好，请发送你需要翻译的中文或缅甸语内容。'
+    name: '中缅翻译专家',
+    content: `你是一位【中缅双语翻译专家】，专门处理日常聊天场景的翻译。
+
+【核心任务】
+接收用户发送的中文或缅甸语文本，提供4种不同翻译版本供用户选择。
+
+【输出格式】
+严格返回以下JSON格式，不要有任何额外文字、解释或代码块标记：
+{
+  "data": [
+    {
+      "style": "自然直译",
+      "translation": "翻译结果",
+      "back_translation": "回译结果"
+    },
+    {
+      "style": "自然意译",
+      "translation": "翻译结果",
+      "back_translation": "回译结果"
+    },
+    {
+      "style": "口语化",
+      "translation": "翻译结果",
+      "back_translation": "回译结果"
+    },
+    {
+      "style": "保留原文结构",
+      "translation": "翻译结果",
+      "back_translation": "回译结果"
+    }
+  ]
+}
+
+【四种风格详解】
+
+1. **自然直译**
+   - 在保留原文结构和含义的基础上，让译文符合目标语言的表达习惯
+   - 尽量保持原文逻辑顺序，但确保读起来流畅自然，不生硬
+   - 平衡准确性和自然度
+
+2. **自然意译**
+   - 在保留原文完整含义的基础上，充分适应目标语言的表达习惯
+   - 可以调整语序、重组句式，选择最自然的说法
+   - 读起来像母语者说的话，强调流畅度
+
+3. **口语化**
+   - 采用当地人自然流畅的日常对话表达方式
+   - 使用简短句式、常用词汇和口语习惯
+   - 可适当添加语气词，让表达更亲切接地气
+
+4. **保留原文结构**
+   - 尽量保持原文的句式结构和词序
+   - 确保关键词和表达的对应关系清晰
+   - 在保持结构的前提下，让语序尽可能自然
+
+【翻译总原则】
+- ✅ 完整传达原文意思，不遗漏、不添加
+- ✅ 根据上下文判断语气（正式/随意、礼貌/亲密等）
+- ✅ 回译(back_translation)必须忠实翻译回源语言，用于验证翻译准确性
+- ✅ 缅甸语使用现代日常口语表达
+- ✅ 中文使用自然流畅的口语
+- ✅ 避免过于生僻的俚语或网络流行语
+
+【特别注意】
+- 人称代词、称呼要符合两种语言的礼貌习惯
+- 时态、语气助词要准确传达
+- 数字、时间、地点等关键信息必须完全一致
+
+现在，请等待用户的文本输入。`,
+    openingLine: '你好！请发送你需要翻译的中文或缅甸语内容，我会为你提供4种翻译版本供选择。'
 };
 
 const DEFAULT_SETTINGS = {
     apiKeys: [],
     activeApiKeyId: '',
     chatModels: CHAT_MODELS_LIST,
-    selectedModel: 'gemini-1.5-flash-latest',
+    selectedModel: 'deepseek-v3.2',
     temperature: 0.2,
     maxOutputTokens: 2048,
     autoReadFirstTranslation: true,
@@ -80,13 +147,31 @@ const SPEECH_RECOGNITION_LANGUAGES = [
     { name: '한국어', value: 'ko-KR' },
 ];
 
-// --- 【语音合成工具函数】 ---
-const speakText = (text) => {
-    if (!window.speechSynthesis || !text) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = detectLanguage(text);
-    window.speechSynthesis.speak(utterance);
+// --- 【TTS 缓存和播放】 ---
+const ttsCache = new Map();
+
+const preloadTTS = async (text) => {
+    if (ttsCache.has(text) || !text) return;
+    try {
+        const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(text)}&v=zh-CN-XiaoyouNeural&r=-25`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('API Error');
+        const blob = await response.blob();
+        const audio = new Audio(URL.createObjectURL(blob));
+        ttsCache.set(text, audio);
+    } catch (e) {
+        console.error(`预加载 "${text}" 失败:`, e);
+    }
+};
+
+const playCachedTTS = (text) => {
+    if (ttsCache.has(text)) {
+        ttsCache.get(text).play();
+    } else {
+        preloadTTS(text).then(() => {
+            if (ttsCache.has(text)) ttsCache.get(text).play();
+        });
+    }
 };
 
 // --- 【子组件】AiTtsButton ---
@@ -104,16 +189,8 @@ const AiTtsButton = ({ text }) => {
             setIsPlaying(false);
             return;
         }
-        if (!window.speechSynthesis) {
-            alert('您的浏览器不支持语音朗读功能');
-            return;
-        }
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = detectLanguage(text);
-        utterance.onend = () => setIsPlaying(false);
-        utterance.onerror = () => setIsPlaying(false);
+        playCachedTTS(text);
         setIsPlaying(true);
-        window.speechSynthesis.speak(utterance);
     };
     return (
         <button onClick={handleSpeak} className={`p-1.5 text-xs rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${isPlaying ? 'text-blue-500 animate-pulse' : 'text-gray-500 dark:text-gray-400'}`} title={isPlaying ? "停止朗读" : "朗读"}>
@@ -184,7 +261,7 @@ const ModelManager = ({ models, onChange, onAdd, onDelete }) => (
                 <div className="grid grid-cols-2 gap-2 text-sm">
                     <div>
                         <label className="text-xs font-medium">模型值 (Value)</label>
-                        <input type="text" value={m.value} onChange={(e) => onChange(m.id, 'value', e.target.value)} placeholder="例如: gemini-1.5-pro-latest" className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border dark:border-gray-500 rounded-md text-xs" />
+                        <input type="text" value={m.value} onChange={(e) => onChange(m.id, 'value', e.target.value)} placeholder="例如: deepseek-v3.2" className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border dark:border-gray-500 rounded-md text-xs" />
                     </div>
                     <div>
                         <label className="text-xs font-medium">最大上下文 (Tokens)</label>
@@ -212,7 +289,7 @@ const ApiKeyManager = ({ apiKeys, activeApiKeyId, onChange, onAdd, onDelete, onS
                     </div>
                     <div className="mt-2 space-y-2">
                         <label className="text-xs font-medium block">API 接口地址 (Endpoint)</label>
-                        <input type="text" value={k.url || ''} onChange={(e) => onChange(k.id, 'url', e.target.value)} placeholder="例如: https://generativelanguage.googleapis.com/v1beta/models/" className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border dark:border-gray-500 rounded-md text-xs" />
+                        <input type="text" value={k.url || ''} onChange={(e) => onChange(k.id, 'url', e.target.value)} placeholder="例如: https://apis.iflow.cn/v1" className="w-full mt-1 px-2 py-1 bg-white dark:bg-gray-800 border dark:border-gray-500 rounded-md text-xs" />
                         <label className="text-xs font-medium block">API 密钥 (Key)</label>
                         <div className="relative">
                             <input type={visibleKeys[k.id] ? 'text' : 'password'} value={k.key} onChange={(e) => onChange(k.id, 'key', e.target.value)} placeholder="请输入密钥" className="w-full mt-1 px-2 py-1 pr-8 bg-white dark:bg-gray-800 border dark:border-gray-500 rounded-md text-xs" />
@@ -247,7 +324,7 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
         handleChange('chatModels', (tempSettings.chatModels || []).filter(m => m.id !== id));
     };
     const handleModelChange = (id, field, value) => handleChange('chatModels', (tempSettings.chatModels || []).map(m => m.id === id ? { ...m, [field]: value } : m));
-    const handleAddApiKey = () => handleChange('apiKeys', [...(tempSettings.apiKeys || []), { id: generateSimpleId('key'), key: '', url: 'https://generativelanguage.googleapis.com/v1beta/models/' }]);
+    const handleAddApiKey = () => handleChange('apiKeys', [...(tempSettings.apiKeys || []), { id: generateSimpleId('key'), key: '', url: 'https://apis.iflow.cn/v1' }]);
     const handleDeleteApiKey = (id) => {
         if (!window.confirm('确定删除吗？')) return;
         const newKeys = (tempSettings.apiKeys || []).filter(k => k.id !== id);
@@ -424,7 +501,7 @@ const AiChatContent = ({ onClose }) => {
             ];
             const generationConfig = { temperature: settings.temperature, maxOutputTokens: settings.maxOutputTokens, responseMimeType: "application/json" };
             const modelToUse = settings.selectedModel;
-            const url = `${activeKey.url || 'https://generativelanguage.googleapis.com/v1beta/models/'}${modelToUse}:generateContent?key=${activeKey.key}`;
+            const url = `${activeKey.url || 'https://apis.iflow.cn/v1'}${modelToUse}:generateContent?key=${activeKey.key}`;
             const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -441,7 +518,7 @@ const AiChatContent = ({ onClose }) => {
             if (!Array.isArray(parsedTranslations) || parsedTranslations.length === 0) throw new Error("返回的JSON格式不正确。");
             setMessages(prev => [...prev, { role: 'ai', timestamp: Date.now(), translations: parsedTranslations }]);
             if (settings.autoReadFirstTranslation) {
-                speakText(parsedTranslations[0].translation);
+                playCachedTTS(parsedTranslations[0].translation);
             }
         } catch (err) {
             const errorMessage = `请求错误: ${err.message}`;
