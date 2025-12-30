@@ -182,21 +182,13 @@ const compressImage = (file) => {
 // 简单的脚本检测，用于自动识别语言
 const detectScript = (text) => {
   if (!text) return null;
-  // 缅文范围
   if (/[\u1000-\u109F\uAA60-\uAA7F]+/.test(text)) return 'my-MM';
-  // 中文范围
   if (/[\u4e00-\u9fa5]+/.test(text)) return 'zh-CN';
-  // 韩文
   if (/[\uac00-\ud7af]+/.test(text)) return 'ko-KR';
-  // 日文
   if (/[\u3040-\u30ff\u31f0-\u31ff]+/.test(text)) return 'ja-JP';
-  // 泰文
   if (/[\u0E00-\u0E7F]+/.test(text)) return 'th-TH';
-  // 俄文
   if (/[\u0400-\u04FF]+/.test(text)) return 'ru-RU';
-  // 英文/拉丁 (作为保底，权重较低，通常不自动切除非全是英文)
   if (/^[a-zA-Z\s,.?!]+$/.test(text)) return 'en-US';
-  
   return null;
 };
 
@@ -261,6 +253,9 @@ const DEFAULT_SETTINGS = {
   
   filterThinking: true, 
   enableFollowUp: true, 
+  
+  // 新增：极速模式
+  speedMode: false,
 
   lastSourceLang: 'zh-CN',
   lastTargetLang: 'en-US'
@@ -405,9 +400,9 @@ const TranslationCard = memo(({ data, onPlay }) => {
           <span className="bg-black/70 text-white text-xs px-2 py-1 rounded-md">已复制</span>
         </div>
       )}
-      <div className="text-[18px] leading-relaxed font-medium text-gray-800 break-words select-none">{data.translation}</div>
+      <div className="text-[18px] leading-relaxed font-medium text-gray-800 break-words select-none whitespace-pre-wrap">{data.translation}</div>
       {!!data.back_translation && (
-        <div className="mt-2.5 text-[13px] text-gray-400 break-words leading-snug">{data.back_translation}</div>
+        <div className="mt-2.5 text-[13px] text-gray-400 break-words leading-snug whitespace-pre-wrap">{data.back_translation}</div>
       )}
       <button onClick={(e) => { e.stopPropagation(); onPlay(); }} className="absolute bottom-2 right-2 p-2 text-gray-300 hover:text-blue-500 opacity-50 hover:opacity-100">
         <i className="fas fa-volume-up" />
@@ -535,6 +530,15 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
           <div className="flex-1 overflow-y-auto slim-scrollbar p-5 bg-white">
             {tab === 'common' && (
               <div className="space-y-4">
+                {/* 极速模式开关 */}
+                <div className="flex items-center justify-between p-3 bg-pink-50 border border-pink-100 rounded-xl">
+                  <div>
+                    <div className="text-sm font-bold text-pink-700">⚡ 极速模式 (自然直译)</div>
+                    <div className="text-xs text-pink-500/70">流式输出，仅保留译文与回译，速度更快，表达更自然</div>
+                  </div>
+                  <input type="checkbox" checked={data.speedMode} onChange={e => setData({...data, speedMode: e.target.checked})} className="w-5 h-5 accent-pink-500"/>
+                </div>
+
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                   <div>
                     <div className="text-sm font-bold text-gray-700">过滤模型思考过程</div>
@@ -770,7 +774,10 @@ const AiChatContent = ({ onClose }) => {
   useEffect(() => {
     return () => {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      if (recognitionRef.current) recognitionRef.current.stop();
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
     };
   }, []);
 
@@ -803,6 +810,7 @@ const AiChatContent = ({ onClose }) => {
     return { provider, model };
   };
 
+  // 普通请求
   const fetchAi = async (messages, modelId, jsonMode = true) => {
     const pm = getProviderAndModel(modelId);
     if (!pm) throw new Error(`未配置模型 ${modelId}`);
@@ -832,6 +840,52 @@ const AiChatContent = ({ onClose }) => {
     }
     
     return { content, modelName: pm.model.name };
+  };
+
+  // 流式请求 (极速模式用)
+  const fetchAiStream = async (messages, modelId, onUpdate) => {
+    const pm = getProviderAndModel(modelId);
+    if (!pm) throw new Error(`未配置模型 ${modelId}`);
+    if (!pm.provider.key) throw new Error(`${pm.provider.name} 缺少 Key`);
+
+    const body = { model: pm.model.value, messages, stream: true };
+
+    const res = await fetch(`${pm.provider.url}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${pm.provider.key}` },
+      body: JSON.stringify(body)
+    });
+
+    if (!res.ok) throw new Error(`Stream Error: ${res.status}`);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n');
+      for (const line of lines) {
+        if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+          try {
+            const json = JSON.parse(line.slice(6));
+            const delta = json.choices[0]?.delta?.content || '';
+            if (delta) {
+              fullText += delta;
+              // 实时过滤 think 标签 (简单处理，复杂情况可能需要 buffer)
+              let display = fullText;
+              if (settings.filterThinking) {
+                 display = display.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<think>[\s\S]*/g, '').trim();
+              }
+              onUpdate(display);
+            }
+          } catch (e) {}
+        }
+      }
+    }
+    return fullText;
   };
 
   const handleTranslate = async (textOverride = null) => {
@@ -871,6 +925,68 @@ const AiChatContent = ({ onClose }) => {
     if (history.length === 0) db.updateSession(currentSessionId, { title: text ? text.slice(0, 20) : '[图片]' });
     else db.updateSession(currentSessionId, {}); 
 
+    // ----------------- 极速模式逻辑 -----------------
+    if (settings.speedMode && !inputImage) {
+        const speedSysPrompt = `你是一位专业翻译。将以下内容从【${getLangName(currentSource)}】翻译成【${getLangName(currentTarget)}】。
+采用“自然直译版”：在保留原文结构和含义的基础上，让译文符合目标语言的表达习惯，读起来流畅自然，不生硬。
+输出格式要求：
+[译文] ||| [回译(回到${getLangName(currentSource)})]
+不要输出任何其他内容，只输出结果。`;
+
+        const messages = [
+            { role: 'system', content: speedSysPrompt },
+            { role: 'user', content: text }
+        ];
+
+        const aiMsgId = nowId();
+        // 初始占位
+        const initialAiMsg = { 
+            id: aiMsgId, 
+            sessionId: currentSessionId, 
+            role: 'ai', 
+            results: [{ translation: '...', back_translation: '' }], 
+            modelResults: [], 
+            from: 'ai', 
+            ts: Date.now() 
+        };
+        setHistory(prev => [...prev, initialAiMsg]);
+
+        try {
+            await fetchAiStream(messages, settings.mainModelId, (streamedText) => {
+                // 解析流式文本： 译文 ||| 回译
+                const parts = streamedText.split('|||');
+                const trans = parts[0].trim();
+                const back = parts[1] ? parts[1].trim() : '';
+                
+                setHistory(prev => prev.map(m => {
+                    if (m.id === aiMsgId) {
+                        return {
+                            ...m,
+                            results: [{ translation: trans, back_translation: back }]
+                        };
+                    }
+                    return m;
+                }));
+                scrollToResult();
+            });
+            
+            // 结束后保存到DB
+            setHistory(currentHistory => {
+                const finalMsg = currentHistory.find(m => m.id === aiMsgId);
+                if (finalMsg) db.addMessage(finalMsg);
+                return currentHistory;
+            });
+
+        } catch (e) {
+            const errorMsg = { id: nowId(), sessionId: currentSessionId, role: 'error', text: e.message || '流式传输错误', ts: Date.now(), results: [] };
+            setHistory(prev => [...prev, errorMsg]);
+        } finally {
+            setIsLoading(false);
+        }
+        return; // 极速模式结束
+    }
+
+    // ----------------- 普通模式逻辑 -----------------
     let sysPrompt = BASE_SYSTEM_INSTRUCTION;
     if (settings.useCustomPrompt && settings.customPromptText) {
       sysPrompt += `\n额外要求: ${settings.customPromptText}`;
@@ -969,43 +1085,80 @@ const AiChatContent = ({ onClose }) => {
       } catch (err) { alert('图片失败'); }
   };
 
-  // --- Voice ---
-  // 修复：移除 useCallback 确保读取最新 settings
-  const stopAndSend = () => {
-    if (recognitionRef.current) { recognitionRef.current.stop(); recognitionRef.current = null; }
+  // --- Voice Logic Optimized ---
+  
+  // 停止并发送（自动或手动）
+  const stopAndSend = (isManual = false) => {
+    if (recognitionRef.current) { 
+        recognitionRef.current.stop(); 
+        // 如果是手动停止，立即断开引用防止后续事件干扰
+        if (isManual) recognitionRef.current = null;
+    }
     if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
     setIsRecording(false);
     
-    // 稍微延迟确保识别文本已填入，并触发发送
+    // 稍微延迟确保状态同步
     setTimeout(() => {
         setInputVal(current => {
-            if (current && current.trim()) { handleTranslate(current); }
-            return ''; 
+            if (current && current.trim()) { 
+                handleTranslate(current); 
+                return ''; 
+            }
+            return current; 
         });
-    }, 500); 
+    }, isManual ? 100 : 800); // 手动停止响应更快
   };
 
   const startRecording = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return alert('不支持语音识别');
-    if (isRecording) { stopAndSend(); return; }
+    if (isRecording) { stopAndSend(true); return; }
     
     const recognition = new SpeechRecognition();
     recognition.lang = sourceLang; 
-    recognition.interimResults = true;
+    recognition.interimResults = true; // 必须开启以获得实时反馈
     recognition.continuous = true; 
     
-    recognition.onstart = () => { setIsRecording(true); if (navigator.vibrate) navigator.vibrate(50); setInputVal(''); };
-    recognition.onresult = (e) => {
-      // 修复：获取完整的 transcript 覆盖，避免重复
-      const t = Array.from(e.results).map(r => r[0].transcript).join('');
-      setInputVal(t); 
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = setTimeout(() => { if (recognitionRef.current) stopAndSend(); }, 1500);
+    recognition.onstart = () => { 
+        setIsRecording(true); 
+        if (navigator.vibrate) navigator.vibrate(50); 
+        setInputVal(''); 
     };
-    recognition.onerror = () => { stopAndSend(); };
+    
+    recognition.onresult = (e) => {
+      // 修复重复问题：正确处理 interim 和 final
+      let finalTranscript = '';
+      let interimTranscript = '';
+
+      for (let i = e.resultIndex; i < e.results.length; ++i) {
+        if (e.results[i].isFinal) {
+          finalTranscript += e.results[i][0].transcript;
+        } else {
+          interimTranscript += e.results[i][0].transcript;
+        }
+      }
+      
+      // 如果是 continuous 模式，我们需要把之前的也加上，或者直接用 inputVal 状态管理
+      // 这里简化处理：直接读取所有 results 重新拼接，这是最稳妥防止重复的方法
+      const allTranscript = Array.from(e.results)
+        .map(result => result[0].transcript)
+        .join('');
+
+      setInputVal(allTranscript); 
+      
+      // 自动静音检测
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = setTimeout(() => { 
+          if (recognitionRef.current) stopAndSend(false); 
+      }, 2000); // 2秒静音自动发送
+    };
+    
+    recognition.onerror = (e) => { 
+        console.error('Speech Error', e);
+        stopAndSend(true); 
+    };
+    
     recognition.onend = () => { 
-        // 正常结束时不自动发，依靠 timer 发送，避免 double send
         if(isRecording) setIsRecording(false); 
     };
     
@@ -1032,6 +1185,7 @@ const AiChatContent = ({ onClose }) => {
           <div className="flex items-center gap-2 absolute left-1/2 transform -translate-x-1/2">
             <i className="fas fa-link text-pink-500" />
             <span className="font-extrabold text-gray-800 text-lg tracking-tight">886.best</span>
+            {settings.speedMode && <span className="text-[10px] bg-yellow-400 text-black px-1 rounded font-bold">极速</span>}
           </div>
 
           <div className="flex items-center gap-3 w-10 justify-end">
@@ -1042,13 +1196,19 @@ const AiChatContent = ({ onClose }) => {
         </div>
       </div>
 
-      {/* 录音状态 */}
+      {/* 录音状态 - 增加手动停止按钮 */}
       <Transition show={isRecording} as={Fragment} enter="transition-opacity duration-200" enterFrom="opacity-0" enterTo="opacity-100" leave="transition-opacity duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
-        <div className="absolute top-16 left-0 right-0 z-40 flex justify-center pointer-events-none">
+        <div className="absolute top-16 left-0 right-0 z-40 flex flex-col items-center justify-center pointer-events-auto gap-2">
           <div className="bg-pink-500/90 backdrop-blur text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-4 animate-pulse">
             <i className="fas fa-microphone text-xl animate-bounce"/>
             <span className="font-bold">正在识别 ({getLangName(sourceLang)})...</span>
           </div>
+          <button 
+            onClick={() => stopAndSend(true)} 
+            className="bg-red-500 text-white px-4 py-1 rounded-full text-sm font-bold shadow-lg active:scale-95 transition-transform"
+          >
+            <i className="fas fa-stop mr-1"/> 立即结束并发送
+          </button>
         </div>
       </Transition>
 
@@ -1059,6 +1219,7 @@ const AiChatContent = ({ onClose }) => {
              <div className="text-center text-gray-400 mb-20 opacity-60">
                 <div className="text-4xl mb-2">👋</div>
                 <div className="text-sm">自动识别语言 & 双模对比</div>
+                {settings.speedMode && <div className="text-xs text-pink-500 mt-2">⚡ 已开启极速自然直译模式</div>}
              </div>
            )}
 
@@ -1082,7 +1243,7 @@ const AiChatContent = ({ onClose }) => {
                   {item.modelResults && item.modelResults.length > 1 && (
                       <div className="text-center text-[9px] text-gray-300 mt-1">支持全球 100+ 种语言互译</div>
                   )}
-                  {idx === history.length - 1 && (
+                  {idx === history.length - 1 && !settings.speedMode && (
                     isSuggesting ? (
                       <div className="h-8 flex items-center justify-center gap-1"><span className="w-1.5 h-1.5 bg-pink-300 rounded-full animate-bounce"/><span className="w-1.5 h-1.5 bg-pink-300 rounded-full animate-bounce delay-100"/><span className="w-1.5 h-1.5 bg-pink-300 rounded-full animate-bounce delay-200"/></div>
                     ) : (
@@ -1092,7 +1253,7 @@ const AiChatContent = ({ onClose }) => {
                </div>
              );
            })}
-           {isLoading && <div className="flex justify-center mb-8"><div className="bg-white/80 px-4 py-2 rounded-full shadow-sm flex items-center gap-2 text-sm text-pink-500 animate-pulse"><i className="fas fa-spinner fa-spin" /><span>处理中...</span></div></div>}
+           {isLoading && !settings.speedMode && <div className="flex justify-center mb-8"><div className="bg-white/80 px-4 py-2 rounded-full shadow-sm flex items-center gap-2 text-sm text-pink-500 animate-pulse"><i className="fas fa-spinner fa-spin" /><span>处理中...</span></div></div>}
         </div>
       </div>
 
@@ -1147,7 +1308,7 @@ const AiChatContent = ({ onClose }) => {
             
             <div className="w-11 h-11 flex items-center justify-center shrink-0 mb-0.5">
                {isRecording ? (
-                 <button onClick={stopAndSend} className="w-10 h-10 rounded-full bg-red-500 text-white shadow-md flex items-center justify-center animate-pulse">
+                 <button onClick={() => stopAndSend(true)} className="w-10 h-10 rounded-full bg-red-500 text-white shadow-md flex items-center justify-center animate-pulse">
                    <i className="fas fa-stop" />
                  </button>
                ) : ((inputVal.trim().length > 0 || inputImage) ? (
