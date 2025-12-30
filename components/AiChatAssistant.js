@@ -254,7 +254,7 @@ const DEFAULT_SETTINGS = {
   filterThinking: true, 
   enableFollowUp: true, 
   
-  // 新增：极速模式
+  // 极速模式
   speedMode: false,
 
   lastSourceLang: 'zh-CN',
@@ -1127,24 +1127,20 @@ const AiChatContent = ({ onClose }) => {
     
     recognition.onresult = (e) => {
       // 修复重复问题：正确处理 interim 和 final
-      let finalTranscript = '';
-      let interimTranscript = '';
-
-      for (let i = e.resultIndex; i < e.results.length; ++i) {
-        if (e.results[i].isFinal) {
-          finalTranscript += e.results[i][0].transcript;
-        } else {
-          interimTranscript += e.results[i][0].transcript;
-        }
+      let text = '';
+      for (let i = 0; i < e.results.length; ++i) {
+          text += e.results[i][0].transcript;
       }
       
-      // 如果是 continuous 模式，我们需要把之前的也加上，或者直接用 inputVal 状态管理
-      // 这里简化处理：直接读取所有 results 重新拼接，这是最稳妥防止重复的方法
-      const allTranscript = Array.from(e.results)
-        .map(result => result[0].transcript)
-        .join('');
+      // 简单去重逻辑：防止 "你好你好" 这种双倍重复
+      if (text.length > 0 && text.length % 2 === 0) {
+          const half = text.length / 2;
+          if (text.slice(0, half) === text.slice(half)) {
+              text = text.slice(0, half);
+          }
+      }
 
-      setInputVal(allTranscript); 
+      setInputVal(text); 
       
       // 自动静音检测
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
@@ -1196,19 +1192,14 @@ const AiChatContent = ({ onClose }) => {
         </div>
       </div>
 
-      {/* 录音状态 - 增加手动停止按钮 */}
+      {/* 录音状态 - 居中显示，移除停止按钮 */}
       <Transition show={isRecording} as={Fragment} enter="transition-opacity duration-200" enterFrom="opacity-0" enterTo="opacity-100" leave="transition-opacity duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
-        <div className="absolute top-16 left-0 right-0 z-40 flex flex-col items-center justify-center pointer-events-auto gap-2">
-          <div className="bg-pink-500/90 backdrop-blur text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-4 animate-pulse">
-            <i className="fas fa-microphone text-xl animate-bounce"/>
-            <span className="font-bold">正在识别 ({getLangName(sourceLang)})...</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm pointer-events-none">
+          <div className="bg-pink-500/90 text-white px-8 py-6 rounded-3xl shadow-2xl flex flex-col items-center gap-4 animate-pulse pointer-events-auto">
+            <i className="fas fa-microphone text-4xl animate-bounce"/>
+            <span className="font-bold text-lg">正在识别 ({getLangName(sourceLang)})...</span>
+            <span className="text-xs opacity-80">点击底部麦克风停止</span>
           </div>
-          <button 
-            onClick={() => stopAndSend(true)} 
-            className="bg-red-500 text-white px-4 py-1 rounded-full text-sm font-bold shadow-lg active:scale-95 transition-transform"
-          >
-            <i className="fas fa-stop mr-1"/> 立即结束并发送
-          </button>
         </div>
       </Transition>
 
@@ -1237,6 +1228,27 @@ const AiChatContent = ({ onClose }) => {
              if (item.role === 'error') {
                return <div key={item.id} className="bg-red-50 text-red-500 text-xs p-3 rounded-xl text-center mb-6">{item.text}</div>;
              }
+             
+             // 极速模式下使用简洁气泡，非极速模式使用卡片
+             if (settings.speedMode && item.role === 'ai') {
+                 const res = item.results[0] || {};
+                 return (
+                    <div key={item.id} className="mb-6 animate-in slide-in-from-bottom-4 duration-500">
+                        <div className="bg-white p-4 rounded-2xl shadow-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                            <div className="text-lg font-medium">{res.translation}</div>
+                            {res.back_translation && (
+                                <div className="mt-2 pt-2 border-t border-gray-100 text-gray-500 text-sm">
+                                    {res.back_translation}
+                                </div>
+                            )}
+                            <button onClick={() => playTTS(res.translation, targetLang, settings)} className="mt-2 text-pink-400 opacity-50 hover:opacity-100">
+                                <i className="fas fa-volume-up"/>
+                            </button>
+                        </div>
+                    </div>
+                 );
+             }
+
              return (
                <div key={item.id} className="mb-6 animate-in slide-in-from-bottom-4 duration-500">
                   <TranslationResultContainer item={item} targetLang={targetLang} onPlay={(text) => playTTS(text, targetLang, settings)} />
@@ -1287,7 +1299,7 @@ const AiChatContent = ({ onClose }) => {
             <button onClick={() => fileInputRef.current?.click()} className="w-10 h-11 flex items-center justify-center text-gray-400 hover:text-pink-500">
                <i className="fas fa-camera" />
             </button>
-            <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleImageSelect} />
+            <input type="file" ref={fileInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleImageSelect} />
 
             <div className="flex-1 flex flex-col justify-center min-h-[44px]">
                 {inputImage && (
