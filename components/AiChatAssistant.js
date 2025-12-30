@@ -204,7 +204,7 @@ const detectScript = (text) => {
 const SUPPORTED_LANGUAGES = [
   { code: 'zh-CN', name: '中文', flag: '🇨🇳' },
   { code: 'en-US', name: 'English', flag: '🇺🇸' },
-  { code: 'my-MM', name: '缅甸语', flag: '🇲🇲' }, // 缅文提前，方便测试
+  { code: 'my-MM', name: '缅甸语', flag: '🇲🇲' },
   { code: 'ja-JP', name: '日本語', flag: '🇯🇵' },
   { code: 'ko-KR', name: '한국어', flag: '🇰🇷' },
   { code: 'vi-VN', name: '越南语', flag: '🇻🇳' },
@@ -236,7 +236,6 @@ const BASE_SYSTEM_INSTRUCTION = `你是一位翻译专家。将用户文本翻�
 3. 必须返回严格的 JSON 格式: { "data": [ { "translation": "...", "back_translation": "..." }, ... ] }
 4. 不要输出任何markdown标记或多余解释。`;
 
-// 追问提示词：要求生成 Target Language 的回复
 const REPLY_SYSTEM_INSTRUCTION = `你是一个聊天助手。
 用户刚刚把一句【源语言】翻译成了【目标语言】。
 请用【目标语言】（Target Language）生成 3 到 8 个简短、自然的回复建议，帮助用户回答对方。
@@ -251,7 +250,7 @@ const DEFAULT_SETTINGS = {
   secondModelId: null, 
   followUpModelId: 'm1', 
   
-  ttsConfig: {}, // { "zh-CN": "zh-CN-XiaoyouNeural", ... }
+  ttsConfig: {}, 
   ttsSpeed: 1.0,
 
   backgroundOverlay: 0.9, 
@@ -260,17 +259,15 @@ const DEFAULT_SETTINGS = {
   useCustomPrompt: false,
   customPromptText: '', 
   
-  filterThinking: true, // 新增：过滤思考过程
+  filterThinking: true, 
   enableFollowUp: true, 
 
-  // 持久化语言选择 (默认值，会被localStorage覆盖)
   lastSourceLang: 'zh-CN',
   lastTargetLang: 'en-US'
 };
 
 // ----------------- TTS Engine -----------------
 const ttsCache = new Map();
-// 恢复详细的发音人列表
 const AVAILABLE_VOICES = {
   'zh-CN': [
     { id: 'zh-CN-XiaoyouNeural', name: '小悠 (女)' },
@@ -292,13 +289,11 @@ const AVAILABLE_VOICES = {
   'vi-VN': [{ id: 'vi-VN-HoaiMyNeural', name: 'HoaiMy' }, { id: 'vi-VN-NamMinhNeural', name: 'NamMinh' }],
   'th-TH': [{ id: 'th-TH-PremwadeeNeural', name: 'Premwadee' }, { id: 'th-TH-NiwatNeural', name: 'Niwat' }],
   'ru-RU': [{ id: 'ru-RU-SvetlanaNeural', name: 'Svetlana' }, { id: 'ru-RU-DmitryNeural', name: 'Dmitry' }],
-  // 其他语言若无配置则走 fallback
 };
 
 const getVoiceForLang = (lang, config) => {
   if (config && config[lang]) return config[lang];
   if (AVAILABLE_VOICES[lang]) return AVAILABLE_VOICES[lang][0].id;
-  // Fallback
   if (lang === 'lo-LA') return 'lo-LA-KeomanyNeural';
   if (lang === 'km-KH') return 'km-KH-PisethNeural';
   return 'zh-CN-XiaoyouNeural'; 
@@ -334,7 +329,6 @@ const normalizeTranslations = (raw) => {
   let data = [];
   try {
     let cleanRaw = typeof raw === 'string' ? raw.trim() : '';
-    // 去除 markdown 代码块
     if (cleanRaw.includes('```')) {
       cleanRaw = cleanRaw.replace(/```json/g, '').replace(/```/g, '').trim();
     }
@@ -358,7 +352,7 @@ const getLangFlag = (c) => SUPPORTED_LANGUAGES.find(l => l.code === c)?.flag || 
 
 // ----------------- Components -----------------
 
-// 1. 结果卡片容器 (支持滑动切换双模型)
+// 1. 结果卡片容器
 const TranslationResultContainer = memo(({ item, targetLang, onPlay }) => {
   const hasDual = !!(item.modelResults && item.modelResults.length > 1);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -386,9 +380,7 @@ const TranslationResultContainer = memo(({ item, targetLang, onPlay }) => {
            ))}
         </div>
       )}
-      
       {currentModelName && <div className="text-[10px] text-center text-gray-400 mb-1 font-mono">{currentModelName}</div>}
-
       {currentData.map((res, i) => (
         <TranslationCard key={i} data={res} onPlay={() => onPlay(res.translation)} />
       ))}
@@ -406,7 +398,6 @@ const TranslationCard = memo(({ data, onPlay }) => {
       setTimeout(() => setCopied(false), 800);
     } catch {}
   };
-
   return (
     <div onClick={handleClick} className="bg-white/95 backdrop-blur-sm border border-gray-100 rounded-2xl p-5 shadow-sm active:scale-[0.98] transition-all cursor-pointer relative overflow-hidden group mb-3 text-center">
       {copied && (
@@ -421,7 +412,6 @@ const TranslationCard = memo(({ data, onPlay }) => {
       <button onClick={(e) => { e.stopPropagation(); onPlay(); }} className="absolute bottom-2 right-2 p-2 text-gray-300 hover:text-blue-500 opacity-50 hover:opacity-100">
         <i className="fas fa-volume-up" />
       </button>
-      {/* 移除风格标签 */}
     </div>
   );
 });
@@ -850,27 +840,19 @@ const AiChatContent = ({ onClose }) => {
     
     if (!currentSessionId) await createNewSession();
 
-    // 1. 自动语言检测与交换 (Smart Auto-Swap)
+    // 1. 自动语言检测与交换
     let currentSource = sourceLang;
     let currentTarget = targetLang;
     
-    // 仅在有文本时检测
     if (text) {
         const detected = detectScript(text);
-        // 如果检测到的语言不是源语言，而是目标语言，则交换
         if (detected && detected !== currentSource && detected === currentTarget) {
-            // 交换
             const temp = currentSource;
             currentSource = currentTarget;
             currentTarget = temp;
-            
-            // 更新 UI 状态
             setSourceLang(currentSource);
             setTargetLang(currentTarget);
         } else if (detected && detected !== currentSource && detected !== 'en-US') {
-            // 可选：如果完全是第三种语言，是否自动变更为源语言？
-            // 暂时策略：只在明确是Target时交换，或者明确是Source时保持。
-            // 简单处理：如果检测到是缅文但源是中文，就切源为缅文。
             setSourceLang(detected);
             currentSource = detected;
         }
@@ -879,19 +861,16 @@ const AiChatContent = ({ onClose }) => {
     setIsLoading(true);
     setSuggestions([]); 
     
-    // 构建上下文 - 这里为了速度，不携带 history，只发当前句
     const userMsg = { id: nowId(), sessionId: currentSessionId, role: 'user', text, image: inputImage, ts: Date.now(), results: [] };
     setHistory(prev => [...prev, userMsg]);
     setInputVal('');
     setInputImage(null);
     scrollToResult();
     
-    // 异步存 DB，不阻塞
     db.addMessage(userMsg);
     if (history.length === 0) db.updateSession(currentSessionId, { title: text ? text.slice(0, 20) : '[图片]' });
     else db.updateSession(currentSessionId, {}); 
 
-    // System Prompt
     let sysPrompt = BASE_SYSTEM_INSTRUCTION;
     if (settings.useCustomPrompt && settings.customPromptText) {
       sysPrompt += `\n额外要求: ${settings.customPromptText}`;
@@ -919,7 +898,6 @@ const AiChatContent = ({ onClose }) => {
     ];
 
     try {
-      // 字典匹配
       let dictHit = null;
       if (!inputImage && text) {
          const dict = await loadCheatDict(currentSource);
@@ -932,7 +910,6 @@ const AiChatContent = ({ onClose }) => {
         aiMsg.results = normalizeTranslations(dictHit);
         aiMsg.from = 'dict';
       } else {
-        // 双模并发
         const tasks = [];
         tasks.push(fetchAi(messages, settings.mainModelId, true).then(r => ({ ...r, isMain: true })).catch(e => ({ error: e.message, isMain: true })));
         if (settings.secondModelId && settings.secondModelId !== settings.mainModelId) {
@@ -954,7 +931,6 @@ const AiChatContent = ({ onClose }) => {
       await db.addMessage(aiMsg);
       scrollToResult();
       
-      // 追问 (Follow Up) - 使用目标语言
       if (settings.enableFollowUp && text) {
           fetchSuggestions(text, currentSource, currentTarget);
       }
@@ -970,7 +946,6 @@ const AiChatContent = ({ onClose }) => {
   const fetchSuggestions = async (originalText, src, tgt) => {
     setIsSuggesting(true);
     try {
-      // 提示词要求用 Target Language 回复
       const prompt = `原文(${getLangName(src)}): ${originalText}\n已翻译为: ${getLangName(tgt)}`;
       const { content } = await fetchAi([
         { role: 'system', content: REPLY_SYSTEM_INSTRUCTION },
@@ -995,7 +970,8 @@ const AiChatContent = ({ onClose }) => {
   };
 
   // --- Voice ---
-  const stopAndSend = useCallback(() => {
+  // 修复：移除 useCallback 确保读取最新 settings
+  const stopAndSend = () => {
     if (recognitionRef.current) { recognitionRef.current.stop(); recognitionRef.current = null; }
     if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
     setIsRecording(false);
@@ -1006,8 +982,8 @@ const AiChatContent = ({ onClose }) => {
             if (current && current.trim()) { handleTranslate(current); }
             return ''; 
         });
-    }, 500); // 增加延迟以等待最终结果
-  }, [sourceLang, targetLang]); // 依赖语言
+    }, 500); 
+  };
 
   const startRecording = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1015,19 +991,23 @@ const AiChatContent = ({ onClose }) => {
     if (isRecording) { stopAndSend(); return; }
     
     const recognition = new SpeechRecognition();
-    recognition.lang = sourceLang; // 强制使用当前源语言
+    recognition.lang = sourceLang; 
     recognition.interimResults = true;
     recognition.continuous = true; 
     
     recognition.onstart = () => { setIsRecording(true); if (navigator.vibrate) navigator.vibrate(50); setInputVal(''); };
     recognition.onresult = (e) => {
+      // 修复：获取完整的 transcript 覆盖，避免重复
       const t = Array.from(e.results).map(r => r[0].transcript).join('');
-      setInputVal(t); // 原样回复，不做处理
+      setInputVal(t); 
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = setTimeout(() => { if (recognitionRef.current) stopAndSend(); }, 1500);
     };
     recognition.onerror = () => { stopAndSend(); };
-    recognition.onend = () => { if(isRecording) setIsRecording(false); };
+    recognition.onend = () => { 
+        // 正常结束时不自动发，依靠 timer 发送，避免 double send
+        if(isRecording) setIsRecording(false); 
+    };
     
     recognitionRef.current = recognition;
     recognition.start();
@@ -1142,9 +1122,9 @@ const AiChatContent = ({ onClose }) => {
           </div>
 
           <div className={`relative flex items-end gap-2 bg-white border rounded-[28px] p-1.5 shadow-sm transition-all duration-200 ${isRecording ? 'border-pink-300 ring-2 ring-pink-100' : 'border-pink-100'}`}>
-            {/* 合并的图片按钮 */}
+            {/* 拍照/图片按钮：点击后支持拍照或相册 */}
             <button onClick={() => fileInputRef.current?.click()} className="w-10 h-11 flex items-center justify-center text-gray-400 hover:text-pink-500">
-               <i className="fas fa-image" />
+               <i className="fas fa-camera" />
             </button>
             <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleImageSelect} />
 
