@@ -792,12 +792,9 @@ const AiChatContent = ({ onClose }) => {
   const [history, setHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // 录音相关状态与 Ref (统一放置在此，避免重复声明)
+  // 录音相关状态与 Ref
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef(null);
-  const silenceTimerRef = useRef(null);
-  const finalTranscriptRef = useRef('');
-  const recognitionActiveRef = useRef(false);
 
   const [suggestions, setSuggestions] = useState([]);
   const [isSuggesting, setIsSuggesting] = useState(false);
@@ -840,7 +837,6 @@ const AiChatContent = ({ onClose }) => {
   // Cleanup
   useEffect(() => {
     return () => {
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       if (recognitionRef.current) {
         recognitionRef.current.stop();
         recognitionRef.current = null;
@@ -1181,40 +1177,16 @@ const AiChatContent = ({ onClose }) => {
   };
 
   // -----------------------------
-  // Voice Recognition (Stable CN / MY)
+  // Voice Recognition (Restored from Old Code)
   // -----------------------------
 
-  const isCJK = (text) => /[\u4e00-\u9fa5]/.test(text);
-  const isMyanmar = (text) => /[\u1000-\u109F]/.test(text);
-  const needSpace = (a, b) =>
-    a && b && !isCJK(a) && !isMyanmar(a) && !isCJK(b) && !isMyanmar(b);
-
   const stopAndSend = (isManual = false) => {
-    if (!recognitionActiveRef.current) return;
-
-    recognitionActiveRef.current = false;
-
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch {}
-      if (isManual) recognitionRef.current = null;
-    }
-
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
-    }
-
-    setIsRecording(false);
-
-    const textToSend = finalTranscriptRef.current.trim();
-    finalTranscriptRef.current = '';
-
-    if (!textToSend) return;
-
-    setTimeout(() => {
-      handleTranslate(textToSend);
-      setInputVal('');
-    }, isManual ? 100 : 300);
+    if (!recognitionRef.current) return;
+    // 如果是手动停止，就只是停止录音，让 onend 处理 UI
+    // 但 continuous=false 的情况下，浏览器会自动停止
+    try {
+      recognitionRef.current.stop();
+    } catch(e) { console.error(e); }
   };
 
   const startRecording = () => {
@@ -1226,7 +1198,7 @@ const AiChatContent = ({ onClose }) => {
       return;
     }
 
-    if (recognitionActiveRef.current) {
+    if (isRecording) {
       stopAndSend(true);
       return;
     }
@@ -1234,64 +1206,41 @@ const AiChatContent = ({ onClose }) => {
     const recognition = new SpeechRecognition();
     recognition.lang = sourceLang;
     recognition.interimResults = true;
-    recognition.continuous = true;
+    recognition.continuous = false; // 关键修改：改为 false，说完一句自动停止
 
-    recognitionActiveRef.current = true;
     recognitionRef.current = recognition;
-    finalTranscriptRef.current = '';
     setInputVal('');
     setIsRecording(true);
-
     if (navigator.vibrate) navigator.vibrate(50);
 
-    recognition.onresult = (e) => {
-      if (!recognitionActiveRef.current) return;
+    recognition.onresult = (event) => {
+      // 提取结果逻辑，移植自旧代码
+      const results = Array.from(event.results);
+      const transcript = results
+        .map(result => result[0])
+        .map(result => result.transcript)
+        .join('');
+      
+      setInputVal(transcript); // 实时显示，不再拼接
 
-      let interim = '';
-      let finalText = finalTranscriptRef.current;
-
-      const result = e.results[e.results.length - 1];
-      const transcript = result[0].transcript.trim();
-
-      if (result.isFinal) {
-        if (needSpace(finalText.slice(-1), transcript[0])) {
-          finalText += ' ';
-        }
-        finalText += transcript;
-        finalTranscriptRef.current = finalText;
-      } else {
-        interim = transcript;
+      // 检查是否为最终结果
+      const isFinal = results.some(r => r.isFinal);
+      if (isFinal && transcript.trim()) {
+        try { recognition.stop(); } catch {}
+        setIsRecording(false);
+        handleTranslate(transcript); // 立即发送
+        setInputVal(''); // 发送后清空
       }
-
-      let display = finalText;
-      if (interim) {
-        if (needSpace(display.slice(-1), interim[0])) {
-          display += ' ';
-        }
-        display += interim;
-      }
-
-      setInputVal(display);
-
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = setTimeout(() => {
-        stopAndSend(false);
-      }, 1500);
     };
 
-    recognition.onerror = () => {
-      finalTranscriptRef.current = '';
-      stopAndSend(true);
+    recognition.onerror = (event) => {
+      console.error("Speech error:", event.error);
+      setIsRecording(false);
     };
 
     recognition.onend = () => {
-      recognitionActiveRef.current = false;
       setIsRecording(false);
-
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = null;
-      }
+      recognitionRef.current = null;
     };
 
     recognition.start();
