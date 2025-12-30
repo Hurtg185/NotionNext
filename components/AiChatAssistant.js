@@ -1206,7 +1206,8 @@ const AiChatContent = ({ onClose }) => {
     const recognition = new SpeechRecognition();
     recognition.lang = sourceLang;
     recognition.interimResults = true;
-    recognition.continuous = false; // 关键修改：改为 false，说完一句自动停止
+    // 1. 改为 true，允许连续说话，不会断句马上发
+    recognition.continuous = true;
 
     recognitionRef.current = recognition;
     setInputVal('');
@@ -1214,23 +1215,27 @@ const AiChatContent = ({ onClose }) => {
     if (navigator.vibrate) navigator.vibrate(50);
 
     recognition.onresult = (event) => {
-      // 提取结果逻辑，移植自旧代码
+      // 每次说话都清除倒计时，重新开始算时间
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+
       const results = Array.from(event.results);
       const transcript = results
         .map(result => result[0])
         .map(result => result.transcript)
         .join('');
       
-      setInputVal(transcript); // 实时显示，不再拼接
+      setInputVal(transcript);
 
-      // 检查是否为最终结果
-      const isFinal = results.some(r => r.isFinal);
-      if (isFinal && transcript.trim()) {
-        try { recognition.stop(); } catch {}
-        setIsRecording(false);
-        handleTranslate(transcript); // 立即发送
-        setInputVal(''); // 发送后清空
-      }
+      // 2. 设置静音检测时间 (这里是 2000毫秒 = 2秒)
+      // 如果 2秒内没有新声音，就发送
+      silenceTimerRef.current = setTimeout(() => {
+        if (transcript.trim()) {
+          try { recognition.stop(); } catch {}
+          setIsRecording(false);
+          handleTranslate(transcript); // 发送
+          setInputVal(''); 
+        }
+      }, 1500); // <--- 想改时间就改这里，比如改成 1500
     };
 
     recognition.onerror = (event) => {
@@ -1239,13 +1244,17 @@ const AiChatContent = ({ onClose }) => {
     };
 
     recognition.onend = () => {
+      // 停止时清除定时器
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
       setIsRecording(false);
       recognitionRef.current = null;
     };
 
     recognition.start();
   };
-
   const swapLangs = () => {
     setSourceLang(targetLang);
     setTargetLang(sourceLang);
