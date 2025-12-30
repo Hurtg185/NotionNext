@@ -177,12 +177,12 @@ const compressImage = (file) => {
         const MAX_WIDTH = 1024;
         let width = img.width;
         let height = img.height;
-        
+
         if (width > MAX_WIDTH) {
           height *= MAX_WIDTH / width;
           width = MAX_WIDTH;
         }
-        
+
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
@@ -239,37 +239,37 @@ const DEFAULT_MODELS = [
 
 const BASE_SYSTEM_INSTRUCTION = `你是一位翻译专家。将用户文本翻译成目标语言。
 要求：
-1. 输出4种略有不同的翻译结果（风格要自然，但不要在结果中标记风格名称）。
-2. 回译 (back_translation) 必须翻译回【源语言】，用于核对意思。
-3. 必须返回严格的 JSON 格式: { "data": [ { "translation": "...", "back_translation": "..." }, ... ] }
-4. 不要输出任何markdown标记或多余解释。`;
 
-const REPLY_SYSTEM_INSTRUCTION = `你是一个聊天助手。
-用户刚刚把一句【源语言】翻译成了【目标语言】。
-请用【目标语言】（Target Language）生成 3 到 8 个简短、自然的回复建议，帮助用户回答对方。
-场景为日常聊天，回复要口语化。
-只返回 JSON 数组字符串，格式：["回复1", "回复2", ...]，不要 markdown。`;
+输出4种略有不同的翻译结果（风格要自然，但不要在结果中标记风格名称）。
+
+回译 (back_translation) 必须翻译回【源语言】，用于核对意思。
+
+必须返回严格的 JSON 格式: { "data": [ { "translation": "...", "back_translation": "..." }, ... ] }
+
+不要输出任何markdown标记或多余解释。`;
+
+const REPLY_SYSTEM_INSTRUCTION = `你是一个聊天助手。 用户刚刚把一句【源语言】翻译成了【目标语言】。 请用【目标语言】（Target Language）生成 3 到 8 个简短、自然的回复建议，帮助用户回答对方。 场景为日常聊天，回复要口语化。 只返回 JSON 数组字符串，格式：["回复1", "回复2", ...]，不要 markdown。`;
 
 const DEFAULT_SETTINGS = {
   providers: DEFAULT_PROVIDERS,
   models: DEFAULT_MODELS,
-  
-  mainModelId: 'm1',      
-  secondModelId: null, 
-  followUpModelId: 'm1', 
-  
-  ttsConfig: {}, 
+
+  mainModelId: 'm1',
+  secondModelId: null,
+  followUpModelId: 'm1',
+
+  ttsConfig: {},
   ttsSpeed: 1.0,
 
-  backgroundOverlay: 0.9, 
-  chatBackgroundUrl: '', 
+  backgroundOverlay: 0.9,
+  chatBackgroundUrl: '',
 
   useCustomPrompt: false,
-  customPromptText: '', 
-  
-  filterThinking: true, 
-  enableFollowUp: true, 
-  
+  customPromptText: '',
+
+  filterThinking: true,
+  enableFollowUp: true,
+
   // 极速模式
   speedMode: false,
 
@@ -307,7 +307,7 @@ const getVoiceForLang = (lang, config) => {
   if (AVAILABLE_VOICES[lang]) return AVAILABLE_VOICES[lang][0].id;
   if (lang === 'lo-LA') return 'lo-LA-KeomanyNeural';
   if (lang === 'km-KH') return 'km-KH-PisethNeural';
-  return 'zh-CN-XiaoyouNeural'; 
+  return 'zh-CN-XiaoyouNeural';
 };
 
 const playTTS = async (text, lang, settings) => {
@@ -340,9 +340,7 @@ const normalizeTranslations = (raw) => {
   let data = [];
   try {
     let cleanRaw = typeof raw === 'string' ? raw.trim() : '';
-    if (cleanRaw.includes('```')) {
-      cleanRaw = cleanRaw.replace(/```json/g, '').replace(/```/g, '').trim();
-    }
+    if (cleanRaw.includes('```')) { cleanRaw = cleanRaw.replace(/json/g, '').replace(/```/g, '').trim(); }
     const start = cleanRaw.indexOf('{');
     const end = cleanRaw.lastIndexOf('}');
     if (start >= 0 && end > start) {
@@ -355,7 +353,7 @@ const normalizeTranslations = (raw) => {
   }
   const validData = data.filter(x => x && x.translation);
   if (validData.length === 0) return [{ translation: typeof raw === 'string' ? raw : '无有效译文', back_translation: '' }];
-  return validData.slice(0, 4); 
+  return validData.slice(0, 4);
 };
 
 const getLangName = (c) => SUPPORTED_LANGUAGES.find(l => l.code === c)?.name || c;
@@ -373,10 +371,10 @@ const TranslationResultContainer = memo(({ item, targetLang, onPlay }) => {
   const currentData = hasDual ? item.modelResults[effectiveIndex].data : item.results;
   const currentModelName = hasDual ? item.modelResults[effectiveIndex].modelName : null;
 
-  const onTouchStart = (e) => { if (!hasDual) return; touchStart.current = e.targetTouches.clientX; };
+  const onTouchStart = (e) => { if (!hasDual) return; touchStart.current = e.targetTouches[0].clientX; };
   const onTouchEnd = (e) => {
     if (!hasDual || touchStart.current === null) return;
-    const diff = touchStart.current - e.changedTouches.clientX;
+    const diff = touchStart.current - e.changedTouches[0].clientX;
     if (diff > 50) setCurrentIndex(prev => (prev + 1) % item.modelResults.length);
     if (diff < -50) setCurrentIndex(prev => (prev - 1 + item.modelResults.length) % item.modelResults.length);
     touchStart.current = null;
@@ -386,9 +384,9 @@ const TranslationResultContainer = memo(({ item, targetLang, onPlay }) => {
     <div className="relative group" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       {hasDual && (
         <div className="flex justify-center mb-1 gap-1">
-           {item.modelResults.map((_, idx) => (
-             <div key={idx} className={`h-1 rounded-full transition-all ${idx === effectiveIndex ? 'w-4 bg-pink-400' : 'w-1.5 bg-gray-200'}`} />
-           ))}
+          {item.modelResults.map((_, idx) => (
+            <div key={idx} className={`h-1 rounded-full transition-all ${idx === effectiveIndex ? 'w-4 bg-pink-400' : 'w-1.5 bg-gray-200'}`} />
+          ))}
         </div>
       )}
       {currentModelName && <div className="text-[10px] text-center text-gray-400 mb-1 font-mono">{currentModelName}</div>}
@@ -446,9 +444,9 @@ const ReplyChips = ({ suggestions, onClick }) => {
 
 // 3. 模型选择器 (已优化状态显示)
 const ModelSelectorModal = ({ settings, onClose, onSave }) => {
-  const [mode, setMode] = useState('main'); 
+  const [mode, setMode] = useState('main');
   const [localSettings, setLocalSettings] = useState(settings);
-  
+
   // 确定当前模式下使用的 modelId
   let currentActiveModelId = null;
   if (mode === 'main') currentActiveModelId = localSettings.mainModelId;
@@ -460,7 +458,7 @@ const ModelSelectorModal = ({ settings, onClose, onSave }) => {
   const activeProviderId = activeModelObj ? activeModelObj.providerId : null;
 
   // UI State: 侧边栏选中的 Provider ID (默认选中当前 active model 的 provider)
-  const [selectedProvId, setSelectedProvId] = useState(activeProviderId || settings.providers?.id);
+  const [selectedProvId, setSelectedProvId] = useState(activeProviderId || settings.providers[0]?.id);
 
   // 监听模式切换，自动跳转到该模式选中的模型所在的供应商
   useEffect(() => {
@@ -482,15 +480,15 @@ const ModelSelectorModal = ({ settings, onClose, onSave }) => {
   const currentModels = settings.models.filter(m => m.providerId === selectedProvId);
 
   return (
-    <Dialog open={true} onClose={onClose} className="relative z-">
+    <Dialog open={true} onClose={onClose} className="relative z-[10005]">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" aria-hidden="true" />
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <Dialog.Panel className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden h-[550px] flex flex-col">
           <div className="p-4 border-b border-gray-100 flex justify-between items-center">
-             <div className="font-bold text-gray-800">模型选择</div>
-             <button onClick={onClose}><i className="fas fa-times text-gray-400"/></button>
+            <div className="font-bold text-gray-800">模型选择</div>
+            <button onClick={onClose}><i className="fas fa-times text-gray-400"/></button>
           </div>
-          
+
           {/* Top Tabs with Green Dots */}
           <div className="flex p-2 gap-2 border-b border-gray-100 bg-gray-50">
             <button onClick={() => setMode('main')} className={`flex-1 py-2 text-xs font-bold rounded-lg relative flex items-center justify-center gap-1 ${mode==='main'?'bg-white shadow text-pink-600':'text-gray-500'}`}>
@@ -559,7 +557,7 @@ const ModelSelectorModal = ({ settings, onClose, onSave }) => {
 // 4. 设置弹窗
 const SettingsModal = ({ settings, onSave, onClose }) => {
   const [data, setData] = useState(settings);
-  const [tab, setTab] = useState('common'); 
+  const [tab, setTab] = useState('common');
   const fileInputRef = useRef(null);
 
   const updateProvider = (idx, f, v) => { const arr=[...data.providers]; arr[idx]={...arr[idx],[f]:v}; setData({...data,providers:arr}); };
@@ -571,7 +569,7 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
   const delModel = (mid) => setData(prev=>({...prev,models:prev.models.filter(m=>m.id!==mid)}));
 
   const handleBgUpload = async (e) => {
-    const file = e.target.files;
+    const file = e.target.files[0];
     if(file) {
       const base64 = await compressImage(file);
       setData({...data, chatBackgroundUrl: base64});
@@ -579,7 +577,7 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
   };
 
   return (
-    <Dialog open={true} onClose={onClose} className="relative z-">
+    <Dialog open={true} onClose={onClose} className="relative z-[10002]">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" aria-hidden="true" />
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <Dialog.Panel className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
@@ -731,7 +729,7 @@ const Sidebar = ({ isOpen, onClose, currentSessionId, onSelectSession, onNewSess
 
   return (
     <Transition show={isOpen} as={Fragment}>
-      <Dialog as="div" className="relative z-" onClose={onClose}>
+      <Dialog as="div" className="relative z-[10001]" onClose={onClose}>
         <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0"><div className="fixed inset-0 bg-black/30 backdrop-blur-sm" /></Transition.Child>
         <div className="fixed inset-0 flex">
           <Transition.Child as={Fragment} enter="transform transition ease-in-out duration-300" enterFrom="-translate-x-full" enterTo="translate-x-0" leave="transform transition ease-in-out duration-300" leaveFrom="translate-x-0" leaveTo="-translate-x-full">
@@ -756,8 +754,8 @@ const Sidebar = ({ isOpen, onClose, currentSessionId, onSelectSession, onNewSess
                     ) : (
                       <>
                         <div className="flex items-center gap-2 flex-1 overflow-hidden">
-                           {!!sess.isPinned && <i className="fas fa-thumbtack text-[10px] text-pink-400 rotate-45"/>}
-                           <div className="truncate text-sm text-gray-700 font-medium">{sess.title}</div>
+                          {!!sess.isPinned && <i className="fas fa-thumbtack text-[10px] text-pink-400 rotate-45"/>}
+                          <div className="truncate text-sm text-gray-700 font-medium">{sess.title}</div>
                         </div>
                         <div className="flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button onClick={(e)=>handleTogglePin(e, sess)} className={`${sess.isPinned ? 'text-pink-500':'text-gray-300 hover:text-gray-500'}`}><i className="fas fa-thumbtack text-xs"/></button>
@@ -780,29 +778,32 @@ const Sidebar = ({ isOpen, onClose, currentSessionId, onSelectSession, onNewSess
 // ----------------- Main Chat Logic -----------------
 const AiChatContent = ({ onClose }) => {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
-  
+
   // 语言状态
   const [sourceLang, setSourceLang] = useState('zh-CN');
-  const [targetLang, setTargetLang] = useState('my-MM'); 
-  
+  const [targetLang, setTargetLang] = useState('my-MM');
+
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [inputVal, setInputVal] = useState('');
   const [inputImages, setInputImages] = useState([]); // 多图支持
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
-  const [history, setHistory] = useState([]); 
+  const [history, setHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  
+
+  // 录音相关状态与 Ref (统一放置在此，避免重复声明)
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef(null);
-  const silenceTimerRef = useRef(null); 
-  
+  const silenceTimerRef = useRef(null);
+  const finalTranscriptRef = useRef('');
+  const recognitionActiveRef = useRef(false);
+
   const [suggestions, setSuggestions] = useState([]);
   const [isSuggesting, setIsSuggesting] = useState(false);
 
   const scrollRef = useRef(null);
-  
+
   const [showSettings, setShowSettings] = useState(false);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [showSrcPicker, setShowSrcPicker] = useState(false);
@@ -812,18 +813,18 @@ const AiChatContent = ({ onClose }) => {
   // 初始化加载
   useEffect(() => {
     const s = safeLocalStorageGet('ai886_settings');
-    if (s) { 
-        const parsed = JSON.parse(s);
-        setSettings({ ...DEFAULT_SETTINGS, ...parsed });
-        // 恢复上次语言选择
-        if (parsed.lastSourceLang) setSourceLang(parsed.lastSourceLang);
-        if (parsed.lastTargetLang) setTargetLang(parsed.lastTargetLang);
+    if (s) {
+      const parsed = JSON.parse(s);
+      setSettings({ ...DEFAULT_SETTINGS, ...parsed });
+      // 恢复上次语言选择
+      if (parsed.lastSourceLang) setSourceLang(parsed.lastSourceLang);
+      if (parsed.lastTargetLang) setTargetLang(parsed.lastTargetLang);
     }
     (async () => {
       const sessList = await db.getSessions();
       if (sessList.length > 0) {
         sessList.sort((a,b)=>b.updatedAt-a.updatedAt);
-        loadSession(sessList.id);
+        loadSession(sessList[0].id);
       } else {
         createNewSession();
       }
@@ -897,14 +898,14 @@ const AiChatContent = ({ onClose }) => {
     }
     const data = await res.json();
     if (!data.choices?.length) throw new Error('API返回数据异常');
-    
-    let content = data.choices.message.content;
-    
+
+    let content = data.choices[0].message.content;
+
     // 过滤思考过程
     if (settings.filterThinking) {
         content = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
     }
-    
+
     return { content, modelName: pm.model.name };
   };
 
@@ -937,7 +938,7 @@ const AiChatContent = ({ onClose }) => {
         if (line.startsWith('data: ') && line !== 'data: [DONE]') {
           try {
             const json = JSON.parse(line.slice(6));
-            const delta = json.choices?.delta?.content || '';
+            const delta = json.choices[0]?.delta?.content || '';
             if (delta) {
               fullText += delta;
               // 实时过滤 think 标签 (简单处理，复杂情况可能需要 buffer)
@@ -962,13 +963,13 @@ const AiChatContent = ({ onClose }) => {
   const handleTranslate = async (textOverride = null) => {
     let text = (textOverride || inputVal).trim();
     if (!text && inputImages.length === 0) return;
-    
+
     if (!currentSessionId) await createNewSession();
 
     // 1. 自动语言检测与交换
     let currentSource = sourceLang;
     let currentTarget = targetLang;
-    
+
     if (text) {
         const detected = detectScript(text);
         if (detected && detected !== currentSource && detected === currentTarget) {
@@ -985,7 +986,7 @@ const AiChatContent = ({ onClose }) => {
 
     setIsLoading(true);
     setSuggestions([]); 
-    
+
     // 构造用户消息
     const userMsg = { 
         id: nowId(), 
@@ -1000,7 +1001,7 @@ const AiChatContent = ({ onClose }) => {
     setInputVal('');
     setInputImages([]);
     scrollToResult();
-    
+
     db.addMessage(userMsg);
     if (history.length === 0) db.updateSession(currentSessionId, { title: text ? text.slice(0, 20) : '[图片]' });
     else db.updateSession(currentSessionId, {}); 
@@ -1008,6 +1009,7 @@ const AiChatContent = ({ onClose }) => {
     // ----------------- 极速模式逻辑 -----------------
     if (settings.speedMode && inputImages.length === 0) {
         const speedSysPrompt = `你是一位专业翻译。将以下内容从【${getLangName(currentSource)}】翻译成【${getLangName(currentTarget)}】。
+
 采用“自然直译版”：在保留原文结构和含义的基础上，让译文符合目标语言的表达习惯，读起来流畅自然，不生硬。
 输出格式要求：
 [译文] ||| [回译(回到${getLangName(currentSource)})]
@@ -1037,8 +1039,8 @@ const AiChatContent = ({ onClose }) => {
             await fetchAiStream(messages, settings.mainModelId, (streamedText) => {
                 // 解析流式文本： 译文 ||| 回译
                 const parts = streamedText.split('|||');
-                const trans = parts.trim();
-                const back = parts ? parts.trim() : '';
+                const trans = parts[0].trim();
+                const back = parts[1] ? parts[1].trim() : '';
                 
                 // 🟢 极速模式：更新独立字段
                 setHistory(prev => prev.map(m => {
@@ -1126,7 +1128,7 @@ const AiChatContent = ({ onClose }) => {
         });
 
         aiMsg.modelResults = modelResults;
-        aiMsg.results = modelResults.data;
+        aiMsg.results = modelResults[0].data;
       }
 
       setHistory(prev => [...prev, aiMsg]);
@@ -1152,7 +1154,7 @@ const AiChatContent = ({ onClose }) => {
       const { content } = await fetchAi([
         { role: 'system', content: REPLY_SYSTEM_INSTRUCTION },
         { role: 'user', content: prompt }
-      ], settings.followUpModelId, true); 
+      ], settings.followUpModelId, true);
       const list = JSON.parse(content);
       if (Array.isArray(list)) setSuggestions(list);
     } catch (e) {
@@ -1163,152 +1165,148 @@ const AiChatContent = ({ onClose }) => {
   };
 
   const handleImageSelect = async (e) => {
-      const files = Array.from(e.target.files);
-      if (files.length === 0) return;
-      
-      const newImages = [];
-      for (const file of files) {
-          try {
-              const base64 = await compressImage(file);
-              newImages.push(base64);
-          } catch (err) { console.error(err); }
-      }
-      setInputImages(prev => [...prev, ...newImages]);
-      // 重置 input 防止重复选择不触发
-      e.target.value = '';
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    const newImages = [];
+    for (const file of files) {
+        try {
+            const base64 = await compressImage(file);
+            newImages.push(base64);
+        } catch (err) { console.error(err); }
+    }
+    setInputImages(prev => [...prev, ...newImages]);
+    // 重置 input 防止重复选择不触发
+    e.target.value = '';
   };
 
-// -----------------------------
-// Voice Recognition (Stable CN / MY)
-// -----------------------------
+  // -----------------------------
+  // Voice Recognition (Stable CN / MY)
+  // -----------------------------
 
-const finalTranscriptRef = useRef('');
-const recognitionActiveRef = useRef(false);
-// const silenceTimerRef = useRef(null); // This is already defined at the top
-// const recognitionRef = useRef(null); // THIS IS THE DUPLICATE. REMOVING IT.
+  const isCJK = (text) => /[\u4e00-\u9fa5]/.test(text);
+  const isMyanmar = (text) => /[\u1000-\u109F]/.test(text);
+  const needSpace = (a, b) =>
+    a && b && !isCJK(a) && !isMyanmar(a) && !isCJK(b) && !isMyanmar(b);
 
-const isCJK = (text) => /[\u4e00-\u9fa5]/.test(text);
-const isMyanmar = (text) => /[\u1000-\u109F]/.test(text);
-const needSpace = (a, b) =>
-  a && b && !isCJK(a) && !isMyanmar(a) && !isCJK(b) && !isMyanmar(b);
-
-const stopAndSend = (isManual = false) => {
-  if (!recognitionActiveRef.current) return;
-
-  recognitionActiveRef.current = false;
-
-  if (recognitionRef.current) {
-    try { recognitionRef.current.stop(); } catch {}
-    if (isManual) recognitionRef.current = null;
-  }
-
-  if (silenceTimerRef.current) {
-    clearTimeout(silenceTimerRef.current);
-    silenceTimerRef.current = null;
-  }
-
-  setIsRecording(false);
-
-  const textToSend = finalTranscriptRef.current.trim();
-  finalTranscriptRef.current = '';
-
-  if (!textToSend) return;
-
-  setTimeout(() => {
-    handleTranslate(textToSend);
-    setInputVal('');
-  }, isManual ? 100 : 300);
-};
-
-const startRecording = () => {
-  const SpeechRecognition =
-    window.SpeechRecognition || window.webkitSpeechRecognition;
-
-  if (!SpeechRecognition) {
-    alert('当前浏览器不支持语音识别');
-    return;
-  }
-
-  if (recognitionActiveRef.current) {
-    stopAndSend(true);
-    return;
-  }
-
-  const recognition = new SpeechRecognition();
-  recognition.lang = sourceLang;
-  recognition.interimResults = true;
-  recognition.continuous = true;
-
-  recognitionActiveRef.current = true;
-  recognitionRef.current = recognition;
-  finalTranscriptRef.current = '';
-  setInputVal('');
-  setIsRecording(true);
-
-  if (navigator.vibrate) navigator.vibrate(50);
-
-  recognition.onresult = (e) => {
+  const stopAndSend = (isManual = false) => {
     if (!recognitionActiveRef.current) return;
 
-    let interim = '';
-    let finalText = finalTranscriptRef.current;
-
-    const result = e.results[e.results.length - 1];
-    const transcript = result.transcript.trim();
-
-    if (result.isFinal) {
-      if (needSpace(finalText.slice(-1), transcript)) {
-        finalText += ' ';
-      }
-      finalText += transcript;
-      finalTranscriptRef.current = finalText;
-    } else {
-      interim = transcript;
-    }
-
-    let display = finalText;
-    if (interim) {
-      if (needSpace(display.slice(-1), interim)) {
-        display += ' ';
-      }
-      display += interim;
-    }
-
-    setInputVal(display);
-
-    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-    silenceTimerRef.current = setTimeout(() => {
-      stopAndSend(false);
-    }, 1500);
-  };
-
-  recognition.onerror = () => {
-    finalTranscriptRef.current = '';
-    stopAndSend(true);
-  };
-
-  recognition.onend = () => {
     recognitionActiveRef.current = false;
-    setIsRecording(false);
+
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch {}
+      if (isManual) recognitionRef.current = null;
+    }
 
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = null;
     }
+
+    setIsRecording(false);
+
+    const textToSend = finalTranscriptRef.current.trim();
+    finalTranscriptRef.current = '';
+
+    if (!textToSend) return;
+
+    setTimeout(() => {
+      handleTranslate(textToSend);
+      setInputVal('');
+    }, isManual ? 100 : 300);
   };
 
-  recognition.start();
-};
+  const startRecording = () => {
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
 
-const swapLangs = () => {
-  setSourceLang(targetLang);
-  setTargetLang(sourceLang);
-};
+    if (!SpeechRecognition) {
+      alert('当前浏览器不支持语音识别');
+      return;
+    }
+
+    if (recognitionActiveRef.current) {
+      stopAndSend(true);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = sourceLang;
+    recognition.interimResults = true;
+    recognition.continuous = true;
+
+    recognitionActiveRef.current = true;
+    recognitionRef.current = recognition;
+    finalTranscriptRef.current = '';
+    setInputVal('');
+    setIsRecording(true);
+
+    if (navigator.vibrate) navigator.vibrate(50);
+
+    recognition.onresult = (e) => {
+      if (!recognitionActiveRef.current) return;
+
+      let interim = '';
+      let finalText = finalTranscriptRef.current;
+
+      const result = e.results[e.results.length - 1];
+      const transcript = result[0].transcript.trim();
+
+      if (result.isFinal) {
+        if (needSpace(finalText.slice(-1), transcript[0])) {
+          finalText += ' ';
+        }
+        finalText += transcript;
+        finalTranscriptRef.current = finalText;
+      } else {
+        interim = transcript;
+      }
+
+      let display = finalText;
+      if (interim) {
+        if (needSpace(display.slice(-1), interim[0])) {
+          display += ' ';
+        }
+        display += interim;
+      }
+
+      setInputVal(display);
+
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = setTimeout(() => {
+        stopAndSend(false);
+      }, 1500);
+    };
+
+    recognition.onerror = () => {
+      finalTranscriptRef.current = '';
+      stopAndSend(true);
+    };
+
+    recognition.onend = () => {
+      recognitionActiveRef.current = false;
+      setIsRecording(false);
+
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+    };
+
+    recognition.start();
+  };
+
+  const swapLangs = () => {
+    setSourceLang(targetLang);
+    setTargetLang(sourceLang);
+  };
+
   return (
     <div className="flex flex-col w-full h-[100dvh] bg-[#FFF0F5] relative text-gray-800">
       <GlobalStyles />
       {settings.chatBackgroundUrl && (
-         <div className="absolute inset-0 bg-cover bg-center z-0 transition-opacity duration-500 pointer-events-none" style={{ backgroundImage: `url('${settings.chatBackgroundUrl}')`, opacity: 1 - settings.backgroundOverlay }} />
+        <div className="absolute inset-0 bg-cover bg-center z-0 transition-opacity duration-500 pointer-events-none" style={{ backgroundImage: `url('${settings.chatBackgroundUrl}')`, opacity: 1 - settings.backgroundOverlay }} />
       )}
 
       {/* Header */}
@@ -1378,8 +1376,8 @@ const swapLangs = () => {
              // 🟢 极速模式：UI 渲染 (显示打字机效果)
              if ((settings.speedMode || item.isSpeedMode) && item.role === 'ai') {
                  // 使用 item.translation 字段
-                 const text = item.translation || (item.results && item.results ? item.results.translation : '');
-                 const backText = item.backTranslation || (item.results && item.results ? item.results.back_translation : '');
+                 const text = item.translation || (item.results && item.results[0] ? item.results[0].translation : '');
+                 const backText = item.backTranslation || (item.results && item.results[0] ? item.results[0].back_translation : '');
 
                  return (
                     <div key={item.id} className="mb-6 animate-in slide-in-from-bottom-4 duration-500">
@@ -1529,7 +1527,7 @@ const swapLangs = () => {
       </div>
 
       {/* Pickers */}
-      <Dialog open={showSrcPicker} onClose={() => setShowSrcPicker(false)} className="relative z-">
+      <Dialog open={showSrcPicker} onClose={() => setShowSrcPicker(false)} className="relative z-[10003]">
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm" />
         <div className="fixed inset-0 flex items-center justify-center p-4">
           <Dialog.Panel className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl max-h-[70vh] overflow-y-auto slim-scrollbar">
@@ -1538,7 +1536,7 @@ const swapLangs = () => {
         </div>
       </Dialog>
       
-      <Dialog open={showTgtPicker} onClose={() => setShowTgtPicker(false)} className="relative z-">
+      <Dialog open={showTgtPicker} onClose={() => setShowTgtPicker(false)} className="relative z-[10003]">
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm" />
         <div className="fixed inset-0 flex items-center justify-center p-4">
           <Dialog.Panel className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl max-h-[70vh] overflow-y-auto slim-scrollbar">
@@ -1572,7 +1570,7 @@ const swapLangs = () => {
 const AIChatDrawer = ({ isOpen, onClose }) => {
   return (
     <Transition show={isOpen} as={Fragment}>
-      <Dialog as="div" className="relative z-" onClose={onClose}>
+      <Dialog as="div" className="relative z-[9999]" onClose={onClose}>
         <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0"><div className="fixed inset-0 bg-black/30 backdrop-blur-sm" /></Transition.Child>
         <div className="fixed inset-0 overflow-hidden"><div className="absolute inset-0 overflow-hidden"><Transition.Child as={Fragment} enter="transform transition ease-in-out duration-300" enterFrom="translate-y-full" enterTo="translate-y-0" leave="transform transition ease-in-out duration-300" leaveFrom="translate-y-0" leaveTo="translate-y-full"><Dialog.Panel className="pointer-events-auto w-screen h-full"><AiChatContent onClose={onClose} /></Dialog.Panel></Transition.Child></div></div>
       </Dialog>
