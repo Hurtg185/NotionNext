@@ -121,7 +121,7 @@ class ChatDB {
 
 const db = new ChatDB();
 
-// ----------------- 全局样式 (新增三点动画) -----------------
+// ----------------- 全局样式 (优化动画) -----------------
 const GlobalStyles = () => (
   <style>{`
     .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -136,17 +136,18 @@ const GlobalStyles = () => (
       -webkit-overflow-scrolling: touch; cursor: grab;
     }
 
-    /* 三点加载动画 */
+    /* 优化后的三点加载动画 (更大、居中) */
     .loading-dots {
-      display: inline-flex;
+      display: flex;
+      justify-content: center;
       align-items: center;
-      margin-left: 4px;
-      height: 1em;
+      height: 24px;
+      margin-top: 8px;
     }
     .loading-dots span {
-      width: 4px;
-      height: 4px;
-      margin: 0 1px;
+      width: 8px;
+      height: 8px;
+      margin: 0 3px;
       background-color: #ec4899; /* Pink-500 */
       border-radius: 50%;
       animation: dots-bounce 1.4s infinite ease-in-out both;
@@ -239,7 +240,7 @@ const DEFAULT_PROVIDERS = [
 ];
 
 const DEFAULT_MODELS = [
-  { id: 'm1', providerId: 'p1', name: 'DeepSeek V3', value: 'deepseek-v3.2' },
+  { id: 'm1', providerId: 'p1', name: 'DeepSeek V3', value: 'deepseek-chat' },
   { id: 'm2', providerId: 'p1', name: 'Qwen Max', value: 'qwen-max' },
   { id: 'm3', providerId: 'p1', name: 'GPT-4o', value: 'gpt-4o' }
 ];
@@ -801,6 +802,7 @@ const AiChatContent = ({ onClose }) => {
 
   // 录音相关状态与 Ref (统一放置在此，避免重复声明)
   const [isRecording, setIsRecording] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState(''); // 录音状态提示文本
   const recognitionRef = useRef(null);
   const silenceTimerRef = useRef(null);
 
@@ -914,7 +916,7 @@ const AiChatContent = ({ onClose }) => {
     return { content, modelName: pm.model.name };
   };
 
-  // 修复后的流式请求 (更强的容错性)
+  // 修复后的流式请求 (更强的容错性，解决极速模式空白问题)
   const fetchAiStream = async (messages, modelId, onUpdate) => {
     const pm = getProviderAndModel(modelId);
     if (!pm) throw new Error(`未配置模型 ${modelId}`);
@@ -947,8 +949,8 @@ const AiChatContent = ({ onClose }) => {
            
            try {
              const json = JSON.parse(jsonStr);
-             // 尝试多种可能的路径获取 delta content
-             const delta = json.choices?.[0]?.delta?.content || json.content || '';
+             // 尝试多种可能的路径获取 delta content (兼容 OpenAI, DeepSeek, Qwen 等变体)
+             const delta = json.choices?.[0]?.delta?.content || json.choices?.[0]?.text || json.content || '';
              
              if (delta) {
                fullText += delta;
@@ -1046,10 +1048,14 @@ const AiChatContent = ({ onClose }) => {
         try {
             await fetchAiStream(messages, settings.mainModelId, (streamedText) => {
                 // 解析流式文本： 译文 ||| 回译
+                // 修复：如果还没出现分隔符，先将全部内容当作译文显示，防止空白
                 const parts = streamedText.split('|||');
-                const trans = parts[0].trim();
-                const back = parts[1] ? parts[1].trim() : '';
+                let trans = parts[0].trim();
+                let back = parts[1] ? parts[1].trim() : '';
                 
+                // 如果 trans 为空但 streamedText 不为空（可能格式问题），兜底显示
+                if (!trans && streamedText) trans = streamedText;
+
                 // 🟢 极速模式：更新独立字段
                 setHistory(prev => prev.map(m => {
                     if (m.id === aiMsgId) {
@@ -1189,7 +1195,7 @@ const AiChatContent = ({ onClose }) => {
   };
 
   // -----------------------------
-  // Voice Recognition (Restored & Fixed)
+  // Voice Recognition (Restored & Forced Stop Fix)
   // -----------------------------
 
   const stopAndSend = (isManual = false) => {
@@ -1221,6 +1227,7 @@ const AiChatContent = ({ onClose }) => {
     recognitionRef.current = recognition;
     setInputVal('');
     setIsRecording(true);
+    setVoiceStatus(`正在识别 (${getLangName(sourceLang)})...`); // 初始提示
     if (navigator.vibrate) navigator.vibrate(50);
 
     recognition.onresult = (event) => {
@@ -1239,10 +1246,16 @@ const AiChatContent = ({ onClose }) => {
       // 如果 1.5秒内没有新声音，就发送
       silenceTimerRef.current = setTimeout(() => {
         if (transcript.trim()) {
-          try { recognition.stop(); } catch {}
-          setIsRecording(false);
-          handleTranslate(transcript); // 发送
-          setInputVal(''); 
+          // 强制停止 UI 和 逻辑
+          setVoiceStatus('已收到，正在翻译...'); // 提示用户
+          setTimeout(() => {
+             // 强制停止识别
+             try { recognition.stop(); } catch {}
+             try { recognition.abort(); } catch {} // 双重保险
+             setIsRecording(false);
+             handleTranslate(transcript); // 发送
+             setInputVal(''); 
+          }, 300); // 稍微留点时间展示提示
         }
       }, 1500);
     };
@@ -1303,7 +1316,7 @@ const AiChatContent = ({ onClose }) => {
         <div className="fixed top-24 left-0 right-0 z-50 flex justify-center pointer-events-none">
           <div className="bg-pink-500/90 text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-3 animate-pulse pointer-events-auto backdrop-blur-sm">
             <i className="fas fa-microphone text-xl animate-bounce"/>
-            <span className="font-bold">正在识别 ({getLangName(sourceLang)})...</span>
+            <span className="font-bold">{voiceStatus}</span>
           </div>
         </div>
       </Transition>
@@ -1350,11 +1363,11 @@ const AiChatContent = ({ onClose }) => {
                  return (
                     <div key={item.id} className="mb-6 animate-in slide-in-from-bottom-4 duration-500">
                         {/* 去掉了 shadow, border, bg-white，改为更简洁的样式 */}
-                        <div className="text-gray-800 whitespace-pre-wrap leading-relaxed px-1">
+                        <div className="text-gray-800 whitespace-pre-wrap leading-relaxed px-1 text-center">
                             <div className="text-lg font-medium">
                                 {text}
-                                {/* 光标闪烁改为3个点动画 */}
-                                {item.isStreaming && <span className="loading-dots"><span></span><span></span><span></span></span>}
+                                {/* 光标闪烁改为3个点动画，居中显示 */}
+                                {item.isStreaming && <div className="loading-dots"><span></span><span></span><span></span></div>}
                             </div>
                             {backText && (
                                 <div className="mt-1 text-gray-500 text-sm opacity-80">
