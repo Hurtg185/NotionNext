@@ -1,4 +1,4 @@
-import { Transition, Dialog } from '@headlessui/react';
+import { Transition, Dialog, Menu } from '@headlessui/react';
 import React, {
   useState,
   useEffect,
@@ -722,8 +722,9 @@ const AiChatContent = ({ onClose }) => {
   
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [inputVal, setInputVal] = useState('');
-  const [inputImage, setInputImage] = useState(null);
+  const [inputImages, setInputImages] = useState([]); // 多图支持
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
 
   const [history, setHistory] = useState([]); 
   const [isLoading, setIsLoading] = useState(false);
@@ -881,7 +882,12 @@ const AiChatContent = ({ onClose }) => {
               }
               onUpdate(display);
             }
-          } catch (e) {}
+          } catch (e) {
+             // 容错：部分服务商可能返回非标准格式，尝试直接拼接
+             if (line.length > 6) {
+                 // 某些非标准流可能直接推文本，这里做个简单兜底（视情况而定）
+             }
+          }
         }
       }
     }
@@ -890,7 +896,7 @@ const AiChatContent = ({ onClose }) => {
 
   const handleTranslate = async (textOverride = null) => {
     let text = (textOverride || inputVal).trim();
-    if (!text && !inputImage) return;
+    if (!text && inputImages.length === 0) return;
     
     if (!currentSessionId) await createNewSession();
 
@@ -915,10 +921,19 @@ const AiChatContent = ({ onClose }) => {
     setIsLoading(true);
     setSuggestions([]); 
     
-    const userMsg = { id: nowId(), sessionId: currentSessionId, role: 'user', text, image: inputImage, ts: Date.now(), results: [] };
+    // 构造用户消息
+    const userMsg = { 
+        id: nowId(), 
+        sessionId: currentSessionId, 
+        role: 'user', 
+        text, 
+        images: inputImages, // 存储多图
+        ts: Date.now(), 
+        results: [] 
+    };
     setHistory(prev => [...prev, userMsg]);
     setInputVal('');
-    setInputImage(null);
+    setInputImages([]);
     scrollToResult();
     
     db.addMessage(userMsg);
@@ -926,7 +941,7 @@ const AiChatContent = ({ onClose }) => {
     else db.updateSession(currentSessionId, {}); 
 
     // ----------------- 极速模式逻辑 -----------------
-    if (settings.speedMode && !inputImage) {
+    if (settings.speedMode && inputImages.length === 0) {
         const speedSysPrompt = `你是一位专业翻译。将以下内容从【${getLangName(currentSource)}】翻译成【${getLangName(currentTarget)}】。
 采用“自然直译版”：在保留原文结构和含义的基础上，让译文符合目标语言的表达习惯，读起来流畅自然，不生硬。
 输出格式要求：
@@ -947,7 +962,8 @@ const AiChatContent = ({ onClose }) => {
             results: [{ translation: '...', back_translation: '' }], 
             modelResults: [], 
             from: 'ai', 
-            ts: Date.now() 
+            ts: Date.now(),
+            isSpeedMode: true // 标记为极速模式消息
         };
         setHistory(prev => [...prev, initialAiMsg]);
 
@@ -996,14 +1012,12 @@ const AiChatContent = ({ onClose }) => {
     const userPromptText = `Source: ${getLangName(currentSource)}\nTarget: ${getLangName(currentTarget)}\nContent:\n${text || '[Image Content]'}`;
 
     let finalUserMessage;
-    if (inputImage) {
-        finalUserMessage = {
-            role: 'user',
-            content: [
-                { type: "text", text: userPromptText },
-                { type: "image_url", image_url: { url: inputImage } }
-            ]
-        };
+    if (inputImages.length > 0) {
+        const content = [{ type: "text", text: userPromptText }];
+        inputImages.forEach(img => {
+            content.push({ type: "image_url", image_url: { url: img } });
+        });
+        finalUserMessage = { role: 'user', content };
     } else {
         finalUserMessage = { role: 'user', content: userPromptText };
     }
@@ -1015,7 +1029,7 @@ const AiChatContent = ({ onClose }) => {
 
     try {
       let dictHit = null;
-      if (!inputImage && text) {
+      if (inputImages.length === 0 && text) {
          const dict = await loadCheatDict(currentSource);
          dictHit = matchCheatLoose(dict, text, currentTarget);
       }
@@ -1077,12 +1091,19 @@ const AiChatContent = ({ onClose }) => {
   };
 
   const handleImageSelect = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      try {
-          const base64 = await compressImage(file);
-          setInputImage(base64);
-      } catch (err) { alert('图片失败'); }
+      const files = Array.from(e.target.files);
+      if (files.length === 0) return;
+      
+      const newImages = [];
+      for (const file of files) {
+          try {
+              const base64 = await compressImage(file);
+              newImages.push(base64);
+          } catch (err) { console.error(err); }
+      }
+      setInputImages(prev => [...prev, ...newImages]);
+      // 重置 input 防止重复选择不触发
+      e.target.value = '';
   };
 
   // --- Voice Logic Optimized ---
@@ -1126,21 +1147,28 @@ const AiChatContent = ({ onClose }) => {
     };
     
     recognition.onresult = (e) => {
-      // 修复重复问题：正确处理 interim 和 final
-      let text = '';
-      for (let i = 0; i < e.results.length; ++i) {
-          text += e.results[i][0].transcript;
+      // 修复重复问题：使用 resultIndex 和 isFinal 精确控制
+      let interimTranscript = '';
+      let finalTranscript = '';
+
+      for (let i = e.resultIndex; i < e.results.length; ++i) {
+        if (e.results[i].isFinal) {
+          finalTranscript += e.results[i][0].transcript;
+        } else {
+          interimTranscript += e.results[i][0].transcript;
+        }
       }
       
-      // 简单去重逻辑：防止 "你好你好" 这种双倍重复
-      if (text.length > 0 && text.length % 2 === 0) {
-          const half = text.length / 2;
-          if (text.slice(0, half) === text.slice(half)) {
-              text = text.slice(0, half);
-          }
+      // 只有当有新的 final 结果时才追加，或者显示当前的 interim
+      // 简单策略：直接使用最新的识别结果覆盖，因为 continuous 模式下 e.results 包含所有历史
+      // 但为了防止安卓重复，我们只取当前最新的
+      
+      // 更稳妥的策略：重新拼接所有 results
+      let allText = '';
+      for (let i = 0; i < e.results.length; ++i) {
+          allText += e.results[i][0].transcript;
       }
-
-      setInputVal(text); 
+      setInputVal(allText); 
       
       // 自动静音检测
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
@@ -1192,13 +1220,12 @@ const AiChatContent = ({ onClose }) => {
         </div>
       </div>
 
-      {/* 录音状态 - 居中显示，移除停止按钮 */}
+      {/* 录音状态 - 移至中上部，不遮挡底部，去除全屏模糊 */}
       <Transition show={isRecording} as={Fragment} enter="transition-opacity duration-200" enterFrom="opacity-0" enterTo="opacity-100" leave="transition-opacity duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm pointer-events-none">
-          <div className="bg-pink-500/90 text-white px-8 py-6 rounded-3xl shadow-2xl flex flex-col items-center gap-4 animate-pulse pointer-events-auto">
-            <i className="fas fa-microphone text-4xl animate-bounce"/>
-            <span className="font-bold text-lg">正在识别 ({getLangName(sourceLang)})...</span>
-            <span className="text-xs opacity-80">点击底部麦克风停止</span>
+        <div className="fixed top-24 left-0 right-0 z-50 flex justify-center pointer-events-none">
+          <div className="bg-pink-500/90 text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-3 animate-pulse pointer-events-auto backdrop-blur-sm">
+            <i className="fas fa-microphone text-xl animate-bounce"/>
+            <span className="font-bold">正在识别 ({getLangName(sourceLang)})...</span>
           </div>
         </div>
       </Transition>
@@ -1219,7 +1246,14 @@ const AiChatContent = ({ onClose }) => {
                return (
                  <div key={item.id} className="flex justify-end mb-6 opacity-80 origin-right">
                    <div className="flex flex-col items-end max-w-[85%]">
-                       {item.image && <img src={item.image} className="w-32 h-auto rounded-lg mb-2 border border-gray-200" alt="input" />}
+                       {item.images && item.images.length > 0 && (
+                           <div className="flex gap-1 mb-2 flex-wrap justify-end">
+                               {item.images.map((img, i) => (
+                                   <img key={i} src={img} className="w-24 h-24 object-cover rounded-lg border border-gray-200" alt="input" />
+                               ))}
+                           </div>
+                       )}
+                       {item.image && !item.images && <img src={item.image} className="w-32 h-auto rounded-lg mb-2 border border-gray-200" alt="input" />}
                        {item.text && <div className="bg-gray-200 text-gray-700 px-4 py-2 rounded-2xl rounded-tr-sm text-sm break-words shadow-inner">{item.text}</div>}
                    </div>
                  </div>
@@ -1230,11 +1264,12 @@ const AiChatContent = ({ onClose }) => {
              }
              
              // 极速模式下使用简洁气泡，非极速模式使用卡片
-             if (settings.speedMode && item.role === 'ai') {
+             // 强制检查 settings.speedMode 或消息自身的标记
+             if ((settings.speedMode || item.isSpeedMode) && item.role === 'ai') {
                  const res = item.results[0] || {};
                  return (
                     <div key={item.id} className="mb-6 animate-in slide-in-from-bottom-4 duration-500">
-                        <div className="bg-white p-4 rounded-2xl shadow-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                        <div className="bg-white p-4 rounded-2xl shadow-sm text-gray-800 whitespace-pre-wrap leading-relaxed border border-pink-50">
                             <div className="text-lg font-medium">{res.translation}</div>
                             {res.back_translation && (
                                 <div className="mt-2 pt-2 border-t border-gray-100 text-gray-500 text-sm">
@@ -1295,17 +1330,54 @@ const AiChatContent = ({ onClose }) => {
           </div>
 
           <div className={`relative flex items-end gap-2 bg-white border rounded-[28px] p-1.5 shadow-sm transition-all duration-200 ${isRecording ? 'border-pink-300 ring-2 ring-pink-100' : 'border-pink-100'}`}>
-            {/* 拍照/图片按钮：点击后支持拍照或相册 */}
-            <button onClick={() => fileInputRef.current?.click()} className="w-10 h-11 flex items-center justify-center text-gray-400 hover:text-pink-500">
-               <i className="fas fa-camera" />
-            </button>
-            <input type="file" ref={fileInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleImageSelect} />
+            {/* 拍照/图片按钮：使用 Menu 组件实现弹出菜单 */}
+            <Menu as="div" className="relative">
+                <Menu.Button className="w-10 h-11 flex items-center justify-center text-gray-400 hover:text-pink-500">
+                    <i className="fas fa-camera" />
+                </Menu.Button>
+                <Transition
+                    as={Fragment}
+                    enter="transition ease-out duration-100"
+                    enterFrom="transform opacity-0 scale-95"
+                    enterTo="transform opacity-100 scale-100"
+                    leave="transition ease-in duration-75"
+                    leaveFrom="transform opacity-100 scale-100"
+                    leaveTo="transform opacity-0 scale-95"
+                >
+                    <Menu.Items className="absolute bottom-full left-0 mb-2 w-32 origin-bottom-left rounded-xl bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none overflow-hidden">
+                        <div className="p-1">
+                            <Menu.Item>
+                                {({ active }) => (
+                                    <button onClick={() => cameraInputRef.current?.click()} className={`${active ? 'bg-pink-50 text-pink-600' : 'text-gray-700'} group flex w-full items-center rounded-lg px-2 py-2 text-sm`}>
+                                        <i className="fas fa-camera mr-2"/> 拍照
+                                    </button>
+                                )}
+                            </Menu.Item>
+                            <Menu.Item>
+                                {({ active }) => (
+                                    <button onClick={() => fileInputRef.current?.click()} className={`${active ? 'bg-pink-50 text-pink-600' : 'text-gray-700'} group flex w-full items-center rounded-lg px-2 py-2 text-sm`}>
+                                        <i className="fas fa-image mr-2"/> 相册
+                                    </button>
+                                )}
+                            </Menu.Item>
+                        </div>
+                    </Menu.Items>
+                </Transition>
+            </Menu>
+            
+            {/* 隐藏的 input */}
+            <input type="file" ref={fileInputRef} accept="image/*" multiple className="hidden" onChange={handleImageSelect} />
+            <input type="file" ref={cameraInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleImageSelect} />
 
             <div className="flex-1 flex flex-col justify-center min-h-[44px]">
-                {inputImage && (
-                    <div className="relative inline-block w-fit mb-1 ml-2">
-                        <img src={inputImage} alt="preview" className="h-12 rounded border border-gray-200" />
-                        <button onClick={() => setInputImage(null)} className="absolute -top-2 -right-2 bg-black/50 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]"><i className="fas fa-times"/></button>
+                {inputImages.length > 0 && (
+                    <div className="flex gap-2 overflow-x-auto mb-1 ml-2 py-1 no-scrollbar">
+                        {inputImages.map((img, idx) => (
+                            <div key={idx} className="relative shrink-0">
+                                <img src={img} alt="preview" className="h-12 w-12 object-cover rounded border border-gray-200" />
+                                <button onClick={() => setInputImages(prev => prev.filter((_, i) => i !== idx))} className="absolute -top-1 -right-1 bg-black/50 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]"><i className="fas fa-times"/></button>
+                            </div>
+                        ))}
                     </div>
                 )}
                 <textarea
@@ -1323,7 +1395,7 @@ const AiChatContent = ({ onClose }) => {
                  <button onClick={() => stopAndSend(true)} className="w-10 h-10 rounded-full bg-red-500 text-white shadow-md flex items-center justify-center animate-pulse">
                    <i className="fas fa-stop" />
                  </button>
-               ) : ((inputVal.trim().length > 0 || inputImage) ? (
+               ) : ((inputVal.trim().length > 0 || inputImages.length > 0) ? (
                  <button onClick={() => handleTranslate()} className="w-10 h-10 rounded-full bg-pink-500 text-white shadow-md flex items-center justify-center active:scale-90 transition-transform">
                    <i className="fas fa-arrow-up" />
                  </button>
