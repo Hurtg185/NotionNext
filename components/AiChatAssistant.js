@@ -136,6 +136,22 @@ const GlobalStyles = () => (
       -webkit-overflow-scrolling: touch; cursor: grab;
     }
 
+    /* 光标闪烁动画 */
+    .blinking-cursor {
+      display: inline-block;
+      width: 2px;
+      height: 1.2em;
+      background-color: currentColor;
+      margin-left: 2px;
+      vertical-align: text-bottom;
+      animation: blink 1s step-end infinite;
+    }
+    
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
     @keyframes ripple {
       0% { transform: scale(1); opacity: 0.8; }
       100% { transform: scale(3); opacity: 0; }
@@ -428,16 +444,34 @@ const ReplyChips = ({ suggestions, onClick }) => {
   );
 };
 
-// 3. 模型选择器
+// 3. 模型选择器 (已优化状态显示)
 const ModelSelectorModal = ({ settings, onClose, onSave }) => {
-  const [activeProvId, setActiveProvId] = useState(settings.providers[0]?.id);
   const [mode, setMode] = useState('main'); 
   const [localSettings, setLocalSettings] = useState(settings);
+  
+  // 确定当前模式下使用的 modelId
+  let currentActiveModelId = null;
+  if (mode === 'main') currentActiveModelId = localSettings.mainModelId;
+  else if (mode === 'second') currentActiveModelId = localSettings.secondModelId;
+  else currentActiveModelId = localSettings.followUpModelId;
 
+  // 根据当前 active 的 model 找到对应的 provider
+  const activeModelObj = settings.models.find(m => m.id === currentActiveModelId);
+  const activeProviderId = activeModelObj ? activeModelObj.providerId : null;
+
+  // UI State: 侧边栏选中的 Provider ID (默认选中当前 active model 的 provider)
+  const [selectedProvId, setSelectedProvId] = useState(activeProviderId || settings.providers[0]?.id);
+
+  // 监听模式切换，自动跳转到该模式选中的模型所在的供应商
   useEffect(() => {
-     const currentModel = settings.models.find(m => m.id === settings.mainModelId);
-     if(currentModel) setActiveProvId(currentModel.providerId);
-  }, []);
+    let mid = null;
+    if (mode === 'main') mid = localSettings.mainModelId;
+    else if (mode === 'second') mid = localSettings.secondModelId;
+    else mid = localSettings.followUpModelId;
+
+    const m = settings.models.find(x => x.id === mid);
+    if (m) setSelectedProvId(m.providerId);
+  }, [mode, localSettings]);
 
   const handleSelect = (modelId) => {
     if (mode === 'main') setLocalSettings(s => ({ ...s, mainModelId: modelId }));
@@ -445,7 +479,7 @@ const ModelSelectorModal = ({ settings, onClose, onSave }) => {
     else setLocalSettings(s => ({ ...s, followUpModelId: modelId }));
   };
 
-  const currentModels = settings.models.filter(m => m.providerId === activeProvId);
+  const currentModels = settings.models.filter(m => m.providerId === selectedProvId);
 
   return (
     <Dialog open={true} onClose={onClose} className="relative z-[10005]">
@@ -456,25 +490,56 @@ const ModelSelectorModal = ({ settings, onClose, onSave }) => {
              <div className="font-bold text-gray-800">模型选择</div>
              <button onClick={onClose}><i className="fas fa-times text-gray-400"/></button>
           </div>
+          
+          {/* Top Tabs with Green Dots */}
           <div className="flex p-2 gap-2 border-b border-gray-100 bg-gray-50">
-            <button onClick={() => setMode('main')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${mode==='main'?'bg-white shadow text-pink-600':'text-gray-500'}`}>主翻译</button>
-            <button onClick={() => setMode('second')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${mode==='second'?'bg-white shadow text-purple-600':'text-gray-500'}`}>对比模型</button>
-            <button onClick={() => setMode('followup')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${mode==='followup'?'bg-white shadow text-blue-600':'text-gray-500'}`}>追问建议</button>
+            <button onClick={() => setMode('main')} className={`flex-1 py-2 text-xs font-bold rounded-lg relative flex items-center justify-center gap-1 ${mode==='main'?'bg-white shadow text-pink-600':'text-gray-500'}`}>
+                主翻译
+                {localSettings.mainModelId && <span className="w-1.5 h-1.5 bg-green-500 rounded-full"/>}
+            </button>
+            <button onClick={() => setMode('second')} className={`flex-1 py-2 text-xs font-bold rounded-lg relative flex items-center justify-center gap-1 ${mode==='second'?'bg-white shadow text-purple-600':'text-gray-500'}`}>
+                对比模型
+                {localSettings.secondModelId && <span className="w-1.5 h-1.5 bg-green-500 rounded-full"/>}
+            </button>
+            <button onClick={() => setMode('followup')} className={`flex-1 py-2 text-xs font-bold rounded-lg relative flex items-center justify-center gap-1 ${mode==='followup'?'bg-white shadow text-blue-600':'text-gray-500'}`}>
+                追问建议
+                {localSettings.followUpModelId && <span className="w-1.5 h-1.5 bg-green-500 rounded-full"/>}
+            </button>
           </div>
+
           <div className="flex flex-1 overflow-hidden">
+             {/* Left: Providers List */}
              <div className="w-1/3 bg-gray-50 border-r border-gray-100 overflow-y-auto slim-scrollbar p-2">
-               {settings.providers.map(p => (
-                 <button key={p.id} onClick={() => setActiveProvId(p.id)} className={`w-full text-left px-3 py-3 rounded-xl text-xs font-bold mb-1 ${activeProvId === p.id ? 'bg-white shadow-sm text-gray-900 border-l-4 border-pink-500' : 'text-gray-500'}`}>{p.name}</button>
-               ))}
+               {settings.providers.map(p => {
+                 const isActiveProvider = (p.id === selectedProvId);
+                 // 检查此 provider 是否包含当前模式选中的模型
+                 const containsActiveModel = (p.id === activeProviderId);
+
+                 return (
+                   <button key={p.id} onClick={() => setSelectedProvId(p.id)} className={`w-full text-left px-3 py-3 rounded-xl text-xs font-bold mb-1 relative transition-colors ${isActiveProvider ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}>
+                     {containsActiveModel && <div className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-1 bg-pink-500 rounded-r-full"/>}
+                     {p.name}
+                   </button>
+                 );
+               })}
              </div>
+             
+             {/* Right: Models List */}
              <div className="flex-1 overflow-y-auto slim-scrollbar p-3">
                {currentModels.map(m => {
-                 let isSelected = false;
-                 if (mode === 'main' && localSettings.mainModelId === m.id) isSelected = true;
-                 if (mode === 'second' && localSettings.secondModelId === m.id) isSelected = true;
-                 if (mode === 'followup' && localSettings.followUpModelId === m.id) isSelected = true;
+                 const isSelected = (m.id === currentActiveModelId);
+                 
+                 let activeClass = '';
+                 if (isSelected) {
+                    if (mode === 'main') activeClass = 'border-pink-500 bg-pink-50 text-pink-700';
+                    else if (mode === 'second') activeClass = 'border-purple-500 bg-purple-50 text-purple-700';
+                    else activeClass = 'border-blue-500 bg-blue-50 text-blue-700';
+                 } else {
+                    activeClass = 'border-gray-100';
+                 }
+
                  return (
-                   <button key={m.id} onClick={() => handleSelect(m.id)} className={`w-full text-left px-4 py-3 rounded-xl border mb-2 flex justify-between ${isSelected ? (mode==='main'?'border-pink-500 bg-pink-50 text-pink-700':mode==='second'?'border-purple-500 bg-purple-50 text-purple-700':'border-blue-500 bg-blue-50 text-blue-700') : 'border-gray-100'}`}>
+                   <button key={m.id} onClick={() => handleSelect(m.id)} className={`w-full text-left px-4 py-3 rounded-xl border mb-2 flex justify-between ${activeClass}`}>
                      <div><div className="font-bold text-sm">{m.name}</div><div className="text-[10px] opacity-60 font-mono">{m.value}</div></div>
                      {isSelected && <i className="fas fa-check" />}
                    </button>
@@ -954,16 +1019,17 @@ const AiChatContent = ({ onClose }) => {
         ];
 
         const aiMsgId = nowId();
-        // 初始占位
+        // 🟢 极速模式：初始化专用数据结构
         const initialAiMsg = { 
             id: aiMsgId, 
             sessionId: currentSessionId, 
             role: 'ai', 
-            results: [{ translation: '...', back_translation: '' }], 
-            modelResults: [], 
+            isSpeedMode: true,    // 标记为极速模式
+            isStreaming: true,    // 标记正在流式传输
+            translation: '',      // 独立译文字段
+            backTranslation: '',  // 独立回译字段
             from: 'ai', 
             ts: Date.now(),
-            isSpeedMode: true // 标记为极速模式消息
         };
         setHistory(prev => [...prev, initialAiMsg]);
 
@@ -974,11 +1040,13 @@ const AiChatContent = ({ onClose }) => {
                 const trans = parts[0].trim();
                 const back = parts[1] ? parts[1].trim() : '';
                 
+                // 🟢 极速模式：更新独立字段
                 setHistory(prev => prev.map(m => {
                     if (m.id === aiMsgId) {
                         return {
                             ...m,
-                            results: [{ translation: trans, back_translation: back }]
+                            translation: trans,
+                            backTranslation: back
                         };
                     }
                     return m;
@@ -986,10 +1054,14 @@ const AiChatContent = ({ onClose }) => {
                 scrollToResult();
             });
             
-            // 结束后保存到DB
+            // 结束后保存到DB并关闭流状态
             setHistory(currentHistory => {
                 const finalMsg = currentHistory.find(m => m.id === aiMsgId);
-                if (finalMsg) db.addMessage(finalMsg);
+                if (finalMsg) {
+                    const finishedMsg = { ...finalMsg, isStreaming: false };
+                    db.addMessage(finishedMsg);
+                    return currentHistory.map(m => m.id === aiMsgId ? finishedMsg : m);
+                }
                 return currentHistory;
             });
 
@@ -1106,19 +1178,16 @@ const AiChatContent = ({ onClose }) => {
       e.target.value = '';
   };
 
-  // --- Voice Logic Optimized ---
+  // --- Voice Logic Optimized (Fix Duplication) ---
   
-  // 停止并发送（自动或手动）
   const stopAndSend = (isManual = false) => {
     if (recognitionRef.current) { 
         recognitionRef.current.stop(); 
-        // 如果是手动停止，立即断开引用防止后续事件干扰
         if (isManual) recognitionRef.current = null;
     }
     if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
     setIsRecording(false);
     
-    // 稍微延迟确保状态同步
     setTimeout(() => {
         setInputVal(current => {
             if (current && current.trim()) { 
@@ -1127,7 +1196,7 @@ const AiChatContent = ({ onClose }) => {
             }
             return current; 
         });
-    }, isManual ? 100 : 800); // 手动停止响应更快
+    }, isManual ? 100 : 800);
   };
 
   const startRecording = () => {
@@ -1137,7 +1206,7 @@ const AiChatContent = ({ onClose }) => {
     
     const recognition = new SpeechRecognition();
     recognition.lang = sourceLang; 
-    recognition.interimResults = true; // 必须开启以获得实时反馈
+    recognition.interimResults = true; 
     recognition.continuous = true; 
     
     recognition.onstart = () => { 
@@ -1146,35 +1215,25 @@ const AiChatContent = ({ onClose }) => {
         setInputVal(''); 
     };
     
+    // 🟢 修复语音重复逻辑：区分 isFinal
     recognition.onresult = (e) => {
-      // 修复重复问题：使用 resultIndex 和 isFinal 精确控制
-      let interimTranscript = '';
-      let finalTranscript = '';
+      let finalText = '';
+      let interimText = '';
 
-      for (let i = e.resultIndex; i < e.results.length; ++i) {
+      for (let i = 0; i < e.results.length; ++i) {
         if (e.results[i].isFinal) {
-          finalTranscript += e.results[i][0].transcript;
+          finalText += e.results[i][0].transcript;
         } else {
-          interimTranscript += e.results[i][0].transcript;
+          interimText += e.results[i][0].transcript;
         }
       }
       
-      // 只有当有新的 final 结果时才追加，或者显示当前的 interim
-      // 简单策略：直接使用最新的识别结果覆盖，因为 continuous 模式下 e.results 包含所有历史
-      // 但为了防止安卓重复，我们只取当前最新的
+      setInputVal(finalText + interimText); 
       
-      // 更稳妥的策略：重新拼接所有 results
-      let allText = '';
-      for (let i = 0; i < e.results.length; ++i) {
-          allText += e.results[i][0].transcript;
-      }
-      setInputVal(allText); 
-      
-      // 自动静音检测
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = setTimeout(() => { 
           if (recognitionRef.current) stopAndSend(false); 
-      }, 2000); // 2秒静音自动发送
+      }, 2000);
     };
     
     recognition.onerror = (e) => { 
@@ -1220,7 +1279,7 @@ const AiChatContent = ({ onClose }) => {
         </div>
       </div>
 
-      {/* 录音状态 - 移至中上部，不遮挡底部，去除全屏模糊 */}
+      {/* 录音状态 */}
       <Transition show={isRecording} as={Fragment} enter="transition-opacity duration-200" enterFrom="opacity-0" enterTo="opacity-100" leave="transition-opacity duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
         <div className="fixed top-24 left-0 right-0 z-50 flex justify-center pointer-events-none">
           <div className="bg-pink-500/90 text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-3 animate-pulse pointer-events-auto backdrop-blur-sm">
@@ -1263,20 +1322,26 @@ const AiChatContent = ({ onClose }) => {
                return <div key={item.id} className="bg-red-50 text-red-500 text-xs p-3 rounded-xl text-center mb-6">{item.text}</div>;
              }
              
-             // 极速模式下使用简洁气泡，非极速模式使用卡片
-             // 强制检查 settings.speedMode 或消息自身的标记
+             // 🟢 极速模式：UI 渲染 (显示打字机效果)
              if ((settings.speedMode || item.isSpeedMode) && item.role === 'ai') {
-                 const res = item.results[0] || {};
+                 // 使用 item.translation 字段
+                 const text = item.translation || (item.results && item.results[0] ? item.results[0].translation : '');
+                 const backText = item.backTranslation || (item.results && item.results[0] ? item.results[0].back_translation : '');
+
                  return (
                     <div key={item.id} className="mb-6 animate-in slide-in-from-bottom-4 duration-500">
                         <div className="bg-white p-4 rounded-2xl shadow-sm text-gray-800 whitespace-pre-wrap leading-relaxed border border-pink-50">
-                            <div className="text-lg font-medium">{res.translation}</div>
-                            {res.back_translation && (
+                            <div className="text-lg font-medium">
+                                {text}
+                                {/* 光标闪烁 */}
+                                {item.isStreaming && <span className="blinking-cursor"></span>}
+                            </div>
+                            {backText && (
                                 <div className="mt-2 pt-2 border-t border-gray-100 text-gray-500 text-sm">
-                                    {res.back_translation}
+                                    {backText}
                                 </div>
                             )}
-                            <button onClick={() => playTTS(res.translation, targetLang, settings)} className="mt-2 text-pink-400 opacity-50 hover:opacity-100">
+                            <button onClick={() => playTTS(text, targetLang, settings)} className="mt-2 text-pink-400 opacity-50 hover:opacity-100">
                                 <i className="fas fa-volume-up"/>
                             </button>
                         </div>
@@ -1284,6 +1349,7 @@ const AiChatContent = ({ onClose }) => {
                  );
              }
 
+             // 普通模式：卡片渲染
              return (
                <div key={item.id} className="mb-6 animate-in slide-in-from-bottom-4 duration-500">
                   <TranslationResultContainer item={item} targetLang={targetLang} onPlay={(text) => playTTS(text, targetLang, settings)} />
