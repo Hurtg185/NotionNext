@@ -112,7 +112,7 @@ class ChatDB {
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
       } else {
-        tx.oncomplete = () => resolve(request); 
+        tx.oncomplete = () => resolve(request);
         tx.onerror = () => reject(tx.error);
       }
     });
@@ -373,10 +373,10 @@ const TranslationResultContainer = memo(({ item, targetLang, onPlay }) => {
   const currentData = hasDual ? item.modelResults[effectiveIndex].data : item.results;
   const currentModelName = hasDual ? item.modelResults[effectiveIndex].modelName : null;
 
-  const onTouchStart = (e) => { if (!hasDual) return; touchStart.current = e.targetTouches[0].clientX; };
+  const onTouchStart = (e) => { if (!hasDual) return; touchStart.current = e.targetTouches.clientX; };
   const onTouchEnd = (e) => {
     if (!hasDual || touchStart.current === null) return;
-    const diff = touchStart.current - e.changedTouches[0].clientX;
+    const diff = touchStart.current - e.changedTouches.clientX;
     if (diff > 50) setCurrentIndex(prev => (prev + 1) % item.modelResults.length);
     if (diff < -50) setCurrentIndex(prev => (prev - 1 + item.modelResults.length) % item.modelResults.length);
     touchStart.current = null;
@@ -460,7 +460,7 @@ const ModelSelectorModal = ({ settings, onClose, onSave }) => {
   const activeProviderId = activeModelObj ? activeModelObj.providerId : null;
 
   // UI State: 侧边栏选中的 Provider ID (默认选中当前 active model 的 provider)
-  const [selectedProvId, setSelectedProvId] = useState(activeProviderId || settings.providers[0]?.id);
+  const [selectedProvId, setSelectedProvId] = useState(activeProviderId || settings.providers?.id);
 
   // 监听模式切换，自动跳转到该模式选中的模型所在的供应商
   useEffect(() => {
@@ -482,7 +482,7 @@ const ModelSelectorModal = ({ settings, onClose, onSave }) => {
   const currentModels = settings.models.filter(m => m.providerId === selectedProvId);
 
   return (
-    <Dialog open={true} onClose={onClose} className="relative z-[10005]">
+    <Dialog open={true} onClose={onClose} className="relative z-">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" aria-hidden="true" />
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <Dialog.Panel className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden h-[550px] flex flex-col">
@@ -571,7 +571,7 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
   const delModel = (mid) => setData(prev=>({...prev,models:prev.models.filter(m=>m.id!==mid)}));
 
   const handleBgUpload = async (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files;
     if(file) {
       const base64 = await compressImage(file);
       setData({...data, chatBackgroundUrl: base64});
@@ -579,7 +579,7 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
   };
 
   return (
-    <Dialog open={true} onClose={onClose} className="relative z-[10002]">
+    <Dialog open={true} onClose={onClose} className="relative z-">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" aria-hidden="true" />
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <Dialog.Panel className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
@@ -731,7 +731,7 @@ const Sidebar = ({ isOpen, onClose, currentSessionId, onSelectSession, onNewSess
 
   return (
     <Transition show={isOpen} as={Fragment}>
-      <Dialog as="div" className="relative z-[10001]" onClose={onClose}>
+      <Dialog as="div" className="relative z-" onClose={onClose}>
         <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0"><div className="fixed inset-0 bg-black/30 backdrop-blur-sm" /></Transition.Child>
         <div className="fixed inset-0 flex">
           <Transition.Child as={Fragment} enter="transform transition ease-in-out duration-300" enterFrom="-translate-x-full" enterTo="translate-x-0" leave="transform transition ease-in-out duration-300" leaveFrom="translate-x-0" leaveTo="-translate-x-full">
@@ -823,7 +823,7 @@ const AiChatContent = ({ onClose }) => {
       const sessList = await db.getSessions();
       if (sessList.length > 0) {
         sessList.sort((a,b)=>b.updatedAt-a.updatedAt);
-        loadSession(sessList[0].id);
+        loadSession(sessList.id);
       } else {
         createNewSession();
       }
@@ -898,7 +898,7 @@ const AiChatContent = ({ onClose }) => {
     const data = await res.json();
     if (!data.choices?.length) throw new Error('API返回数据异常');
     
-    let content = data.choices[0].message.content;
+    let content = data.choices.message.content;
     
     // 过滤思考过程
     if (settings.filterThinking) {
@@ -937,7 +937,7 @@ const AiChatContent = ({ onClose }) => {
         if (line.startsWith('data: ') && line !== 'data: [DONE]') {
           try {
             const json = JSON.parse(line.slice(6));
-            const delta = json.choices[0]?.delta?.content || '';
+            const delta = json.choices?.delta?.content || '';
             if (delta) {
               fullText += delta;
               // 实时过滤 think 标签 (简单处理，复杂情况可能需要 buffer)
@@ -1037,8 +1037,8 @@ const AiChatContent = ({ onClose }) => {
             await fetchAiStream(messages, settings.mainModelId, (streamedText) => {
                 // 解析流式文本： 译文 ||| 回译
                 const parts = streamedText.split('|||');
-                const trans = parts[0].trim();
-                const back = parts[1] ? parts[1].trim() : '';
+                const trans = parts.trim();
+                const back = parts ? parts.trim() : '';
                 
                 // 🟢 极速模式：更新独立字段
                 setHistory(prev => prev.map(m => {
@@ -1126,7 +1126,7 @@ const AiChatContent = ({ onClose }) => {
         });
 
         aiMsg.modelResults = modelResults;
-        aiMsg.results = modelResults[0].data;
+        aiMsg.results = modelResults.data;
       }
 
       setHistory(prev => [...prev, aiMsg]);
@@ -1184,8 +1184,8 @@ const AiChatContent = ({ onClose }) => {
 
 const finalTranscriptRef = useRef('');
 const recognitionActiveRef = useRef(false);
-const silenceTimerRef = useRef(null);
-const recognitionRef = useRef(null);
+// const silenceTimerRef = useRef(null); // This is already defined at the top
+// const recognitionRef = useRef(null); // THIS IS THE DUPLICATE. REMOVING IT.
 
 const isCJK = (text) => /[\u4e00-\u9fa5]/.test(text);
 const isMyanmar = (text) => /[\u1000-\u109F]/.test(text);
@@ -1254,10 +1254,10 @@ const startRecording = () => {
     let finalText = finalTranscriptRef.current;
 
     const result = e.results[e.results.length - 1];
-    const transcript = result[0].transcript.trim();
+    const transcript = result.transcript.trim();
 
     if (result.isFinal) {
-      if (needSpace(finalText.slice(-1), transcript[0])) {
+      if (needSpace(finalText.slice(-1), transcript)) {
         finalText += ' ';
       }
       finalText += transcript;
@@ -1268,7 +1268,7 @@ const startRecording = () => {
 
     let display = finalText;
     if (interim) {
-      if (needSpace(display.slice(-1), interim[0])) {
+      if (needSpace(display.slice(-1), interim)) {
         display += ' ';
       }
       display += interim;
@@ -1378,8 +1378,8 @@ const swapLangs = () => {
              // 🟢 极速模式：UI 渲染 (显示打字机效果)
              if ((settings.speedMode || item.isSpeedMode) && item.role === 'ai') {
                  // 使用 item.translation 字段
-                 const text = item.translation || (item.results && item.results[0] ? item.results[0].translation : '');
-                 const backText = item.backTranslation || (item.results && item.results[0] ? item.results[0].back_translation : '');
+                 const text = item.translation || (item.results && item.results ? item.results.translation : '');
+                 const backText = item.backTranslation || (item.results && item.results ? item.results.back_translation : '');
 
                  return (
                     <div key={item.id} className="mb-6 animate-in slide-in-from-bottom-4 duration-500">
@@ -1529,7 +1529,7 @@ const swapLangs = () => {
       </div>
 
       {/* Pickers */}
-      <Dialog open={showSrcPicker} onClose={() => setShowSrcPicker(false)} className="relative z-[10003]">
+      <Dialog open={showSrcPicker} onClose={() => setShowSrcPicker(false)} className="relative z-">
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm" />
         <div className="fixed inset-0 flex items-center justify-center p-4">
           <Dialog.Panel className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl max-h-[70vh] overflow-y-auto slim-scrollbar">
@@ -1538,7 +1538,7 @@ const swapLangs = () => {
         </div>
       </Dialog>
       
-      <Dialog open={showTgtPicker} onClose={() => setShowTgtPicker(false)} className="relative z-[10003]">
+      <Dialog open={showTgtPicker} onClose={() => setShowTgtPicker(false)} className="relative z-">
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm" />
         <div className="fixed inset-0 flex items-center justify-center p-4">
           <Dialog.Panel className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl max-h-[70vh] overflow-y-auto slim-scrollbar">
@@ -1572,7 +1572,7 @@ const swapLangs = () => {
 const AIChatDrawer = ({ isOpen, onClose }) => {
   return (
     <Transition show={isOpen} as={Fragment}>
-      <Dialog as="div" className="relative z-[9999]" onClose={onClose}>
+      <Dialog as="div" className="relative z-" onClose={onClose}>
         <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0"><div className="fixed inset-0 bg-black/30 backdrop-blur-sm" /></Transition.Child>
         <div className="fixed inset-0 overflow-hidden"><div className="absolute inset-0 overflow-hidden"><Transition.Child as={Fragment} enter="transform transition ease-in-out duration-300" enterFrom="translate-y-full" enterTo="translate-y-0" leave="transform transition ease-in-out duration-300" leaveFrom="translate-y-0" leaveTo="translate-y-full"><Dialog.Panel className="pointer-events-auto w-screen h-full"><AiChatContent onClose={onClose} /></Dialog.Panel></Transition.Child></div></div>
       </Dialog>
