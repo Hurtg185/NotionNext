@@ -1178,83 +1178,132 @@ const AiChatContent = ({ onClose }) => {
       e.target.value = '';
   };
 
-  // --- Voice Logic Optimized (Fix Duplication) ---
-  
-  const stopAndSend = (isManual = false) => {
-    if (recognitionRef.current) { 
-        recognitionRef.current.stop(); 
-        if (isManual) recognitionRef.current = null;
-    }
-    if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
-    setIsRecording(false);
-    
-    setTimeout(() => {
-        setInputVal(current => {
-            if (current && current.trim()) { 
-                handleTranslate(current); 
-                return ''; 
-            }
-            return current; 
-        });
-    }, isManual ? 100 : 800);
-  };
+// -----------------------------
+// Voice Recognition (Stable CN / MY)
+// -----------------------------
 
-  const startRecording = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return alert('不支持语音识别');
-    if (isRecording) { stopAndSend(true); return; }
-    
-    const recognition = new SpeechRecognition();
-    recognition.lang = sourceLang; 
-    recognition.interimResults = true; 
-    recognition.continuous = true; 
-    
-    recognition.onstart = () => { 
-        setIsRecording(true); 
-        if (navigator.vibrate) navigator.vibrate(50); 
-        setInputVal(''); 
-    };
-    
-    // 🟢 修复语音重复逻辑：区分 isFinal
-    recognition.onresult = (e) => {
-  let finalText = '';
-  let interimText = '';
-  
-  // ✅ 区分最终结果和临时结果
-  for (let i = 0; i < e.results.length; i++) {
-    const transcript = e.results[i][0].transcript;
-    if (e.results[i].isFinal) {
-      finalText += transcript;
-    } else {
-      interimText += transcript;
-    }
+const finalTranscriptRef = useRef('');
+const recognitionActiveRef = useRef(false);
+const silenceTimerRef = useRef(null);
+const recognitionRef = useRef(null);
+
+const isCJK = (text) => /[\u4e00-\u9fa5]/.test(text);
+const isMyanmar = (text) => /[\u1000-\u109F]/.test(text);
+const needSpace = (a, b) =>
+  a && b && !isCJK(a) && !isMyanmar(a) && !isCJK(b) && !isMyanmar(b);
+
+const stopAndSend = (isManual = false) => {
+  if (!recognitionActiveRef.current) return;
+
+  recognitionActiveRef.current = false;
+
+  if (recognitionRef.current) {
+    try { recognitionRef.current.stop(); } catch {}
+    if (isManual) recognitionRef.current = null;
   }
-  
-  // 合并：已确认 + 临时
-  setInputVal(finalText + interimText);
-  
-  // 静音检测（保持不变）
-  if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-  silenceTimerRef.current = setTimeout(() => { 
-    if (recognitionRef.current) stopAndSend(false); 
-  }, 2000);
+
+  if (silenceTimerRef.current) {
+    clearTimeout(silenceTimerRef.current);
+    silenceTimerRef.current = null;
+  }
+
+  setIsRecording(false);
+
+  const textToSend = finalTranscriptRef.current.trim();
+  finalTranscriptRef.current = '';
+
+  if (!textToSend) return;
+
+  setTimeout(() => {
+    handleTranslate(textToSend);
+    setInputVal('');
+  }, isManual ? 100 : 300);
 };
-    
-    recognition.onerror = (e) => { 
-        console.error('Speech Error', e);
-        stopAndSend(true); 
-    };
-    
-    recognition.onend = () => { 
-        if(isRecording) setIsRecording(false); 
-    };
-    
-    recognitionRef.current = recognition;
-    recognition.start();
+
+const startRecording = () => {
+  const SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    alert('当前浏览器不支持语音识别');
+    return;
+  }
+
+  if (recognitionActiveRef.current) {
+    stopAndSend(true);
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+  recognition.lang = sourceLang;
+  recognition.interimResults = true;
+  recognition.continuous = true;
+
+  recognitionActiveRef.current = true;
+  recognitionRef.current = recognition;
+  finalTranscriptRef.current = '';
+  setInputVal('');
+  setIsRecording(true);
+
+  if (navigator.vibrate) navigator.vibrate(50);
+
+  recognition.onresult = (e) => {
+    if (!recognitionActiveRef.current) return;
+
+    let interim = '';
+    let finalText = finalTranscriptRef.current;
+
+    const result = e.results[e.results.length - 1];
+    const transcript = result[0].transcript.trim();
+
+    if (result.isFinal) {
+      if (needSpace(finalText.slice(-1), transcript[0])) {
+        finalText += ' ';
+      }
+      finalText += transcript;
+      finalTranscriptRef.current = finalText;
+    } else {
+      interim = transcript;
+    }
+
+    let display = finalText;
+    if (interim) {
+      if (needSpace(display.slice(-1), interim[0])) {
+        display += ' ';
+      }
+      display += interim;
+    }
+
+    setInputVal(display);
+
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    silenceTimerRef.current = setTimeout(() => {
+      stopAndSend(false);
+    }, 1500);
   };
 
-  const swapLangs = () => { const t = sourceLang; setSourceLang(targetLang); setTargetLang(t); };
+  recognition.onerror = () => {
+    finalTranscriptRef.current = '';
+    stopAndSend(true);
+  };
 
+  recognition.onend = () => {
+    recognitionActiveRef.current = false;
+    setIsRecording(false);
+
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+  };
+
+  recognition.start();
+};
+
+const swapLangs = () => {
+  setSourceLang(targetLang);
+  setTargetLang(sourceLang);
+};
   return (
     <div className="flex flex-col w-full h-[100dvh] bg-[#FFF0F5] relative text-gray-800">
       <GlobalStyles />
