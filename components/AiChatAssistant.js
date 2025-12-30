@@ -239,7 +239,7 @@ const DEFAULT_PROVIDERS = [
 ];
 
 const DEFAULT_MODELS = [
-  { id: 'm1', providerId: 'p1', name: 'DeepSeek V3', value: 'deepseek-chat' },
+  { id: 'm1', providerId: 'p1', name: 'DeepSeek V3', value: 'deepseek-v3.2' },
   { id: 'm2', providerId: 'p1', name: 'Qwen Max', value: 'qwen-max' },
   { id: 'm3', providerId: 'p1', name: 'GPT-4o', value: 'gpt-4o' }
 ];
