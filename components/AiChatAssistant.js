@@ -121,7 +121,7 @@ class ChatDB {
 
 const db = new ChatDB();
 
-// ----------------- 全局样式 -----------------
+// ----------------- 全局样式 (新增三点动画) -----------------
 const GlobalStyles = () => (
   <style>{`
     .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -136,20 +136,27 @@ const GlobalStyles = () => (
       -webkit-overflow-scrolling: touch; cursor: grab;
     }
 
-    /* 光标闪烁动画 */
-    .blinking-cursor {
-      display: inline-block;
-      width: 2px;
-      height: 1.2em;
-      background-color: currentColor;
-      margin-left: 2px;
-      vertical-align: text-bottom;
-      animation: blink 1s step-end infinite;
+    /* 三点加载动画 */
+    .loading-dots {
+      display: inline-flex;
+      align-items: center;
+      margin-left: 4px;
+      height: 1em;
     }
-    
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0; }
+    .loading-dots span {
+      width: 4px;
+      height: 4px;
+      margin: 0 1px;
+      background-color: #ec4899; /* Pink-500 */
+      border-radius: 50%;
+      animation: dots-bounce 1.4s infinite ease-in-out both;
+    }
+    .loading-dots span:nth-child(1) { animation-delay: -0.32s; }
+    .loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+    @keyframes dots-bounce {
+      0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+      40% { transform: scale(1); opacity: 1; }
     }
 
     @keyframes ripple {
@@ -792,9 +799,10 @@ const AiChatContent = ({ onClose }) => {
   const [history, setHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // 录音相关状态与 Ref
+  // 录音相关状态与 Ref (统一放置在此，避免重复声明)
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef(null);
+  const silenceTimerRef = useRef(null);
 
   const [suggestions, setSuggestions] = useState([]);
   const [isSuggesting, setIsSuggesting] = useState(false);
@@ -837,6 +845,7 @@ const AiChatContent = ({ onClose }) => {
   // Cleanup
   useEffect(() => {
     return () => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       if (recognitionRef.current) {
         recognitionRef.current.stop();
         recognitionRef.current = null;
@@ -905,7 +914,7 @@ const AiChatContent = ({ onClose }) => {
     return { content, modelName: pm.model.name };
   };
 
-  // 流式请求 (极速模式用)
+  // 修复后的流式请求 (更强的容错性)
   const fetchAiStream = async (messages, modelId, onUpdate) => {
     const pm = getProviderAndModel(modelId);
     if (!pm) throw new Error(`未配置模型 ${modelId}`);
@@ -931,25 +940,28 @@ const AiChatContent = ({ onClose }) => {
       const chunk = decoder.decode(value, { stream: true });
       const lines = chunk.split('\n');
       for (const line of lines) {
-        if (line.startsWith('data: ') && line !== 'data: [DONE]') {
-          try {
-            const json = JSON.parse(line.slice(6));
-            const delta = json.choices[0]?.delta?.content || '';
-            if (delta) {
-              fullText += delta;
-              // 实时过滤 think 标签 (简单处理，复杂情况可能需要 buffer)
-              let display = fullText;
-              if (settings.filterThinking) {
-                 display = display.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<think>[\s\S]*/g, '').trim();
-              }
-              onUpdate(display);
-            }
-          } catch (e) {
-             // 容错：部分服务商可能返回非标准格式，尝试直接拼接
-             if (line.length > 6) {
-                 // 某些非标准流可能直接推文本，这里做个简单兜底（视情况而定）
+        // 兼容不同服务商的 SSE 格式
+        if (line.startsWith('data: ')) {
+           const jsonStr = line.slice(6).trim();
+           if (jsonStr === '[DONE]') break;
+           
+           try {
+             const json = JSON.parse(jsonStr);
+             // 尝试多种可能的路径获取 delta content
+             const delta = json.choices?.[0]?.delta?.content || json.content || '';
+             
+             if (delta) {
+               fullText += delta;
+               // 实时过滤 think 标签
+               let display = fullText;
+               if (settings.filterThinking) {
+                  display = display.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<think>[\s\S]*/g, '').trim();
+               }
+               onUpdate(display);
              }
-          }
+           } catch (e) {
+             // 忽略单行解析错误，继续处理下一行
+           }
         }
       }
     }
@@ -1177,13 +1189,11 @@ const AiChatContent = ({ onClose }) => {
   };
 
   // -----------------------------
-  // Voice Recognition (Restored from Old Code)
+  // Voice Recognition (Restored & Fixed)
   // -----------------------------
 
   const stopAndSend = (isManual = false) => {
     if (!recognitionRef.current) return;
-    // 如果是手动停止，就只是停止录音，让 onend 处理 UI
-    // 但 continuous=false 的情况下，浏览器会自动停止
     try {
       recognitionRef.current.stop();
     } catch(e) { console.error(e); }
@@ -1206,7 +1216,6 @@ const AiChatContent = ({ onClose }) => {
     const recognition = new SpeechRecognition();
     recognition.lang = sourceLang;
     recognition.interimResults = true;
-    // 1. 改为 true，允许连续说话，不会断句马上发
     recognition.continuous = true;
 
     recognitionRef.current = recognition;
@@ -1226,8 +1235,8 @@ const AiChatContent = ({ onClose }) => {
       
       setInputVal(transcript);
 
-      // 2. 设置静音检测时间 (这里是 2000毫秒 = 2秒)
-      // 如果 2秒内没有新声音，就发送
+      // 2. 设置静音检测时间 (1.5秒)
+      // 如果 1.5秒内没有新声音，就发送
       silenceTimerRef.current = setTimeout(() => {
         if (transcript.trim()) {
           try { recognition.stop(); } catch {}
@@ -1235,7 +1244,7 @@ const AiChatContent = ({ onClose }) => {
           handleTranslate(transcript); // 发送
           setInputVal(''); 
         }
-      }, 1500); // <--- 想改时间就改这里，比如改成 1500
+      }, 1500);
     };
 
     recognition.onerror = (event) => {
@@ -1255,6 +1264,7 @@ const AiChatContent = ({ onClose }) => {
 
     recognition.start();
   };
+
   const swapLangs = () => {
     setSourceLang(targetLang);
     setTargetLang(sourceLang);
@@ -1331,7 +1341,7 @@ const AiChatContent = ({ onClose }) => {
                return <div key={item.id} className="bg-red-50 text-red-500 text-xs p-3 rounded-xl text-center mb-6">{item.text}</div>;
              }
              
-             // 🟢 极速模式：UI 渲染 (显示打字机效果)
+             // 🟢 极速模式：UI 渲染 (修改为非卡片样式，更像聊天气泡或直接文本)
              if ((settings.speedMode || item.isSpeedMode) && item.role === 'ai') {
                  // 使用 item.translation 字段
                  const text = item.translation || (item.results && item.results[0] ? item.results[0].translation : '');
@@ -1339,18 +1349,19 @@ const AiChatContent = ({ onClose }) => {
 
                  return (
                     <div key={item.id} className="mb-6 animate-in slide-in-from-bottom-4 duration-500">
-                        <div className="bg-white p-4 rounded-2xl shadow-sm text-gray-800 whitespace-pre-wrap leading-relaxed border border-pink-50">
+                        {/* 去掉了 shadow, border, bg-white，改为更简洁的样式 */}
+                        <div className="text-gray-800 whitespace-pre-wrap leading-relaxed px-1">
                             <div className="text-lg font-medium">
                                 {text}
-                                {/* 光标闪烁 */}
-                                {item.isStreaming && <span className="blinking-cursor"></span>}
+                                {/* 光标闪烁改为3个点动画 */}
+                                {item.isStreaming && <span className="loading-dots"><span></span><span></span><span></span></span>}
                             </div>
                             {backText && (
-                                <div className="mt-2 pt-2 border-t border-gray-100 text-gray-500 text-sm">
+                                <div className="mt-1 text-gray-500 text-sm opacity-80">
                                     {backText}
                                 </div>
                             )}
-                            <button onClick={() => playTTS(text, targetLang, settings)} className="mt-2 text-pink-400 opacity-50 hover:opacity-100">
+                            <button onClick={() => playTTS(text, targetLang, settings)} className="mt-1 text-pink-400 opacity-50 hover:opacity-100">
                                 <i className="fas fa-volume-up"/>
                             </button>
                         </div>
