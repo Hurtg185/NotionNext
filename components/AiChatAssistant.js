@@ -121,7 +121,7 @@ class ChatDB {
 
 const db = new ChatDB();
 
-// ----------------- 全局样式 (优化动画) -----------------
+// ----------------- 全局样式 -----------------
 const GlobalStyles = () => (
   <style>{`
     .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -134,30 +134,6 @@ const GlobalStyles = () => (
     .chip-scroll-container {
       display: flex; gap: 8px; overflow-x: auto; padding: 4px 10px;
       -webkit-overflow-scrolling: touch; cursor: grab;
-    }
-
-    /* 优化后的三点加载动画 (更大、居中) */
-    .loading-dots {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 24px;
-      margin-top: 8px;
-    }
-    .loading-dots span {
-      width: 8px;
-      height: 8px;
-      margin: 0 3px;
-      background-color: #ec4899; /* Pink-500 */
-      border-radius: 50%;
-      animation: dots-bounce 1.4s infinite ease-in-out both;
-    }
-    .loading-dots span:nth-child(1) { animation-delay: -0.32s; }
-    .loading-dots span:nth-child(2) { animation-delay: -0.16s; }
-
-    @keyframes dots-bounce {
-      0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
-      40% { transform: scale(1); opacity: 1; }
     }
 
     @keyframes ripple {
@@ -277,9 +253,6 @@ const DEFAULT_SETTINGS = {
 
   filterThinking: true,
   enableFollowUp: true,
-
-  // 极速模式
-  speedMode: false,
 
   lastSourceLang: 'zh-CN',
   lastTargetLang: 'en-US'
@@ -601,15 +574,6 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
           <div className="flex-1 overflow-y-auto slim-scrollbar p-5 bg-white">
             {tab === 'common' && (
               <div className="space-y-4">
-                {/* 极速模式开关 */}
-                <div className="flex items-center justify-between p-3 bg-pink-50 border border-pink-100 rounded-xl">
-                  <div>
-                    <div className="text-sm font-bold text-pink-700">⚡ 极速模式 (自然直译)</div>
-                    <div className="text-xs text-pink-500/70">流式输出，仅保留译文与回译，速度更快，表达更自然</div>
-                  </div>
-                  <input type="checkbox" checked={data.speedMode} onChange={e => setData({...data, speedMode: e.target.checked})} className="w-5 h-5 accent-pink-500"/>
-                </div>
-
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                   <div>
                     <div className="text-sm font-bold text-gray-700">过滤模型思考过程</div>
@@ -800,11 +764,9 @@ const AiChatContent = ({ onClose }) => {
   const [history, setHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // 录音相关状态与 Ref (统一放置在此，避免重复声明)
+  // 录音相关状态与 Ref
   const [isRecording, setIsRecording] = useState(false);
-  const [voiceStatus, setVoiceStatus] = useState(''); // 录音状态提示文本
   const recognitionRef = useRef(null);
-  const silenceTimerRef = useRef(null);
 
   const [suggestions, setSuggestions] = useState([]);
   const [isSuggesting, setIsSuggesting] = useState(false);
@@ -847,7 +809,6 @@ const AiChatContent = ({ onClose }) => {
   // Cleanup
   useEffect(() => {
     return () => {
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       if (recognitionRef.current) {
         recognitionRef.current.stop();
         recognitionRef.current = null;
@@ -916,60 +877,6 @@ const AiChatContent = ({ onClose }) => {
     return { content, modelName: pm.model.name };
   };
 
-  // 修复后的流式请求 (更强的容错性，解决极速模式空白问题)
-  const fetchAiStream = async (messages, modelId, onUpdate) => {
-    const pm = getProviderAndModel(modelId);
-    if (!pm) throw new Error(`未配置模型 ${modelId}`);
-    if (!pm.provider.key) throw new Error(`${pm.provider.name} 缺少 Key`);
-
-    const body = { model: pm.model.value, messages, stream: true };
-
-    const res = await fetch(`${pm.provider.url}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${pm.provider.key}` },
-      body: JSON.stringify(body)
-    });
-
-    if (!res.ok) throw new Error(`Stream Error: ${res.status}`);
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let fullText = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split('\n');
-      for (const line of lines) {
-        // 兼容不同服务商的 SSE 格式
-        if (line.startsWith('data: ')) {
-           const jsonStr = line.slice(6).trim();
-           if (jsonStr === '[DONE]') break;
-           
-           try {
-             const json = JSON.parse(jsonStr);
-             // 尝试多种可能的路径获取 delta content (兼容 OpenAI, DeepSeek, Qwen 等变体)
-             const delta = json.choices?.[0]?.delta?.content || json.choices?.[0]?.text || json.content || '';
-             
-             if (delta) {
-               fullText += delta;
-               // 实时过滤 think 标签
-               let display = fullText;
-               if (settings.filterThinking) {
-                  display = display.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<think>[\s\S]*/g, '').trim();
-               }
-               onUpdate(display);
-             }
-           } catch (e) {
-             // 忽略单行解析错误，继续处理下一行
-           }
-        }
-      }
-    }
-    return fullText;
-  };
-
   const handleTranslate = async (textOverride = null) => {
     let text = (textOverride || inputVal).trim();
     if (!text && inputImages.length === 0) return;
@@ -1015,80 +922,6 @@ const AiChatContent = ({ onClose }) => {
     db.addMessage(userMsg);
     if (history.length === 0) db.updateSession(currentSessionId, { title: text ? text.slice(0, 20) : '[图片]' });
     else db.updateSession(currentSessionId, {}); 
-
-    // ----------------- 极速模式逻辑 -----------------
-    if (settings.speedMode && inputImages.length === 0) {
-        const speedSysPrompt = `你是一位专业翻译。将以下内容从【${getLangName(currentSource)}】翻译成【${getLangName(currentTarget)}】。
-
-采用“自然直译版”：在保留原文结构和含义的基础上，让译文符合目标语言的表达习惯，读起来流畅自然，不生硬。
-输出格式要求：
-[译文] ||| [回译(回到${getLangName(currentSource)})]
-不要输出任何其他内容，只输出结果。`;
-
-        const messages = [
-            { role: 'system', content: speedSysPrompt },
-            { role: 'user', content: text }
-        ];
-
-        const aiMsgId = nowId();
-        // 🟢 极速模式：初始化专用数据结构
-        const initialAiMsg = { 
-            id: aiMsgId, 
-            sessionId: currentSessionId, 
-            role: 'ai', 
-            isSpeedMode: true,    // 标记为极速模式
-            isStreaming: true,    // 标记正在流式传输
-            translation: '',      // 独立译文字段
-            backTranslation: '',  // 独立回译字段
-            from: 'ai', 
-            ts: Date.now(),
-        };
-        setHistory(prev => [...prev, initialAiMsg]);
-
-        try {
-            await fetchAiStream(messages, settings.mainModelId, (streamedText) => {
-                // 解析流式文本： 译文 ||| 回译
-                // 修复：如果还没出现分隔符，先将全部内容当作译文显示，防止空白
-                const parts = streamedText.split('|||');
-                let trans = parts[0].trim();
-                let back = parts[1] ? parts[1].trim() : '';
-                
-                // 如果 trans 为空但 streamedText 不为空（可能格式问题），兜底显示
-                if (!trans && streamedText) trans = streamedText;
-
-                // 🟢 极速模式：更新独立字段
-                setHistory(prev => prev.map(m => {
-                    if (m.id === aiMsgId) {
-                        return {
-                            ...m,
-                            translation: trans,
-                            backTranslation: back
-                        };
-                    }
-                    return m;
-                }));
-                scrollToResult();
-            });
-            
-            // 结束后保存到DB并关闭流状态
-            setHistory(currentHistory => {
-                const finalMsg = currentHistory.find(m => m.id === aiMsgId);
-                if (finalMsg) {
-                    const finishedMsg = { ...finalMsg, isStreaming: false };
-                    db.addMessage(finishedMsg);
-                    return currentHistory.map(m => m.id === aiMsgId ? finishedMsg : m);
-                }
-                return currentHistory;
-            });
-
-        } catch (e) {
-            const errorMsg = { id: nowId(), sessionId: currentSessionId, role: 'error', text: e.message || '流式传输错误', ts: Date.now(), results: [] };
-            setHistory(prev => [...prev, errorMsg]);
-        } finally {
-            setIsLoading(false);
-        }
-        return; // 极速模式结束
-    }
 
     // ----------------- 普通模式逻辑 -----------------
     let sysPrompt = BASE_SYSTEM_INSTRUCTION;
@@ -1195,11 +1028,13 @@ const AiChatContent = ({ onClose }) => {
   };
 
   // -----------------------------
-  // Voice Recognition (Restored & Forced Stop Fix)
+  // Voice Recognition (Restored from Old Code)
   // -----------------------------
 
   const stopAndSend = (isManual = false) => {
     if (!recognitionRef.current) return;
+    // 如果是手动停止，就只是停止录音，让 onend 处理 UI
+    // 但 continuous=false 的情况下，浏览器会自动停止
     try {
       recognitionRef.current.stop();
     } catch(e) { console.error(e); }
@@ -1222,42 +1057,31 @@ const AiChatContent = ({ onClose }) => {
     const recognition = new SpeechRecognition();
     recognition.lang = sourceLang;
     recognition.interimResults = true;
-    recognition.continuous = true;
+    recognition.continuous = false; // 关键修改：改为 false，说完一句自动停止
 
     recognitionRef.current = recognition;
     setInputVal('');
     setIsRecording(true);
-    setVoiceStatus(`正在识别 (${getLangName(sourceLang)})...`); // 初始提示
     if (navigator.vibrate) navigator.vibrate(50);
 
     recognition.onresult = (event) => {
-      // 每次说话都清除倒计时，重新开始算时间
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-
+      // 提取结果逻辑，移植自旧代码
       const results = Array.from(event.results);
       const transcript = results
         .map(result => result[0])
         .map(result => result.transcript)
         .join('');
       
-      setInputVal(transcript);
+      setInputVal(transcript); // 实时显示，不再拼接
 
-      // 2. 设置静音检测时间 (1.5秒)
-      // 如果 1.5秒内没有新声音，就发送
-      silenceTimerRef.current = setTimeout(() => {
-        if (transcript.trim()) {
-          // 强制停止 UI 和 逻辑
-          setVoiceStatus('已收到，正在翻译...'); // 提示用户
-          setTimeout(() => {
-             // 强制停止识别
-             try { recognition.stop(); } catch {}
-             try { recognition.abort(); } catch {} // 双重保险
-             setIsRecording(false);
-             handleTranslate(transcript); // 发送
-             setInputVal(''); 
-          }, 300); // 稍微留点时间展示提示
-        }
-      }, 1500);
+      // 检查是否为最终结果
+      const isFinal = results.some(r => r.isFinal);
+      if (isFinal && transcript.trim()) {
+        try { recognition.stop(); } catch {}
+        setIsRecording(false);
+        handleTranslate(transcript); // 立即发送
+        setInputVal(''); // 发送后清空
+      }
     };
 
     recognition.onerror = (event) => {
@@ -1266,11 +1090,6 @@ const AiChatContent = ({ onClose }) => {
     };
 
     recognition.onend = () => {
-      // 停止时清除定时器
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = null;
-      }
       setIsRecording(false);
       recognitionRef.current = null;
     };
@@ -1300,7 +1119,6 @@ const AiChatContent = ({ onClose }) => {
           <div className="flex items-center gap-2 absolute left-1/2 transform -translate-x-1/2">
             <i className="fas fa-link text-pink-500" />
             <span className="font-extrabold text-gray-800 text-lg tracking-tight">886.best</span>
-            {settings.speedMode && <span className="text-[10px] bg-yellow-400 text-black px-1 rounded font-bold">极速</span>}
           </div>
 
           <div className="flex items-center gap-3 w-10 justify-end">
@@ -1316,7 +1134,7 @@ const AiChatContent = ({ onClose }) => {
         <div className="fixed top-24 left-0 right-0 z-50 flex justify-center pointer-events-none">
           <div className="bg-pink-500/90 text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-3 animate-pulse pointer-events-auto backdrop-blur-sm">
             <i className="fas fa-microphone text-xl animate-bounce"/>
-            <span className="font-bold">{voiceStatus}</span>
+            <span className="font-bold">正在识别 ({getLangName(sourceLang)})...</span>
           </div>
         </div>
       </Transition>
@@ -1328,7 +1146,6 @@ const AiChatContent = ({ onClose }) => {
              <div className="text-center text-gray-400 mb-20 opacity-60">
                 <div className="text-4xl mb-2">👋</div>
                 <div className="text-sm">自动识别语言 & 双模对比</div>
-                {settings.speedMode && <div className="text-xs text-pink-500 mt-2">⚡ 已开启极速自然直译模式</div>}
              </div>
            )}
 
@@ -1354,34 +1171,6 @@ const AiChatContent = ({ onClose }) => {
                return <div key={item.id} className="bg-red-50 text-red-500 text-xs p-3 rounded-xl text-center mb-6">{item.text}</div>;
              }
              
-             // 🟢 极速模式：UI 渲染 (修改为非卡片样式，更像聊天气泡或直接文本)
-             if ((settings.speedMode || item.isSpeedMode) && item.role === 'ai') {
-                 // 使用 item.translation 字段
-                 const text = item.translation || (item.results && item.results[0] ? item.results[0].translation : '');
-                 const backText = item.backTranslation || (item.results && item.results[0] ? item.results[0].back_translation : '');
-
-                 return (
-                    <div key={item.id} className="mb-6 animate-in slide-in-from-bottom-4 duration-500">
-                        {/* 去掉了 shadow, border, bg-white，改为更简洁的样式 */}
-                        <div className="text-gray-800 whitespace-pre-wrap leading-relaxed px-1 text-center">
-                            <div className="text-lg font-medium">
-                                {text}
-                                {/* 光标闪烁改为3个点动画，居中显示 */}
-                                {item.isStreaming && <div className="loading-dots"><span></span><span></span><span></span></div>}
-                            </div>
-                            {backText && (
-                                <div className="mt-1 text-gray-500 text-sm opacity-80">
-                                    {backText}
-                                </div>
-                            )}
-                            <button onClick={() => playTTS(text, targetLang, settings)} className="mt-1 text-pink-400 opacity-50 hover:opacity-100">
-                                <i className="fas fa-volume-up"/>
-                            </button>
-                        </div>
-                    </div>
-                 );
-             }
-
              // 普通模式：卡片渲染
              return (
                <div key={item.id} className="mb-6 animate-in slide-in-from-bottom-4 duration-500">
@@ -1389,7 +1178,7 @@ const AiChatContent = ({ onClose }) => {
                   {item.modelResults && item.modelResults.length > 1 && (
                       <div className="text-center text-[9px] text-gray-300 mt-1">支持全球 100+ 种语言互译</div>
                   )}
-                  {idx === history.length - 1 && !settings.speedMode && (
+                  {idx === history.length - 1 && (
                     isSuggesting ? (
                       <div className="h-8 flex items-center justify-center gap-1"><span className="w-1.5 h-1.5 bg-pink-300 rounded-full animate-bounce"/><span className="w-1.5 h-1.5 bg-pink-300 rounded-full animate-bounce delay-100"/><span className="w-1.5 h-1.5 bg-pink-300 rounded-full animate-bounce delay-200"/></div>
                     ) : (
@@ -1399,7 +1188,7 @@ const AiChatContent = ({ onClose }) => {
                </div>
              );
            })}
-           {isLoading && !settings.speedMode && <div className="flex justify-center mb-8"><div className="bg-white/80 px-4 py-2 rounded-full shadow-sm flex items-center gap-2 text-sm text-pink-500 animate-pulse"><i className="fas fa-spinner fa-spin" /><span>处理中...</span></div></div>}
+           {isLoading && <div className="flex justify-center mb-8"><div className="bg-white/80 px-4 py-2 rounded-full shadow-sm flex items-center gap-2 text-sm text-pink-500 animate-pulse"><i className="fas fa-spinner fa-spin" /><span>处理中...</span></div></div>}
         </div>
       </div>
 
