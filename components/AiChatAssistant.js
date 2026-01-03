@@ -136,22 +136,6 @@ const GlobalStyles = () => (
       -webkit-overflow-scrolling: touch; cursor: grab;
     }
 
-    /* 光标闪烁动画 */
-    .blinking-cursor {
-      display: inline-block;
-      width: 2px;
-      height: 1.2em;
-      background-color: currentColor;
-      margin-left: 2px;
-      vertical-align: text-bottom;
-      animation: blink 1s step-end infinite;
-    }
-    
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0; }
-    }
-
     @keyframes ripple {
       0% { transform: scale(1); opacity: 0.8; }
       100% { transform: scale(3); opacity: 0; }
@@ -269,9 +253,6 @@ const DEFAULT_SETTINGS = {
 
   filterThinking: true,
   enableFollowUp: true,
-
-  // 极速模式
-  speedMode: false,
 
   lastSourceLang: 'zh-CN',
   lastTargetLang: 'en-US'
@@ -593,15 +574,6 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
           <div className="flex-1 overflow-y-auto slim-scrollbar p-5 bg-white">
             {tab === 'common' && (
               <div className="space-y-4">
-                {/* 极速模式开关 */}
-                <div className="flex items-center justify-between p-3 bg-pink-50 border border-pink-100 rounded-xl">
-                  <div>
-                    <div className="text-sm font-bold text-pink-700">⚡ 极速模式 (自然直译)</div>
-                    <div className="text-xs text-pink-500/70">流式输出，仅保留译文与回译，速度更快，表达更自然</div>
-                  </div>
-                  <input type="checkbox" checked={data.speedMode} onChange={e => setData({...data, speedMode: e.target.checked})} className="w-5 h-5 accent-pink-500"/>
-                </div>
-
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                   <div>
                     <div className="text-sm font-bold text-gray-700">过滤模型思考过程</div>
@@ -905,57 +877,6 @@ const AiChatContent = ({ onClose }) => {
     return { content, modelName: pm.model.name };
   };
 
-  // 流式请求 (极速模式用)
-  const fetchAiStream = async (messages, modelId, onUpdate) => {
-    const pm = getProviderAndModel(modelId);
-    if (!pm) throw new Error(`未配置模型 ${modelId}`);
-    if (!pm.provider.key) throw new Error(`${pm.provider.name} 缺少 Key`);
-
-    const body = { model: pm.model.value, messages, stream: true };
-
-    const res = await fetch(`${pm.provider.url}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${pm.provider.key}` },
-      body: JSON.stringify(body)
-    });
-
-    if (!res.ok) throw new Error(`Stream Error: ${res.status}`);
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let fullText = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split('\n');
-      for (const line of lines) {
-        if (line.startsWith('data: ') && line !== 'data: [DONE]') {
-          try {
-            const json = JSON.parse(line.slice(6));
-            const delta = json.choices[0]?.delta?.content || '';
-            if (delta) {
-              fullText += delta;
-              // 实时过滤 think 标签 (简单处理，复杂情况可能需要 buffer)
-              let display = fullText;
-              if (settings.filterThinking) {
-                 display = display.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<think>[\s\S]*/g, '').trim();
-              }
-              onUpdate(display);
-            }
-          } catch (e) {
-             // 容错：部分服务商可能返回非标准格式，尝试直接拼接
-             if (line.length > 6) {
-                 // 某些非标准流可能直接推文本，这里做个简单兜底（视情况而定）
-             }
-          }
-        }
-      }
-    }
-    return fullText;
-  };
-
   const handleTranslate = async (textOverride = null) => {
     let text = (textOverride || inputVal).trim();
     if (!text && inputImages.length === 0) return;
@@ -1001,76 +922,6 @@ const AiChatContent = ({ onClose }) => {
     db.addMessage(userMsg);
     if (history.length === 0) db.updateSession(currentSessionId, { title: text ? text.slice(0, 20) : '[图片]' });
     else db.updateSession(currentSessionId, {}); 
-
-    // ----------------- 极速模式逻辑 -----------------
-    if (settings.speedMode && inputImages.length === 0) {
-        const speedSysPrompt = `你是一位专业翻译。将以下内容从【${getLangName(currentSource)}】翻译成【${getLangName(currentTarget)}】。
-
-采用“自然直译版”：在保留原文结构和含义的基础上，让译文符合目标语言的表达习惯，读起来流畅自然，不生硬。
-输出格式要求：
-[译文] ||| [回译(回到${getLangName(currentSource)})]
-不要输出任何其他内容，只输出结果。`;
-
-        const messages = [
-            { role: 'system', content: speedSysPrompt },
-            { role: 'user', content: text }
-        ];
-
-        const aiMsgId = nowId();
-        // 🟢 极速模式：初始化专用数据结构
-        const initialAiMsg = { 
-            id: aiMsgId, 
-            sessionId: currentSessionId, 
-            role: 'ai', 
-            isSpeedMode: true,    // 标记为极速模式
-            isStreaming: true,    // 标记正在流式传输
-            translation: '',      // 独立译文字段
-            backTranslation: '',  // 独立回译字段
-            from: 'ai', 
-            ts: Date.now(),
-        };
-        setHistory(prev => [...prev, initialAiMsg]);
-
-        try {
-            await fetchAiStream(messages, settings.mainModelId, (streamedText) => {
-                // 解析流式文本： 译文 ||| 回译
-                const parts = streamedText.split('|||');
-                const trans = parts[0].trim();
-                const back = parts[1] ? parts[1].trim() : '';
-                
-                // 🟢 极速模式：更新独立字段
-                setHistory(prev => prev.map(m => {
-                    if (m.id === aiMsgId) {
-                        return {
-                            ...m,
-                            translation: trans,
-                            backTranslation: back
-                        };
-                    }
-                    return m;
-                }));
-                scrollToResult();
-            });
-            
-            // 结束后保存到DB并关闭流状态
-            setHistory(currentHistory => {
-                const finalMsg = currentHistory.find(m => m.id === aiMsgId);
-                if (finalMsg) {
-                    const finishedMsg = { ...finalMsg, isStreaming: false };
-                    db.addMessage(finishedMsg);
-                    return currentHistory.map(m => m.id === aiMsgId ? finishedMsg : m);
-                }
-                return currentHistory;
-            });
-
-        } catch (e) {
-            const errorMsg = { id: nowId(), sessionId: currentSessionId, role: 'error', text: e.message || '流式传输错误', ts: Date.now(), results: [] };
-            setHistory(prev => [...prev, errorMsg]);
-        } finally {
-            setIsLoading(false);
-        }
-        return; // 极速模式结束
-    }
 
     // ----------------- 普通模式逻辑 -----------------
     let sysPrompt = BASE_SYSTEM_INSTRUCTION;
@@ -1268,7 +1119,6 @@ const AiChatContent = ({ onClose }) => {
           <div className="flex items-center gap-2 absolute left-1/2 transform -translate-x-1/2">
             <i className="fas fa-link text-pink-500" />
             <span className="font-extrabold text-gray-800 text-lg tracking-tight">886.best</span>
-            {settings.speedMode && <span className="text-[10px] bg-yellow-400 text-black px-1 rounded font-bold">极速</span>}
           </div>
 
           <div className="flex items-center gap-3 w-10 justify-end">
@@ -1296,7 +1146,6 @@ const AiChatContent = ({ onClose }) => {
              <div className="text-center text-gray-400 mb-20 opacity-60">
                 <div className="text-4xl mb-2">👋</div>
                 <div className="text-sm">自动识别语言 & 双模对比</div>
-                {settings.speedMode && <div className="text-xs text-pink-500 mt-2">⚡ 已开启极速自然直译模式</div>}
              </div>
            )}
 
@@ -1322,33 +1171,6 @@ const AiChatContent = ({ onClose }) => {
                return <div key={item.id} className="bg-red-50 text-red-500 text-xs p-3 rounded-xl text-center mb-6">{item.text}</div>;
              }
              
-             // 🟢 极速模式：UI 渲染 (显示打字机效果)
-             if ((settings.speedMode || item.isSpeedMode) && item.role === 'ai') {
-                 // 使用 item.translation 字段
-                 const text = item.translation || (item.results && item.results[0] ? item.results[0].translation : '');
-                 const backText = item.backTranslation || (item.results && item.results[0] ? item.results[0].back_translation : '');
-
-                 return (
-                    <div key={item.id} className="mb-6 animate-in slide-in-from-bottom-4 duration-500">
-                        <div className="bg-white p-4 rounded-2xl shadow-sm text-gray-800 whitespace-pre-wrap leading-relaxed border border-pink-50">
-                            <div className="text-lg font-medium">
-                                {text}
-                                {/* 光标闪烁 */}
-                                {item.isStreaming && <span className="blinking-cursor"></span>}
-                            </div>
-                            {backText && (
-                                <div className="mt-2 pt-2 border-t border-gray-100 text-gray-500 text-sm">
-                                    {backText}
-                                </div>
-                            )}
-                            <button onClick={() => playTTS(text, targetLang, settings)} className="mt-2 text-pink-400 opacity-50 hover:opacity-100">
-                                <i className="fas fa-volume-up"/>
-                            </button>
-                        </div>
-                    </div>
-                 );
-             }
-
              // 普通模式：卡片渲染
              return (
                <div key={item.id} className="mb-6 animate-in slide-in-from-bottom-4 duration-500">
@@ -1356,7 +1178,7 @@ const AiChatContent = ({ onClose }) => {
                   {item.modelResults && item.modelResults.length > 1 && (
                       <div className="text-center text-[9px] text-gray-300 mt-1">支持全球 100+ 种语言互译</div>
                   )}
-                  {idx === history.length - 1 && !settings.speedMode && (
+                  {idx === history.length - 1 && (
                     isSuggesting ? (
                       <div className="h-8 flex items-center justify-center gap-1"><span className="w-1.5 h-1.5 bg-pink-300 rounded-full animate-bounce"/><span className="w-1.5 h-1.5 bg-pink-300 rounded-full animate-bounce delay-100"/><span className="w-1.5 h-1.5 bg-pink-300 rounded-full animate-bounce delay-200"/></div>
                     ) : (
@@ -1366,7 +1188,7 @@ const AiChatContent = ({ onClose }) => {
                </div>
              );
            })}
-           {isLoading && !settings.speedMode && <div className="flex justify-center mb-8"><div className="bg-white/80 px-4 py-2 rounded-full shadow-sm flex items-center gap-2 text-sm text-pink-500 animate-pulse"><i className="fas fa-spinner fa-spin" /><span>处理中...</span></div></div>}
+           {isLoading && <div className="flex justify-center mb-8"><div className="bg-white/80 px-4 py-2 rounded-full shadow-sm flex items-center gap-2 text-sm text-pink-500 animate-pulse"><i className="fas fa-spinner fa-spin" /><span>处理中...</span></div></div>}
         </div>
       </div>
 
