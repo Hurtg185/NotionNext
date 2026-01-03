@@ -136,6 +136,22 @@ const GlobalStyles = () => (
       -webkit-overflow-scrolling: touch; cursor: grab;
     }
 
+    /* 光标闪烁动画 */
+    .blinking-cursor {
+      display: inline-block;
+      width: 2px;
+      height: 1.2em;
+      background-color: currentColor;
+      margin-left: 2px;
+      vertical-align: text-bottom;
+      animation: blink 1s step-end infinite;
+    }
+    
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
     @keyframes ripple {
       0% { transform: scale(1); opacity: 0.8; }
       100% { transform: scale(3); opacity: 0; }
