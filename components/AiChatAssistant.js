@@ -247,13 +247,6 @@ const BASE_SYSTEM_INSTRUCTION = `你是一位翻译专家。将用户文本翻�
 必须返回严格的 JSON 格式: { "data": [ { "translation": "...", "back_translation": "..." }, ... ] }
 不要输出任何markdown标记或多余解释。`;
 
-
-回译 (back_translation) 必须翻译回【源语言】，用于核对意思。
-
-必须返回严格的 JSON 格式: { "data": [ { "translation": "...", "back_translation": "..." }, ... ] }
-
-不要输出任何markdown标记或多余解释。`;
-
 const REPLY_SYSTEM_INSTRUCTION = `你是一个聊天助手。 用户刚刚把一句【源语言】翻译成了【目标语言】。 请用【目标语言】（Target Language）生成 3 到 8 个简短、自然的回复建议，帮助用户回答对方。 场景为日常聊天，回复要口语化。 只返回 JSON 数组字符串，格式：["回复1", "回复2", ...],不要 markdown。`;
 
 const DEFAULT_SETTINGS = {
