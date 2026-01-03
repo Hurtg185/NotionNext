@@ -237,47 +237,52 @@ const DEFAULT_MODELS = [
   { id: 'm3', providerId: 'p1', name: 'GPT-4o', value: 'gpt-4o' }
 ];
 
-const BASE_SYSTEM_INSTRUCTION = `你是一位翻译专家。将用户文本翻译成目标语言。
+const BASE_SYSTEM_INSTRUCTION = `你是一位翻译专家。将用户聊天文本翻译成目标语言。
 要求：
+自然直译：在保留原文结构和含义的基础上，让译文符合目标语言的表达习惯，读起来流畅自然，不生硬。
+贴近原文 — 保留句式、语序及关键词对应，信息完整准确
+意译 — 保留完整含义，充分适应目标语言习惯，读来自然流畅
+口语化 — 用最自然的日常口语表达同一意思，像真人对话译 (back_translation) 必须翻译回【源语言】，用于核对意: [ { "translation": "...", "back_translation": "..." }, ... ] }
 
-输出4种略有不同的翻译结果（风格要自然，但不要在结果中标记风格名称）。
+不要输出任何markdown标记或多余解释。;
 
-回译 (back_translation) 必须翻译回【源语言】，用于核对意思。
 
-必须返回严格的 JSON 格式: { "data": [ { "translation": "...", "back_translation": "..." }, ... ] }
+cons  REPLY_SYSTEM_INSTRUCTIO =  `你是一个聊天助手。 用户刚刚把一句【源语言】翻译成了【目标语言】。 请用【目标语言】（Target Language）生成 3 到 8 个简短、自然的回复建议，帮助用户回答对方。 场景为日常聊天，回复要口语化。 只返回 JSON 数组字符串，格式：["回复1", "回复2", ...]，不要 markdown。;
 
-不要输出任何markdown标记或多余解释。`;
 
-const REPLY_SYSTEM_INSTRUCTION = `你是一个聊天助手。 用户刚刚把一句【源语言】翻译成了【目标语言】。 请用【目标语言】（Target Language）生成 3 到 8 个简短、自然的回复建议，帮助用户回答对方。 场景为日常聊天，回复要口语化。 只返回 JSON 数组字符串，格式：["回复1", "回复2", ...]，不要 markdown。`;
+cons  DEFAULT_SETTING =  
+   provider:  DEFAULT_PROVIDER,
+   model:  DEFAULT_MODEL,
 
-const DEFAULT_SETTINGS = {
-  providers: DEFAULT_PROVIDERS,
-  models: DEFAULT_MODELS,
+   mainModelI:  'm1,
+   secondModelI:  nul,
+   followUpModelI:  'm1,
 
-  mainModelId: 'm1',
-  secondModelId: null,
-  followUpModelId: 'm1',
+   ttsConfi:  {,
+   ttsSpee:  1.,
 
-  ttsConfig: {},
-  ttsSpeed: 1.0,
+   backgroundOverla:  0.,
+   chatBackgroundUr:  ',
 
-  backgroundOverlay: 0.9,
-  chatBackgroundUrl: '',
+   useCustomPromp:  fals,
+   customPromptTex:  ',
 
-  useCustomPrompt: false,
-  customPromptText: '',
+   filterThinkin:  tru,
+   enableFollowU:  tru,
 
-  filterThinking: true,
-  enableFollowUp: true,
+   lastSourceLan:  'zh-CN,
+   lastTargetLan:  'en-US
 
-  lastSourceLang: 'zh-CN',
-  lastTargetLang: 'en-US'
-};
+;
 
-// ----------------- TTS Engine -----------------
-const ttsCache = new Map();
-const AVAILABLE_VOICES = {
-  'zh-CN': [
+
+// ----------------- TTS Engine ----------------
+
+cons  ttsCach =  ne  Map(;
+
+cons  AVAILABLE_VOICE =  
+   'zh-CN:  
+': [
     { id: 'zh-CN-XiaoyouNeural', name: '小悠 (女)' },
     { id: 'zh-CN-YunxiNeural', name: '云希 (男)' },
     { id: 'zh-CN-XiaoxiaoNeural', name: '晓晓 (女)' },
@@ -303,11 +308,7 @@ const getVoiceForLang = (lang, config) => {
   if (config && config[lang]) return config[lang];
   if (AVAILABLE_VOICES[lang]) return AVAILABLE_VOICES[lang][0].id;
   if (lang === 'lo-LA') return 'lo-LA-KeomanyNeural';
-  if (lang === 'km-KH') return 'km-KH-PisethNeural';
-  return 'zh-CN-XiaoyouNeural';
-};
-
-const playTTS = async (text, lang, settings) => {
+  if (lang === 'km-KH') const playTTS = async (text, lang, settings) => {
   if (!text) return;
   const voice = getVoiceForLang(lang, settings.ttsConfig);
   const speed = settings.ttsSpeed || 1.0;
