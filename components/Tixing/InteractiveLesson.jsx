@@ -334,7 +334,6 @@ export default function InteractiveLesson({ lesson }) {
 
   if (!hasMounted) return null;
 
-  // AI & 浮球渲染逻辑
   const isGrammarPage = type === 'grammar_study';
   const isQuestionPage = ['choice', 'paixu', 'lianxian', 'gaicuo', 'image_match_blanks'].includes(type);
   const showAIDock = !isFinished && (isGrammarPage || isQuestionPage);
@@ -371,7 +370,7 @@ export default function InteractiveLesson({ lesson }) {
       case 'sentences': return <CardListRenderer {...commonProps} type={type} onComplete={goNext} />;
       
       case 'grammar_study': 
-        // ✅ 核心修复：显式传递 onAskAI，连接 GrammarPointPlayer 的菜单与 AI 组件
+        // ✅ 修复：传递 onAskAI 以消除弹窗报错
         return (
           <GrammarPointPlayer 
             grammarPoints={commonProps.data.grammarPoints} 
