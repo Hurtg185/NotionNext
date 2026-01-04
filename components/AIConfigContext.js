@@ -2,14 +2,13 @@ import React, { createContext, useState, useContext, useEffect, useMemo } from '
 import Script from 'next/script';
 
 // --- 常量定义 ---
-const CONFIG_KEY = 'ai_global_config_v14';
-const SESSIONS_KEY = 'ai_global_sessions_v14';
-const BOOKMARKS_KEY = 'ai_global_bookmarks_v14';
+const CONFIG_KEY = 'ai_global_config_v15'; // 升级版本号以重置配置
+const SESSIONS_KEY = 'ai_global_sessions_v15';
 const USER_KEY = 'hsk_user';
 
 const AIContext = createContext();
 
-// --- 辅助函数：激活码校验 (完整保留) ---
+// --- 辅助函数：激活码校验 ---
 const validateActivationCode = (code) => {
   if (!code) return { isValid: false, error: '请输入激活码' };
   const c = code.trim().toUpperCase();
@@ -41,7 +40,7 @@ export const AIProvider = ({ children }) => {
     ttsSpeed: 1,
     ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural',
     soundEnabled: true,
-    systemPrompt: '' 
+    sttLang: 'zh-CN'
   });
 
   /* ======================
@@ -66,25 +65,28 @@ export const AIProvider = ({ children }) => {
   const [pageContext, setPageContext] = useState('');
 
   /* ======================
-     6. 提示词模板 (核心修复：强化等级执行力)
+     6. 提示词模板 (✅ 核心修改部分)
   ====================== */
   const SYSTEM_PROMPTS = {
+    // 普通对话模式：增加了“智能判断”逻辑，防止 AI 句句不离语法
     CHAT: `你是一位专门教【缅甸学生】学习汉语的老师。
 【当前学生等级】{{LEVEL}}
-【当前页面内容】{{CONTEXT}}
+【屏幕上下文】{{CONTEXT}} (这是学生当前正在看的学习内容，仅作为背景参考)
 
-【语言强制执行规则（必须严格遵守）】
--根据学生用什么语言跟你对话，你就用什么语言回答，关键词和例句除外。
-- H1 / H2 (初学者)：解释必须以【缅文为主】，中文仅作为关键词或例句。绝对不允许连续两句只有中文。如果你违反此项，学生将无法理解。
-- H3 / H4 (进阶)：采取“中文+缅文”对照讲解。
-- H5 及以上 (高级)：以中文讲解为主，难点辅以缅文。
+【你的行为准则 - 非常重要】
+1. **智能判断意图**：
+   - 如果学生问“你好”、“聊聊别的”或与学习无关的话题，请**完全忽略**屏幕上下文，像朋友一样自然闲聊。
+   - 如果学生问“这是什么意思”、“请解释一下”或针对屏幕内容提问，请结合【屏幕上下文】进行专业讲解。
 
-【回答结构】
-1. 用符合等级的语言解释。
-2. 结合【当前页面内容】举例。
-3. 结尾给出 3-5 个追问建议。
-追问格式：SUGGESTIONS: 建议1|||建议2|||建议3`,
+2. **讲解时的语言规则（严格遵守）**
+   - H1 / H2 (初学者)：解释必须以【缅文为主】，中文仅作为关键词或例句。绝对不允许连续两句只有中文。
+   - H3 / H4 (进阶)：采取“中文+缅文”对照讲解。
+   - H5 及以上 (高级)：以中文讲解为主，难点辅以缅文。
 
+3. **回答结构（仅在讲解知识点时使用）**
+   - 解释含义 -> 举例说明 -> 互动提问。`,
+
+    // 互动错题模式：保持原有逻辑
     INTERACTIVE: `你是一名缅甸学生的汉语语法与互动私教老师。你的任务不是直接讲语法，是让学生下次不再这样选。
 【当前任务】学生做错题了，需要补课。你要通过“复原错因 + 场景尴尬感 + 小窍门”引导学生自己悟出来。
 【学生等级】{{LEVEL}}
@@ -92,7 +94,6 @@ export const AIProvider = ({ children }) => {
 【语言强制执行规则（优先级最高）】
 - 如果{{GRAMMAR}}是 H1 或 H2：你必须【全程使用缅甸语】解释逻辑。严禁发送大段中文。
 - 如果{{GRAMMAR}}是 H3 或 H4：每一句中文解释后必须紧跟缅文翻译。
-
 
 【错题信息】
 - 语法点：{{GRAMMAR}}
@@ -110,15 +111,13 @@ export const AIProvider = ({ children }) => {
 ② 尴尬现场（最关键）：把误选放进真实场景，展示尴尬或误会。用缅语对比解释为什么中文不能这样硬套。
 ③ 关键线索提醒：引导学生注意题目中的关键字，详细解释为什么不能这样选。
 ④ 一句话收尾点出核心。
-⑤易错点
-⑥提示学生有不懂的地方继续提问
 
 【追问生成】
 基于本题错误点生成 3 个追问，使用格式：SUGGESTIONS: Q1|||Q2|||Q3`
   };
 
   /* ======================
-     7. 初始化与本地存储 (完整保留)
+     7. 初始化与本地存储
   ====================== */
   useEffect(() => {
     const cachedUser = localStorage.getItem(USER_KEY);
@@ -148,10 +147,18 @@ export const AIProvider = ({ children }) => {
     if (!currentSessionId && initialSessions.length > 0) {
         setCurrentSessionId(initialSessions[0].id);
     }
+    
+    // 初始化标签页
+    try {
+        const savedBookmarks = localStorage.getItem('ai_global_bookmarks_v15');
+        if (savedBookmarks) setBookmarks(JSON.parse(savedBookmarks));
+    } catch(e) {}
+
   }, []);
 
   useEffect(() => { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); }, [config]);
   useEffect(() => { if(sessions.length > 0) localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions)); }, [sessions]);
+  useEffect(() => { localStorage.setItem('ai_global_bookmarks_v15', JSON.stringify(bookmarks)); }, [bookmarks]);
 
   useEffect(() => {
     if (user?.unlocked_levels) {
@@ -162,7 +169,7 @@ export const AIProvider = ({ children }) => {
   }, [user]);
 
   /* ======================
-     8. Google 登录逻辑 (完整保留)
+     8. Google 登录逻辑
   ====================== */
   useEffect(() => {
     if (isGoogleLoaded && window.google) {
@@ -206,7 +213,7 @@ export const AIProvider = ({ children }) => {
   };
 
   /* ======================
-     9. 权限与 API 交互 (完整保留)
+     9. 权限与 API 交互
   ====================== */
   const syncQuota = async (email) => {
     try {
@@ -284,24 +291,25 @@ export const AIProvider = ({ children }) => {
         template = template.replace('{{QUESTION}}', activeTask.question || '');
         template = template.replace('{{USER_CHOICE}}', activeTask.userChoice || '');
     } else {
-        template = template.replace('{{CONTEXT}}', pageContext || '通用汉语语法');
+        // 在普通模式下，传入当前页面内容，但提示词中已经说明了“仅供参考”
+        template = template.replace('{{CONTEXT}}', pageContext || '（无特定屏幕内容，请自由交流）');
     }
     return template;
   }, [config.userLevel, aiMode, activeTask, pageContext]);
 
   /* ======================
-     11. 触发器函数 (核心修复：解决新对话和追问问题)
+     11. 触发器函数
   ====================== */
   
   // 1. 触发互动题解析
   const triggerInteractiveAI = (payload) => {
     setAiMode('INTERACTIVE');
     
-    // ✅ 修复：每次触发新题目，强制创建一个新 Session，标题设为语法点
+    // 创建专用错题 Session
     const newSessionId = Date.now();
     const newSession = { 
         id: newSessionId, 
-        title: `解析: ${payload.grammarPoint || '新题目'}`, 
+        title: `解析: ${payload.grammarPoint || '错题分析'}`, 
         messages: [], 
         date: new Date().toISOString() 
     };
@@ -315,29 +323,34 @@ export const AIProvider = ({ children }) => {
     setIsAiOpen(true);
   };
 
-  // 2. 静默更新 PPT 上下文
+  // 2. 静默更新 PPT 上下文 (在翻页时调用)
   const updatePageContext = (content) => {
+    // 只有在非互动模式下才更新背景 Context，避免覆盖错题信息
     if (aiMode !== 'INTERACTIVE') {
         setPageContext(content);
     }
   };
 
-  // 3. 重置模式
+  // 3. 重置为普通聊天模式
   const resetToChatMode = () => {
       setAiMode('CHAT');
       setActiveTask(null);
+      // 如果当前是错题 Session，建议新建一个“新对话”以免逻辑混乱
+      const newSession = { id: Date.now(), title: '新对话', messages: [], date: new Date().toISOString() };
+      setSessions(prev => [newSession, ...prev]);
+      setCurrentSessionId(newSession.id);
   };
   
   // 4. 兼容旧版触发器
   const triggerAI = (title, content) => {
       setAiMode('CHAT');
-      setActiveTask({ title, content, timestamp: Date.now() }); 
+      setActiveTask(null); // 清除特定任务
       setPageContext(content);
       setIsAiOpen(true);
   };
 
   /* ======================
-     12. Provider 导出 (完整返回所有状态)
+     12. Provider 导出
   ====================== */
   return (
     <AIContext.Provider value={{
