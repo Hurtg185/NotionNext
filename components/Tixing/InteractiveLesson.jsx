@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/router';
 import { FaPlay, FaHome, FaRedo, FaStar, FaRegStar, FaClock, FaMedal, FaExpand, FaCompress } from "react-icons/fa";
 import confetti from 'canvas-confetti';
-import { useAI } from '../AIConfigContext'; // ✅ 修改1：引入 AI Context
-import AIChatDock from '../AIChatDock';      // ✅ 修改2：引入 AI 助手 UI 组件
+import { useAI } from '../AIConfigContext'; // 引入 AI Context
+import AIChatDock from '../AIChatDock';      // 引入 AI 助手 UI 组件
 
 // --- 核心全屏播放器组件 ---
 import WordStudyPlayer from './WordStudyPlayer';
@@ -64,10 +64,9 @@ const audioManager = (() => {
 })();
 
 // ============================================================================
-// ===== 辅助组件 (已翻译为缅文) =====
+// ===== 辅助组件 =====
 // ============================================================================
 
-// 1. 列表容器适配器
 const CardListRenderer = ({ data, type, onComplete }) => {
   const isPhrase = type === 'phrase_study' || type === 'sentences';
   const list = data.words || data.sentences || data.vocabulary || []; 
@@ -97,7 +96,6 @@ const CardListRenderer = ({ data, type, onComplete }) => {
   );
 };
 
-// 2. 封面页 (图片优化 + 缅文)
 const CoverBlock = ({ data, onNext }) => {
   return (
     <div className="w-full h-full flex flex-col items-center justify-center relative bg-slate-900 overflow-hidden">
@@ -132,7 +130,6 @@ const CoverBlock = ({ data, onNext }) => {
   );
 };
 
-// 3. 结果结算页面 (5星制 + 缅文)
 const SummaryBlock = ({ duration, mistakes, router, onRestart }) => { 
   let stars = 0;
   let title = "";
@@ -337,15 +334,10 @@ export default function InteractiveLesson({ lesson }) {
 
   if (!hasMounted) return null;
 
-  // ✅ 核心修复逻辑：决定是否渲染 AI 以及是否隐藏羽毛球
-  // 1. 判断是否是语法页面 (需要显示羽毛按钮)
+  // AI & 浮球渲染逻辑
   const isGrammarPage = type === 'grammar_study';
-  // 2. 判断是否是练习题目页面 (不需要常驻羽毛按钮，但需要组件存在来响应 triggerInteractiveAI)
   const isQuestionPage = ['choice', 'paixu', 'lianxian', 'gaicuo', 'image_match_blanks'].includes(type);
-  
-  // 只有在【语法页】或者【题目页】且没结束时，才渲染 AIChatDock 实例
   const showAIDock = !isFinished && (isGrammarPage || isQuestionPage);
-  // 在题目页面时，通知 AI 组件隐藏它的悬浮羽毛按钮 (需要 AIChatDock 支持 hideFloatingBall 属性)
   const shouldHideAiBall = isQuestionPage;
 
   if (isFinished) {
@@ -377,7 +369,16 @@ export default function InteractiveLesson({ lesson }) {
       case 'word_study': return <WordStudyPlayer {...commonProps} onNext={goNext} />;
       case 'phrase_study': 
       case 'sentences': return <CardListRenderer {...commonProps} type={type} onComplete={goNext} />;
-      case 'grammar_study': return <GrammarPointPlayer grammarPoints={commonProps.data.grammarPoints} onComplete={goNext} />;
+      
+      case 'grammar_study': 
+        // ✅ 核心修复：显式传递 onAskAI，连接 GrammarPointPlayer 的菜单与 AI 组件
+        return (
+          <GrammarPointPlayer 
+            grammarPoints={commonProps.data.grammarPoints} 
+            onComplete={goNext} 
+            onAskAI={triggerInteractiveAI} 
+          />
+        );
       
       case 'choice': 
         return (
@@ -395,13 +396,8 @@ export default function InteractiveLesson({ lesson }) {
           <PaiXuTi 
             {...commonProps} 
             triggerAI={triggerInteractiveAI} 
-            onCorrect={() => {
-              goNext();
-            }}
-            onWrong={() => {
-              handleWrong();
-              goNext();
-            }}
+            onCorrect={() => { goNext(); }}
+            onWrong={() => { handleWrong(); goNext(); }}
           />
         );
       
@@ -431,11 +427,6 @@ export default function InteractiveLesson({ lesson }) {
         {renderContent()}
       </main>
 
-      {/* ✅ 核心修复：在这里统一渲染 AIChatDock。
-          1. 语法页渲染它，且显示按钮。
-          2. 练习页渲染它，但隐藏按钮（hideFloatingBall 传 true）。
-          3. 这样全局只有一个 AI 实例，解析窗也能弹出，且不重复。
-      */}
       {showAIDock && <AIChatDock hideFloatingBall={shouldHideAiBall} />}
     </div>
   );
