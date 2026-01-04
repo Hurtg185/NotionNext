@@ -3,15 +3,15 @@ import React, {
   useState,
   useEffect,
   useRef,
+  useCallback,
   Fragment,
   memo
 } from 'react';
-
 // 假设这些库文件存在，如果没有请自行处理引用
-// 如果没有这个文件，handleTranslate 中的 dict 逻辑会自动跳过
 import { loadCheatDict, matchCheatLoose } from '@/lib/cheatDict';
 
 // ----------------- IndexedDB Helper -----------------
+// 仅用于存储消息以便发送时的缓存，不用于展示历史列表
 class ChatDB {
   constructor(dbName = 'AiChatDB', version = 2) {
     this.dbName = dbName;
@@ -28,12 +28,6 @@ class ChatDB {
         if (!db.objectStoreNames.contains('sessions')) {
           const sessionStore = db.createObjectStore('sessions', { keyPath: 'id' });
           sessionStore.createIndex('updatedAt', 'updatedAt', { unique: false });
-          sessionStore.createIndex('isPinned', 'isPinned', { unique: false });
-        } else {
-          const store = request.transaction.objectStore('sessions');
-          if (!store.indexNames.contains('isPinned')) {
-            store.createIndex('isPinned', 'isPinned', { unique: false });
-          }
         }
         if (!db.objectStoreNames.contains('messages')) {
           const msgStore = db.createObjectStore('messages', { keyPath: 'id' });
@@ -48,60 +42,15 @@ class ChatDB {
     });
   }
 
-  async createSession(title = 'New Chat') {
+  async createSession(title = '新对话') {
     await this.open();
     const session = { id: Date.now().toString(), title, updatedAt: Date.now(), isPinned: 0 };
     return this.transaction('sessions', 'readwrite', store => store.put(session)).then(() => session);
   }
 
-  async updateSession(id, data) {
-    await this.open();
-    return this.transaction('sessions', 'readwrite', async store => {
-      const session = await new Promise((res, rej) => {
-        const req = store.get(id);
-        req.onsuccess = () => res(req.result);
-        req.onerror = rej;
-      });
-      if (session) {
-        Object.assign(session, data, { updatedAt: Date.now() });
-        store.put(session);
-      }
-    });
-  }
-
-  async deleteSession(id) {
-    await this.open();
-    await this.transaction('sessions', 'readwrite', store => store.delete(id));
-    const db = this.db;
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(['messages'], 'readwrite');
-      const store = tx.objectStore('messages');
-      const index = store.index('sessionId');
-      const req = index.getAllKeys(id);
-      req.onsuccess = () => {
-        req.result.forEach(key => store.delete(key));
-      };
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  }
-
-  async getSessions() {
-    await this.open();
-    return this.transaction('sessions', 'readonly', store => store.getAll());
-  }
-
   async addMessage(message) {
     await this.open();
     return this.transaction('messages', 'readwrite', store => store.put(message));
-  }
-
-  async getMessages(sessionId) {
-    await this.open();
-    return this.transaction('messages', 'readonly', store => {
-      const index = store.index('sessionId');
-      return index.getAll(sessionId);
-    });
   }
 
   transaction(storeName, mode, callback) {
@@ -122,7 +71,7 @@ class ChatDB {
 
 const db = new ChatDB();
 
-// ----------------- Global Styles -----------------
+// ----------------- 全局样式 -----------------
 const GlobalStyles = () => (
   <style>{`
     .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -136,13 +85,22 @@ const GlobalStyles = () => (
       display: flex; gap: 8px; overflow-x: auto; padding: 4px 10px;
       -webkit-overflow-scrolling: touch; cursor: grab;
     }
-    
-    /* 打字机光标效果 */
-    .typing-cursor::after {
-      content: '|';
-      animation: blink 1s step-start infinite;
+
+    /* 光标闪烁动画 */
+    .blinking-cursor {
+      display: inline-block;
+      width: 2px;
+      height: 1.2em;
+      background-color: currentColor;
+      margin-left: 2px;
+      vertical-align: text-bottom;
+      animation: blink 1s step-end infinite;
     }
-    @keyframes blink { 50% { opacity: 0; } }
+    
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
   `}</style>
 );
 
@@ -151,7 +109,7 @@ const safeLocalStorageGet = (key) => (typeof window !== 'undefined' ? localStora
 const safeLocalStorageSet = (key, value) => { if (typeof window !== 'undefined') localStorage.setItem(key, value); };
 const nowId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
-// Image Compression
+// 图片压缩
 const compressImage = (file) => {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -174,7 +132,7 @@ const compressImage = (file) => {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-        // Compress quality 0.6
+        // 压缩质量 0.6
         const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
         resolve(dataUrl);
       };
@@ -182,7 +140,7 @@ const compressImage = (file) => {
   });
 };
 
-// Script detection
+// 脚本检测 (简单正则)
 const detectScript = (text) => {
   if (!text) return null;
   if (/[\u1000-\u109F\uAA60-\uAA7F]+/.test(text)) return 'my-MM';
@@ -191,6 +149,8 @@ const detectScript = (text) => {
   if (/[\u3040-\u30ff\u31f0-\u31ff]+/.test(text)) return 'ja-JP';
   if (/[\u0E00-\u0E7F]+/.test(text)) return 'th-TH';
   if (/[\u0400-\u04FF]+/.test(text)) return 'ru-RU';
+  if (/[\u0600-\u06FF]+/.test(text)) return 'ar-SA';
+  if (/[\u0900-\u097F]+/.test(text)) return 'hi-IN';
   if (/^[a-zA-Z\s,.?!]+$/.test(text)) return 'en-US';
   return null;
 };
@@ -204,80 +164,57 @@ const SUPPORTED_LANGUAGES = [
   { code: 'ko-KR', name: '한국어', flag: '🇰🇷' },
   { code: 'vi-VN', name: '越南语', flag: '🇻🇳' },
   { code: 'th-TH', name: '泰语', flag: '🇹🇭' },
+  { code: 'ms-MY', name: '马来语', flag: '🇲🇾' },
+  { code: 'id-ID', name: '印尼语', flag: '🇮🇩' },
+  { code: 'tl-PH', name: '菲律宾语', flag: '🇵🇭' },
+  { code: 'hi-IN', name: '印度语', flag: '🇮🇳' },
+  { code: 'ar-SA', name: '阿拉伯语', flag: '🇸🇦' },
   { code: 'lo-LA', name: '老挝语', flag: '🇱🇦' },
   { code: 'ru-RU', name: '俄语', flag: '🇷🇺' },
   { code: 'km-KH', name: '柬埔寨语', flag: '🇰🇭' },
-  { code: 'id-ID', name: '印尼语', flag: '🇮🇩' },
   { code: 'fr-FR', name: 'Français', flag: '🇫🇷' },
   { code: 'es-ES', name: 'Español', flag: '🇪🇸' },
   { code: 'pt-BR', name: 'Português', flag: '🇧🇷' },
   { code: 'de-DE', name: 'Deutsch', flag: '🇩🇪' },
 ];
 
-// Expanded Providers (More options as requested)
 const DEFAULT_PROVIDERS = [
-  { id: 'p1', name: '默认接口 (Iflow)', url: 'https://apis.iflow.cn/v1', key: '' },
-  { id: 'p2', name: '硅基流动 (SiliconFlow)', url: 'https://api.siliconflow.cn/v1', key: '' },
-  { id: 'p3', name: 'OpenAI', url: 'https://api.openai.com/v1', key: '' },
-  { id: 'p4', name: 'DeepSeek Official', url: 'https://api.deepseek.com', key: '' },
-  { id: 'p5', name: 'Groq', url: 'https://api.groq.com/openai/v1', key: '' }
+  { id: 'p1', name: '默认接口', url: 'https://apis.iflow.cn/v1', key: '' }
 ];
 
-// Expanded Models
 const DEFAULT_MODELS = [
-  { id: 'm1', providerId: 'p1', name: 'DeepSeek V3 (Iflow)', value: 'deepseek-chat' },
-  { id: 'm2', providerId: 'p2', name: 'DeepSeek V3 (Silicon)', value: 'deepseek-ai/DeepSeek-V3' },
-  { id: 'm3', providerId: 'p2', name: 'Qwen 2.5 72B', value: 'Qwen/Qwen2.5-72B-Instruct' },
-  { id: 'm4', providerId: 'p3', name: 'GPT-4o', value: 'gpt-4o' },
-  { id: 'm5', providerId: 'p3', name: 'GPT-4o Mini', value: 'gpt-4o-mini' },
-  { id: 'm6', providerId: 'p1', name: 'Qwen Max', value: 'qwen-max' },
-  { id: 'm7', providerId: 'p5', name: 'Llama3 70B', value: 'llama3-70b-8192' }
+  { id: 'm1', providerId: 'p1', name: 'DeepSeek V3', value: 'deepseek-chat' },
+  { id: 'm2', providerId: 'p1', name: 'Qwen Max', value: 'qwen-max' },
+  { id: 'm3', providerId: 'p1', name: 'GPT-4o', value: 'gpt-4o' }
 ];
 
-// 核心修改：强制要求4种风格的 Prompt
-const BASE_SYSTEM_INSTRUCTION = `You are a professional translation engine.
-Translate the user's content into the Target Language.
+// 修正后的提示词：强调忠实原文
+const BASE_SYSTEM_INSTRUCTION = `你是一位翻译专家。将用户文本翻译成目标语言。
+请严格按照以下顺序提供 4 种不同风格的翻译结果，**所有风格都必须严格忠实于原文意思**，不可瞎编：
 
-You MUST provide **exactly 4 distinct translation versions** covering these specific styles:
+1. style: "自然直译" - 在保留原文结构和含义的基础上，让译文符合目标语言的表达习惯，读起来流畅自然。
+2. style: "贴近原文" - 尽量保留原文的句式、语序及关键词对应，信息完整准确，不改变原文结构。
+3. style: "意译" - 在**不改变原文意思**的前提下，充分适应目标语言习惯，侧重于传递原文的深层含义。
+4. style: "口语化" - 用最自然的日常口语表达**完全相同的意思**，像当地人聊天一样，但不可偏离原意。
 
-1. **Literal** (直译): Preserves original sentence structure and grammar strictly.
-2. **Natural** (意译): Fluent, native-sounding, focuses on meaning over structure.
-3. **Colloquial** (口语): Casual, spoken style, suitable for chat/daily life.
-4. **Formal** (书面/专业): Polite, business-appropriate, elegant phrasing.
+回译 (back_translation) 必须翻译回【源语言】，用于核对意思。
+必须返回严格的 JSON 格式，包含 data 数组，每个元素包含 style, translation, back_translation 字段。
+格式示例: { "data": [ { "style": "自然直译", "translation": "...", "back_translation": "..." }, ... ] }
+不要输出任何markdown标记或多余解释。`;
 
-Back Translation Requirement:
-Each version MUST include a back_translation to the Source Language for verification.
-
-Strict JSON Output Format:
-{
-  "data": [
-    { "style": "Literal", "translation": "...", "back_translation": "..." },
-    { "style": "Natural", "translation": "...", "back_translation": "..." },
-    { "style": "Colloquial", "translation": "...", "back_translation": "..." },
-    { "style": "Formal", "translation": "...", "back_translation": "..." }
-  ]
-}
-
-- Do NOT omit any style.
-- Do NOT output Markdown code blocks.
-- Only output the raw JSON string.`;
-
-// Reply suggestion prompt
-const REPLY_SYSTEM_INSTRUCTION = `You are a chat assistant. 
-The user translated text from [Source Language] to [Target Language]. 
-Generate 4-6 short, natural follow-up replies in [Target Language].
-Return ONLY a JSON array of strings: ["Reply1", "Reply2", ...]`;
+const REPLY_SYSTEM_INSTRUCTION = `你是一个聊天助手。 用户刚刚把一句【源语言】翻译成了【目标语言】。 请用【目标语言】（Target Language）生成 3 到 8 个简短、自然的回复建议，帮助用户回答对方。 场景为日常聊天，回复要口语化。 只返回 JSON 数组字符串，格式：["回复1", "回复2", ...],不要 markdown。`;
 
 const DEFAULT_SETTINGS = {
   providers: DEFAULT_PROVIDERS,
   models: DEFAULT_MODELS,
 
   mainModelId: 'm1',
-  secondModelId: 'm3', // Default: Enable dual model
+  secondModelId: null,
   followUpModelId: 'm1',
 
   ttsConfig: {},
   ttsSpeed: 1.0,
+  autoPlayTTS: false, // 自动朗读开关
 
   backgroundOverlay: 0.9,
   chatBackgroundUrl: '',
@@ -295,26 +232,19 @@ const DEFAULT_SETTINGS = {
 // ----------------- TTS Engine -----------------
 const ttsCache = new Map();
 const AVAILABLE_VOICES = {
-  'zh-CN': [
-    { id: 'zh-CN-XiaoyouNeural', name: '小悠 (女)' },
-    { id: 'zh-CN-YunxiNeural', name: '云希 (男)' },
-    { id: 'zh-CN-XiaoxiaoNeural', name: '晓晓 (女)' },
-    { id: 'zh-CN-YunyangNeural', name: '云野 (男)' }
-  ],
-  'en-US': [
-    { id: 'en-US-JennyNeural', name: 'Jenny (F)' },
-    { id: 'en-US-GuyNeural', name: 'Guy (M)' },
-    { id: 'en-US-AriaNeural', name: 'Aria (F)' }
-  ],
-  'my-MM': [
-    { id: 'my-MM-NilarNeural', name: 'Nilar (F)' },
-    { id: 'my-MM-ThihaNeural', name: 'Thiha (M)' }
-  ],
+  'zh-CN': [{ id: 'zh-CN-XiaoyouNeural', name: '小悠 (女)' }, { id: 'zh-CN-YunxiNeural', name: '云希 (男)' }],
+  'en-US': [{ id: 'en-US-JennyNeural', name: 'Jenny (女)' }, { id: 'en-US-GuyNeural', name: 'Guy (男)' }],
+  'my-MM': [{ id: 'my-MM-NilarNeural', name: 'Nilar (女)' }, { id: 'my-MM-ThihaNeural', name: 'Thiha (男)' }],
   'ja-JP': [{ id: 'ja-JP-NanamiNeural', name: 'Nanami' }, { id: 'ja-JP-KeitaNeural', name: 'Keita' }],
   'ko-KR': [{ id: 'ko-KR-SunHiNeural', name: 'SunHi' }, { id: 'ko-KR-InJoonNeural', name: 'InJoon' }],
   'vi-VN': [{ id: 'vi-VN-HoaiMyNeural', name: 'HoaiMy' }, { id: 'vi-VN-NamMinhNeural', name: 'NamMinh' }],
   'th-TH': [{ id: 'th-TH-PremwadeeNeural', name: 'Premwadee' }, { id: 'th-TH-NiwatNeural', name: 'Niwat' }],
   'ru-RU': [{ id: 'ru-RU-SvetlanaNeural', name: 'Svetlana' }, { id: 'ru-RU-DmitryNeural', name: 'Dmitry' }],
+  'ms-MY': [{ id: 'ms-MY-YasminNeural', name: 'Yasmin (女)' }, { id: 'ms-MY-OsmanNeural', name: 'Osman (男)' }],
+  'id-ID': [{ id: 'id-ID-GadisNeural', name: 'Gadis (女)' }, { id: 'id-ID-ArdiNeural', name: 'Ardi (男)' }],
+  'tl-PH': [{ id: 'tl-PH-BlessicaNeural', name: 'Blessica (女)' }, { id: 'tl-PH-AngeloNeural', name: 'Angelo (男)' }],
+  'hi-IN': [{ id: 'hi-IN-SwaraNeural', name: 'Swara (女)' }, { id: 'hi-IN-MadhurNeural', name: 'Madhur (男)' }],
+  'ar-SA': [{ id: 'ar-SA-ZariyahNeural', name: 'Zariyah (女)' }, { id: 'ar-SA-HamedNeural', name: 'Hamed (男)' }],
 };
 
 const getVoiceForLang = (lang, config) => {
@@ -355,10 +285,7 @@ const normalizeTranslations = (raw) => {
   let data = [];
   try {
     let cleanRaw = typeof raw === 'string' ? raw.trim() : '';
-    // Remove markdown code blocks
-    if (cleanRaw.includes('```')) { 
-        cleanRaw = cleanRaw.replace(/```json/gi, '').replace(/```/g, '').trim(); 
-    }
+    if (cleanRaw.includes('```')) { cleanRaw = cleanRaw.replace(/json/g, '').replace(/```/g, '').trim(); }
     const start = cleanRaw.indexOf('{');
     const end = cleanRaw.lastIndexOf('}');
     if (start >= 0 && end > start) {
@@ -367,13 +294,11 @@ const normalizeTranslations = (raw) => {
     const json = cleanRaw ? JSON.parse(cleanRaw) : raw;
     data = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
   } catch (e) {
-    return [{ translation: typeof raw === 'string' ? raw : 'Parse Error', back_translation: '', style: 'Error' }];
+    return [{ style: '错误', translation: '解析数据失败', back_translation: '' }];
   }
   const validData = data.filter(x => x && x.translation);
-  if (validData.length === 0) return [{ translation: typeof raw === 'string' ? raw : 'No valid translation', back_translation: '', style: 'Raw' }];
-  
-  // Return all items (Prompt demands 4, so we take all valid ones)
-  return validData;
+  if (validData.length === 0) return [{ style: '默认', translation: typeof raw === 'string' ? raw : '无有效译文', back_translation: '' }];
+  return validData.slice(0, 4);
 };
 
 const getLangName = (c) => SUPPORTED_LANGUAGES.find(l => l.code === c)?.name || c;
@@ -381,16 +306,15 @@ const getLangFlag = (c) => SUPPORTED_LANGUAGES.find(l => l.code === c)?.flag || 
 
 // ----------------- Components -----------------
 
-// 1. Result Container
+// 1. 结果卡片容器
 const TranslationResultContainer = memo(({ item, targetLang, onPlay }) => {
   const hasDual = !!(item.modelResults && item.modelResults.length > 1);
   const [currentIndex, setCurrentIndex] = useState(0);
   const touchStart = useRef(null);
 
   const effectiveIndex = hasDual ? currentIndex : 0;
-  const currentModelResult = hasDual ? item.modelResults[effectiveIndex] : { data: item.results, modelName: null };
-  const currentData = currentModelResult.data || [];
-  const currentModelName = currentModelResult.modelName;
+  const currentData = hasDual ? item.modelResults[effectiveIndex].data : item.results;
+  const currentModelName = hasDual ? item.modelResults[effectiveIndex].modelName : null;
 
   const onTouchStart = (e) => { if (!hasDual) return; touchStart.current = e.targetTouches[0].clientX; };
   const onTouchEnd = (e) => {
@@ -404,47 +328,22 @@ const TranslationResultContainer = memo(({ item, targetLang, onPlay }) => {
   return (
     <div className="relative group" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       {hasDual && (
-        <div className="flex justify-center mb-2 gap-1.5">
+        <div className="flex justify-center mb-1 gap-1">
           {item.modelResults.map((_, idx) => (
-            <button 
-                key={idx} 
-                onClick={() => setCurrentIndex(idx)}
-                className={`h-1.5 rounded-full transition-all ${idx === effectiveIndex ? 'w-6 bg-pink-400' : 'w-2 bg-gray-200'}`} 
-            />
+            <div key={idx} className={`h-1 rounded-full transition-all ${idx === effectiveIndex ? 'w-4 bg-pink-400' : 'w-1.5 bg-gray-200'}`} />
           ))}
         </div>
       )}
-      {currentModelName && (
-        <div className="text-[11px] text-center text-gray-400 mb-2 font-mono tracking-wide flex items-center justify-center gap-1">
-             <i className="fas fa-microchip text-[9px]"/> {currentModelName}
-        </div>
-      )}
-      <div className="space-y-3">
-        {currentData.map((res, i) => (
-            <TranslationCard key={i} data={res} onPlay={() => onPlay(res.translation)} index={i} />
-        ))}
-      </div>
+      {currentModelName && <div className="text-[10px] text-center text-gray-400 mb-1 font-mono">{currentModelName}</div>}
+      {currentData.map((res, i) => (
+        <TranslationCard key={i} data={res} onPlay={() => onPlay(res.translation)} />
+      ))}
     </div>
   );
 });
 
-// 核心修改：卡片增加了 Style 标签显示
-const TranslationCard = memo(({ data, onPlay, index }) => {
+const TranslationCard = memo(({ data, onPlay }) => {
   const [copied, setCopied] = useState(false);
-  
-  // 风格标签的样式映射
-  const getStyleBadge = (styleName) => {
-     if(!styleName) return { label: `Style ${index+1}`, color: 'text-gray-400 bg-gray-50' };
-     const s = styleName.toLowerCase();
-     if(s.includes('literal') || s.includes('直译')) return { label: '🧩 Literal / 直译', color: 'text-blue-600 bg-blue-50' };
-     if(s.includes('natural') || s.includes('意译')) return { label: '✨ Natural / 意译', color: 'text-green-600 bg-green-50' };
-     if(s.includes('colloquial') || s.includes('口语')) return { label: '💬 Colloquial / 口语', color: 'text-pink-600 bg-pink-50' };
-     if(s.includes('formal') || s.includes('书面')) return { label: '👔 Formal / 书面', color: 'text-purple-600 bg-purple-50' };
-     return { label: styleName, color: 'text-gray-600 bg-gray-50' };
-  };
-
-  const styleInfo = getStyleBadge(data.style);
-
   const handleClick = async () => {
     try {
       await navigator.clipboard.writeText(data.translation);
@@ -453,25 +352,32 @@ const TranslationCard = memo(({ data, onPlay, index }) => {
       setTimeout(() => setCopied(false), 800);
     } catch {}
   };
+  
+  // 样式标签颜色映射
+  const styleColor = {
+    "自然直译": "bg-blue-50 text-blue-600 border-blue-100",
+    "贴近原文": "bg-green-50 text-green-600 border-green-100",
+    "意译": "bg-purple-50 text-purple-600 border-purple-100",
+    "口语化": "bg-orange-50 text-orange-600 border-orange-100"
+  }[data.style] || "bg-gray-50 text-gray-500 border-gray-100";
 
   return (
-    <div onClick={handleClick} className="bg-white/95 backdrop-blur-sm border border-gray-100 rounded-2xl p-4 shadow-sm active:scale-[0.99] transition-all cursor-pointer relative overflow-hidden group hover:shadow-md">
+    <div onClick={handleClick} className="bg-white/95 backdrop-blur-sm border border-gray-100 rounded-2xl p-4 shadow-sm active:scale-[0.98] transition-all cursor-pointer relative overflow-hidden group mb-3 text-center">
       {copied && (
         <div className="absolute inset-0 bg-black/5 flex items-center justify-center z-10">
-          <span className="bg-black/70 text-white text-xs px-2 py-1 rounded-md">Copied</span>
+          <span className="bg-black/70 text-white text-xs px-2 py-1 rounded-md">已复制</span>
         </div>
       )}
       
-      {/* 风格标签 */}
-      <div className={`absolute top-0 left-0 px-3 py-1 text-[10px] font-bold rounded-br-xl ${styleInfo.color}`}>
-        {styleInfo.label}
-      </div>
+      {data.style && (
+         <div className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold border mb-2 ${styleColor}`}>
+           {data.style}
+         </div>
+      )}
 
-      <div className="mt-5 text-[17px] leading-relaxed font-medium text-gray-800 break-words select-none whitespace-pre-wrap">{data.translation}</div>
+      <div className="text-[18px] leading-relaxed font-medium text-gray-800 break-words select-none whitespace-pre-wrap">{data.translation}</div>
       {!!data.back_translation && (
-        <div className="mt-2 text-[12px] text-gray-400 break-words leading-snug whitespace-pre-wrap border-t border-gray-100 pt-2 flex items-start gap-1">
-            <span className="opacity-50">↩️</span> {data.back_translation}
-        </div>
+        <div className="mt-2.5 text-[13px] text-gray-400 break-words leading-snug whitespace-pre-wrap">{data.back_translation}</div>
       )}
       <button onClick={(e) => { e.stopPropagation(); onPlay(); }} className="absolute bottom-2 right-2 p-2 text-gray-300 hover:text-blue-500 opacity-50 hover:opacity-100">
         <i className="fas fa-volume-up" />
@@ -480,12 +386,12 @@ const TranslationCard = memo(({ data, onPlay, index }) => {
   );
 });
 
-// 2. Reply Chips
+// 2. 追问气泡
 const ReplyChips = ({ suggestions, onClick }) => {
   if (!suggestions || suggestions.length === 0) return null;
   return (
     <div className="mt-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
-      <div className="text-[10px] text-gray-400 text-center mb-2">Suggested Replies</div>
+      <div className="text-[10px] text-gray-400 text-center mb-2">快捷回复 (译文语言)</div>
       <div className="chip-scroll-container no-scrollbar">
         {suggestions.map((text, i) => (
           <button key={i} onClick={() => onClick(text)} className="shrink-0 bg-white border border-pink-100 text-gray-600 px-3 py-1.5 rounded-full text-sm shadow-sm hover:bg-pink-50 active:scale-95 transition-transform">
@@ -497,7 +403,7 @@ const ReplyChips = ({ suggestions, onClick }) => {
   );
 };
 
-// 3. Model Selector (Optimized)
+// 3. 模型选择器
 const ModelSelectorModal = ({ settings, onClose, onSave }) => {
   const [mode, setMode] = useState('main');
   const [localSettings, setLocalSettings] = useState(settings);
@@ -509,7 +415,6 @@ const ModelSelectorModal = ({ settings, onClose, onSave }) => {
 
   const activeModelObj = settings.models.find(m => m.id === currentActiveModelId);
   const activeProviderId = activeModelObj ? activeModelObj.providerId : null;
-
   const [selectedProvId, setSelectedProvId] = useState(activeProviderId || settings.providers[0]?.id);
 
   useEffect(() => {
@@ -536,21 +441,21 @@ const ModelSelectorModal = ({ settings, onClose, onSave }) => {
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <Dialog.Panel className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden h-[550px] flex flex-col">
           <div className="p-4 border-b border-gray-100 flex justify-between items-center">
-            <div className="font-bold text-gray-800">Select Model</div>
+            <div className="font-bold text-gray-800">模型选择</div>
             <button onClick={onClose}><i className="fas fa-times text-gray-400"/></button>
           </div>
 
           <div className="flex p-2 gap-2 border-b border-gray-100 bg-gray-50">
             <button onClick={() => setMode('main')} className={`flex-1 py-2 text-xs font-bold rounded-lg relative flex items-center justify-center gap-1 ${mode==='main'?'bg-white shadow text-pink-600':'text-gray-500'}`}>
-                Main
+                主翻译
                 {localSettings.mainModelId && <span className="w-1.5 h-1.5 bg-green-500 rounded-full"/>}
             </button>
             <button onClick={() => setMode('second')} className={`flex-1 py-2 text-xs font-bold rounded-lg relative flex items-center justify-center gap-1 ${mode==='second'?'bg-white shadow text-purple-600':'text-gray-500'}`}>
-                Contrast
+                对比模型
                 {localSettings.secondModelId && <span className="w-1.5 h-1.5 bg-green-500 rounded-full"/>}
             </button>
             <button onClick={() => setMode('followup')} className={`flex-1 py-2 text-xs font-bold rounded-lg relative flex items-center justify-center gap-1 ${mode==='followup'?'bg-white shadow text-blue-600':'text-gray-500'}`}>
-                Suggestions
+                追问建议
                 {localSettings.followUpModelId && <span className="w-1.5 h-1.5 bg-green-500 rounded-full"/>}
             </button>
           </div>
@@ -586,7 +491,7 @@ const ModelSelectorModal = ({ settings, onClose, onSave }) => {
              </div>
           </div>
           <div className="p-4 border-t border-gray-100 flex justify-end">
-             <button onClick={() => { onSave(localSettings); onClose(); }} className="w-full py-3 bg-pink-500 text-white rounded-xl font-bold shadow-lg shadow-pink-200">Done</button>
+             <button onClick={() => { onSave(localSettings); onClose(); }} className="w-full py-3 bg-pink-500 text-white rounded-xl font-bold shadow-lg shadow-pink-200">完成设置</button>
           </div>
         </Dialog.Panel>
       </div>
@@ -594,17 +499,17 @@ const ModelSelectorModal = ({ settings, onClose, onSave }) => {
   );
 };
 
-// 4. Settings Modal
+// 4. 设置弹窗
 const SettingsModal = ({ settings, onSave, onClose }) => {
   const [data, setData] = useState(settings);
   const [tab, setTab] = useState('common');
   const fileInputRef = useRef(null);
 
   const updateProvider = (idx, f, v) => { const arr=[...data.providers]; arr[idx]={...arr[idx],[f]:v}; setData({...data,providers:arr}); };
-  const addProvider = () => setData(prev=>({...prev,providers:[...prev.providers,{id:nowId(),name:'New Provider',url:'',key:''}]}));
+  const addProvider = () => setData(prev=>({...prev,providers:[...prev.providers,{id:nowId(),name:'新供应商',url:'',key:''}]}));
   const delProvider = (id) => { if(data.providers.length>1) setData(prev=>({...prev,providers:prev.providers.filter(p=>p.id!==id)})); };
   const getModelsByProv = (pid) => data.models.filter(m=>m.providerId===pid);
-  const addModel = (pid) => setData(prev=>({...prev,models:[...prev.models,{id:nowId(),providerId:pid,name:'New Model',value:''}]}));
+  const addModel = (pid) => setData(prev=>({...prev,models:[...prev.models,{id:nowId(),providerId:pid,name:'新模型',value:''}]}));
   const updateModel = (mid,f,v) => setData(prev=>({...prev,models:prev.models.map(m=>m.id===mid?{...m,[f]:v}:m)}));
   const delModel = (mid) => setData(prev=>({...prev,models:prev.models.filter(m=>m.id!==mid)}));
 
@@ -622,11 +527,11 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <Dialog.Panel className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
           <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-            <div className="font-bold text-gray-800">Settings</div>
+            <div className="font-bold text-gray-800">设置</div>
             <button onClick={onClose} className="w-8 h-8 bg-gray-200 rounded-full text-gray-500"><i className="fas fa-times"/></button>
           </div>
           <div className="flex p-2 gap-1 border-b border-gray-100">
-            {[{id:'common',label:'General'}, {id:'provider',label:'Providers & Models'}, {id:'voice',label:'Voice'}].map(t => (
+            {[{id:'common',label:'通用'}, {id:'provider',label:'供应商与模型'}, {id:'voice',label:'发音人'}].map(t => (
               <button key={t.id} onClick={() => setTab(t.id)} className={`flex-1 py-2 text-xs font-bold rounded-lg ${tab===t.id ? 'bg-pink-50 text-pink-600':'text-gray-500 hover:bg-gray-50'}`}>{t.label}</button>
             ))}
           </div>
@@ -635,35 +540,26 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
               <div className="space-y-4">
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                   <div>
-                    <div className="text-sm font-bold text-gray-700">Filter Chain of Thought</div>
-                    <div className="text-xs text-gray-400">Hide &lt;think&gt; tags from DeepSeek/R1 models</div>
+                    <div className="text-sm font-bold text-gray-700">过滤模型思考过程</div>
+                    <div className="text-xs text-gray-400">关闭 DeepSeek 等模型的 &lt;think&gt; 输出</div>
                   </div>
                   <input type="checkbox" checked={data.filterThinking} onChange={e => setData({...data, filterThinking: e.target.checked})} className="w-5 h-5 accent-pink-500"/>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                   <div>
-                    <div className="text-sm font-bold text-gray-700">Enable Suggestions</div>
+                    <div className="text-sm font-bold text-gray-700">启用追问建议</div>
                   </div>
                   <input type="checkbox" checked={data.enableFollowUp} onChange={e => setData({...data, enableFollowUp: e.target.checked})} className="w-5 h-5 accent-pink-500"/>
                 </div>
                 <div className="p-3 bg-gray-50 rounded-xl">
-                  <div className="text-sm font-bold text-gray-700 mb-2">Background Image</div>
+                  <div className="text-sm font-bold text-gray-700 mb-2">背景设置</div>
                   <div className="flex items-center gap-3 mb-2">
-                     <button onClick={() => fileInputRef.current.click()} className="px-3 py-1.5 bg-white border rounded-lg text-xs shadow-sm">Upload</button>
+                     <button onClick={() => fileInputRef.current.click()} className="px-3 py-1.5 bg-white border rounded-lg text-xs shadow-sm">上传图片</button>
                      <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleBgUpload} />
-                     <button onClick={() => setData({...data, chatBackgroundUrl: ''})} className="px-3 py-1.5 bg-red-50 text-red-500 border border-red-100 rounded-lg text-xs">Clear</button>
+                     <button onClick={() => setData({...data, chatBackgroundUrl: ''})} className="px-3 py-1.5 bg-red-50 text-red-500 border border-red-100 rounded-lg text-xs">清除</button>
                   </div>
                   <input type="range" min="0.5" max="1.0" step="0.05" value={data.backgroundOverlay} onChange={e=>setData({...data, backgroundOverlay: parseFloat(e.target.value)})} className="w-full accent-pink-500"/>
                 </div>
-                 <div className="p-3 bg-gray-50 rounded-xl">
-                    <div className="flex justify-between items-center mb-2">
-                        <div className="text-sm font-bold text-gray-700">Custom System Prompt</div>
-                        <input type="checkbox" checked={data.useCustomPrompt} onChange={e=>setData({...data, useCustomPrompt: e.target.checked})} className="w-4 h-4 accent-pink-500"/>
-                    </div>
-                    {data.useCustomPrompt && (
-                        <textarea className="w-full p-2 text-xs border rounded-lg h-20" placeholder="Extra instructions..." value={data.customPromptText} onChange={e=>setData({...data, customPromptText: e.target.value})}/>
-                    )}
-                 </div>
               </div>
             )}
             {tab === 'provider' && (
@@ -672,30 +568,38 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                   <div key={p.id} className="bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm">
                     <div className="flex justify-between items-center mb-2">
                        <input className="font-bold text-gray-800 bg-transparent outline-none" value={p.name} onChange={e=>updateProvider(idx,'name',e.target.value)} />
-                       <button onClick={()=>delProvider(p.id)} className="text-red-500 text-xs">Delete</button>
+                       <button onClick={()=>delProvider(p.id)} className="text-red-500 text-xs">删除</button>
                     </div>
                     <div className="grid grid-cols-2 gap-2 mb-3">
                       <input className="bg-white text-xs p-2 rounded border" placeholder="URL" value={p.url} onChange={e=>updateProvider(idx,'url',e.target.value)} />
                       <input className="bg-white text-xs p-2 rounded border" type="password" placeholder="Key" value={p.key} onChange={e=>updateProvider(idx,'key',e.target.value)} />
                     </div>
                     <div className="bg-white rounded-lg p-2 border border-gray-100">
-                      <div className="flex justify-between mb-2"><span className="text-[10px] font-bold text-gray-400">Models</span><button onClick={()=>addModel(p.id)} className="text-[10px] bg-blue-50 text-blue-600 px-2 rounded">+ Add</button></div>
+                      <div className="flex justify-between mb-2"><span className="text-[10px] font-bold text-gray-400">模型列表</span><button onClick={()=>addModel(p.id)} className="text-[10px] bg-blue-50 text-blue-600 px-2 rounded">+ 添加</button></div>
                       {getModelsByProv(p.id).map(m => (
                         <div key={m.id} className="flex gap-2 items-center mb-1">
-                          <input className="flex-1 text-[11px] border rounded p-1" placeholder="Name" value={m.name} onChange={e=>updateModel(m.id,'name',e.target.value)} />
-                          <input className="flex-1 text-[11px] border rounded p-1 font-mono" placeholder="Value (ID)" value={m.value} onChange={e=>updateModel(m.id,'value',e.target.value)} />
+                          <input className="flex-1 text-[11px] border rounded p-1" placeholder="名称" value={m.name} onChange={e=>updateModel(m.id,'name',e.target.value)} />
+                          <input className="flex-1 text-[11px] border rounded p-1 font-mono" placeholder="Value" value={m.value} onChange={e=>updateModel(m.id,'value',e.target.value)} />
                           <button onClick={()=>delModel(m.id)} className="text-gray-300 hover:text-red-500"><i className="fas fa-times"/></button>
                         </div>
                       ))}
                     </div>
                   </div>
                 ))}
-                <button onClick={addProvider} className="w-full py-2 border border-dashed rounded-xl text-gray-500 text-sm hover:bg-gray-50">+ Add Provider</button>
+                <button onClick={addProvider} className="w-full py-2 border border-dashed rounded-xl text-gray-500 text-sm hover:bg-gray-50">+ 添加供应商</button>
               </div>
             )}
             {tab === 'voice' && (
               <div className="space-y-4">
-                 <div className="text-sm font-bold text-gray-700 px-1">Language Specific Voices</div>
+                 <div className="p-3 bg-gray-50 rounded-xl flex items-center justify-between">
+                    <div>
+                        <div className="text-sm font-bold text-gray-700">自动朗读</div>
+                        <div className="text-xs text-gray-400">翻译完成后自动播放第一条结果</div>
+                    </div>
+                    <input type="checkbox" checked={data.autoPlayTTS} onChange={e => setData({...data, autoPlayTTS: e.target.checked})} className="w-5 h-5 accent-pink-500"/>
+                 </div>
+
+                 <div className="text-sm font-bold text-gray-700 px-1 mt-4">特定语言发音人设置</div>
                  {SUPPORTED_LANGUAGES.map(lang => (
                    AVAILABLE_VOICES[lang.code] && (
                      <div key={lang.code} className="flex items-center justify-between border-b border-gray-50 py-2">
@@ -703,22 +607,22 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
                        <select className="text-xs bg-gray-50 border border-gray-200 rounded px-2 py-1 max-w-[140px]" value={(data.ttsConfig||{})[lang.code]||''} onChange={(e)=>{
                          const cfg={...(data.ttsConfig||{})}; cfg[lang.code]=e.target.value; setData({...data,ttsConfig:cfg});
                        }}>
-                         <option value="">Default</option>
+                         <option value="">默认</option>
                          {AVAILABLE_VOICES[lang.code].map(v=><option key={v.id} value={v.id}>{v.name}</option>)}
                        </select>
                      </div>
                    )
                  ))}
                  <div className="p-3 bg-gray-50 rounded-xl mt-4">
-                    <div className="text-sm font-bold text-gray-700">TTS Speed: {data.ttsSpeed}x</div>
+                    <div className="text-sm font-bold text-gray-700">全局语速: {data.ttsSpeed}x</div>
                     <input type="range" min="0.5" max="2.0" step="0.1" className="w-full accent-pink-500 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer mt-2" value={data.ttsSpeed} onChange={e=>setData({...data,ttsSpeed:parseFloat(e.target.value)})}/>
                  </div>
               </div>
             )}
           </div>
           <div className="p-4 border-t border-gray-100 flex justify-end gap-3">
-             <button onClick={onClose} className="px-5 py-2 rounded-xl bg-gray-100 text-sm font-bold text-gray-600">Cancel</button>
-             <button onClick={()=>{onSave(data);onClose();}} className="px-5 py-2 rounded-xl bg-pink-500 text-sm font-bold text-white shadow-lg shadow-pink-200">Save</button>
+             <button onClick={onClose} className="px-5 py-2 rounded-xl bg-gray-100 text-sm font-bold text-gray-600">取消</button>
+             <button onClick={()=>{onSave(data);onClose();}} className="px-5 py-2 rounded-xl bg-pink-500 text-sm font-bold text-white shadow-lg shadow-pink-200">保存</button>
           </div>
         </Dialog.Panel>
       </div>
@@ -726,111 +630,23 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
   );
 };
 
-// 5. Sidebar
-const Sidebar = ({ isOpen, onClose, currentSessionId, onSelectSession, onNewSession }) => {
-  const [sessions, setSessions] = useState([]);
-  const [editingId, setEditingId] = useState(null);
-  const [editName, setEditName] = useState('');
-
-  useEffect(() => { if (isOpen) loadSessions(); }, [isOpen]);
-
-  const loadSessions = async () => {
-    const list = await db.getSessions();
-    list.sort((a, b) => {
-      if ((b.isPinned || 0) !== (a.isPinned || 0)) return (b.isPinned || 0) - (a.isPinned || 0);
-      return b.updatedAt - a.updatedAt;
-    });
-    setSessions(list);
-  };
-
-  const handleDelete = async (e, id) => {
-    e.stopPropagation();
-    if (confirm('Delete this session?')) {
-      await db.deleteSession(id);
-      loadSessions();
-      if (id === currentSessionId) onNewSession();
-    }
-  };
-
-  const handleTogglePin = async (e, sess) => {
-    e.stopPropagation();
-    await db.updateSession(sess.id, { isPinned: sess.isPinned ? 0 : 1 });
-    loadSessions();
-  };
-
-  const handleRename = async (e) => {
-    e.preventDefault();
-    if (editingId && editName.trim()) {
-      await db.updateSession(editingId, { title: editName });
-      setEditingId(null);
-      loadSessions();
-    }
-  };
-
-  return (
-    <Transition show={isOpen} as={Fragment}>
-      <Dialog as="div" className="relative z-[10001]" onClose={onClose}>
-        <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0"><div className="fixed inset-0 bg-black/30 backdrop-blur-sm" /></Transition.Child>
-        <div className="fixed inset-0 flex">
-          <Transition.Child as={Fragment} enter="transform transition ease-in-out duration-300" enterFrom="-translate-x-full" enterTo="translate-x-0" leave="transform transition ease-in-out duration-300" leaveFrom="translate-x-0" leaveTo="-translate-x-full">
-            <Dialog.Panel className="relative w-[80%] max-w-xs h-full bg-white shadow-2xl flex flex-col">
-              <div className="p-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-                <span className="font-bold text-lg text-gray-800">History</span>
-                <button onClick={onClose}><i className="fas fa-times text-gray-400"/></button>
-              </div>
-              <div className="p-3">
-                <button onClick={() => { onNewSession(); onClose(); }} className="w-full py-2.5 bg-pink-500 text-white rounded-xl font-bold shadow-md shadow-pink-200 flex items-center justify-center gap-2 mb-3">
-                  <i className="fas fa-plus"/> New Chat
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto slim-scrollbar p-2">
-                {sessions.map(sess => (
-                  <div key={sess.id} onClick={() => { onSelectSession(sess.id); onClose(); }} className={`group flex items-center justify-between p-3 mb-1 rounded-xl cursor-pointer transition-colors ${currentSessionId === sess.id ? 'bg-pink-50 border border-pink-100' : 'hover:bg-gray-50 border border-transparent'}`}>
-                    {editingId === sess.id ? (
-                      <form onSubmit={handleRename} onClick={e=>e.stopPropagation()} className="flex-1 flex gap-1">
-                        <input className="flex-1 text-sm border rounded px-1" autoFocus value={editName} onChange={e=>setEditName(e.target.value)} onBlur={()=>setEditingId(null)} />
-                        <button type="submit" className="text-green-500 text-xs px-2">OK</button>
-                      </form>
-                    ) : (
-                      <>
-                        <div className="flex items-center gap-2 flex-1 overflow-hidden">
-                          {!!sess.isPinned && <i className="fas fa-thumbtack text-[10px] text-pink-400 rotate-45"/>}
-                          <div className="truncate text-sm text-gray-700 font-medium">{sess.title}</div>
-                        </div>
-                        <div className="flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={(e)=>handleTogglePin(e, sess)} className={`${sess.isPinned ? 'text-pink-500':'text-gray-300 hover:text-gray-500'}`}><i className="fas fa-thumbtack text-xs"/></button>
-                          <button onClick={(e)=>{e.stopPropagation();setEditingId(sess.id);setEditName(sess.title);}} className="text-gray-300 hover:text-blue-500"><i className="fas fa-edit text-xs"/></button>
-                          <button onClick={(e)=>handleDelete(e, sess.id)} className="text-gray-300 hover:text-red-500"><i className="fas fa-trash text-xs"/></button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </Dialog.Panel>
-          </Transition.Child>
-        </div>
-      </Dialog>
-    </Transition>
-  );
-};
-
 // ----------------- Main Chat Logic -----------------
 const AiChatContent = ({ onClose }) => {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
 
+  // 语言状态
   const [sourceLang, setSourceLang] = useState('zh-CN');
   const [targetLang, setTargetLang] = useState('my-MM');
 
-  const [currentSessionId, setCurrentSessionId] = useState(null);
   const [inputVal, setInputVal] = useState('');
-  const [inputImages, setInputImages] = useState([]);
+  const [inputImages, setInputImages] = useState([]); // 多图支持
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
   const [history, setHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  // 录音相关状态与 Ref
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef(null);
 
@@ -843,32 +659,28 @@ const AiChatContent = ({ onClose }) => {
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [showSrcPicker, setShowSrcPicker] = useState(false);
   const [showTgtPicker, setShowTgtPicker] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(false);
 
+  // 初始化加载
   useEffect(() => {
     const s = safeLocalStorageGet('ai886_settings');
     if (s) {
       const parsed = JSON.parse(s);
       setSettings({ ...DEFAULT_SETTINGS, ...parsed });
+      // 恢复上次语言选择
       if (parsed.lastSourceLang) setSourceLang(parsed.lastSourceLang);
       if (parsed.lastTargetLang) setTargetLang(parsed.lastTargetLang);
     }
-    (async () => {
-      const sessList = await db.getSessions();
-      if (sessList.length > 0) {
-        sessList.sort((a,b)=>b.updatedAt-a.updatedAt);
-        loadSession(sessList[0].id);
-      } else {
-        createNewSession();
-      }
-    })();
+    // 每次进入都清空历史，只显示欢迎界面
+    setHistory([]);
   }, []);
 
+  // 持久化保存
   useEffect(() => {
     const toSave = { ...settings, lastSourceLang: sourceLang, lastTargetLang: targetLang };
     safeLocalStorageSet('ai886_settings', JSON.stringify(toSave));
   }, [settings, sourceLang, targetLang]);
 
+  // Cleanup
   useEffect(() => {
     return () => {
       if (recognitionRef.current) {
@@ -885,21 +697,6 @@ const AiChatContent = ({ onClose }) => {
     }, 100);
   };
 
-  const createNewSession = async () => {
-    const sess = await db.createSession();
-    setCurrentSessionId(sess.id);
-    setHistory([]);
-    setSuggestions([]);
-  };
-
-  const loadSession = async (id) => {
-    setCurrentSessionId(id);
-    const msgs = await db.getMessages(id);
-    msgs.sort((a,b) => a.ts - b.ts);
-    setHistory(msgs);
-    scrollToResult();
-  };
-
   const getProviderAndModel = (modelId) => {
     const model = settings.models.find(m => m.id === modelId);
     if (!model) return null;
@@ -907,10 +704,11 @@ const AiChatContent = ({ onClose }) => {
     return { provider, model };
   };
 
+  // 普通请求
   const fetchAi = async (messages, modelId, jsonMode = true) => {
     const pm = getProviderAndModel(modelId);
-    if (!pm) throw new Error(`Model ${modelId} not configured.`);
-    if (!pm.provider.key) throw new Error(`${pm.provider.name} missing API Key.`);
+    if (!pm) throw new Error(`未配置模型 ${modelId}`);
+    if (!pm.provider.key) throw new Error(`${pm.provider.name} 缺少 Key`);
 
     const body = { model: pm.model.value, messages, stream: false };
     if (jsonMode) body.response_format = { type: 'json_object' };
@@ -926,10 +724,11 @@ const AiChatContent = ({ onClose }) => {
       throw new Error(errData?.error?.message || `API Error: ${res.status}`);
     }
     const data = await res.json();
-    if (!data.choices?.length) throw new Error('API returned no choices.');
+    if (!data.choices?.length) throw new Error('API返回数据异常');
 
     let content = data.choices[0].message.content;
 
+    // 过滤思考过程
     if (settings.filterThinking) {
         content = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
     }
@@ -941,12 +740,10 @@ const AiChatContent = ({ onClose }) => {
     let text = (textOverride || inputVal).trim();
     if (!text && inputImages.length === 0) return;
 
-    if (!currentSessionId) await createNewSession();
-
+    // 1. 自动语言检测与交换
     let currentSource = sourceLang;
     let currentTarget = targetLang;
 
-    // Logic to detect language and swap if needed
     if (text) {
         const detected = detectScript(text);
         if (detected && detected !== currentSource && detected === currentTarget) {
@@ -962,8 +759,12 @@ const AiChatContent = ({ onClose }) => {
     }
 
     setIsLoading(true);
-    setSuggestions([]); 
+    setSuggestions([]);
+    
+    // 生成临时会话ID
+    const currentSessionId = nowId();
 
+    // 构造用户消息
     const userMsg = { 
         id: nowId(), 
         sessionId: currentSessionId, 
@@ -973,23 +774,21 @@ const AiChatContent = ({ onClose }) => {
         ts: Date.now(), 
         results: [] 
     };
-    setHistory(prev => [...prev, userMsg]);
+
+    // 关键改变：每次都重置为新的对话列表，不保存历史
+    setHistory([userMsg]);
     setInputVal('');
     setInputImages([]);
     scrollToResult();
 
-    db.addMessage(userMsg);
-    if (history.length === 0) db.updateSession(currentSessionId, { title: text ? text.slice(0, 20) : '[Image]' });
-    else db.updateSession(currentSessionId, {}); 
-
-    // Build Prompt with English instructions
+    // ----------------- 普通模式逻辑 -----------------
     let sysPrompt = BASE_SYSTEM_INSTRUCTION;
     if (settings.useCustomPrompt && settings.customPromptText) {
-      sysPrompt += `\nAdditional Rules: ${settings.customPromptText}`;
+      sysPrompt += `\n额外要求: ${settings.customPromptText}`;
     }
-    sysPrompt += `\nIMPORTANT: The back_translation MUST be in: ${getLangName(currentSource)}`;
+    sysPrompt += `\nback_translation 必须翻译回: ${getLangName(currentSource)}`;
 
-    const userPromptText = `Source Language: ${getLangName(currentSource)}\nTarget Language: ${getLangName(currentTarget)}\nInput Text:\n${text || '[Image Content]'}`;
+    const userPromptText = `Source: ${getLangName(currentSource)}\nTarget: ${getLangName(currentTarget)}\nContent:\n${text || '[Image Content]'}`;
 
     let finalUserMessage;
     if (inputImages.length > 0) {
@@ -1009,12 +808,9 @@ const AiChatContent = ({ onClose }) => {
 
     try {
       let dictHit = null;
-      // Local dictionary lookup (if function exists)
-      if (inputImages.length === 0 && text && typeof loadCheatDict !== 'undefined') {
-         try {
-            const dict = await loadCheatDict(currentSource);
-            dictHit = matchCheatLoose(dict, text, currentTarget);
-         } catch(e) { console.warn('Dict error', e); }
+      if (inputImages.length === 0 && text) {
+         const dict = await loadCheatDict(currentSource);
+         dictHit = matchCheatLoose(dict, text, currentTarget);
       }
       
       let aiMsg = { id: nowId(), sessionId: currentSessionId, role: 'ai', results: [], modelResults: [], from: 'ai', ts: Date.now() };
@@ -1024,46 +820,37 @@ const AiChatContent = ({ onClose }) => {
         aiMsg.from = 'dict';
       } else {
         const tasks = [];
-        // Primary Model
-        tasks.push(fetchAi(messages, settings.mainModelId, true)
-            .then(r => ({ ...r, isMain: true }))
-            .catch(e => ({ error: e.message, isMain: true, modelName: 'Main Model' }))
-        );
-
-        // Secondary Model (if selected and different)
+        tasks.push(fetchAi(messages, settings.mainModelId, true).then(r => ({ ...r, isMain: true })).catch(e => ({ error: e.message, isMain: true })));
         if (settings.secondModelId && settings.secondModelId !== settings.mainModelId) {
-           tasks.push(fetchAi(messages, settings.secondModelId, true)
-               .then(r => ({ ...r, isMain: false }))
-               .catch(e => ({ error: e.message, isMain: false, modelName: 'Contrast Model' }))
-           );
+           tasks.push(fetchAi(messages, settings.secondModelId, true).then(r => ({ ...r, isMain: false })).catch(e => ({ error: e.message, isMain: false })));
         }
 
         const responses = await Promise.all(tasks);
         
         const modelResults = responses.map(res => {
-            if (res.error) {
-                return { 
-                    modelName: res.modelName + ' (Failed)', 
-                    data: [{ translation: `Error: ${res.error}`, back_translation: '', style: 'Error' }] 
-                };
-            }
+            if (res.error) return { modelName: 'Error', data: [{ style: '错误', translation: res.error, back_translation: '' }] };
             return { modelName: res.modelName, data: normalizeTranslations(res.content) };
         });
 
         aiMsg.modelResults = modelResults;
-        aiMsg.results = modelResults[0].data; // Fallback for single view
+        aiMsg.results = modelResults[0].data;
       }
 
       setHistory(prev => [...prev, aiMsg]);
-      await db.addMessage(aiMsg);
+      // 不再持久化保存 aiMsg，保持“不保存历史对话”
       scrollToResult();
+      
+      // 自动播放第一个结果
+      if (settings.autoPlayTTS && aiMsg.results && aiMsg.results.length > 0) {
+        playTTS(aiMsg.results[0].translation, currentTarget, settings);
+      }
       
       if (settings.enableFollowUp && text) {
           fetchSuggestions(text, currentSource, currentTarget);
       }
 
     } catch (e) {
-      const errorMsg = { id: nowId(), sessionId: currentSessionId, role: 'error', text: e.message || 'Unknown Error', ts: Date.now(), results: [] };
+      const errorMsg = { id: nowId(), sessionId: currentSessionId, role: 'error', text: e.message || '未知错误', ts: Date.now(), results: [] };
       setHistory(prev => [...prev, errorMsg]);
     } finally {
       setIsLoading(false);
@@ -1073,7 +860,7 @@ const AiChatContent = ({ onClose }) => {
   const fetchSuggestions = async (originalText, src, tgt) => {
     setIsSuggesting(true);
     try {
-      const prompt = `Source Text (${getLangName(src)}): ${originalText}\nTranslated to: ${getLangName(tgt)}`;
+      const prompt = `原文(${getLangName(src)}): ${originalText}\n已翻译为: ${getLangName(tgt)}`;
       const { content } = await fetchAi([
         { role: 'system', content: REPLY_SYSTEM_INSTRUCTION },
         { role: 'user', content: prompt }
@@ -1102,6 +889,10 @@ const AiChatContent = ({ onClose }) => {
     e.target.value = '';
   };
 
+  // -----------------------------
+  // Voice Recognition
+  // -----------------------------
+
   const stopAndSend = (isManual = false) => {
     if (!recognitionRef.current) return;
     try {
@@ -1113,7 +904,7 @@ const AiChatContent = ({ onClose }) => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert('Browser does not support Speech Recognition');
+      alert('当前浏览器不支持语音识别');
       return;
     }
 
@@ -1125,7 +916,7 @@ const AiChatContent = ({ onClose }) => {
     const recognition = new SpeechRecognition();
     recognition.lang = sourceLang;
     recognition.interimResults = true;
-    recognition.continuous = false;
+    recognition.continuous = false; 
 
     recognitionRef.current = recognition;
     setInputVal('');
@@ -1139,14 +930,14 @@ const AiChatContent = ({ onClose }) => {
         .map(result => result.transcript)
         .join('');
       
-      setInputVal(transcript);
+      setInputVal(transcript); 
 
       const isFinal = results.some(r => r.isFinal);
       if (isFinal && transcript.trim()) {
         try { recognition.stop(); } catch {}
         setIsRecording(false);
-        handleTranslate(transcript);
-        setInputVal('');
+        handleTranslate(transcript); 
+        setInputVal(''); 
       }
     };
 
@@ -1175,12 +966,10 @@ const AiChatContent = ({ onClose }) => {
         <div className="absolute inset-0 bg-cover bg-center z-0 transition-opacity duration-500 pointer-events-none" style={{ backgroundImage: `url('${settings.chatBackgroundUrl}')`, opacity: 1 - settings.backgroundOverlay }} />
       )}
 
-      {/* Header */}
+      {/* Header (移除了历史按钮) */}
       <div className="relative z-20 pt-safe-top bg-white/60 backdrop-blur-md shadow-sm border-b border-pink-100/50">
         <div className="flex items-center justify-between h-12 relative px-4">
-          <button onClick={() => setShowSidebar(true)} className="text-gray-600 hover:text-pink-500 w-10 text-left">
-            <i className="fas fa-bars text-lg"/>
-          </button>
+          <div className="w-10"></div>
           
           <div className="flex items-center gap-2 absolute left-1/2 transform -translate-x-1/2">
             <i className="fas fa-link text-pink-500" />
@@ -1195,23 +984,23 @@ const AiChatContent = ({ onClose }) => {
         </div>
       </div>
 
-      {/* Rec Status */}
+      {/* 录音状态 */}
       <Transition show={isRecording} as={Fragment} enter="transition-opacity duration-200" enterFrom="opacity-0" enterTo="opacity-100" leave="transition-opacity duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
         <div className="fixed top-24 left-0 right-0 z-50 flex justify-center pointer-events-none">
           <div className="bg-pink-500/90 text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-3 animate-pulse pointer-events-auto backdrop-blur-sm">
             <i className="fas fa-microphone text-xl animate-bounce"/>
-            <span className="font-bold">Listening ({getLangName(sourceLang)})...</span>
+            <span className="font-bold">正在识别 ({getLangName(sourceLang)})...</span>
           </div>
         </div>
       </Transition>
 
-      {/* Chat Area */}
+      {/* 聊天区域 */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar relative z-10 px-4 pt-4 pb-32 scroll-smooth">
         <div className="w-full max-w-[600px] mx-auto min-h-full flex flex-col justify-end">
            {history.length === 0 && !isLoading && (
              <div className="text-center text-gray-400 mb-20 opacity-60">
                 <div className="text-4xl mb-2">👋</div>
-                <div className="text-sm">4-Style Translation & Dual Model</div>
+                <div className="text-sm">自动识别语言 & 四重风格翻译</div>
              </div>
            )}
 
@@ -1237,11 +1026,12 @@ const AiChatContent = ({ onClose }) => {
                return <div key={item.id} className="bg-red-50 text-red-500 text-xs p-3 rounded-xl text-center mb-6">{item.text}</div>;
              }
              
+             // 普通模式：卡片渲染
              return (
                <div key={item.id} className="mb-6 animate-in slide-in-from-bottom-4 duration-500">
                   <TranslationResultContainer item={item} targetLang={targetLang} onPlay={(text) => playTTS(text, targetLang, settings)} />
                   {item.modelResults && item.modelResults.length > 1 && (
-                      <div className="text-center text-[9px] text-gray-300 mt-1">Multi-Model Comparison</div>
+                      <div className="text-center text-[9px] text-gray-300 mt-1">双模对比</div>
                   )}
                   {idx === history.length - 1 && (
                     isSuggesting ? (
@@ -1253,11 +1043,11 @@ const AiChatContent = ({ onClose }) => {
                </div>
              );
            })}
-           {isLoading && <div className="flex justify-center mb-8"><div className="bg-white/80 px-4 py-2 rounded-full shadow-sm flex items-center gap-2 text-sm text-pink-500 animate-pulse"><i className="fas fa-spinner fa-spin" /><span>Translating 4 Styles...</span></div></div>}
+           {isLoading && <div className="flex justify-center mb-8"><div className="bg-white/80 px-4 py-2 rounded-full shadow-sm flex items-center gap-2 text-sm text-pink-500 animate-pulse"><i className="fas fa-spinner fa-spin" /><span>思考中...</span></div></div>}
         </div>
       </div>
 
-      {/* Input Area */}
+      {/* 底部输入区 */}
       <div className="fixed bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-white via-white/95 to-white/0 pt-6 pb-[max(12px,env(safe-area-inset-bottom))]">
         <div className="w-full max-w-[600px] mx-auto px-4">
           
@@ -1283,7 +1073,6 @@ const AiChatContent = ({ onClose }) => {
           </div>
 
           <div className={`relative flex items-end gap-2 bg-white border rounded-[28px] p-1.5 shadow-sm transition-all duration-200 ${isRecording ? 'border-pink-300 ring-2 ring-pink-100' : 'border-pink-100'}`}>
-            {/* Camera/Image Button */}
             <Menu as="div" className="relative">
                 <Menu.Button className="w-10 h-11 flex items-center justify-center text-gray-400 hover:text-pink-500">
                     <i className="fas fa-camera" />
@@ -1302,14 +1091,14 @@ const AiChatContent = ({ onClose }) => {
                             <Menu.Item>
                                 {({ active }) => (
                                     <button onClick={() => cameraInputRef.current?.click()} className={`${active ? 'bg-pink-50 text-pink-600' : 'text-gray-700'} group flex w-full items-center rounded-lg px-2 py-2 text-sm`}>
-                                        <i className="fas fa-camera mr-2"/> Camera
+                                        <i className="fas fa-camera mr-2"/> 拍照
                                     </button>
                                 )}
                             </Menu.Item>
                             <Menu.Item>
                                 {({ active }) => (
                                     <button onClick={() => fileInputRef.current?.click()} className={`${active ? 'bg-pink-50 text-pink-600' : 'text-gray-700'} group flex w-full items-center rounded-lg px-2 py-2 text-sm`}>
-                                        <i className="fas fa-image mr-2"/> Gallery
+                                        <i className="fas fa-image mr-2"/> 相册
                                     </button>
                                 )}
                             </Menu.Item>
@@ -1334,7 +1123,7 @@ const AiChatContent = ({ onClose }) => {
                 )}
                 <textarea
                   className="w-full bg-transparent border-none outline-none resize-none px-2 py-2 max-h-32 text-[16px] leading-6 no-scrollbar placeholder-gray-400 text-gray-800"
-                  placeholder={isRecording ? "" : "Type something..."}
+                  placeholder={isRecording ? "" : "输入内容..."}
                   rows={1}
                   value={inputVal}
                   onChange={e => setInputVal(e.target.value)}
@@ -1379,14 +1168,6 @@ const AiChatContent = ({ onClose }) => {
           </Dialog.Panel>
         </div>
       </Dialog>
-
-      <Sidebar 
-        isOpen={showSidebar} 
-        onClose={() => setShowSidebar(false)} 
-        currentSessionId={currentSessionId}
-        onSelectSession={loadSession}
-        onNewSession={createNewSession}
-      />
 
       {showSettings && <SettingsModal settings={settings} onSave={setSettings} onClose={() => setShowSettings(false)} />}
       
