@@ -5,7 +5,7 @@ import { pinyin } from 'pinyin-pro';
 import ReactPlayer from 'react-player';
 import {
   FaPause, FaPlay, FaChevronRight, FaVolumeUp, 
-  FaExclamationTriangle, FaBookReader
+  FaExclamationTriangle, FaBookReader, FaCopy, FaLanguage
 } from 'react-icons/fa';
 import { useAI } from '../AIConfigContext';
 
@@ -22,7 +22,7 @@ const playSFX = (type) => {
 };
 
 // =================================================================================
-// ===== 1. 健壮的 TTS Hook (移除进度监听，彻底解决空对象崩溃问题) =====
+// ===== 1. 健壮的 TTS Hook =====
 // =================================================================================
 function useRobustTTS() {
   const [playerState, setPlayerState] = useState({
@@ -232,7 +232,7 @@ const RichTextRenderer = ({ content, onPlayText, activeTtsId }) => {
 // =================================================================================
 // ===== 3. 主组件 GrammarPointPlayer =====
 // =================================================================================
-const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
+const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete, onAskAI }) => {
   const { updatePageContext } = useAI();
   const playerContainerRef = useRef(null);
   
@@ -240,6 +240,10 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const contentRef = useRef(null);
+
+  // 自定义菜单状态
+  const [menu, setMenu] = useState({ visible: false, x: 0, y: 0, text: '' });
+  const menuRef = useRef(null);
 
   // TTS 状态
   const { play, stop, activeId } = useRobustTTS();
@@ -251,7 +255,10 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
       id: item.id || idx,
       title: item['语法标题'] || '',
       pattern: item['句型结构'] || '',
-      videoUrl: item['视频链接'] || 'https://audio.886.best/chinese-vocab-audio/%E8%A7%86%E9%A2%91/Screenrecorder-2025-05-23-17-46-34-343.mp4',
+      // 修改：如果数据里没有链接，则是空字符串，不放硬编码
+      videoUrl: item['视频链接'] || '',
+      // 新增：支持封面，如果没有封面默认为 true (ReactPlayer会尝试加载自动封面或黑屏)
+      coverUrl: item['视频封面'] || true,
       explanationRaw: item['语法详解'] || '',
       attention: item['注意事项'] || '',
       dialogues: (item['例句列表'] || []).map((ex, i) => {
@@ -293,8 +300,25 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
   // 翻页清理
   useEffect(() => {
     stop();
+    setMenu({ ...menu, visible: false }); // 翻页关闭菜单
     if (contentRef.current) contentRef.current.scrollTop = 0;
   }, [currentIndex, stop]);
+
+  // 点击空白处关闭菜单
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menu.visible && menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenu(prev => ({ ...prev, visible: false }));
+        window.getSelection().removeAllRanges();
+      }
+    };
+    window.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      window.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [menu.visible]);
 
   // 页面切换动画
   const transitions = useTransition(currentIndex, {
@@ -313,7 +337,6 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
     }
   };
 
-  // 触发视频全屏
   const handleVideoFullScreen = () => {
     const el = playerContainerRef.current;
     if (el) {
@@ -321,6 +344,88 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
       else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
     }
   };
+
+  // ----- 菜单核心逻辑 -----
+  
+  // 1. 处理右键
+  const handleContextMenu = (e) => {
+    e.preventDefault(); // 屏蔽浏览器默认菜单
+    const selection = window.getSelection();
+    const text = selection.toString().trim();
+    
+    if (text) {
+      setMenu({
+        visible: true,
+        x: e.clientX,
+        y: e.clientY,
+        text: text
+      });
+    }
+  };
+
+  // 2. 处理文本选择 (鼠标抬起或触摸结束)
+  const handleTextSelection = (e) => {
+    // 稍微延迟以确保选区已建立
+    setTimeout(() => {
+      const selection = window.getSelection();
+      const text = selection.toString().trim();
+
+      if (text.length > 0) {
+        // 获取选区坐标
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        
+        // 计算位置：居中显示在选区上方
+        let top = rect.top - 50; 
+        let left = rect.left + (rect.width / 2) - 100; // 假设菜单宽200左右
+
+        // 边界检查（简单处理）
+        if (left < 10) left = 10;
+        if (top < 10) top = rect.bottom + 10;
+
+        setMenu({
+          visible: true,
+          x: left,
+          y: top,
+          text: text
+        });
+      }
+    }, 10);
+  };
+
+  // 3. 菜单功能执行
+  const handleMenuAction = (action) => {
+    const text = menu.text;
+    if (!text) return;
+
+    switch (action) {
+      case 'read':
+        play(text, 'selection_read');
+        break;
+      case 'copy':
+        navigator.clipboard.writeText(text);
+        // 可以加一个简单的提示
+        console.log('Copied:', text);
+        break;
+      case 'explain':
+        // 1. 更新上下文，让AI知道你在问哪个词
+        updatePageContext(`用户正在查询: "${text}"。请解释这个词/句子的语法点和用法。`);
+        // 2. 触发 AI 交互 (如果父组件传入了 onAskAI)
+        if (onAskAI) {
+            onAskAI(`请解释一下：${text}`);
+        } else {
+            console.warn("未传入 onAskAI 函数，请在 GrammarPointPlayer 组件上传入该函数以触发AI解释。");
+            alert(`AI解释: ${text} (请连接AI组件)`);
+        }
+        break;
+      default:
+        break;
+    }
+    // 操作后关闭菜单
+    setMenu(prev => ({ ...prev, visible: false }));
+    window.getSelection().removeAllRanges();
+  };
+
 
   if (!currentPoint) return null;
 
@@ -330,12 +435,19 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
         const gp = normalizedPoints[i];
         return (
           <animated.div style={{ ...styles.page, ...style }}>
-            <div style={styles.scrollContainer} ref={contentRef}>
+            <div 
+              style={styles.scrollContainer} 
+              ref={contentRef}
+              // 绑定事件到容器，实现屏蔽默认菜单和自定义选词
+              onContextMenu={handleContextMenu}
+              onMouseUp={handleTextSelection}
+              onTouchEnd={handleTextSelection}
+            >
               <div style={styles.contentWrapper}>
                 
                 <h2 style={styles.title}>{gp.title}</h2>
 
-                {/* 核心句型卡片 + 视频封面 */}
+                {/* 核心句型卡片 + 视频 (条件渲染) */}
                 <div style={styles.headerRow}>
                   <div style={styles.patternCard}>
                     <div style={styles.cardLabel}><FaBookReader /> 核心句型</div>
@@ -344,21 +456,24 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
                     </div>
                   </div>
 
-                  <div 
-                    style={styles.videoBox} 
-                    ref={playerContainerRef} 
-                    onClick={handleVideoFullScreen}
-                  >
-                    <ReactPlayer 
-                      url={gp.videoUrl} 
-                      width="100%" 
-                      height="100%" 
-                      playing={isVideoPlaying}
-                      light={true} 
-                      config={{ file: { attributes: { controlsList: 'nodownload' }}}} 
-                    />
-                    <div style={styles.videoOverlay}>点击全屏</div>
-                  </div>
+                  {/* 只有当 videoUrl 存在时才渲染视频区域 */}
+                  {gp.videoUrl && (
+                    <div 
+                      style={styles.videoBox} 
+                      ref={playerContainerRef} 
+                      onClick={handleVideoFullScreen}
+                    >
+                      <ReactPlayer 
+                        url={gp.videoUrl} 
+                        width="100%" 
+                        height="100%" 
+                        playing={isVideoPlaying}
+                        light={gp.coverUrl} // 使用数据中的封面
+                        config={{ file: { attributes: { controlsList: 'nodownload' }}}} 
+                      />
+                      <div style={styles.videoOverlay}>点击全屏</div>
+                    </div>
+                  )}
                 </div>
 
                 {/* 语法详解内容 */}
@@ -389,7 +504,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
                   </div>
                 )}
 
-                {/* 对话模块 (根据 speaker 自动区分左右和音色) */}
+                {/* 对话模块 */}
                 <div style={styles.section}>
                   <div style={styles.sectionHeader}>💬 场景对话</div>
                   <div style={styles.chatList}>
@@ -432,6 +547,35 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
                 </button>
                 <div style={{ height: '60px' }} />
               </div>
+
+              {/* ----- 自定义菜单渲染 ----- */}
+              {menu.visible && (
+                <div 
+                  ref={menuRef}
+                  style={{
+                    ...styles.customMenu,
+                    top: menu.y, // 绝对定位，如果是基于视口需改为 fixed 并用 clientY
+                    left: menu.x,
+                    // 如果是在 scrollContainer 内，使用 absolute 即可，但坐标需为 pageX/Y
+                    // 这里为了简单稳健，建议使用 fixed 定位覆盖在最上层
+                    position: 'fixed' 
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()} // 防止点击菜单触发容器的关闭事件
+                >
+                  <div style={styles.menuItem} onClick={() => handleMenuAction('read')}>
+                    <FaVolumeUp size={14} /> 朗读
+                  </div>
+                  <div style={styles.menuDivider} />
+                  <div style={styles.menuItem} onClick={() => handleMenuAction('copy')}>
+                    <FaCopy size={14} /> 复制
+                  </div>
+                  <div style={styles.menuDivider} />
+                  <div style={styles.menuItem} onClick={() => handleMenuAction('explain')}>
+                    <FaLanguage size={14} /> 解释
+                  </div>
+                </div>
+              )}
+
             </div>
           </animated.div>
         );
@@ -446,7 +590,16 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
 const styles = {
   container: { position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#fff' },
   page: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'white' },
-  scrollContainer: { flex: 1, overflowY: 'auto', padding: '20px 16px 40px' },
+  
+  // 关键：userSelect: text 允许选择，同时处理iOS长按
+  scrollContainer: { 
+    flex: 1, 
+    overflowY: 'auto', 
+    padding: '20px 16px 40px',
+    userSelect: 'text',
+    WebkitUserSelect: 'text',
+    WebkitTouchCallout: 'none' // 尝试禁用iOS默认长按菜单
+  },
   contentWrapper: { maxWidth: '600px', margin: '0 auto' },
 
   title: { fontSize: '1.4rem', fontWeight: '800', textAlign: 'center', color: '#000', marginBottom: '20px' },
@@ -476,6 +629,34 @@ const styles = {
   chatTranslation: { fontSize: '0.85rem', color: '#64748b', marginTop: '4px' },
 
   submitBtn: { width: '100%', background: '#000', color: 'white', border: 'none', padding: '14px 0', borderRadius: '30px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' },
+
+  // 自定义菜单样式
+  customMenu: {
+    background: '#333',
+    color: '#fff',
+    borderRadius: '8px',
+    padding: '4px 0',
+    display: 'flex',
+    alignItems: 'center',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+    zIndex: 9999,
+    fontSize: '13px',
+    transform: 'translate(-50%, -120%)', // 居中并显示在上方
+    whiteSpace: 'nowrap'
+  },
+  menuItem: {
+    padding: '8px 12px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    transition: 'background 0.2s'
+  },
+  menuDivider: {
+    width: '1px',
+    height: '16px',
+    background: '#555'
+  }
 };
 
 // 全局内联样式注入 (处理视频控制条显示)
@@ -485,6 +666,8 @@ if (typeof document !== 'undefined' && !document.getElementById('gp-player-style
   style.innerHTML = `
     .active-scale:active { transform: scale(0.97); }
     video::-webkit-media-controls-enclosure { display: flex !important; }
+    /* 防止iOS点击高亮背景色影响菜单视觉 */
+    * { -webkit-tap-highlight-color: transparent; }
   `;
   document.head.appendChild(style);
 }
