@@ -307,11 +307,14 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete, onAskA
   // 点击空白处关闭菜单
   useEffect(() => {
     const handleClickOutside = (e) => {
+      // 检查点击的不是菜单本身
       if (menu.visible && menuRef.current && !menuRef.current.contains(e.target)) {
+        // 允许用户继续选择文字（不立即清除选区），只关闭菜单
+        // 如果点击的是非文本区域，再清除
         setMenu(prev => ({ ...prev, visible: false }));
-        window.getSelection().removeAllRanges();
       }
     };
+    // 使用 mousedown 而不是 click，响应更快
     window.addEventListener('mousedown', handleClickOutside);
     window.addEventListener('touchstart', handleClickOutside);
     return () => {
@@ -345,15 +348,19 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete, onAskA
     }
   };
 
-  // ----- 菜单核心逻辑 -----
+  // ----- 关键：菜单与选词核心逻辑 -----
   
-  // 1. 处理右键
+  // 1. 屏蔽系统默认右键菜单（Context Menu），显示自定义菜单
   const handleContextMenu = (e) => {
-    e.preventDefault(); // 屏蔽浏览器默认菜单
+    // 阻止浏览器默认的黑条菜单弹出
+    e.preventDefault(); 
+    
+    // 获取当前选中的文本
     const selection = window.getSelection();
     const text = selection.toString().trim();
     
     if (text) {
+      // 如果已经有选区，直接显示在鼠标位置
       setMenu({
         visible: true,
         x: e.clientX,
@@ -363,34 +370,47 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete, onAskA
     }
   };
 
-  // 2. 处理文本选择 (鼠标抬起或触摸结束)
-  const handleTextSelection = (e) => {
-    // 稍微延迟以确保选区已建立
+  // 2. 处理选区结束事件 (MouseUp / TouchEnd)
+  // 这是为了在移动端拖拽光标选择结束后，自动弹出菜单
+  const handleSelectionEnd = (e) => {
+    // 稍微延迟，等待原生选区更新完成
     setTimeout(() => {
       const selection = window.getSelection();
       const text = selection.toString().trim();
 
-      if (text.length > 0) {
-        // 获取选区坐标
-        const range = selection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        
-        // 计算位置：居中显示在选区上方
-        let top = rect.top - 50; 
-        let left = rect.left + (rect.width / 2) - 100; // 假设菜单宽200左右
-
-        // 边界检查（简单处理）
-        if (left < 10) left = 10;
-        if (top < 10) top = rect.bottom + 10;
-
-        setMenu({
-          visible: true,
-          x: left,
-          y: top,
-          text: text
-        });
+      // 如果选区为空，或者是点击了菜单本身，则不处理
+      if (!text || (menuRef.current && menuRef.current.contains(e.target))) {
+        return;
       }
-    }, 10);
+
+      if (text.length > 0) {
+        // 获取选区几何信息
+        try {
+          const range = selection.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          
+          if (rect.width === 0 && rect.height === 0) return;
+
+          // 计算菜单位置：显示在选区正上方
+          let top = rect.top - 50; 
+          let left = rect.left + (rect.width / 2);
+
+          // 简单的边界检查
+          if (left < 50) left = 50;
+          if (left > window.innerWidth - 50) left = window.innerWidth - 50;
+          if (top < 10) top = rect.bottom + 10; // 如果上方没空间，就显示在下方
+
+          setMenu({
+            visible: true,
+            x: left,
+            y: top,
+            text: text
+          });
+        } catch (err) {
+          console.error("Selection rect error:", err);
+        }
+      }
+    }, 150); // 150ms 延迟确保手机端原生选区动作完成
   };
 
   // 3. 菜单功能执行
@@ -403,19 +423,19 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete, onAskA
         play(text, 'selection_read');
         break;
       case 'copy':
-        navigator.clipboard.writeText(text);
-        // 可以加一个简单的提示
-        console.log('Copied:', text);
+        navigator.clipboard.writeText(text).then(() => {
+          // 可选：加一个轻提示
+        }).catch(err => console.error("Copy failed", err));
         break;
       case 'explain':
-        // 1. 更新上下文，让AI知道你在问哪个词
-        updatePageContext(`用户正在查询: "${text}"。请解释这个词/句子的语法点和用法。`);
-        // 2. 触发 AI 交互 (如果父组件传入了 onAskAI)
-        if (onAskAI) {
-            onAskAI(`请解释一下：${text}`);
+        // 1. 更新上下文
+        updatePageContext(`用户正在查询: "${text}"。请解释这个词/句子的含义、语法点和用法。`);
+        // 2. 调用父组件传入的 AI 触发函数
+        if (onAskAI && typeof onAskAI === 'function') {
+            onAskAI(`解释一下：${text}`);
         } else {
-            console.warn("未传入 onAskAI 函数，请在 GrammarPointPlayer 组件上传入该函数以触发AI解释。");
-            alert(`AI解释: ${text} (请连接AI组件)`);
+            console.warn("未传入 onAskAI 属性，无法自动打开 AI 助手。");
+            alert("请确保在组件上绑定了 onAskAI 函数以呼出 AIChatDock。");
         }
         break;
       default:
@@ -423,7 +443,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete, onAskA
     }
     // 操作后关闭菜单
     setMenu(prev => ({ ...prev, visible: false }));
-    window.getSelection().removeAllRanges();
+    // 此时保留高亮让用户知道自己选了啥，或者如果想取消高亮可用: window.getSelection().removeAllRanges();
   };
 
 
@@ -438,10 +458,12 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete, onAskA
             <div 
               style={styles.scrollContainer} 
               ref={contentRef}
-              // 绑定事件到容器，实现屏蔽默认菜单和自定义选词
+              // 关键事件绑定：
+              // 1. onContextMenu: 拦截右键/长按弹出系统菜单
               onContextMenu={handleContextMenu}
-              onMouseUp={handleTextSelection}
-              onTouchEnd={handleTextSelection}
+              // 2. onMouseUp / onTouchEnd: 监听用户选择文本结束的动作
+              onMouseUp={handleSelectionEnd}
+              onTouchEnd={handleSelectionEnd}
             >
               <div style={styles.contentWrapper}>
                 
@@ -554,13 +576,12 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete, onAskA
                   ref={menuRef}
                   style={{
                     ...styles.customMenu,
-                    top: menu.y, // 绝对定位，如果是基于视口需改为 fixed 并用 clientY
+                    top: menu.y, // 绝对定位，基于视口
                     left: menu.x,
-                    // 如果是在 scrollContainer 内，使用 absolute 即可，但坐标需为 pageX/Y
-                    // 这里为了简单稳健，建议使用 fixed 定位覆盖在最上层
                     position: 'fixed' 
                   }}
-                  onMouseDown={(e) => e.stopPropagation()} // 防止点击菜单触发容器的关闭事件
+                  onMouseDown={(e) => e.stopPropagation()} 
+                  onTouchStart={(e) => e.stopPropagation()} // 防止菜单本身被当作选区操作
                 >
                   <div style={styles.menuItem} onClick={() => handleMenuAction('read')}>
                     <FaVolumeUp size={14} /> 朗读
@@ -591,14 +612,18 @@ const styles = {
   container: { position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#fff' },
   page: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'white' },
   
-  // 关键：userSelect: text 允许选择，同时处理iOS长按
+  // 关键修正：
+  // 1. userSelect: text 允许用户自由拖拽选择
+  // 2. 移除 WebkitTouchCallout: none，因为我们已经用 contextmenu 拦截了菜单，
+  //    保留 callout 可以让用户看到放大镜（在部分 iOS 上），提高选择精确度。
+  //    如果还觉得系统菜单碍事，可以加 WebkitTouchCallout: 'none'，但要确保 contextmenu 逻辑正常。
   scrollContainer: { 
     flex: 1, 
     overflowY: 'auto', 
     padding: '20px 16px 40px',
     userSelect: 'text',
     WebkitUserSelect: 'text',
-    WebkitTouchCallout: 'none' // 尝试禁用iOS默认长按菜单
+    // WebkitTouchCallout: 'none' // 已注释，为了让移动端原生选择光标/放大镜更好用
   },
   contentWrapper: { maxWidth: '600px', margin: '0 auto' },
 
@@ -642,7 +667,8 @@ const styles = {
     zIndex: 9999,
     fontSize: '13px',
     transform: 'translate(-50%, -120%)', // 居中并显示在上方
-    whiteSpace: 'nowrap'
+    whiteSpace: 'nowrap',
+    pointerEvents: 'auto'
   },
   menuItem: {
     padding: '8px 12px',
@@ -650,7 +676,8 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '6px',
-    transition: 'background 0.2s'
+    transition: 'background 0.2s',
+    userSelect: 'none'
   },
   menuDivider: {
     width: '1px',
