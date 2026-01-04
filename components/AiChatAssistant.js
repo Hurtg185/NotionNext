@@ -109,6 +109,30 @@ const safeLocalStorageGet = (key) => (typeof window !== 'undefined' ? localStora
 const safeLocalStorageSet = (key, value) => { if (typeof window !== 'undefined') localStorage.setItem(key, value); };
 const nowId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
+// 生成简单的提示音 (Beep)
+const playBeep = () => {
+    try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        
+        osc.frequency.value = 600; // 频率
+        gain.gain.value = 0.1; // 音量
+        
+        osc.start();
+        setTimeout(() => {
+            osc.stop();
+            ctx.close();
+        }, 150); // 持续时间
+    } catch (e) {
+        console.error("Audio Context Error", e);
+    }
+};
+
 // 图片压缩
 const compressImage = (file) => {
   return new Promise((resolve) => {
@@ -335,9 +359,13 @@ const TranslationResultContainer = memo(({ item, targetLang, onPlay }) => {
         </div>
       )}
       {currentModelName && <div className="text-[10px] text-center text-gray-400 mb-1 font-mono">{currentModelName}</div>}
-      {currentData.map((res, i) => (
-        <TranslationCard key={i} data={res} onPlay={() => onPlay(res.translation)} />
-      ))}
+      
+      {/* 增加 Key 以触发切换动画 */}
+      <div key={effectiveIndex} className="animate-in fade-in slide-in-from-right-4 duration-300">
+        {currentData.map((res, i) => (
+            <TranslationCard key={i} data={res} onPlay={() => onPlay(res.translation)} />
+        ))}
+      </div>
     </div>
   );
 });
@@ -353,14 +381,6 @@ const TranslationCard = memo(({ data, onPlay }) => {
     } catch {}
   };
   
-  // 样式标签颜色映射
-  const styleColor = {
-    "自然直译": "bg-blue-50 text-blue-600 border-blue-100",
-    "贴近原文": "bg-green-50 text-green-600 border-green-100",
-    "意译": "bg-purple-50 text-purple-600 border-purple-100",
-    "口语化": "bg-orange-50 text-orange-600 border-orange-100"
-  }[data.style] || "bg-gray-50 text-gray-500 border-gray-100";
-
   return (
     <div onClick={handleClick} className="bg-white/95 backdrop-blur-sm border border-gray-100 rounded-2xl p-4 shadow-sm active:scale-[0.98] transition-all cursor-pointer relative overflow-hidden group mb-3 text-center">
       {copied && (
@@ -369,11 +389,7 @@ const TranslationCard = memo(({ data, onPlay }) => {
         </div>
       )}
       
-      {data.style && (
-         <div className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold border mb-2 ${styleColor}`}>
-           {data.style}
-         </div>
-      )}
+      {/* 移除了风格标签显示 */}
 
       <div className="text-[18px] leading-relaxed font-medium text-gray-800 break-words select-none whitespace-pre-wrap">{data.translation}</div>
       {!!data.back_translation && (
@@ -913,6 +929,9 @@ const AiChatContent = ({ onClose }) => {
       return;
     }
 
+    // 播放提示音
+    playBeep();
+
     const recognition = new SpeechRecognition();
     recognition.lang = sourceLang;
     recognition.interimResults = true;
@@ -1043,7 +1062,14 @@ const AiChatContent = ({ onClose }) => {
                </div>
              );
            })}
-           {isLoading && <div className="flex justify-center mb-8"><div className="bg-white/80 px-4 py-2 rounded-full shadow-sm flex items-center gap-2 text-sm text-pink-500 animate-pulse"><i className="fas fa-spinner fa-spin" /><span>思考中...</span></div></div>}
+           {isLoading && (
+              <div className="flex justify-center mb-8">
+                <div className="bg-white/90 px-6 py-4 rounded-2xl shadow-lg flex items-center gap-3 text-pink-500 animate-pulse border border-pink-100">
+                  <i className="fas fa-circle-notch fa-spin text-2xl" />
+                  <span className="font-bold text-lg">深度思考中...</span>
+                </div>
+              </div>
+           )}
         </div>
       </div>
 
