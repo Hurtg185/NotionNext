@@ -3,7 +3,7 @@ import {
   FaPaperPlane, FaChevronDown, FaRobot, FaCog, FaTimes, 
   FaHistory, FaFeatherAlt, FaMicrophone, FaStop, FaLightbulb, 
   FaLanguage, FaCheck, FaVolumeUp, FaCopy, FaTrashAlt, FaStar, FaRegStar,
-  FaGoogle, FaLock, FaRocket
+  FaGoogle, FaLock, FaRocket, FaEye, FaEyeSlash
 } from 'react-icons/fa';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -230,7 +230,7 @@ export default function AIChatDock() {
         if (messages.length === 0) {
             let autoMsg = '';
             if (aiMode === 'INTERACTIVE') {
-                autoMsg = `老师，这道题我做错了，请帮我深度解析原因：\n题目：${activeTask.question}\n我的选择：${activeTask.userChoice}`;
+                autoMsg = `老师，我做错了这道题，请帮我深度解析原因：\n题目：${activeTask.question}\n我的选择：${activeTask.userChoice}`;
             } else {
                 // 普通语法模式
                 autoMsg = `老师，请详细讲解一下当前内容：${activeTask.title}`;
@@ -463,6 +463,11 @@ export default function AIChatDock() {
       return next;
     });
   };
+  const handleConfirmLogin = () => {
+    sessionStorage.setItem('need_open_api_guide', 'true');
+    setShowLoginTip(false);
+    login();
+  };
 
   // 拖拽逻辑
   const handleTouchStart = (e) => { draggingRef.current = false; dragStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; btnStartPos.current = { ...btnPos }; };
@@ -472,6 +477,8 @@ export default function AIChatDock() {
     if (Math.abs(dx) > 5 || Math.abs(dy) > 5) { draggingRef.current = true; setBtnPos({ right: btnStartPos.current.right + dx, bottom: btnStartPos.current.bottom + dy }); }
   };
   const handleTouchEnd = () => { if (!draggingRef.current) setIsAiOpen(true); draggingRef.current = false; };
+  const handleSettingsTouchStart = (e) => { settingsTouchStart.current = e.touches[0].clientX; };
+  const handleSettingsTouchEnd = (e) => { if (e.changedTouches[0].clientX - settingsTouchStart.current > 80) setShowSettings(false); };
 
   // 会话管理
   const createNewSession = () => {
@@ -484,7 +491,9 @@ export default function AIChatDock() {
   const switchSession = (id) => { setCurrentSessionId(id); setShowSidebar(false); };
   const deleteSession = (e, id) => { e.stopPropagation(); setSessions(prev => prev.filter(s => s.id !== id)); };
   const renameSession = (e, id) => { e.stopPropagation(); const t = prompt("新标题"); if(t) setSessions(prev => prev.map(s => s.id===id?{...s, title:t}:s)); };
+  const handleBookmarkClick = (content) => { setInput(content); setShowSidebar(false); textareaRef.current?.focus(); };
 
+  // 动态标题逻辑
   const getNavTitle = () => {
       if (aiMode === 'INTERACTIVE') return '错题深度解析';
       return activeTask?.title || 'AI 助教';
@@ -533,7 +542,7 @@ export default function AIChatDock() {
                 <h4 style={styles.bookmarkHeader}><FaStar size={14} style={{marginRight: 6}}/>我的收藏</h4>
                 <div style={styles.bookmarkList}>
                     {bookmarks.length > 0 ? bookmarks.map(b => (
-                        <div key={b.id} style={styles.bookmarkItem} onClick={() => { setInput(b.content); setShowSidebar(false); }}>
+                        <div key={b.id} style={styles.bookmarkItem} onClick={() => handleBookmarkClick(b.content)}>
                             <p style={styles.bookmarkContent}>{b.content}</p>
                         </div>
                     )) : <p style={styles.noBookmarks}>暂无收藏</p>}
@@ -624,7 +633,7 @@ export default function AIChatDock() {
                 value={input}
                 onChange={e => { setInput(e.target.value); e.target.style.height = 'auto'; e.target.style.height = `${e.target.scrollHeight}px`; }}
                 onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); handleSend(); }}}
-                placeholder={isListening ? "正在聆听..." : "输入问题，或长按话筒..."}
+                placeholder={isListening ? "正在聆听..." : "输入问题..."}
                 style={styles.textarea}
                 rows={1}
               />
@@ -695,7 +704,7 @@ export default function AIChatDock() {
 
           {showSettings && (
             <div style={styles.settingsOverlay} onClick={(e) => e.target === e.currentTarget && setShowSettings(false)}>
-              <div style={styles.settingsModal}>
+              <div style={styles.settingsModal} onTouchStart={handleSettingsTouchStart} onTouchEnd={handleSettingsTouchEnd}>
                 <div style={styles.modalHeader}>
                   <h3>设置</h3>
                   <button onClick={() => setShowSettings(false)} style={styles.closeBtn}><FaTimes /></button>
