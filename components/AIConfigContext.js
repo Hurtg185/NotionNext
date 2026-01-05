@@ -9,33 +9,33 @@ const USER_KEY = 'hsk_user';
 
 const AIContext = createContext();
 
-// --- 辅助函数：激活码校验 (完整保留) ---
+// --- 辅助函数：激活码校验 (统一命名规范) ---
 const validateActivationCode = (code) => {
   if (!code) return { isValid: false, error: '请输入激活码' };
   const c = code.trim().toUpperCase();
   if (!c.includes('-JHM-')) return { isValid: false, error: '格式错误' };
   const parts = c.split('-');
-  const VALID = ['Hsk1', 'Hsk2', 'Hsk3', 'Hsk4', 'Hsk5', 'Hsk6', 'H7-9'];
+  const VALID = ['HSK 1', 'HSK 2', 'HSK 3', 'HSK 4', 'HSK 5', 'HSK 6', 'HSK 7-9', 'SP'];
   if (!VALID.includes(parts[0])) return { isValid: false, error: '等级不支持' };
   return { isValid: true, level: parts[0] };
 };
 
 export const AIProvider = ({ children }) => {
   /* ======================
-     1. 用户 / 激活 / 谷歌状态
+     1. 用户 / 激活 / 状态
   ====================== */
   const [user, setUser] = useState(null);
   const [isActivated, setIsActivated] = useState(false);
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
 
   /* ======================
-     2. AI 配置
+     2. AI 配置 (默认等级设为 HSK 1)
   ====================== */
   const [config, setConfig] = useState({
     apiKey: '',
     baseUrl: 'https://integrate.api.nvidia.com/v1', 
     modelId: 'deepseek-ai/deepseek-v3.2',
-    userLevel: 'H1',
+    userLevel: 'HSK 1', 
     showPinyin: true, 
     autoSendStt: false, 
     ttsSpeed: 1,
@@ -45,69 +45,62 @@ export const AIProvider = ({ children }) => {
   });
 
   /* ======================
-     3. AI UI / 会话 / 历史记录
+     3. AI UI / 会话 / 模式
   ====================== */
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [bookmarks, setBookmarks] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
-
-  /* ======================
-     4. 配额管理
-  ====================== */
-  const TOTAL_FREE_QUOTA = 60; 
   const [remainingQuota, setRemainingQuota] = useState(0);
+  const TOTAL_FREE_QUOTA = 60; 
 
-  /* ======================
-     5. 模式与上下文管理
-  ====================== */
   const [aiMode, setAiMode] = useState('CHAT');
   const [activeTask, setActiveTask] = useState(null); 
   const [pageContext, setPageContext] = useState('');
 
   /* ======================
-     6. 提示词模板 (核心修复：增加灵活性防止死循环)
+     4. 提示词模板 (终极进化版)
   ====================== */
   const SYSTEM_PROMPTS = {
-    CHAT: `你是一位专门教【缅甸学生】学习汉语的老师。
-【当前学生等级】{{LEVEL}}
-【当前页面内容】{{CONTEXT}}
+    CHAT: `你是一位专业且博学的汉语老师，专门教【缅甸学生】学习汉语。
+【当前教学等级】：{{LEVEL}}
+
+【最高指令：优先级与详尽度】
+1. **即时性**：你必须首先、直接、详细地回答用户最后提出的问题。
+2. **禁止简洁**：你的回复必须详尽。禁止只给出一两句话的简短回答。每个语法点必须配合缅甸语深度逻辑分析，并提供至少 3 个实用的中缅双语例句。
+3. **数据关联**：如果用户的问题与当前课件内容 {{CONTEXT}} 相关，请结合课件讲解；如果是课外问题，请直接发挥你的知识储备。
 
 【语言强制执行规则】
-- 如果学生用中文提问，你用中文回答并辅以关键词的缅文解释。
-- 如果学生用缅文提问，你用缅文回答。
-- Hsk1 / Hsk2：必须【缅文为主】，中文仅作为关键词或例句。
-- Hsk3 / Hsk4：采取“中文+缅文”对照讲解。
-- Hsk5 及以上：以中文讲解为主，难点辅以缅文。
+- HSK 1 / HSK 2：必须以【缅甸语为主】讲解逻辑，中文仅作为关键词或例句。
+- HSK 3 / HSK 4：采取“中文+缅甸语”对照讲解。
+- HSK 5 以上 / SP：中文讲解为主，难点辅以缅甸语。
 
 【回答结构】
-1. 用符合等级的语言解释。
-2. 结合【当前页面内容】举例。
-3. 结尾给出 3-5 个追问建议。
-追问格式：SUGGESTIONS: 建议1|||建议2|||建议3`,
+1. 详细的缅语解析/回答。
+2. 实用例句 (中文+拼音+缅文)。
+3. 追问建议 (格式：SUGGESTIONS: 建议1|||建议2|||建议3)`,
 
-    INTERACTIVE: `你是一名缅甸学生的汉语语法私教。当前处于【错题专项解析】模式。
+    INTERACTIVE: `你是一名汉语语法私教。当前处于【错题专项深度解析】模式。
+【当前等级】：{{LEVEL}}
+【题目 ID】：{{TASK_ID}}
 
-【错题背景】
+【背景信息】
 - 语法点：{{GRAMMAR}}
 - 题目：{{QUESTION}}
 - 学生误选：{{USER_CHOICE}}
-【学生等级】{{LEVEL}}
 
-【核心逻辑】
-1. **针对性**：首先根据上述错题信息，按照“还原错因->场景尴尬感->窍门引导”进行补课。
-2. **灵活性（重要）**：如果学生在后续对话中提出了与当前语法或本错题无关的其他问题，请立即切换为普通老师身份回答，不要强行套用语法和错题背景。
+【核心解析逻辑】
+1. **不给答案**：严禁直接说出正确选项。
+2. **心理分析**：先用缅甸语分析为什么学生会产生错觉选了 {{USER_CHOICE}}。
+3. **生活化对比**：举一个缅甸生活中的尴尬场景，对比正确与错误的逻辑差异。
+4. **记忆窍门**：给出一个一句话的缅语记忆口诀。
+5. **自由扩展**：如果学生明白后问了其他问题，请立即切换回老师身份自由回答。
 
-【语言规则】
-- Hsk1/Hsk2：全缅文解释逻辑。
-- Hsk3/Hsk4：中文解释后紧跟缅文翻译。
-
-【追问生成】
-基于当前对话生成 3 个追问，使用格式：SUGGESTIONS: Q1|||Q2|||Q3`
+SUGGESTIONS: Q1|||Q2|||Q3`
   };
 
   /* ======================
-     7. 初始化与本地存储
+     5. 初始化与数据加载
   ====================== */
   useEffect(() => {
     const cachedUser = localStorage.getItem(USER_KEY);
@@ -146,23 +139,90 @@ export const AIProvider = ({ children }) => {
     if (user?.unlocked_levels) {
       const levels = user.unlocked_levels.split(',');
       const highest = levels[levels.length - 1];
-      setConfig((c) => ({ ...c, userLevel: highest }));
+      // 这里的等级将作为保底等级
+      setConfig((c) => ({ ...c, userLevel: highest.replace('Hsk', 'HSK ') }));
     }
   }, [user]);
 
   /* ======================
-     8. Google 登录逻辑
+     6. 核心逻辑：智能等级判断 (教材 > 激活码)
   ====================== */
-  useEffect(() => {
-    if (isGoogleLoaded && window.google) {
-        window.google.accounts.id.initialize({
-            client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID, 
-            callback: handleGoogleCallback,
-            auto_select: false
-        });
-    }
-  }, [isGoogleLoaded]);
+  const finalSystemPrompt = useMemo(() => {
+    let template = aiMode === 'INTERACTIVE' ? SYSTEM_PROMPTS.INTERACTIVE : SYSTEM_PROMPTS.CHAT;
+    
+    // 优先级 1: 如果 activeTask 中带有教材 ID (如 hsk1_01)，提取等级
+    let displayLevel = config.userLevel || 'HSK 1';
+    const taskId = activeTask?.id || "";
+    
+    if (taskId.toLowerCase().includes('hsk1')) displayLevel = 'HSK 1';
+    else if (taskId.toLowerCase().includes('hsk2')) displayLevel = 'HSK 2';
+    else if (taskId.toLowerCase().includes('hsk3')) displayLevel = 'HSK 3';
+    else if (taskId.toLowerCase().includes('sp')) displayLevel = '口语专项 (Spoken Chinese)';
+    else if (displayLevel.toUpperCase() === 'SP') displayLevel = '口语专项 (Spoken Chinese)';
 
+    template = template.replace(/{{LEVEL}}/g, displayLevel);
+    
+    if (aiMode === 'INTERACTIVE' && activeTask) {
+        template = template.replace('{{TASK_ID}}', activeTask.id || '未知课程');
+        template = template.replace('{{GRAMMAR}}', activeTask.grammarPoint || '通用语法');
+        template = template.replace('{{QUESTION}}', activeTask.question || '');
+        template = template.replace('{{USER_CHOICE}}', activeTask.userChoice || '');
+    } else {
+        template = template.replace('{{CONTEXT}}', pageContext ? pageContext.substring(0, 300) : '通用对话');
+    }
+    return template;
+  }, [config.userLevel, aiMode, activeTask, pageContext]);
+
+  /* ======================
+     7. 触发器函数 (增强版)
+  ====================== */
+  
+  // 1. 触发互动题解析 (传入 payload 需包含 id: "hsk1_xx")
+  const triggerInteractiveAI = (payload) => {
+    setAiMode('INTERACTIVE');
+    const newSessionId = Date.now();
+    const newSession = { 
+        id: newSessionId, 
+        title: `解析: ${payload.grammarPoint || '语法点'}`, 
+        messages: [], 
+        date: new Date().toISOString()
+    };
+    setSessions(prev => [newSession, ...prev]);
+    setCurrentSessionId(newSessionId);
+    setActiveTask({ ...payload, timestamp: Date.now() });
+    setIsAiOpen(true);
+  };
+
+  // 2. 触发课件内容讲解 (增加 id 参数：如 "hsk1_01")
+  const triggerAI = (title, content, id = null) => {
+      setAiMode('CHAT');
+      setActiveTask({ title, content, id, timestamp: Date.now() }); 
+      setPageContext(`课件标题: ${title}, 详细内容: ${content}`);
+      setIsAiOpen(true);
+  };
+
+  const selectSession = (sessionId) => {
+      setCurrentSessionId(sessionId);
+      const session = sessions.find(s => s.id === sessionId);
+      if (session && !session.title.includes('解析')) {
+          setAiMode('CHAT');
+          setActiveTask(null);
+      }
+  };
+
+  const updatePageContext = (content) => {
+    if (aiMode !== 'INTERACTIVE') setPageContext(content);
+  };
+
+  const resetToChatMode = () => {
+      setAiMode('CHAT');
+      setActiveTask(null);
+      setPageContext('');
+  };
+
+  /* ======================
+     8. Google 登录与权限 (保留)
+  ====================== */
   const handleGoogleCallback = async (response) => {
     try {
         const res = await fetch('/api/verify-google', {
@@ -174,44 +234,12 @@ export const AIProvider = ({ children }) => {
         setUser(data);
         localStorage.setItem(USER_KEY, JSON.stringify(data));
         if (data.unlocked_levels) setIsActivated(true);
-        syncQuota(data.email);
-    } catch (e) {
-        console.error("Google login failed", e);
-    }
-  };
-
-  const login = () => {
-      if (window.google) {
-          window.google.accounts.id.prompt();
-      } else {
-          alert("Google 服务加载中...");
-      }
-  };
-
-  const logout = () => {
-      localStorage.removeItem(USER_KEY);
-      setUser(null);
-      setIsActivated(false);
-  };
-
-  /* ======================
-     9. 权限与 API 交互
-  ====================== */
-  const syncQuota = async (email) => {
-    try {
-        const res = await fetch('/api/can-use-ai', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email }),
-        });
-        const data = await res.json();
-        setRemainingQuota(data.remaining);
-    } catch (e) {}
+    } catch (e) { console.error("Login failed", e); }
   };
 
   const canUseAI = async () => {
       if (isActivated) return true;
-      if (!user || !user.email) return false;
+      if (!user) return false;
       try {
           const res = await fetch('/api/can-use-ai', {
               method: 'POST',
@@ -219,24 +247,9 @@ export const AIProvider = ({ children }) => {
               body: JSON.stringify({ email: user.email })
           });
           const data = await res.json();
-          if (data.remaining !== undefined) setRemainingQuota(data.remaining);
+          setRemainingQuota(data.remaining);
           return data.canUse;
-      } catch (e) {
-          return remainingQuota > 0;
-      }
-  };
-
-  const recordUsage = async () => {
-      if (isActivated) return;
-      if (!user || !user.email) return;
-      try {
-          await fetch('/api/record-ai-usage', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email: user.email })
-          });
-          setRemainingQuota(prev => Math.max(0, prev - 1));
-      } catch (e) {}
+      } catch (e) { return remainingQuota > 0; }
   };
 
   const handleActivate = async (code) => {
@@ -256,103 +269,17 @@ export const AIProvider = ({ children }) => {
         localStorage.setItem(USER_KEY, JSON.stringify(newUser));
         setIsActivated(true);
         return { success: true };
-    } catch(e) {
-        return { success: false, error: '网络错误' };
-    }
+    } catch(e) { return { success: false, error: '网络错误' }; }
   };
 
-  /* ======================
-     10. Prompt 动态生成逻辑 (核心修复)
-  ====================== */
-  const finalSystemPrompt = useMemo(() => {
-    let template = aiMode === 'INTERACTIVE' ? SYSTEM_PROMPTS.INTERACTIVE : SYSTEM_PROMPTS.CHAT;
-    
-    // 基础变量替换
-    template = template.replace(/{{LEVEL}}/g, config.userLevel || 'H1');
-    
-    if (aiMode === 'INTERACTIVE' && activeTask) {
-        template = template.replace('{{GRAMMAR}}', activeTask.grammarPoint || '通用语法');
-        template = template.replace('{{QUESTION}}', activeTask.question || '');
-        template = template.replace('{{USER_CHOICE}}', activeTask.userChoice || '');
-    } else {
-        template = template.replace('{{CONTEXT}}', pageContext || '通用汉语语法');
-    }
-    return template;
-  }, [config.userLevel, aiMode, activeTask, pageContext]);
-
-  /* ======================
-     11. 会话管理切换 (核心修复：解决重复语法问题)
-  ====================== */
-  
-  // 切换 Session 的包装函数
-  const selectSession = (sessionId) => {
-      setCurrentSessionId(sessionId);
-      const session = sessions.find(s => s.id === sessionId);
-      // 如果切换到的会话标题不包含“解析”，或者是一个空对话，自动切回 CHAT 模式并清除任务
-      if (session && !session.title.includes('解析')) {
-          setAiMode('CHAT');
-          setActiveTask(null);
-      }
-  };
-
-  // 1. 触发互动题解析
-  const triggerInteractiveAI = (payload) => {
-    setAiMode('INTERACTIVE');
-    
-    // 创建解析专用 Session
-    const newSessionId = Date.now();
-    const newSession = { 
-        id: newSessionId, 
-        title: `解析: ${payload.grammarPoint || '新题目'}`, 
-        messages: [], 
-        date: new Date().toISOString(),
-        isInteractive: true // 标记位
-    };
-    setSessions(prev => [newSession, ...prev]);
-    setCurrentSessionId(newSessionId);
-
-    setActiveTask({
-      ...payload,
-      timestamp: Date.now() 
-    });
-    setIsAiOpen(true);
-  };
-
-  // 2. 静默更新 PPT 上下文
-  const updatePageContext = (content) => {
-    if (aiMode !== 'INTERACTIVE') {
-        setPageContext(content);
-    }
-  };
-
-  // 3. 重置模式 (当用户点击“新对话”或手动清空时调用)
-  const resetToChatMode = () => {
-      setAiMode('CHAT');
-      setActiveTask(null);
-      setPageContext('');
-      const newSessionId = Date.now();
-      const newSession = { id: newSessionId, title: '新对话', messages: [], date: new Date().toISOString() };
-      setSessions(prev => [newSession, ...prev]);
-      setCurrentSessionId(newSessionId);
-  };
-  
-  // 4. 兼容旧版触发器
-  const triggerAI = (title, content) => {
-      setAiMode('CHAT');
-      setActiveTask(null); // 触发普通 AI 时必须清除之前的互动任务
-      setPageContext(content);
-      setIsAiOpen(true);
-  };
-
-  /* ======================
-     12. Provider 导出
-  ====================== */
   return (
     <AIContext.Provider value={{
-        user, login, logout, isActivated, isGoogleLoaded, config, setConfig,
-        sessions, setSessions, currentSessionId, setCurrentSessionId: selectSession, // 使用修复后的 selectSession
+        user, login: () => window.google?.accounts.id.prompt(), 
+        logout: () => { localStorage.removeItem(USER_KEY); setUser(null); setIsActivated(false); },
+        isActivated, config, setConfig,
+        sessions, setSessions, currentSessionId, setCurrentSessionId: selectSession,
         bookmarks, setBookmarks, isAiOpen, setIsAiOpen,
-        canUseAI, recordUsage, remainingQuota, TOTAL_FREE_QUOTA,
+        canUseAI, remainingQuota, TOTAL_FREE_QUOTA,
         handleActivate, handleGoogleCallback,
         activeTask, aiMode, systemPrompt: finalSystemPrompt,
         triggerInteractiveAI, updatePageContext, resetToChatMode, triggerAI
@@ -367,8 +294,4 @@ export const AIProvider = ({ children }) => {
   );
 };
 
-export const useAI = () => {
-  const ctx = useContext(AIContext);
-  if (!ctx) throw new Error('useAI must be used within AIProvider');
-  return ctx;
-};
+export const useAI = () => useContext(AIContext);
