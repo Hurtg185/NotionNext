@@ -38,7 +38,7 @@ const MODEL_OPTIONS = [
   { name: 'Llama 3.1 405B', value: 'meta/llama-3.1-405b-instruct' }
 ];
 
-const LONG_PRESS_DURATION = 600; 
+const LONG_PRESS_DURATION = 600; // 长按语音按钮的毫秒数
 
 // --- 简易音效引擎 ---
 const playTickSound = () => {
@@ -110,11 +110,11 @@ const TypingIndicator = () => (
   </div>
 );
 
-export default function AIChatDock({ hideFloatingBall = false }) {
+export default function AIChatDock() {
   const {
     user, login, config, setConfig, sessions, setSessions,
     currentSessionId, setCurrentSessionId, isAiOpen, setIsAiOpen,
-    activeTask, aiMode, resetToChatMode, systemPrompt, bookmarks, setBookmarks,
+    activeTask, aiMode, resetToChatMode, systemPrompt,
     isActivated, canUseAI, recordUsage, remainingQuota, TOTAL_FREE_QUOTA
   } = useAI();
 
@@ -127,6 +127,7 @@ export default function AIChatDock({ hideFloatingBall = false }) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
+  const [bookmarks, setBookmarks] = useState([]);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -135,7 +136,7 @@ export default function AIChatDock({ hideFloatingBall = false }) {
   const [isCopied, setIsCopied] = useState(false);
   const [showKeyText, setShowKeyText] = useState(true);
 
-  // 悬浮按钮位置
+  // 悬浮按钮位置 (仅当关闭时使用)
   const [btnPos, setBtnPos] = useState({ right: 20, bottom: 40 });
   const draggingRef = useRef(false);
   const dragStartPos = useRef({ x: 0, y: 0 });
@@ -149,12 +150,10 @@ export default function AIChatDock({ hideFloatingBall = false }) {
   const abortControllerRef = useRef(null);
   const recognitionRef = useRef(null);
   const textareaRef = useRef(null);
-  
-  // 用于标记“因为切题导致需要自动发送消息”的状态
   const isNewSessionForTask = useRef(false);
 
   // =======================================================
-  // 核心交互逻辑 1：拦截返回键
+  // ✅ 核心交互逻辑 1：拦截手机物理返回键 / 侧滑手势
   // =======================================================
   useEffect(() => {
     const handlePopState = (event) => {
@@ -169,6 +168,7 @@ export default function AIChatDock({ hideFloatingBall = false }) {
         window.removeEventListener('popstate', handlePopState);
       };
     } else {
+      // 如果是通过history.back()关闭的，需要确保历史记录正确
       if (window.history.state && window.history.state.aiDockOpen) {
         window.history.back();
       }
@@ -176,20 +176,41 @@ export default function AIChatDock({ hideFloatingBall = false }) {
   }, [isAiOpen, setIsAiOpen]);
   
   // =======================================================
-  // 核心交互逻辑 2: 收藏功能
+  // ✅ 核心交互逻辑 2: 消息收藏功能 (LocalStorage 持久化)
   // =======================================================
+  useEffect(() => {
+    try {
+      const storedBookmarks = localStorage.getItem('ai_bookmarks');
+      if (storedBookmarks) {
+        setBookmarks(JSON.parse(storedBookmarks));
+      }
+    } catch (e) {
+      console.error("Failed to load bookmarks from localStorage", e);
+    }
+  }, []);
+
   const toggleBookmark = (message) => {
     setBookmarks(prev => {
       const isBookmarked = prev.some(b => b.id === message.id);
-      if (isBookmarked) return prev.filter(b => b.id !== message.id);
-      return [{...message, bookmarkedAt: new Date().toISOString()}, ...prev];
+      let newBookmarks;
+      if (isBookmarked) {
+        newBookmarks = prev.filter(b => b.id !== message.id);
+      } else {
+        newBookmarks = [{...message, bookmarkedAt: new Date().toISOString()}, ...prev];
+      }
+      try {
+        localStorage.setItem('ai_bookmarks', JSON.stringify(newBookmarks));
+      } catch (e) {
+        console.error("Failed to save bookmarks to localStorage", e);
+      }
+      return newBookmarks;
     });
   };
 
   const handleBookmarkClick = (content) => {
     setInput(content);
     setShowSidebar(false);
-    if(textareaRef.current) textareaRef.current.focus();
+    textareaRef.current?.focus();
   };
 
   const messages = useMemo(() => {
@@ -203,7 +224,7 @@ export default function AIChatDock({ hideFloatingBall = false }) {
       prevSessions.map(s => {
         if (s.id === currentSessionId) {
           const newMsgs = typeof updater === 'function' ? updater(s.messages) : updater;
-          // 添加唯一ID
+          // 为每条消息添加唯一ID，用于收藏
           const msgsWithId = newMsgs.map(m => m.id ? m : { ...m, id: `${Date.now()}-${Math.random()}` });
           let newTitle = s.title;
           if (aiMode === 'CHAT' && s.title === '新对话' && msgsWithId.length > 1) {
@@ -237,39 +258,41 @@ export default function AIChatDock({ hideFloatingBall = false }) {
   }, [messages, isAiOpen, loading]);
 
   // =======================================================
-  // 核心交互逻辑 3：错题/互动任务自动触发
+  // ✅ 核心交互逻辑 3：任务切换自动开启新对话
   // =======================================================
   useEffect(() => {
-    // 只有在互动模式且有任务时，才去触发自动对话
     if (aiMode === 'INTERACTIVE' && activeTask && activeTask.timestamp) {
         const lastProcessed = sessionStorage.getItem('last_ai_task_ts');
         if (lastProcessed !== String(activeTask.timestamp)) {
             sessionStorage.setItem('last_ai_task_ts', String(activeTask.timestamp));
             
+            // 1. 创建新 Session
             const taskMessageContent = `我正在做这道题，请帮我分析一下：\n- **题目**: "${activeTask.question}"\n- **我的选择**: "${activeTask.userChoice}"\n- **涉及语法点**: ${activeTask.grammarPoint}`;
             const firstMessage = { role: 'assistant', content: `好的，我们来分析这道关于 **${activeTask.grammarPoint}** 的题目。`, id: Date.now() };
             const userTaskMessage = { role: 'user', content: taskMessageContent, id: Date.now() + 1};
 
-            // 注意：Session 已经在 Context 中 triggerInteractiveAI 创建了，这里主要是发消息
-            // 为了安全起见，这里不再重复创建 session，而是利用 Context 已经切过来的 currentSessionId
-            updateMessages([firstMessage, userTaskMessage]);
-            isNewSessionForTask.current = true; // 标记，让下面的 effect 去触发 API
+            const newSession = {
+                id: Date.now(),
+                title: `${activeTask.grammarPoint} - 错题分析`,
+                messages: [firstMessage, userTaskMessage],
+                date: new Date().toISOString()
+            };
+
+            setSessions(prev => [newSession, ...prev]);
+            setCurrentSessionId(newSession.id);
+            isNewSessionForTask.current = true; // 标记，让下一个 effect 去发送
         }
     }
-  }, [activeTask, aiMode, currentSessionId]); // 移除 setSessions 依赖，防止循环
+  }, [activeTask, aiMode, setSessions, setCurrentSessionId]);
   
-  // 分离 API 请求触发
+  // 分离 handleSend 的触发，确保 state 更新后执行
   useEffect(() => {
       if (isNewSessionForTask.current && currentSessionId && messages.length > 0) {
           isNewSessionForTask.current = false;
-          // 自动发送给 AI，historyOverride 使用当前最新消息
-          handleSend(messages[messages.length - 1].content, true, messages); 
+          handleSend(messages[messages.length - 1].content, true, messages); // 将当前消息列表传过去
       }
   }, [currentSessionId, messages]);
 
-  // =======================================================
-  // 其他常规逻辑
-  // =======================================================
   const handleSelectionChange = () => {
     if (window.selectionTimeout) clearTimeout(window.selectionTimeout);
     window.selectionTimeout = setTimeout(() => {
@@ -279,7 +302,7 @@ export default function AIChatDock({ hideFloatingBall = false }) {
       if (text.length > 0 && isAiOpen) {
         const range = selection.getRangeAt(0);
         const rect = range.getBoundingClientRect();
-        let top = rect.top - 60; 
+        let top = rect.top - 60; // 留出更多空间
         let left = rect.left + rect.width / 2;
         if (top < 10) top = rect.bottom + 10;
         setSelectionMenu({ show: true, x: left, y: top, text: text });
@@ -335,7 +358,7 @@ export default function AIChatDock({ hideFloatingBall = false }) {
     setSessions(prev => [newSession, ...prev]);
     setCurrentSessionId(newSession.id);
     setShowSidebar(false);
-    resetToChatMode(); // 关键：新建对话时，重置回普通聊天模式
+    resetToChatMode();
   };
 
   const switchSession = (id) => {
@@ -393,6 +416,9 @@ export default function AIChatDock({ hideFloatingBall = false }) {
     } catch (e) { alert('无法启动语音识别: ' + e.message); }
   };
 
+  // =======================================================
+  // ✅ 核心 UI/UX 规格 2: 大语音按钮长短按逻辑
+  // =======================================================
   const handleMicButtonPress = () => {
     longPressTimerRef.current = setTimeout(() => {
         setShowSttLangMenu(true);
@@ -443,17 +469,18 @@ export default function AIChatDock({ hideFloatingBall = false }) {
 
     const currentMessages = historyOverride || messages;
 
-    // 非系统触发时添加用户消息
+    // 只有在非系统触发（即用户主动发送）时，才添加新的用户消息
     if (!isSystemTrigger) {
         const userMsg = { role: 'user', content: contentToSend };
         updateMessages(prev => [...prev, userMsg, { role: 'assistant', content: '' }]);
     } else {
+        // 如果是系统触发（如切换题目），则直接在现有消息基础上追加一个空的 assistant 消息
         updateMessages(prev => [...prev, { role: 'assistant', content: '' }]);
     }
     
+    // 等待 state 更新
     await new Promise(resolve => setTimeout(resolve, 0));
 
-    // 使用 Context 中的 systemPrompt (它已经包含了动态逻辑)
     const historyMsgs = (isSystemTrigger ? currentMessages : messages.slice(-7)).map(m => ({ role: m.role, content: m.content }));
     const apiMessages = [{ role: 'system', content: systemPrompt }, ...historyMsgs];
 
@@ -517,7 +544,9 @@ export default function AIChatDock({ hideFloatingBall = false }) {
                   return [...list, { ...last, content: fullContent }];
                 });
               }
-            } catch (e) {}
+            } catch (e) {
+                // JSON 解析错误，忽略不完整的块
+            }
           }
         }
       }
@@ -593,7 +622,7 @@ export default function AIChatDock({ hideFloatingBall = false }) {
 
   const handleSettingsTouchEnd = (e) => {
     const touchEnd = e.changedTouches[0].clientX;
-    if (touchEnd - settingsTouchStart.current > 80) { 
+    if (touchEnd - settingsTouchStart.current > 80) { // 右滑阈值
       setShowSettings(false);
     }
   };
@@ -604,6 +633,7 @@ export default function AIChatDock({ hideFloatingBall = false }) {
   
   const handleTextareaChange = (e) => {
       setInput(e.target.value);
+      // Auto-height logic
       if (textareaRef.current) {
           textareaRef.current.style.height = 'auto';
           textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
@@ -626,8 +656,7 @@ export default function AIChatDock({ hideFloatingBall = false }) {
         </div>
       )}
 
-      {/* 如果不隐藏悬浮球，且 AI 面板关闭时显示 */}
-      {!isAiOpen && !hideFloatingBall && (
+      {!isAiOpen && (
         <div
           style={{ ...styles.floatingBtn, right: btnPos.right, bottom: btnPos.bottom }}
           onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
@@ -1002,7 +1031,7 @@ const styles = {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
     padding: '0 10px 0 16px', borderBottom: '1px solid #e2e8f0',
     flexShrink: 0,
-    paddingTop: 'env(safe-area-inset-top)', 
+    paddingTop: 'env(safe-area-inset-top)', // 适配 iPhone 刘海屏
   },
   navTitle: { fontSize: '1.1rem', fontWeight: 'bold', color: '#1e293b' },
   navBackBtn: { background: 'none', border: 'none', padding: 8, cursor: 'pointer', color: '#334155', marginLeft: -8 },
@@ -1015,7 +1044,7 @@ const styles = {
   },
   footer: {
     background: '#fff', borderTop: '1px solid #e2e8f0',
-    paddingBottom: 'env(safe-area-inset-bottom)', 
+    paddingBottom: 'env(safe-area-inset-bottom)', // 适配 iPhone X+
     display: 'flex', flexDirection: 'column', flexShrink: 0
   },
   floatingBtn: {
@@ -1124,7 +1153,7 @@ const styles = {
     scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch'
   },
   inputGroup: {
-      minHeight: '80px', marginBottom: '16px', 
+      minHeight: '80px', marginBottom: '16px', // 固定容器防止抖动
   },
   settingRow: { display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.9rem', fontWeight: 600, color: '#475569' },
   switchRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.9rem', color: '#334155', padding: '12px 0' },
