@@ -71,13 +71,17 @@ export const AIProvider = ({ children }) => {
      5. System Prompt (核心修复：SP修正 + 灵活性指令)
   ====================== */
   const SYSTEM_PROMPTS = {
-    CHAT: `你是一位专业且博学的汉语老师，专门教【缅甸学生】学习汉语。
+    // ✅ [核心改造] 强化了对缅甸学生的身份认知，并增加了对“易错点”等上下文的优先处理指令
+    CHAT: `你是一位专业且博学的汉语老师，你的唯一使命是教【缅甸学生】学习汉语。记住，你的学生是缅甸人，语言习惯和思维方式都与中文不同。
+
 【当前教学等级】：{{LEVEL}}
 【注意】：如果等级显示 SP，表示“口语专项/专业口语 (Speaking Practice)”，绝对禁止将其解释为 "Sponsored Program" 或其他商业含义。
 
 【最高指令：优先级与详尽度】
-1.【当前教学等级】：{{LEVEL}}
-2.【当前参考内容】：{{CONTEXT}}
+1.【优先响应具体任务】：如果用户的第一个问题是要求解释某个具体的语法点，请先提供一个**高度概括的核心总结**和1-2个关键例句。完成这个初始任务后，再进入自由问答模式。
+2.【深度结合参考内容】：**请仔细分析【当前参考内容】({{CONTEXT}})。如果其中包含“易错点”、“常见错误”、“注意”等关键词，必须在你的回答中优先讲解这些内容，帮助学生避免犯错。**
+3.【当前教学等级】：{{LEVEL}}
+
 【语言强制执行规则】
 - HSK 1 / HSK 2：必须以【缅甸语为主】讲解逻辑，中文仅作为关键词或例句。
 - HSK 3 / HSK 4：采取“中文+缅甸语”对照讲解。
@@ -284,7 +288,7 @@ SUGGESTIONS: Q1|||Q2|||Q3`
         template = template.replace('{{QUESTION}}', activeTask.question || '');
         template = template.replace('{{USER_CHOICE}}', activeTask.userChoice || '');
     } else {
-        template = template.replace('{{CONTEXT}}', pageContext ? pageContext.substring(0, 500) : '通用对话');
+        template = template.replace('{{CONTEXT}}', pageContext ? pageContext.substring(0, 1000) : '通用对话'); // 增加上下文长度
     }
     return template;
   }, [config.userLevel, aiMode, activeTask, pageContext]);
@@ -314,17 +318,7 @@ SUGGESTIONS: Q1|||Q2|||Q3`
   // 1. 触发互动题解析
   const triggerInteractiveAI = (payload) => {
     setAiMode('INTERACTIVE');
-    const newSessionId = Date.now();
-    const newSession = { 
-        id: newSessionId, 
-        title: `解析: ${payload.grammarPoint || '错题'}`, 
-        messages: [], 
-        date: new Date().toISOString()
-    };
-    setSessions(prev => [newSession, ...prev]);
-    setCurrentSessionId(newSessionId);
-    
-    // 增加 timestamp 确保 useEffect 能监听到变化
+    // 这部分逻辑现在由 AIChatDock.js 处理，这里只负责设置状态
     setActiveTask({ ...payload, timestamp: Date.now() });
     setIsAiOpen(true);
   };
@@ -332,18 +326,9 @@ SUGGESTIONS: Q1|||Q2|||Q3`
   // 2. 触发课件内容讲解 (支持传入 id 进行等级锁定)
   const triggerAI = (title, content, id = null) => {
       setAiMode('CHAT');
-      // 即使是普通讲解，也设置 activeTask，以便 Prompt 能获取 ID 判断等级
-      // 同时这会触发 AIChatDock 的自动讲解 useEffect
       setActiveTask({ title, content, id, timestamp: Date.now() }); 
       setPageContext(`课件标题: ${title}\n内容: ${content}`);
       setIsAiOpen(true);
-      
-      // 如果当前是新会话列表，或者想每次都新开一个
-      if (!currentSessionId) {
-          const newId = Date.now();
-          setSessions(prev => [{ id: newId, title: title || '新对话', messages: [], date: new Date().toISOString() }, ...prev]);
-          setCurrentSessionId(newId);
-      }
   };
 
   const updatePageContext = (content) => {
@@ -354,10 +339,7 @@ SUGGESTIONS: Q1|||Q2|||Q3`
       setAiMode('CHAT');
       setActiveTask(null);
       setPageContext('');
-      // 可选：是否要新建一个空白会话？
-      const newId = Date.now();
-      setSessions(prev => [{ id: newId, title: '新对话', messages: [], date: new Date().toISOString() }, ...prev]);
-      setCurrentSessionId(newId);
+      // 创建新对话的逻辑在 AIChatDock.js 中完成，这里只重置状态
   };
 
   return (
