@@ -5,12 +5,12 @@ import { pinyin } from 'pinyin-pro';
 import ReactPlayer from 'react-player';
 import {
   FaPause, FaPlay, FaChevronRight, FaVolumeUp, 
-  FaExclamationTriangle, FaBookReader
+  FaExclamationTriangle, FaBookReader, FaRobot
 } from 'react-icons/fa';
 import { useAI } from '../AIConfigContext';
 
 // =================================================================================
-// ===== 0. 音效工具 (UI 交互反馈) =====
+// ===== 0. 音效工具 =====
 // =================================================================================
 const playSFX = (type) => {
   if (typeof window === 'undefined') return;
@@ -22,7 +22,7 @@ const playSFX = (type) => {
 };
 
 // =================================================================================
-// ===== 1. 健壮的 TTS Hook (移除进度监听，彻底解决空对象崩溃问题) =====
+// ===== 1. 健壮的 TTS Hook =====
 // =================================================================================
 function useRobustTTS() {
   const [playerState, setPlayerState] = useState({
@@ -58,7 +58,6 @@ function useRobustTTS() {
 
   const play = useCallback(async (text, uniqueId, voiceOverride = null) => {
     playSFX('click');
-    // 如果当前正在播放这个 ID，则执行暂停/继续逻辑
     if (playerState.activeId === uniqueId && audioRef.current) {
       if (audioRef.current.paused) {
         audioRef.current.play();
@@ -70,7 +69,6 @@ function useRobustTTS() {
       return;
     }
 
-    // 播放新的文本，先清理旧的
     cleanupAudio();
     setPlayerState({ isPlaying: false, activeId: uniqueId, loadingId: uniqueId });
 
@@ -84,7 +82,7 @@ function useRobustTTS() {
       return;
     }
 
-    const targetVoice = voiceOverride || (/[\u1000-\u109F]/.test(text) ? 'my-MM-NilarNeural' : 'zh-CN-XiaoyouNeural');
+    const targetVoice = voiceOverride || (/[\u1000-\u109F]/.test(text) ? 'my-MM-NilarNeural' : 'zh-CN-XiaoxiaoMultilingualNeural');
 
     try {
       const url = `/api/tts?t=${encodeURIComponent(cleanText)}&v=${targetVoice}&_ts=${Date.now()}`;
@@ -116,7 +114,7 @@ function useRobustTTS() {
 }
 
 // =================================================================================
-// ===== 2. 文本渲染组件 (拼音 + 排版样式 + 点击朗读) =====
+// ===== 2. 文本渲染组件 =====
 // =================================================================================
 const PinyinText = ({ text, onClick, color = '#000000', bold = false, strikethrough = false }) => {
   if (!text) return null;
@@ -135,7 +133,7 @@ const PinyinText = ({ text, onClick, color = '#000000', bold = false, strikethro
         fontSize: '1.1rem', 
         cursor: onClick ? 'pointer' : 'default',
         textDecoration: strikethrough ? 'line-through' : 'none',
-        textDecorationColor: color === '#ff0000' ? '#ff0000' : '#ef4444', 
+        textDecorationColor: color, 
         textDecorationThickness: '2px'
       }}
     >
@@ -164,11 +162,6 @@ const RichTextRenderer = ({ content, onPlayText, activeTtsId }) => {
         const trimmed = line.trim();
         if (!trimmed) return <div key={idx} style={{ height: '8px' }} />;
 
-        // 识别特定加粗标题行
-        const isHeader = /三个核心句型|两种其他用法|总结/.test(trimmed);
-        // 识别错误提示行
-        const isErrorLine = trimmed.startsWith('错误：');
-
         if (trimmed.startsWith('###')) {
           return <h3 key={idx} style={styles.h3}>{trimmed.replace(/###\s?/, '')}</h3>;
         }
@@ -178,7 +171,6 @@ const RichTextRenderer = ({ content, onPlayText, activeTtsId }) => {
         return (
           <div key={idx} style={styles.textRow}>
             {trimmed.split(/(\*\*.*?\*\*|~~.*?~~|\{\{.*?\}\})/g).map((part, pIdx) => {
-              // 重点标记 logic
               if (part.startsWith('**') && part.endsWith('**')) {
                 return (
                   <span key={pIdx} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
@@ -187,40 +179,14 @@ const RichTextRenderer = ({ content, onPlayText, activeTtsId }) => {
                   </span>
                 );
               } 
-              // 红色删除线 logic
               if (part.startsWith('~~') && part.endsWith('~~')) {
-                return <PinyinText key={pIdx} text={part.slice(2, -2)} onClick={() => onPlayText(trimmed, segmentId)} color="#ff0000" strikethrough={true} />;
+                return <PinyinText key={pIdx} text={part.slice(2, -2)} onClick={() => onPlayText(trimmed, segmentId)} color="#ef4444" strikethrough={true} />;
               }
-              // 黄色加粗 logic
               if (part.startsWith('{{') && part.endsWith('}}')) {
                 return <PinyinText key={pIdx} text={part.slice(2, -2)} onClick={() => onPlayText(trimmed, segmentId)} color="#eab308" bold={true} />;
               }
               
-              // 复合排版逻辑
-              let displayColor = "#000000";
-              let hasStrikethrough = false;
-              let isBoldText = isHeader;
-              
-              if (isErrorLine) {
-                  displayColor = "#ff0000";
-                  // 只要不是行首的“错误：”字样，后面的字全部加删除线
-                  if (pIdx > 0 || !trimmed.startsWith(part)) {
-                      hasStrikethrough = true;
-                  } else {
-                      isBoldText = true;
-                  }
-              }
-
-              return (
-                <PinyinText 
-                  key={pIdx} 
-                  text={part} 
-                  onClick={() => onPlayText(trimmed, segmentId)} 
-                  color={displayColor}
-                  bold={isBoldText}
-                  strikethrough={hasStrikethrough}
-                />
-              );
+              return <PinyinText key={pIdx} text={part} onClick={() => onPlayText(trimmed, segmentId)} />;
             })}
           </div>
         );
@@ -233,25 +199,27 @@ const RichTextRenderer = ({ content, onPlayText, activeTtsId }) => {
 // ===== 3. 主组件 GrammarPointPlayer =====
 // =================================================================================
 const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
-  const { updatePageContext } = useAI();
-  const playerContainerRef = useRef(null);
-  
-  // 视频状态
-  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  // 引入 AI 上下文
+  const { triggerAI, updatePageContext, isAiOpen } = useAI();
+
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  
+  const playerContainerRef = useRef(null);
   const contentRef = useRef(null);
 
-  // TTS 状态
   const { play, stop, activeId } = useRobustTTS();
 
-  // 数据标准化
+  // 数据标准化：支持视频链接、封面图
   const normalizedPoints = useMemo(() => {
     if (!Array.isArray(grammarPoints)) return [];
     return grammarPoints.map((item, idx) => ({
       id: item.id || idx,
       title: item['语法标题'] || '',
       pattern: item['句型结构'] || '',
-      videoUrl: item['视频链接'] || 'https://audio.886.best/chinese-vocab-audio/%E8%A7%86%E9%A2%91/Screenrecorder-2025-05-23-17-46-34-343.mp4',
+      // 支持字段: '视频链接' (videoUrl) 和 '视频封面' (poster)
+      videoUrl: item['视频链接'] || item.videoUrl || '',
+      videoPoster: item['视频封面'] || item.poster || '', 
       explanationRaw: item['语法详解'] || '',
       attention: item['注意事项'] || '',
       dialogues: (item['例句列表'] || []).map((ex, i) => {
@@ -269,7 +237,59 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
 
   const currentPoint = normalizedPoints[currentIndex];
 
-  // 全屏交互逻辑：进入全屏播放，退出全屏自动暂停
+  // =================================================================================
+  // 核心逻辑：构造 AI 上下文并触发
+  // =================================================================================
+  
+  // 构造“全知视角”的内容包
+  const constructFullAIContent = useCallback((point) => {
+    if (!point) return '';
+    let content = `【语法标题】：${point.title}\n`;
+    content += `【核心句型】：${point.pattern}\n\n`;
+    content += `【详解内容】：\n${point.explanationRaw}\n\n`;
+    
+    if (point.attention) {
+      content += `【注意事项/易错点】：\n${point.attention}\n\n`;
+    }
+    
+    if (point.dialogues && point.dialogues.length > 0) {
+      content += `【参考例句】：\n`;
+      point.dialogues.forEach((d, i) => {
+        content += `${i+1}. ${d.sentence} (${d.translation})\n`;
+      });
+    }
+    return content;
+  }, []);
+
+  // 触发 AI 讲解
+  const handleAskAI = useCallback(() => {
+    if (!currentPoint) return;
+    playSFX('click');
+    const fullContent = constructFullAIContent(currentPoint);
+    // 构造带等级信息的 ID，确保 AI Provider 能识别等级 (如: HSK 1 -> hsk1_grammar_01)
+    const levelId = `${level.replace(/\s+/g, '').toLowerCase()}_grammar_${currentPoint.id}`;
+    triggerAI(currentPoint.title, fullContent, levelId);
+  }, [currentPoint, level, constructFullAIContent, triggerAI]);
+
+  // 自动同步逻辑
+  useEffect(() => {
+    if (currentPoint) {
+      const fullContent = constructFullAIContent(currentPoint);
+      // 1. 静默更新上下文 (AI 随时准备着)
+      updatePageContext(fullContent);
+
+      // 2. 如果 AI 窗口已打开，切换页面时自动触发新讲解
+      if (isAiOpen) {
+        const levelId = `${level.replace(/\s+/g, '').toLowerCase()}_grammar_${currentPoint.id}`;
+        triggerAI(currentPoint.title, fullContent, levelId);
+      }
+    }
+  }, [currentIndex, currentPoint, isAiOpen, level, updatePageContext, triggerAI, constructFullAIContent]);
+
+  // =================================================================================
+  // UI 交互逻辑
+  // =================================================================================
+
   useEffect(() => {
     const handleFsChange = () => {
       const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
@@ -283,20 +303,11 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
     };
   }, []);
 
-  // 更新全局 AI 上下文
-  useEffect(() => {
-    if (currentPoint) {
-      updatePageContext(`等级:${level} | 标题:${currentPoint.title} | 内容概览:${currentPoint.explanationRaw.slice(0, 100)}`);
-    }
-  }, [currentPoint, level, updatePageContext]);
-
-  // 翻页清理
   useEffect(() => {
     stop();
     if (contentRef.current) contentRef.current.scrollTop = 0;
   }, [currentIndex, stop]);
 
-  // 页面切换动画
   const transitions = useTransition(currentIndex, {
     key: currentIndex,
     from: { opacity: 0, transform: 'translate3d(30px,0,0)' },
@@ -313,7 +324,6 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
     }
   };
 
-  // 触发视频全屏
   const handleVideoFullScreen = () => {
     const el = playerContainerRef.current;
     if (el) {
@@ -326,6 +336,11 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
 
   return (
     <div style={styles.container}>
+      {/* 悬浮 AI 按钮：点击立即讲解当前内容 */}
+      <button style={styles.aiFloatBtn} onClick={handleAskAI}>
+        <FaRobot /> AI 讲解
+      </button>
+
       {transitions((style, i) => {
         const gp = normalizedPoints[i];
         return (
@@ -344,24 +359,33 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
                     </div>
                   </div>
 
-                  <div 
-                    style={styles.videoBox} 
-                    ref={playerContainerRef} 
-                    onClick={handleVideoFullScreen}
-                  >
-                    <ReactPlayer 
-                      url={gp.videoUrl} 
-                      width="100%" 
-                      height="100%" 
-                      playing={isVideoPlaying}
-                      light={true} 
-                      config={{ file: { attributes: { controlsList: 'nodownload' }}}} 
-                    />
-                    <div style={styles.videoOverlay}>点击全屏</div>
-                  </div>
+                  {/* 视频模块：支持 videoUrl 和 videoPoster */}
+                  {gp.videoUrl ? (
+                    <div 
+                      style={styles.videoBox} 
+                      ref={playerContainerRef} 
+                      onClick={handleVideoFullScreen}
+                    >
+                      <ReactPlayer 
+                        url={gp.videoUrl} 
+                        width="100%" 
+                        height="100%" 
+                        playing={isVideoPlaying}
+                        // 如果有封面图，light 属性显示图片；否则显示默认黑色+播放按钮
+                        light={gp.videoPoster || true} 
+                        config={{ file: { attributes: { controlsList: 'nodownload' }}}} 
+                      />
+                      <div style={styles.videoOverlay}>点击全屏</div>
+                    </div>
+                  ) : (
+                    // 无视频时的占位装饰
+                    <div style={{...styles.videoBox, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                        <span style={{fontSize: '2rem'}}>📖</span>
+                    </div>
+                  )}
                 </div>
 
-                {/* 语法详解内容 */}
+                {/* 语法详解 */}
                 <div style={styles.section}>
                   <div style={styles.sectionHeader}>📝 语法详解</div>
                   <div style={styles.textBody}>
@@ -373,7 +397,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
                   </div>
                 </div>
 
-                {/* 注意事项模块 */}
+                {/* 注意事项 */}
                 {gp.attention && (
                   <div style={styles.section}>
                     <div style={{...styles.sectionHeader, color: '#ef4444'}}>
@@ -389,7 +413,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
                   </div>
                 )}
 
-                {/* 对话模块 (根据 speaker 自动区分左右和音色) */}
+                {/* 对话模块 */}
                 <div style={styles.section}>
                   <div style={styles.sectionHeader}>💬 场景对话</div>
                   <div style={styles.chatList}>
@@ -441,10 +465,13 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
 };
 
 // =================================================================================
-// ===== 5. 样式定义 (CSS-in-JS) =====
+// ===== 5. 样式定义 =====
 // =================================================================================
 const styles = {
   container: { position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#fff' },
+  // AI 悬浮按钮样式
+  aiFloatBtn: { position: 'absolute', top: '12px', right: '16px', zIndex: 50, background: '#4f46e5', color: '#fff', border: 'none', borderRadius: '20px', padding: '6px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 4px 10px rgba(79, 70, 229, 0.3)', cursor: 'pointer', fontWeight: 'bold' },
+  
   page: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'white' },
   scrollContainer: { flex: 1, overflowY: 'auto', padding: '20px 16px 40px' },
   contentWrapper: { maxWidth: '600px', margin: '0 auto' },
@@ -478,7 +505,7 @@ const styles = {
   submitBtn: { width: '100%', background: '#000', color: 'white', border: 'none', padding: '14px 0', borderRadius: '30px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' },
 };
 
-// 全局内联样式注入 (处理视频控制条显示)
+// 全局内联样式注入
 if (typeof document !== 'undefined' && !document.getElementById('gp-player-style')) {
   const style = document.createElement('style');
   style.id = 'gp-player-style';
