@@ -22,7 +22,7 @@ const playSFX = (type) => {
 };
 
 // =================================================================================
-// ===== 1. 健壮的 TTS Hook =====
+// ===== 1. 健壮的 TTS Hook (增强文字清洗：剔除拼音、标点、表情) =====
 // =================================================================================
 function useRobustTTS() {
   const [playerState, setPlayerState] = useState({
@@ -58,7 +58,6 @@ function useRobustTTS() {
 
   const play = useCallback(async (text, uniqueId, voiceOverride = null) => {
     playSFX('click');
-    // 如果当前正在播放这个 ID，则执行暂停/继续逻辑
     if (playerState.activeId === uniqueId && audioRef.current) {
       if (audioRef.current.paused) {
         audioRef.current.play();
@@ -70,13 +69,24 @@ function useRobustTTS() {
       return;
     }
 
-    // 播放新的文本，先清理旧的
     cleanupAudio();
     setPlayerState({ isPlaying: false, activeId: uniqueId, loadingId: uniqueId });
 
+    // ✅ 深度净化文本：彻底去除拼音(字母)、标点符号、表情符号
     const cleanText = String(text)
+      // 1. 去除 Markdown 和 HTML 标签
       .replace(/\*\*|~~|\{\{|\}\}|###/g, '')
       .replace(/<[^>]+>/g, '')
+      // 2. 去除所有英文字母 (防止抓取到 ruby 里的拼音)
+      .replace(/[a-zA-Z]/g, '')
+      // 3. 去除拼音专用的声调符号 (āáǎà 等)
+      .replace(/[\u0100-\u017F\u0180-\u024F]/g, '')
+      // 4. 去除 Emoji 表情
+      .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+      // 5. 去除中英文标点符号
+      .replace(/[.,!?;:，。！？；：、""''（）()[\]{}|_\\/<>@#$%^&*+=\-~`]/g, ' ')
+      // 6. 去除多余空格
+      .replace(/\s+/g, '')
       .trim();
 
     if (!cleanText) {
@@ -84,6 +94,7 @@ function useRobustTTS() {
       return;
     }
 
+    // 缅甸语判定逻辑保持
     const targetVoice = voiceOverride || (/[\u1000-\u109F]/.test(text) ? 'my-MM-NilarNeural' : 'zh-CN-XiaoyouNeural');
 
     try {
@@ -116,7 +127,7 @@ function useRobustTTS() {
 }
 
 // =================================================================================
-// ===== 2. 文本渲染组件 (拼音 + 排版样式 + 点击朗读) =====
+// ===== 2. 文本渲染组件 (拼音 + 排版样式) =====
 // =================================================================================
 const PinyinText = ({ text, onClick, color = '#000000', bold = false, strikethrough = false }) => {
   if (!text) return null;
@@ -155,7 +166,8 @@ const PinyinText = ({ text, onClick, color = '#000000', bold = false, strikethro
   );
 };
 
-const RichTextRenderer = ({ content, onPlayText, activeTtsId }) => {
+// 正文渲染：不传递 onClick 回调，禁用正文点击朗读
+const RichTextRenderer = ({ content }) => {
   if (!content) return null;
 
   return (
@@ -164,46 +176,38 @@ const RichTextRenderer = ({ content, onPlayText, activeTtsId }) => {
         const trimmed = line.trim();
         if (!trimmed) return <div key={idx} style={{ height: '8px' }} />;
 
-        // 识别特定加粗标题行
         const isHeader = /三个核心句型|两种其他用法|总结/.test(trimmed);
-        // 识别错误提示行
         const isErrorLine = trimmed.startsWith('错误：');
 
         if (trimmed.startsWith('###')) {
           return <h3 key={idx} style={styles.h3}>{trimmed.replace(/###\s?/, '')}</h3>;
         }
 
-        const segmentId = `seg_${idx}`;
-
         return (
           <div key={idx} style={styles.textRow}>
             {trimmed.split(/(\*\*.*?\*\*|~~.*?~~|\{\{.*?\}\})/g).map((part, pIdx) => {
-              // 重点标记 logic
               if (part.startsWith('**') && part.endsWith('**')) {
                 return (
                   <span key={pIdx} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                     <span style={{ fontSize: '0.6rem', color: '#0000ff' }}>▪️</span>
-                    <PinyinText text={part.slice(2, -2)} onClick={() => onPlayText(trimmed, segmentId)} color="#0000ff" bold={true} />
+                    {/* onClick 为空 */}
+                    <PinyinText text={part.slice(2, -2)} color="#0000ff" bold={true} />
                   </span>
                 );
               } 
-              // 红色删除线 logic
               if (part.startsWith('~~') && part.endsWith('~~')) {
-                return <PinyinText key={pIdx} text={part.slice(2, -2)} onClick={() => onPlayText(trimmed, segmentId)} color="#ff0000" strikethrough={true} />;
+                return <PinyinText key={pIdx} text={part.slice(2, -2)} color="#ff0000" strikethrough={true} />;
               }
-              // 黄色加粗 logic
               if (part.startsWith('{{') && part.endsWith('}}')) {
-                return <PinyinText key={pIdx} text={part.slice(2, -2)} onClick={() => onPlayText(trimmed, segmentId)} color="#eab308" bold={true} />;
+                return <PinyinText key={pIdx} text={part.slice(2, -2)} color="#eab308" bold={true} />;
               }
               
-              // 复合排版逻辑
               let displayColor = "#000000";
               let hasStrikethrough = false;
               let isBoldText = isHeader;
               
               if (isErrorLine) {
                   displayColor = "#ff0000";
-                  // 只要不是行首的“错误：”字样，后面的字全部加删除线
                   if (pIdx > 0 || !trimmed.startsWith(part)) {
                       hasStrikethrough = true;
                   } else {
@@ -215,7 +219,6 @@ const RichTextRenderer = ({ content, onPlayText, activeTtsId }) => {
                 <PinyinText 
                   key={pIdx} 
                   text={part} 
-                  onClick={() => onPlayText(trimmed, segmentId)} 
                   color={displayColor}
                   bold={isBoldText}
                   strikethrough={hasStrikethrough}
@@ -236,28 +239,22 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete, onAskA
   const { updatePageContext } = useAI();
   const playerContainerRef = useRef(null);
   
-  // 视频状态
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const contentRef = useRef(null);
 
-  // 自定义菜单状态
   const [menu, setMenu] = useState({ visible: false, x: 0, y: 0, text: '' });
   const menuRef = useRef(null);
 
-  // TTS 状态
   const { play, stop, activeId } = useRobustTTS();
 
-  // 数据标准化
   const normalizedPoints = useMemo(() => {
     if (!Array.isArray(grammarPoints)) return [];
     return grammarPoints.map((item, idx) => ({
       id: item.id || idx,
       title: item['语法标题'] || '',
       pattern: item['句型结构'] || '',
-      // 修改：如果数据里没有链接，则是空字符串，不放硬编码
       videoUrl: item['视频链接'] || '',
-      // 新增：支持封面，如果没有封面默认为 true (ReactPlayer会尝试加载自动封面或黑屏)
       coverUrl: item['视频封面'] || true,
       explanationRaw: item['语法详解'] || '',
       attention: item['注意事项'] || '',
@@ -276,7 +273,6 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete, onAskA
 
   const currentPoint = normalizedPoints[currentIndex];
 
-  // 全屏交互逻辑：进入全屏播放，退出全屏自动暂停
   useEffect(() => {
     const handleFsChange = () => {
       const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
@@ -290,31 +286,24 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete, onAskA
     };
   }, []);
 
-  // 更新全局 AI 上下文
   useEffect(() => {
     if (currentPoint) {
       updatePageContext(`等级:${level} | 标题:${currentPoint.title} | 内容概览:${currentPoint.explanationRaw.slice(0, 100)}`);
     }
   }, [currentPoint, level, updatePageContext]);
 
-  // 翻页清理
   useEffect(() => {
     stop();
-    setMenu({ ...menu, visible: false }); // 翻页关闭菜单
+    setMenu({ ...menu, visible: false }); 
     if (contentRef.current) contentRef.current.scrollTop = 0;
   }, [currentIndex, stop]);
 
-  // 点击空白处关闭菜单
   useEffect(() => {
     const handleClickOutside = (e) => {
-      // 检查点击的不是菜单本身
       if (menu.visible && menuRef.current && !menuRef.current.contains(e.target)) {
-        // 允许用户继续选择文字（不立即清除选区），只关闭菜单
-        // 如果点击的是非文本区域，再清除
         setMenu(prev => ({ ...prev, visible: false }));
       }
     };
-    // 使用 mousedown 而不是 click，响应更快
     window.addEventListener('mousedown', handleClickOutside);
     window.addEventListener('touchstart', handleClickOutside);
     return () => {
@@ -323,7 +312,6 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete, onAskA
     };
   }, [menu.visible]);
 
-  // 页面切换动画
   const transitions = useTransition(currentIndex, {
     key: currentIndex,
     from: { opacity: 0, transform: 'translate3d(30px,0,0)' },
@@ -348,102 +336,57 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete, onAskA
     }
   };
 
-  // ----- 关键：菜单与选词核心逻辑 -----
-  
-  // 1. 屏蔽系统默认右键菜单（Context Menu），显示自定义菜单
+  // ----- 菜单核心逻辑 -----
   const handleContextMenu = (e) => {
-    // 阻止浏览器默认的黑条菜单弹出
     e.preventDefault(); 
-    
-    // 获取当前选中的文本
     const selection = window.getSelection();
     const text = selection.toString().trim();
-    
     if (text) {
-      // 如果已经有选区，直接显示在鼠标位置
-      setMenu({
-        visible: true,
-        x: e.clientX,
-        y: e.clientY,
-        text: text
-      });
+      setMenu({ visible: true, x: e.clientX, y: e.clientY, text: text });
     }
   };
 
-  // 2. 处理选区结束事件 (MouseUp / TouchEnd)
-  // 这是为了在移动端拖拽光标选择结束后，自动弹出菜单
   const handleSelectionEnd = (e) => {
-    // 稍微延迟，等待原生选区更新完成
     setTimeout(() => {
       const selection = window.getSelection();
       const text = selection.toString().trim();
-
-      // 如果选区为空，或者是点击了菜单本身，则不处理
-      if (!text || (menuRef.current && menuRef.current.contains(e.target))) {
-        return;
-      }
+      if (!text || (menuRef.current && menuRef.current.contains(e.target))) return;
 
       if (text.length > 0) {
-        // 获取选区几何信息
         try {
           const range = selection.getRangeAt(0);
           const rect = range.getBoundingClientRect();
-          
           if (rect.width === 0 && rect.height === 0) return;
-
-          // 计算菜单位置：显示在选区正上方
           let top = rect.top - 50; 
           let left = rect.left + (rect.width / 2);
-
-          // 简单的边界检查
           if (left < 50) left = 50;
           if (left > window.innerWidth - 50) left = window.innerWidth - 50;
-          if (top < 10) top = rect.bottom + 10; // 如果上方没空间，就显示在下方
-
-          setMenu({
-            visible: true,
-            x: left,
-            y: top,
-            text: text
-          });
-        } catch (err) {
-          console.error("Selection rect error:", err);
-        }
+          if (top < 10) top = rect.bottom + 10;
+          setMenu({ visible: true, x: left, y: top, text: text });
+        } catch (err) {}
       }
-    }, 150); // 150ms 延迟确保手机端原生选区动作完成
+    }, 150);
   };
 
-  // 3. 菜单功能执行
   const handleMenuAction = (action) => {
     const text = menu.text;
     if (!text) return;
-
     switch (action) {
       case 'read':
+        // ✅ 自由选词朗读：play 函数内部会自动清洗拼音
         play(text, 'selection_read');
         break;
       case 'copy':
-        navigator.clipboard.writeText(text).then(() => {
-          // 可选：加一个轻提示
-        }).catch(err => console.error("Copy failed", err));
+        navigator.clipboard.writeText(text);
         break;
       case 'explain':
-        // 1. 更新上下文
         updatePageContext(`用户正在查询: "${text}"。请解释这个词/句子的含义、语法点和用法。`);
-        // 2. 调用父组件传入的 AI 触发函数
-        if (onAskAI && typeof onAskAI === 'function') {
-            onAskAI(`解释一下：${text}`);
-        } else {
-            console.warn("未传入 onAskAI 属性，无法自动打开 AI 助手。");
-            alert("请确保在组件上绑定了 onAskAI 函数以呼出 AIChatDock。");
-        }
+        if (onAskAI) onAskAI(`解释一下：${text}`);
         break;
       default:
         break;
     }
-    // 操作后关闭菜单
     setMenu(prev => ({ ...prev, visible: false }));
-    // 此时保留高亮让用户知道自己选了啥，或者如果想取消高亮可用: window.getSelection().removeAllRanges();
   };
 
 
@@ -458,10 +401,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete, onAskA
             <div 
               style={styles.scrollContainer} 
               ref={contentRef}
-              // 关键事件绑定：
-              // 1. onContextMenu: 拦截右键/长按弹出系统菜单
               onContextMenu={handleContextMenu}
-              // 2. onMouseUp / onTouchEnd: 监听用户选择文本结束的动作
               onMouseUp={handleSelectionEnd}
               onTouchEnd={handleSelectionEnd}
             >
@@ -469,16 +409,15 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete, onAskA
                 
                 <h2 style={styles.title}>{gp.title}</h2>
 
-                {/* 核心句型卡片 + 视频 (条件渲染) */}
+                {/* 核心句型卡片 (✅ 已去除点击播放) */}
                 <div style={styles.headerRow}>
                   <div style={styles.patternCard}>
                     <div style={styles.cardLabel}><FaBookReader /> 核心句型</div>
-                    <div onClick={() => play(gp.pattern, `pat_${gp.id}`)} style={styles.patternText}>
+                    <div style={styles.patternText}>
                       <PinyinText text={gp.pattern} color="#1e40af" bold />
                     </div>
                   </div>
 
-                  {/* 只有当 videoUrl 存在时才渲染视频区域 */}
                   {gp.videoUrl && (
                     <div 
                       style={styles.videoBox} 
@@ -490,7 +429,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete, onAskA
                         width="100%" 
                         height="100%" 
                         playing={isVideoPlaying}
-                        light={gp.coverUrl} // 使用数据中的封面
+                        light={gp.coverUrl} 
                         config={{ file: { attributes: { controlsList: 'nodownload' }}}} 
                       />
                       <div style={styles.videoOverlay}>点击全屏</div>
@@ -498,35 +437,27 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete, onAskA
                   )}
                 </div>
 
-                {/* 语法详解内容 */}
+                {/* 语法详解 (✅ 已去除点击播放) */}
                 <div style={styles.section}>
                   <div style={styles.sectionHeader}>📝 语法详解</div>
                   <div style={styles.textBody}>
-                    <RichTextRenderer 
-                      content={gp.explanationRaw} 
-                      onPlayText={play} 
-                      activeTtsId={activeId}
-                    />
+                    <RichTextRenderer content={gp.explanationRaw} />
                   </div>
                 </div>
 
-                {/* 注意事项模块 */}
+                {/* 注意事项模块 (✅ 已去除点击播放) */}
                 {gp.attention && (
                   <div style={styles.section}>
                     <div style={{...styles.sectionHeader, color: '#ef4444'}}>
                       <FaExclamationTriangle /> 注意事项
                     </div>
                     <div style={styles.attentionBox}>
-                       <RichTextRenderer 
-                        content={gp.attention} 
-                        onPlayText={play} 
-                        activeTtsId={activeId}
-                       />
+                       <RichTextRenderer content={gp.attention} />
                     </div>
                   </div>
                 )}
 
-                {/* 对话模块 */}
+                {/* 对话模块 (✅ 唯一保留的点击播放入口) */}
                 <div style={styles.section}>
                   <div style={styles.sectionHeader}>💬 场景对话</div>
                   <div style={styles.chatList}>
@@ -570,18 +501,18 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete, onAskA
                 <div style={{ height: '60px' }} />
               </div>
 
-              {/* ----- 自定义菜单渲染 ----- */}
+              {/* ----- 自定义选词菜单 ----- */}
               {menu.visible && (
                 <div 
                   ref={menuRef}
                   style={{
                     ...styles.customMenu,
-                    top: menu.y, // 绝对定位，基于视口
+                    top: menu.y,
                     left: menu.x,
                     position: 'fixed' 
                   }}
                   onMouseDown={(e) => e.stopPropagation()} 
-                  onTouchStart={(e) => e.stopPropagation()} // 防止菜单本身被当作选区操作
+                  onTouchStart={(e) => e.stopPropagation()}
                 >
                   <div style={styles.menuItem} onClick={() => handleMenuAction('read')}>
                     <FaVolumeUp size={14} /> 朗读
@@ -611,39 +542,21 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete, onAskA
 const styles = {
   container: { position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#fff' },
   page: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'white' },
-  
-  // 关键修正：
-  // 1. userSelect: text 允许用户自由拖拽选择
-  // 2. 移除 WebkitTouchCallout: none，因为我们已经用 contextmenu 拦截了菜单，
-  //    保留 callout 可以让用户看到放大镜（在部分 iOS 上），提高选择精确度。
-  //    如果还觉得系统菜单碍事，可以加 WebkitTouchCallout: 'none'，但要确保 contextmenu 逻辑正常。
-  scrollContainer: { 
-    flex: 1, 
-    overflowY: 'auto', 
-    padding: '20px 16px 40px',
-    userSelect: 'text',
-    WebkitUserSelect: 'text',
-    // WebkitTouchCallout: 'none' // 已注释，为了让移动端原生选择光标/放大镜更好用
-  },
+  scrollContainer: { flex: 1, overflowY: 'auto', padding: '20px 16px 40px', userSelect: 'text', WebkitUserSelect: 'text' },
   contentWrapper: { maxWidth: '600px', margin: '0 auto' },
-
   title: { fontSize: '1.4rem', fontWeight: '800', textAlign: 'center', color: '#000', marginBottom: '20px' },
   h3: { fontSize: '1.1rem', color: '#000', borderLeft: '4px solid #3b82f6', paddingLeft: '10px', marginTop: '20px', marginBottom: '10px' },
-  
   headerRow: { display: 'flex', gap: '10px', marginBottom: '24px', alignItems: 'stretch' },
   patternCard: { flex: 1, background: '#f8fafc', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', justifyContent: 'center' },
   videoBox: { width: '100px', height: '150px', borderRadius: '12px', overflow: 'hidden', background: '#000', position: 'relative', cursor: 'pointer' },
   videoOverlay: { position: 'absolute', bottom: 0, width: '100%', background: 'rgba(0,0,0,0.5)', color: '#fff', fontSize: '9px', textAlign: 'center', padding: '2px 0' },
-
   cardLabel: { fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold', marginBottom: '6px' },
   patternText: { fontSize: '1.15rem', textAlign: 'center' },
-
   section: { marginBottom: '25px' },
   sectionHeader: { fontSize: '1rem', fontWeight: 'bold', marginBottom: '10px', color: '#000', display: 'flex', alignItems: 'center', gap: '6px' },
   textRow: { padding: '4px 0' },
   textBody: { fontSize: '1.05rem', color: '#000' },
   attentionBox: { border: '1px dashed #ef4444', borderRadius: '12px', padding: '14px' },
-
   chatList: { display: 'flex', flexDirection: 'column', gap: '16px' },
   chatRow: { display: 'flex', gap: '10px' },
   chatAvatar: { width: 34, height: 34, borderRadius: '50%', border: '1px solid #eee' },
@@ -652,48 +565,18 @@ const styles = {
   tailL: { position: 'absolute', top: '12px', left: '-5px', borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderRight: '6px solid #fff1f2' },
   tailR: { position: 'absolute', top: '12px', right: '-5px', borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '6px solid #eff6ff' },
   chatTranslation: { fontSize: '0.85rem', color: '#64748b', marginTop: '4px' },
-
   submitBtn: { width: '100%', background: '#000', color: 'white', border: 'none', padding: '14px 0', borderRadius: '30px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' },
-
-  // 自定义菜单样式
-  customMenu: {
-    background: '#333',
-    color: '#fff',
-    borderRadius: '8px',
-    padding: '4px 0',
-    display: 'flex',
-    alignItems: 'center',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-    zIndex: 9999,
-    fontSize: '13px',
-    transform: 'translate(-50%, -120%)', // 居中并显示在上方
-    whiteSpace: 'nowrap',
-    pointerEvents: 'auto'
-  },
-  menuItem: {
-    padding: '8px 12px',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    transition: 'background 0.2s',
-    userSelect: 'none'
-  },
-  menuDivider: {
-    width: '1px',
-    height: '16px',
-    background: '#555'
-  }
+  customMenu: { background: '#333', color: '#fff', borderRadius: '8px', padding: '4px 0', display: 'flex', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.3)', zIndex: 9999, fontSize: '13px', transform: 'translate(-50%, -120%)', whiteSpace: 'nowrap', pointerEvents: 'auto' },
+  menuItem: { padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'background 0.2s', userSelect: 'none' },
+  menuDivider: { width: '1px', height: '16px', background: '#555' }
 };
 
-// 全局内联样式注入 (处理视频控制条显示)
 if (typeof document !== 'undefined' && !document.getElementById('gp-player-style')) {
   const style = document.createElement('style');
   style.id = 'gp-player-style';
   style.innerHTML = `
     .active-scale:active { transform: scale(0.97); }
     video::-webkit-media-controls-enclosure { display: flex !important; }
-    /* 防止iOS点击高亮背景色影响菜单视觉 */
     * { -webkit-tap-highlight-color: transparent; }
   `;
   document.head.appendChild(style);
