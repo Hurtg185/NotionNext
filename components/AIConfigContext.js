@@ -2,19 +2,20 @@ import React, { createContext, useState, useContext, useEffect, useMemo } from '
 import Script from 'next/script';
 
 // --- 常量定义 ---
-const CONFIG_KEY = 'ai_global_config_v15'; // 升级版本号以重置配置
-const SESSIONS_KEY = 'ai_global_sessions_v15';
+const CONFIG_KEY = 'ai_global_config_v14';
+const SESSIONS_KEY = 'ai_global_sessions_v14';
+const BOOKMARKS_KEY = 'ai_global_bookmarks_v14';
 const USER_KEY = 'hsk_user';
 
 const AIContext = createContext();
 
-// --- 辅助函数：激活码校验 ---
+// --- 辅助函数：激活码校验 (完整保留) ---
 const validateActivationCode = (code) => {
   if (!code) return { isValid: false, error: '请输入激活码' };
   const c = code.trim().toUpperCase();
   if (!c.includes('-JHM-')) return { isValid: false, error: '格式错误' };
   const parts = c.split('-');
-  const VALID = ['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'H7-9', 'SP'];
+  const VALID = ['Hsk1', 'Hsk2', 'Hsk3', 'Hsk4', 'Hsk5', 'Hsk6', 'H7-9'];
   if (!VALID.includes(parts[0])) return { isValid: false, error: '等级不支持' };
   return { isValid: true, level: parts[0] };
 };
@@ -40,7 +41,7 @@ export const AIProvider = ({ children }) => {
     ttsSpeed: 1,
     ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural',
     soundEnabled: true,
-    sttLang: 'zh-CN'
+    systemPrompt: '' 
   });
 
   /* ======================
@@ -65,55 +66,44 @@ export const AIProvider = ({ children }) => {
   const [pageContext, setPageContext] = useState('');
 
   /* ======================
-     6. 提示词模板 (✅ 核心修改部分)
+     6. 提示词模板 (核心修复：增加灵活性防止死循环)
   ====================== */
   const SYSTEM_PROMPTS = {
-    // 普通对话模式：增加了“智能判断”逻辑，防止 AI 句句不离语法
     CHAT: `你是一位专门教【缅甸学生】学习汉语的老师。
 【当前学生等级】{{LEVEL}}
-【屏幕上下文】{{CONTEXT}} (这是学生当前正在看的学习内容，仅作为背景参考)
+【当前页面内容】{{CONTEXT}}
 
-【你的行为准则 - 非常重要】
-1. **智能判断意图**：
-   - 如果学生问“你好”、“聊聊别的”或与学习无关的话题，请**完全忽略**屏幕上下文，像朋友一样自然闲聊。
-   - 如果学生问“这是什么意思”、“请解释一下”或针对屏幕内容提问，请结合【屏幕上下文】进行专业讲解。
+【语言强制执行规则】
+- 如果学生用中文提问，你用中文回答并辅以关键词的缅文解释。
+- 如果学生用缅文提问，你用缅文回答。
+- Hsk1 / Hsk2：必须【缅文为主】，中文仅作为关键词或例句。
+- Hsk3 / Hsk4：采取“中文+缅文”对照讲解。
+- Hsk5 及以上：以中文讲解为主，难点辅以缅文。
 
-2. **讲解时的语言规则（严格遵守）**
-   - H1 / H2 (初学者)：解释必须以【缅文为主】，中文仅作为关键词或例句。绝对不允许连续两句只有中文。
-   - H3 / H4 (进阶)：采取“中文+缅文”对照讲解。
-   - H5 及以上 (高级)：以中文讲解为主，难点辅以缅文。
+【回答结构】
+1. 用符合等级的语言解释。
+2. 结合【当前页面内容】举例。
+3. 结尾给出 3-5 个追问建议。
+追问格式：SUGGESTIONS: 建议1|||建议2|||建议3`,
 
-3. **回答结构（仅在讲解知识点时使用）**
-   - 解释含义 -> 举例说明 -> 互动提问。`,
+    INTERACTIVE: `你是一名缅甸学生的汉语语法私教。当前处于【错题专项解析】模式。
 
-    // 互动错题模式：保持原有逻辑
-    INTERACTIVE: `你是一名缅甸学生的汉语语法与互动私教老师。你的任务不是直接讲语法，是让学生下次不再这样选。
-【当前任务】学生做错题了，需要补课。你要通过“复原错因 + 场景尴尬感 + 小窍门”引导学生自己悟出来。
-【学生等级】{{LEVEL}}
-
-【语言强制执行规则（优先级最高）】
-- 如果{{GRAMMAR}}是 H1 或 H2：你必须【全程使用缅甸语】解释逻辑。严禁发送大段中文。
-- 如果{{GRAMMAR}}是 H3 或 H4：每一句中文解释后必须紧跟缅文翻译。
-
-【错题信息】
+【错题背景】
 - 语法点：{{GRAMMAR}}
 - 题目：{{QUESTION}}
 - 学生误选：{{USER_CHOICE}}
+【学生等级】{{LEVEL}}
 
-【总规则】
-1.不说“你错了 / 不对”  
-2.不超过 5个语法术语  
-3. 用自然流畅的地道口语，避免 AI 痕迹。
-4. 重点分析：为什么会选 {{USER_CHOICE}}
+【核心逻辑】
+1. **针对性**：首先根据上述错题信息，按照“还原错因->场景尴尬感->窍门引导”进行补课。
+2. **灵活性（重要）**：如果学生在后续对话中提出了与当前语法或本错题无关的其他问题，请立即切换为普通老师身份回答，不要强行套用语法和错题背景。
 
-【补课流程】
-① 还原学生当时的想法：用缅甸学生的思维想一下他为什么选这个？
-② 尴尬现场（最关键）：把误选放进真实场景，展示尴尬或误会。用缅语对比解释为什么中文不能这样硬套。
-③ 关键线索提醒：引导学生注意题目中的关键字，详细解释为什么不能这样选。
-④ 一句话收尾点出核心。
+【语言规则】
+- Hsk1/Hsk2：全缅文解释逻辑。
+- Hsk3/Hsk4：中文解释后紧跟缅文翻译。
 
 【追问生成】
-基于本题错误点生成 3 个追问，使用格式：SUGGESTIONS: Q1|||Q2|||Q3`
+基于当前对话生成 3 个追问，使用格式：SUGGESTIONS: Q1|||Q2|||Q3`
   };
 
   /* ======================
@@ -147,18 +137,10 @@ export const AIProvider = ({ children }) => {
     if (!currentSessionId && initialSessions.length > 0) {
         setCurrentSessionId(initialSessions[0].id);
     }
-    
-    // 初始化标签页
-    try {
-        const savedBookmarks = localStorage.getItem('ai_global_bookmarks_v15');
-        if (savedBookmarks) setBookmarks(JSON.parse(savedBookmarks));
-    } catch(e) {}
-
   }, []);
 
   useEffect(() => { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); }, [config]);
   useEffect(() => { if(sessions.length > 0) localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions)); }, [sessions]);
-  useEffect(() => { localStorage.setItem('ai_global_bookmarks_v15', JSON.stringify(bookmarks)); }, [bookmarks]);
 
   useEffect(() => {
     if (user?.unlocked_levels) {
@@ -280,10 +262,12 @@ export const AIProvider = ({ children }) => {
   };
 
   /* ======================
-     10. Prompt 动态生成逻辑
+     10. Prompt 动态生成逻辑 (核心修复)
   ====================== */
   const finalSystemPrompt = useMemo(() => {
     let template = aiMode === 'INTERACTIVE' ? SYSTEM_PROMPTS.INTERACTIVE : SYSTEM_PROMPTS.CHAT;
+    
+    // 基础变量替换
     template = template.replace(/{{LEVEL}}/g, config.userLevel || 'H1');
     
     if (aiMode === 'INTERACTIVE' && activeTask) {
@@ -291,27 +275,38 @@ export const AIProvider = ({ children }) => {
         template = template.replace('{{QUESTION}}', activeTask.question || '');
         template = template.replace('{{USER_CHOICE}}', activeTask.userChoice || '');
     } else {
-        // 在普通模式下，传入当前页面内容，但提示词中已经说明了“仅供参考”
-        template = template.replace('{{CONTEXT}}', pageContext || '（无特定屏幕内容，请自由交流）');
+        template = template.replace('{{CONTEXT}}', pageContext || '通用汉语语法');
     }
     return template;
   }, [config.userLevel, aiMode, activeTask, pageContext]);
 
   /* ======================
-     11. 触发器函数
+     11. 会话管理切换 (核心修复：解决重复语法问题)
   ====================== */
   
+  // 切换 Session 的包装函数
+  const selectSession = (sessionId) => {
+      setCurrentSessionId(sessionId);
+      const session = sessions.find(s => s.id === sessionId);
+      // 如果切换到的会话标题不包含“解析”，或者是一个空对话，自动切回 CHAT 模式并清除任务
+      if (session && !session.title.includes('解析')) {
+          setAiMode('CHAT');
+          setActiveTask(null);
+      }
+  };
+
   // 1. 触发互动题解析
   const triggerInteractiveAI = (payload) => {
     setAiMode('INTERACTIVE');
     
-    // 创建专用错题 Session
+    // 创建解析专用 Session
     const newSessionId = Date.now();
     const newSession = { 
         id: newSessionId, 
-        title: `解析: ${payload.grammarPoint || '错题分析'}`, 
+        title: `解析: ${payload.grammarPoint || '新题目'}`, 
         messages: [], 
-        date: new Date().toISOString() 
+        date: new Date().toISOString(),
+        isInteractive: true // 标记位
     };
     setSessions(prev => [newSession, ...prev]);
     setCurrentSessionId(newSessionId);
@@ -323,28 +318,28 @@ export const AIProvider = ({ children }) => {
     setIsAiOpen(true);
   };
 
-  // 2. 静默更新 PPT 上下文 (在翻页时调用)
+  // 2. 静默更新 PPT 上下文
   const updatePageContext = (content) => {
-    // 只有在非互动模式下才更新背景 Context，避免覆盖错题信息
     if (aiMode !== 'INTERACTIVE') {
         setPageContext(content);
     }
   };
 
-  // 3. 重置为普通聊天模式
+  // 3. 重置模式 (当用户点击“新对话”或手动清空时调用)
   const resetToChatMode = () => {
       setAiMode('CHAT');
       setActiveTask(null);
-      // 如果当前是错题 Session，建议新建一个“新对话”以免逻辑混乱
-      const newSession = { id: Date.now(), title: '新对话', messages: [], date: new Date().toISOString() };
+      setPageContext('');
+      const newSessionId = Date.now();
+      const newSession = { id: newSessionId, title: '新对话', messages: [], date: new Date().toISOString() };
       setSessions(prev => [newSession, ...prev]);
-      setCurrentSessionId(newSession.id);
+      setCurrentSessionId(newSessionId);
   };
   
   // 4. 兼容旧版触发器
   const triggerAI = (title, content) => {
       setAiMode('CHAT');
-      setActiveTask(null); // 清除特定任务
+      setActiveTask(null); // 触发普通 AI 时必须清除之前的互动任务
       setPageContext(content);
       setIsAiOpen(true);
   };
@@ -355,7 +350,7 @@ export const AIProvider = ({ children }) => {
   return (
     <AIContext.Provider value={{
         user, login, logout, isActivated, isGoogleLoaded, config, setConfig,
-        sessions, setSessions, currentSessionId, setCurrentSessionId,
+        sessions, setSessions, currentSessionId, setCurrentSessionId: selectSession, // 使用修复后的 selectSession
         bookmarks, setBookmarks, isAiOpen, setIsAiOpen,
         canUseAI, recordUsage, remainingQuota, TOTAL_FREE_QUOTA,
         handleActivate, handleGoogleCallback,
