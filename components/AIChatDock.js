@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
-  FaPaperPlane, FaChevronLeft, FaRobot, FaCog, FaTimes,
-  FaVolumeUp, FaStop, FaCopy, FaMicrophone, FaEraser,
+  FaPaperPlane, FaRobot, FaCog, FaTimes,
+  FaVolumeUp, FaStop, FaCopy, FaMicrophone,
   FaList, FaEdit, FaTrashAlt, FaPlus, FaLightbulb, FaFeatherAlt,
-  FaLanguage, FaCheck, FaFont, FaLock, FaRocket, FaGoogle,
+  FaLanguage, FaCheck, FaFont, FaGoogle,
   FaEye, FaEyeSlash, FaArrowLeft, FaStar, FaRegStar
 } from 'react-icons/fa';
 import ReactMarkdown from 'react-markdown';
@@ -23,19 +23,6 @@ const STT_LANGS = [
   { label: '中文 (普通话)', value: 'zh-CN' },
   { label: '缅甸语', value: 'my-MM' },
   { label: '英语', value: 'en-US' }
-];
-
-const API_ENDPOINTS = [
-  { name: 'NVIDIA (默认)', value: 'https://integrate.api.nvidia.com/v1' },
-  { name: '阿里心流 (Iflow)', value: 'https://apis.iflow.cn/v1' },
-  { name: 'DeepSeek 官方', value: 'https://api.deepseek.com' }
-];
-
-const MODEL_OPTIONS = [
-  { name: 'DeepSeek V3 (推荐)', value: 'deepseek-ai/deepseek-v3.2' },
-  { name: 'Qwen 2.5 (阿里)', value: 'qwen-turbo' },
-  { name: 'Gemini 2.5 Flash', value: 'Gemini-2.5-Flash-Lite' },
-  { name: 'Llama 3.1 405B', value: 'meta/llama-3.1-405b-instruct' }
 ];
 
 const LONG_PRESS_DURATION = 600;
@@ -151,23 +138,32 @@ export default function AIChatDock() {
   const textareaRef = useRef(null);
   const isNewSessionForTask = useRef(false);
 
+  // ✅ [修复] 优化后的浏览器历史记录管理，确保能正确退出
   useEffect(() => {
     const handlePopState = (event) => {
+      // 当用户点击浏览器返回，并且AI面板是打开状态时，关闭它
       if (isAiOpen) {
         setIsAiOpen(false);
       }
     };
+    
     if (isAiOpen) {
-      window.history.pushState({ aiDockOpen: true }, '');
+      // AI打开时，如果当前历史记录没有我们的标记，就压入一个新的记录点
+      if (!window.history.state?.aiDockOpen) {
+        window.history.pushState({ aiDockOpen: true }, '');
+      }
       window.addEventListener('popstate', handlePopState);
-      return () => {
-        window.removeEventListener('popstate', handlePopState);
-      };
     } else {
-      if (window.history.state && window.history.state.aiDockOpen) {
+      // AI关闭时，如果当前历史记录点是我们的，就返回上一个记录点
+      if (window.history.state?.aiDockOpen) {
         window.history.back();
       }
     }
+    
+    // 组件卸载时移除监听器
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
   }, [isAiOpen, setIsAiOpen]);
   
   useEffect(() => {
@@ -248,27 +244,44 @@ export default function AIChatDock() {
     }
   }, [messages, isAiOpen, loading]);
 
+  // ✅ [核心改造] 自动处理新任务（错题 & 语法讲解），并创建新对话
   useEffect(() => {
-    if (aiMode === 'INTERACTIVE' && activeTask && activeTask.timestamp) {
-        const lastProcessed = sessionStorage.getItem('last_ai_task_ts');
-        if (lastProcessed !== String(activeTask.timestamp)) {
-            sessionStorage.setItem('last_ai_task_ts', String(activeTask.timestamp));
-            
-            const taskMessageContent = `我正在做这道题，请帮我分析一下：\n- **题目**: "${activeTask.question}"\n- **我的选择**: "${activeTask.userChoice}"\n- **涉及语法点**: ${activeTask.grammarPoint}`;
-            const firstMessage = { role: 'assistant', content: `好的，我们来分析这道关于 **${activeTask.grammarPoint}** 的题目。`, id: Date.now() };
-            const userTaskMessage = { role: 'user', content: taskMessageContent, id: Date.now() + 1};
+    if (activeTask && activeTask.timestamp) {
+      const lastProcessed = sessionStorage.getItem('last_ai_task_ts');
+      if (lastProcessed === String(activeTask.timestamp)) {
+        return; 
+      }
+      sessionStorage.setItem('last_ai_task_ts', String(activeTask.timestamp));
 
-            const newSession = {
-                id: Date.now(),
-                title: `${activeTask.grammarPoint} - 错题分析`,
-                messages: [firstMessage, userTaskMessage],
-                date: new Date().toISOString()
-            };
+      let initialUserMessage;
+      let newSessionTitle;
+      let initialAssistantMessage = null;
 
-            setSessions(prev => [newSession, ...prev]);
-            setCurrentSessionId(newSession.id);
-            isNewSessionForTask.current = true;
-        }
+      if (aiMode === 'INTERACTIVE') {
+        newSessionTitle = `${activeTask.grammarPoint} - 错题分析`;
+        initialAssistantMessage = { role: 'assistant', content: `好的，我们来分析这道关于 **${activeTask.grammarPoint}** 的题目。`, id: Date.now() };
+        initialUserMessage = { role: 'user', content: `我正在做这道题，请帮我分析一下：\n- **题目**: "${activeTask.question}"\n- **我的选择**: "${activeTask.userChoice}"\n- **涉及语法点**: ${activeTask.grammarPoint}`, id: Date.now() + 1 };
+      } else if (aiMode === 'CHAT' && activeTask.content) {
+        newSessionTitle = activeTask.title || '语法讲解';
+        initialUserMessage = { role: 'user', content: `你好，请根据我正在学习的【${activeTask.title}】这个语法点，用缅甸语给我一个简洁明了的核心解释，并举1-2个最常用的例子。`, id: Date.now() + 1 };
+      } else {
+        return;
+      }
+
+      const messages = initialAssistantMessage 
+        ? [initialAssistantMessage, initialUserMessage]
+        : [initialUserMessage];
+
+      const newSession = {
+        id: Date.now(),
+        title: newSessionTitle,
+        messages: messages,
+        date: new Date().toISOString()
+      };
+
+      setSessions(prev => [newSession, ...prev]);
+      setCurrentSessionId(newSession.id);
+      isNewSessionForTask.current = true;
     }
   }, [activeTask, aiMode, setSessions, setCurrentSessionId]);
   
@@ -461,7 +474,7 @@ export default function AIChatDock() {
     
     await new Promise(resolve => setTimeout(resolve, 0));
 
-    const historyMsgs = (isSystemTrigger ? currentMessages : messages.slice(-7)).map(m => ({ role: m.role, content: m.content }));
+    const historyMsgs = (isSystemTrigger ? currentMessages : messages.slice(-10)).map(m => ({ role: m.role, content: m.content }));
     const apiMessages = [{ role: 'system', content: systemPrompt }, ...historyMsgs];
 
     try {
@@ -569,11 +582,20 @@ export default function AIChatDock() {
     }
   };
 
+  // ✅ [优化] TTS朗读前过滤标点、格式和表情
   const playInternalTTS = async (text) => {
     if (!text) return;
     if (audioRef.current) audioRef.current.pause();
     setIsPlaying(true);
-    const clean = text.replace(/[*#`>~\-\[\]]/g, '');
+    
+    // 移除Markdown, URL, 中英文标点, Emoji
+    const emojiRegex = /(?:[\u2700-\u27bf]|(?:\ud83c[\udde6-\uddff]){2}|[\ud800-\udbff][\udc00-\udfff]|[\u0023-\u0039]\ufe0f?\u20e3|\u3299|\u3297|\u303d|\u3030|\u24c2|\ud83c[\udd70-\udd71]|\ud83c[\udd7e-\udd7f]|\ud83c\udd8e|\ud83c[\udd91-\udd9a]|\ud83c[\udde6-\uddff]|\ud83c[\ude01-\ude02]|\ud83c\ude1a|\ud83c\ude2f|\ud83c[\ude32-\ude3a]|\ud83c[\ude50-\ude51]|\u203c|\u2049|[\u25aa-\u25ab]|\u25b6|\u25c0|[\u25fb-\u25fe]|\u00a9|\u00ae|\u2122|\u2139|\ud83c\udc04|[\u2600-\u26FF]|\u2b05|\u2b06|\u2b07|\u2b1b|\u2b1c|\u2b50|\u2b55|\u231a|\u231b|\u2328|\u23cf|[\u23e9-\u23f3]|[\u23f8-\u23fa]|\ud83c\udccf|\u2934|\u2935|[\u2190-\u21ff])/g;
+    const clean = text
+        .replace(/\[(.*?)\]\(.*?\)/g, '$1') // 移除Markdown链接
+        .replace(/[*#`>~\-\[\]_]/g, '')    // 移除Markdown符号
+        .replace(/[,\.。、·;；:：!！?？#~（）《》「」『』【】]/g, ' ') // 移除中英文标点
+        .replace(emojiRegex, '');               // 移除Emoji
+        
     const rate = Math.round((config.ttsSpeed - 1) * 100);
     const url = `/api/tts?t=${encodeURIComponent(clean)}&v=${config.ttsVoice}&r=${rate}%`;
     try {
@@ -606,10 +628,6 @@ export default function AIChatDock() {
     }
   };
 
-  const handleBack = () => {
-    window.history.back();
-  };
-  
   const handleTextareaChange = (e) => {
       setInput(e.target.value);
       if (textareaRef.current) {
@@ -681,10 +699,9 @@ export default function AIChatDock() {
             </div>
           </div>
 
+          {/* ✅ [UI改造] 调整头部导航栏布局 */}
           <div style={styles.navHeader}>
-            <button onClick={handleBack} style={styles.navBackBtn}>
-              <FaChevronLeft size={20} />
-            </button>
+            <button onClick={() => setShowSidebar(true)} style={styles.navIconBtn}><FaList size={20} /></button>
             <div style={styles.navTitle}>
               {aiMode === 'INTERACTIVE' ? 'AI 互动辅导' : `AI 助教 ${isActivated ? '' : `(${remainingQuota})`}`}
             </div>
@@ -692,8 +709,8 @@ export default function AIChatDock() {
               {aiMode === 'INTERACTIVE' && (
                 <button onClick={resetToChatMode} style={styles.navTextBtn}>退出互动</button>
               )}
-              <button onClick={() => setShowSidebar(true)} style={styles.navIconBtn}><FaList size={18} /></button>
               <button onClick={() => setShowSettings(true)} style={styles.navIconBtn}><FaCog size={18} /></button>
+              <button onClick={() => setIsAiOpen(false)} style={styles.navIconBtn}><FaTimes size={20} /></button>
             </div>
           </div>
 
@@ -786,27 +803,8 @@ export default function AIChatDock() {
                   <FaVolumeUp className="animate-pulse" /> 正在朗读... <FaStop />
                 </div>
               )}
+              {/* ✅ [UI改造] 调整输入框布局和交互 */}
               <div style={styles.inputBox}>
-                <div style={{position: 'relative'}}>
-                    <button
-                        onMouseDown={handleMicButtonPress}
-                        onMouseUp={handleMicButtonRelease}
-                        onTouchStart={handleMicButtonPress}
-                        onTouchEnd={handleMicButtonRelease}
-                        style={{ ...styles.largeMicBtn, background: isListening ? '#ef4444' : '#e2e8f0' }}
-                    >
-                      <FaMicrophone size={24} color={isListening ? '#fff' : '#64748b'} className={isListening ? 'animate-pulse' : ''} />
-                    </button>
-                    {showSttLangMenu && (
-                        <div id="stt-lang-menu" style={styles.sttLangMenu}>
-                            {STT_LANGS.map(lang => (
-                                <div key={lang.value} onClick={() => handleSttLangSelect(lang.value)} style={styles.sttLangItem}>
-                                    {lang.label} {config.sttLang === lang.value && <FaCheck size={12} color="#4f46e5"/>}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
                 <textarea
                   ref={textareaRef}
                   value={input}
@@ -816,9 +814,34 @@ export default function AIChatDock() {
                   style={styles.textarea}
                   rows={1}
                 />
-                <button onClick={() => handleSend()} disabled={loading || !input.trim()} style={{ ...styles.sendBtn, opacity: (loading || !input.trim()) ? 0.5 : 1 }}>
-                    <FaPaperPlane size={18} />
-                </button>
+                <div style={{position: 'relative'}}>
+                    {input.trim().length > 0 ? (
+                        <button onClick={() => handleSend()} disabled={loading} style={styles.dynamicInputBtn}>
+                            <FaPaperPlane size={20} color="#fff" />
+                        </button>
+                    ) : (
+                        <>
+                            <button
+                                onMouseDown={handleMicButtonPress}
+                                onMouseUp={handleMicButtonRelease}
+                                onTouchStart={handleMicButtonPress}
+                                onTouchEnd={handleMicButtonRelease}
+                                style={{ ...styles.dynamicInputBtn, background: isListening ? '#ef4444' : '#6366f1' }}
+                            >
+                              <FaMicrophone size={22} color="#fff" className={isListening ? 'animate-pulse' : ''} />
+                            </button>
+                            {showSttLangMenu && (
+                                <div id="stt-lang-menu" style={styles.sttLangMenu}>
+                                    {STT_LANGS.map(lang => (
+                                        <div key={lang.value} onClick={() => handleSttLangSelect(lang.value)} style={styles.sttLangItem}>
+                                            {lang.label} {config.sttLang === lang.value && <FaCheck size={12} color="#4f46e5"/>}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
               </div>
             </div>
           </div>
@@ -989,9 +1012,8 @@ export default function AIChatDock() {
 
 const styles = {
   fullScreenContainer: { position: 'fixed', inset: 0, background: '#f8fafc', zIndex: 99999, display: 'flex', flexDirection: 'column', animation: 'slideUp 0.3s ease-out' },
-  navHeader: { height: 56, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 10px 0 16px', borderBottom: '1px solid #e2e8f0', flexShrink: 0, paddingTop: 'env(safe-area-inset-top)' },
-  navTitle: { fontSize: '1.1rem', fontWeight: 'bold', color: '#1e293b' },
-  navBackBtn: { background: 'none', border: 'none', padding: 8, cursor: 'pointer', color: '#334155', marginLeft: -8 },
+  navHeader: { height: 56, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', borderBottom: '1px solid #e2e8f0', flexShrink: 0, paddingTop: 'env(safe-area-inset-top)' },
+  navTitle: { fontSize: '1.1rem', fontWeight: 'bold', color: '#1e293b', textAlign: 'center', flex: 1 },
   navIconBtn: { background: 'none', border: 'none', padding: 8, cursor: 'pointer', color: '#64748b' },
   navTextBtn: { background: 'none', border: '1px solid #e0e7ff', borderRadius: 4, padding: '4px 8px', color: '#4f46e5', fontSize: '0.8rem', cursor: 'pointer' },
   chatBody: { flex: 1, overflowY: 'auto', padding: '16px', background: '#f8fafc', WebkitOverflowScrolling: 'touch' },
@@ -1028,13 +1050,13 @@ const styles = {
   td: { border: '1px solid #e2e8f0', padding: '6px 10px', verticalAlign: 'top' },
   scrollSuggestionContainer: { display: 'flex', gap: 10, padding: '12px 16px 4px 16px', overflowX: 'auto', whiteSpace: 'nowrap', WebkitOverflowScrolling: 'touch' },
   scrollSuggestionBtn: { flexShrink: 0, background: '#ffffff', border: '1px solid #e0e7ff', borderRadius: '20px', padding: '8px 16px', fontSize: '0.88rem', color: '#4f46e5', cursor: 'pointer', display: 'flex', alignItems: 'center', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.08)', fontWeight: '500' },
-  inputContainer: { padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 },
+  inputContainer: { padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 8 },
   ttsBar: { background: '#eff6ff', color: '#2563eb', fontSize: '0.75rem', padding: '4px 10px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', alignSelf: 'flex-start' },
-  inputBox: { display: 'flex', alignItems: 'flex-end', gap: 10, padding: '12px 16px', background: '#fff' },
-  textarea: { flex: 1, border: '1px solid #e2e8f0', borderRadius: 20, background: '#f8fafc', padding: '10px 14px', fontSize: '1rem', outline: 'none', resize: 'none', maxHeight: 120, lineHeight: 1.5 },
-  mainBtn: { width: 44, height: 44, borderRadius: '50%', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '1.2rem', transition: 'all 0.2s', flexShrink: 0 },
-  sttLangMenu: { position: 'absolute', bottom: '110%', right: 0, background: '#fff', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.15)', padding: 8, width: 140, zIndex: 20 },
-  sttLangItem: { padding: '8px', borderRadius: 6, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' },
+  inputBox: { display: 'flex', alignItems: 'flex-end', gap: 10, padding: '4px', background: '#fff' },
+  textarea: { flex: 1, border: '1px solid #e2e8f0', borderRadius: 20, background: '#f8fafc', padding: '10px 16px', fontSize: '1rem', outline: 'none', resize: 'none', maxHeight: 120, lineHeight: 1.5 },
+  dynamicInputBtn: { width: 44, height: 44, borderRadius: '50%', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s', flexShrink: 0, background: '#6366f1', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.2)' },
+  sttLangMenu: { position: 'absolute', bottom: '120%', right: 0, background: '#fff', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.15)', padding: 8, width: 140, zIndex: 20 },
+  sttLangItem: { padding: '8px 10px', borderRadius: 6, fontSize: '0.9rem', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   popover: { position: 'fixed', transform: 'translateX(-50%)', background: '#1e293b', borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 4px 15px rgba(0,0,0,0.3)', zIndex: 11000, color: '#fff' },
   popArrow: { position: 'absolute', bottom: -6, left: '50%', marginLeft: -6, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '6px solid #1e293b' },
   popBtn: { background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem' },
