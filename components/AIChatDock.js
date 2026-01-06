@@ -435,6 +435,7 @@ export default function AIChatDock() {
     const contentToSend = (typeof textToSend === 'string' ? textToSend : input).trim();
     if (!contentToSend || loading) return;
     
+    // --- 权限和配置检查前置 ---
     if (!isSystemTrigger) {
       if (!user) {
         setShowLoginTip(true);
@@ -443,8 +444,8 @@ export default function AIChatDock() {
       if (!isActivated) {
         try {
           const auth = await canUseAI();
-          // 正确处理 canUseAI 返回的布尔值或对象
-          const canUse = typeof auth === 'object' ? auth.canUse : auth;
+          // 正确处理 canUseAI 可能返回的布尔值或对象
+          const canUse = (auth && typeof auth === 'object') ? auth.canUse : auth;
           if (!canUse) {
             setShowPaywall(true);
             return;
@@ -462,6 +463,7 @@ export default function AIChatDock() {
       return;
     }
     
+    // --- UI状态更新 ---
     if (!isSystemTrigger) setInput('');
     setSuggestions([]);
     setLoading(true);
@@ -469,12 +471,14 @@ export default function AIChatDock() {
     if (abortControllerRef.current) abortControllerRef.current.abort();
     abortControllerRef.current = new AbortController();
 
+    // --- 消息历史准备 ---
     const userMessage = { role: 'user', content: contentToSend };
     const currentHistory = historyOverride !== null ? historyOverride : messages;
     const historyForApi = [...currentHistory, userMessage];
     const historyMsgs = historyForApi.slice(-10).map(({ role, content }) => ({ role, content }));
     const apiMessages = [{ role: 'system', content: systemPrompt }, ...historyMsgs];
 
+    // --- 在UI上显示占位符 ---
     const assistantPlaceholder = { role: 'assistant', content: '', id: `${Date.now()}-assist` };
     if (isSystemTrigger) {
       updateMessages(prev => [...prev, assistantPlaceholder]);
@@ -482,7 +486,7 @@ export default function AIChatDock() {
       updateMessages(prev => [...prev, { ...userMessage, id: `${Date.now()}-user` }, assistantPlaceholder]);
     }
     
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise(resolve => setTimeout(resolve, 0)); // 确保UI有时间渲染
 
     try {
       const response = await fetch('/api/chat', {
@@ -502,6 +506,7 @@ export default function AIChatDock() {
       }
       if (!response.body) throw new Error("无响应内容");
 
+      // --- 健壮的流式数据处理 ---
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
@@ -526,7 +531,7 @@ export default function AIChatDock() {
               const delta = data.choices?.[0]?.delta?.content || '';
               if (delta) {
                 fullContent += delta;
-                if (config.soundEnabled) playTickSound(); // Simplified sound logic
+                if (config.soundEnabled) playTickSound(); // 简化音效逻辑
                 updateMessages(prev => {
                   const updated = [...prev];
                   if (updated.length > 0) {
@@ -559,8 +564,8 @@ export default function AIChatDock() {
         console.error("Chat Error:", err);
         updateMessages(prev => {
           const last = prev[prev.length - 1];
-          const newContent = last.content || `[系统]: 生成中断，请检查设置。(${err.message})`;
-          return [...prev.slice(0, -1), { ...last, content: newContent }];
+          const newContent = last ? (last.content || `[系统]: 生成中断，请检查设置。(${err.message})`) : `[系统]: 生成中断，请检查设置。(${err.message})`;
+          return [...prev.slice(0, -1), { ...(last || {}), content: newContent }];
         });
       }
     } finally {
