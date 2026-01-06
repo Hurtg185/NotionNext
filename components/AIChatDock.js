@@ -136,31 +136,26 @@ export default function AIChatDock() {
   const abortControllerRef = useRef(null);
   const recognitionRef = useRef(null);
   const textareaRef = useRef(null);
-  const isNewSessionForTask = useRef(false);
+  const taskToRun = useRef(null);
 
-  // ✅ [修复] 优化后的浏览器历史记录管理，确保能正确退出
   useEffect(() => {
     const handlePopState = (event) => {
-      // 当用户点击浏览器返回，并且AI面板是打开状态时，关闭它
       if (isAiOpen) {
         setIsAiOpen(false);
       }
     };
     
     if (isAiOpen) {
-      // AI打开时，如果当前历史记录没有我们的标记，就压入一个新的记录点
       if (!window.history.state?.aiDockOpen) {
         window.history.pushState({ aiDockOpen: true }, '');
       }
       window.addEventListener('popstate', handlePopState);
     } else {
-      // AI关闭时，如果当前历史记录点是我们的，就返回上一个记录点
       if (window.history.state?.aiDockOpen) {
         window.history.back();
       }
     }
     
-    // 组件卸载时移除监听器
     return () => {
       window.removeEventListener('popstate', handlePopState);
     };
@@ -214,7 +209,7 @@ export default function AIChatDock() {
           const newMsgs = typeof updater === 'function' ? updater(s.messages) : updater;
           const msgsWithId = newMsgs.map(m => m.id ? m : { ...m, id: `${Date.now()}-${Math.random()}` });
           let newTitle = s.title;
-          if (aiMode === 'CHAT' && s.title === '新对话' && msgsWithId.length > 1) {
+          if (aiMode === 'CHAT' && s.title.startsWith('新对话') && msgsWithId.length > 1) {
             const firstUserMsg = msgsWithId.find(m => m.role === 'user');
             if (firstUserMsg) newTitle = firstUserMsg.content.substring(0, 15);
           }
@@ -244,53 +239,49 @@ export default function AIChatDock() {
     }
   }, [messages, isAiOpen, loading]);
 
-  // ✅ [核心改造] 自动处理新任务（错题 & 语法讲解），并创建新对话
+  // ✅ [核心改造] 第1步：监听新任务，创建新会话，并准备好要“偷偷”发送的指令
   useEffect(() => {
     if (activeTask && activeTask.timestamp) {
       const lastProcessed = sessionStorage.getItem('last_ai_task_ts');
-      if (lastProcessed === String(activeTask.timestamp)) {
-        return; 
-      }
+      if (lastProcessed === String(activeTask.timestamp)) return;
       sessionStorage.setItem('last_ai_task_ts', String(activeTask.timestamp));
 
-      let initialUserMessage;
+      let hiddenPrompt;
       let newSessionTitle;
-      let initialAssistantMessage = null;
+      let initialMessages = [];
 
       if (aiMode === 'INTERACTIVE') {
         newSessionTitle = `${activeTask.grammarPoint} - 错题分析`;
-        initialAssistantMessage = { role: 'assistant', content: `好的，我们来分析这道关于 **${activeTask.grammarPoint}** 的题目。`, id: Date.now() };
-        initialUserMessage = { role: 'user', content: `我正在做这道题，请帮我分析一下：\n- **题目**: "${activeTask.question}"\n- **我的选择**: "${activeTask.userChoice}"\n- **涉及语法点**: ${activeTask.grammarPoint}`, id: Date.now() + 1 };
+        hiddenPrompt = `我正在做这道题，请帮我分析一下：\n- **题目**: "${activeTask.question}"\n- **我的选择**: "${activeTask.userChoice}"\n- **涉及语法点**: ${activeTask.grammarPoint}`;
+        initialMessages.push({ role: 'assistant', content: `好的，我们来分析这道关于 **${activeTask.grammarPoint}** 的题目。`, id: Date.now() });
       } else if (aiMode === 'CHAT' && activeTask.content) {
         newSessionTitle = activeTask.title || '语法讲解';
-        initialUserMessage = { role: 'user', content: `你好，请根据我正在学习的【${activeTask.title}】这个语法点，用缅甸语给我一个简洁明了的核心解释，并举1-2个最常用的例子。`, id: Date.now() + 1 };
+        hiddenPrompt = `你好，请根据我正在学习的【${activeTask.title}】这个语法点，用缅甸语给我一个简洁明了的核心解释，并举1-2个最常用的例子。`;
       } else {
         return;
       }
 
-      const messages = initialAssistantMessage 
-        ? [initialAssistantMessage, initialUserMessage]
-        : [initialUserMessage];
-
       const newSession = {
         id: Date.now(),
         title: newSessionTitle,
-        messages: messages,
+        messages: initialMessages,
         date: new Date().toISOString()
       };
-
+      
       setSessions(prev => [newSession, ...prev]);
       setCurrentSessionId(newSession.id);
-      isNewSessionForTask.current = true;
+      taskToRun.current = { prompt: hiddenPrompt, history: initialMessages };
     }
   }, [activeTask, aiMode, setSessions, setCurrentSessionId]);
   
+  // ✅ [核心改造] 第2步：一旦新会话ID设置好，就执行“偷偷”发送指令的任务
   useEffect(() => {
-      if (isNewSessionForTask.current && currentSessionId && messages.length > 0) {
-          isNewSessionForTask.current = false;
-          handleSend(messages[messages.length - 1].content, true, messages);
-      }
-  }, [currentSessionId, messages]);
+    if (taskToRun.current && currentSessionId) {
+      const { prompt, history } = taskToRun.current;
+      taskToRun.current = null; // 立即清除任务，防止重复执行
+      handleSend(prompt, true, history);
+    }
+  }, [currentSessionId]);
 
   const handleSelectionChange = () => {
     if (window.selectionTimeout) clearTimeout(window.selectionTimeout);
@@ -442,6 +433,7 @@ export default function AIChatDock() {
     login();
   };
 
+  // ✅ [核心改造] 第3步：重写 handleSend 函数，修复发送逻辑并支持隐藏初始指令
   const handleSend = async (textToSend = input, isSystemTrigger = false, historyOverride = null) => {
     const contentToSend = (typeof textToSend === 'string' ? textToSend : input).trim();
     if (!contentToSend || loading) return;
@@ -451,8 +443,7 @@ export default function AIChatDock() {
     if (!isSystemTrigger && !isActivated) {
       try {
         const auth = await canUseAI();
-        const canUse = (auth && typeof auth === 'object') ? auth.canUse : auth;
-        if (!canUse) { setShowPaywall(true); return; }
+        if (!auth.canUse) { setShowPaywall(true); return; }
       } catch (e) { alert("网络校验失败，请检查网络连接"); return; }
     }
     
@@ -463,19 +454,21 @@ export default function AIChatDock() {
     if (abortControllerRef.current) abortControllerRef.current.abort();
     abortControllerRef.current = new AbortController();
 
-    const currentMessages = historyOverride || messages;
+    const userMessage = { role: 'user', content: contentToSend };
+    const currentHistory = historyOverride !== null ? historyOverride : messages;
+    
+    const historyForApi = [...currentHistory, userMessage];
+    const historyMsgs = historyForApi.slice(-10).map(({ role, content }) => ({ role, content }));
+    const apiMessages = [{ role: 'system', content: systemPrompt }, ...historyMsgs];
 
-    if (!isSystemTrigger) {
-        const userMsg = { role: 'user', content: contentToSend };
-        updateMessages(prev => [...prev, userMsg, { role: 'assistant', content: '' }]);
+    const assistantPlaceholder = { role: 'assistant', content: '', id: `${Date.now()}-assist` };
+    if (isSystemTrigger) {
+      updateMessages([...currentHistory, assistantPlaceholder]);
     } else {
-        updateMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+      updateMessages([...currentHistory, { ...userMessage, id: `${Date.now()}-user` }, assistantPlaceholder]);
     }
     
     await new Promise(resolve => setTimeout(resolve, 0));
-
-    const historyMsgs = (isSystemTrigger ? currentMessages : messages.slice(-10)).map(m => ({ role: m.role, content: m.content }));
-    const apiMessages = [{ role: 'system', content: systemPrompt }, ...historyMsgs];
 
     try {
       const response = await fetch('/api/chat', {
@@ -503,77 +496,52 @@ export default function AIChatDock() {
       const decoder = new TextDecoder();
       let done = false;
       let fullContent = '';
-      let buffer = '';
-      let soundThrottler = 0;
-
+      
       while (!done) {
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
         const chunk = decoder.decode(value, { stream: true });
-        buffer += chunk;
+        
+        fullContent += chunk;
 
-        const lines = buffer.split('\n');
-        buffer = lines.pop();
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed === 'data: [DONE]') continue;
-          if (trimmed.startsWith('data:')) {
-            try {
-              const jsonStr = trimmed.replace(/^data:\s?/, '');
-              if (jsonStr === '[DONE]') continue;
-
-              const data = JSON.parse(jsonStr);
-              const delta = data.choices?.[0]?.delta?.content || '';
-              if (delta) {
-                fullContent += delta;
-                if (config.soundEnabled) {
-                  soundThrottler++;
-                  if (soundThrottler % 3 === 0) playTickSound();
-                }
-                updateMessages(prev => {
-                  const last = prev[prev.length - 1];
-                  const list = prev.slice(0, -1);
-                  return [...list, { ...last, content: fullContent }];
-                });
-              }
-            } catch (e) {
-            }
+        updateMessages(prev => {
+          const updated = [...prev];
+          if(updated.length > 0) {
+            updated[updated.length - 1].content = fullContent;
           }
-        }
+          return updated;
+        });
       }
 
       let cleanContent = fullContent;
-      let rawSuggestionsStr = '';
-      if (fullContent.includes('SUGGESTIONS:')) {
-        const parts = fullContent.split('SUGGESTIONS:');
-        cleanContent = parts[0].trim();
-        rawSuggestionsStr = parts[1];
-      } else if (fullContent.includes('[建议]:')) {
-        const parts = fullContent.split('[建议]:');
-        cleanContent = parts[0].trim();
-        rawSuggestionsStr = parts[1];
+      if (cleanContent.startsWith("data: ")) {
+          // Handle potential stream format inconsistencies
+          try {
+              const jsonData = JSON.parse(cleanContent.substring(6));
+              cleanContent = jsonData.choices[0].delta.content || "";
+          } catch(e) {
+             // Fallback for simple text
+          }
       }
 
-      updateMessages(prev => [...prev.slice(0, -1), { role: 'assistant', content: cleanContent, id: Date.now() }]);
-
-      if (rawSuggestionsStr) {
-        const splitRegex = /\|\|\||\||\n/;
-        const finalSuggestions = rawSuggestionsStr
-          .split(splitRegex)
-          .map(s => s.trim().replace(/^(\d+[\.、\s]+)/, ''))
-          .filter(s => s && s.length > 1)
-          .slice(0, 10);
-        setSuggestions(finalSuggestions);
-      }
+      updateMessages(prev => {
+        const final = [...prev];
+        if (final.length > 0) {
+          final[final.length - 1] = { ...final[final.length - 1], content: cleanContent, id: Date.now() };
+        }
+        return final;
+      });
+      
       if (!isSystemTrigger && !isActivated) await recordUsage();
       if (config.autoTTS) playInternalTTS(cleanContent);
+
     } catch (err) {
       if (err.name !== 'AbortError') {
         console.error("Chat Error:", err);
         updateMessages(prev => {
           const last = prev[prev.length - 1];
-          return [...prev.slice(0, -1), { ...last, content: last.content || `[系统]: 生成中断，请检查设置。(${err.message})` }];
+          const newContent = last.content || `[系统]: 生成中断，请检查设置。(${err.message})`;
+          return [...prev.slice(0, -1), { ...last, content: newContent }];
         });
       }
     } finally {
@@ -582,19 +550,17 @@ export default function AIChatDock() {
     }
   };
 
-  // ✅ [优化] TTS朗读前过滤标点、格式和表情
   const playInternalTTS = async (text) => {
     if (!text) return;
     if (audioRef.current) audioRef.current.pause();
     setIsPlaying(true);
     
-    // 移除Markdown, URL, 中英文标点, Emoji
     const emojiRegex = /(?:[\u2700-\u27bf]|(?:\ud83c[\udde6-\uddff]){2}|[\ud800-\udbff][\udc00-\udfff]|[\u0023-\u0039]\ufe0f?\u20e3|\u3299|\u3297|\u303d|\u3030|\u24c2|\ud83c[\udd70-\udd71]|\ud83c[\udd7e-\udd7f]|\ud83c\udd8e|\ud83c[\udd91-\udd9a]|\ud83c[\udde6-\uddff]|\ud83c[\ude01-\ude02]|\ud83c\ude1a|\ud83c\ude2f|\ud83c[\ude32-\ude3a]|\ud83c[\ude50-\ude51]|\u203c|\u2049|[\u25aa-\u25ab]|\u25b6|\u25c0|[\u25fb-\u25fe]|\u00a9|\u00ae|\u2122|\u2139|\ud83c\udc04|[\u2600-\u26FF]|\u2b05|\u2b06|\u2b07|\u2b1b|\u2b1c|\u2b50|\u2b55|\u231a|\u231b|\u2328|\u23cf|[\u23e9-\u23f3]|[\u23f8-\u23fa]|\ud83c\udccf|\u2934|\u2935|[\u2190-\u21ff])/g;
     const clean = text
-        .replace(/\[(.*?)\]\(.*?\)/g, '$1') // 移除Markdown链接
-        .replace(/[*#`>~\-\[\]_]/g, '')    // 移除Markdown符号
-        .replace(/[,\.。、·;；:：!！?？#~（）《》「」『』【】]/g, ' ') // 移除中英文标点
-        .replace(emojiRegex, '');               // 移除Emoji
+        .replace(/\[(.*?)\]\(.*?\)/g, '$1') 
+        .replace(/[*#`>~\-\[\]_]/g, '')
+        .replace(/[,\.。、·;；:：!！?？#~（）《》「」『』【】]/g, ' ') 
+        .replace(emojiRegex, '');
         
     const rate = Math.round((config.ttsSpeed - 1) * 100);
     const url = `/api/tts?t=${encodeURIComponent(clean)}&v=${config.ttsVoice}&r=${rate}%`;
@@ -699,23 +665,17 @@ export default function AIChatDock() {
             </div>
           </div>
 
-          {/* ✅ [UI改造] 调整头部导航栏布局 */}
+          {/* ✅ [UI改造] 移除了最右侧的关闭按钮 */}
           <div style={styles.navHeader}>
             <button onClick={() => setShowSidebar(true)} style={styles.navIconBtn}><FaList size={20} /></button>
             <div style={styles.navTitle}>
               {aiMode === 'INTERACTIVE' ? 'AI 互动辅导' : `AI 助教 ${isActivated ? '' : `(${remainingQuota})`}`}
             </div>
-            <div style={{ display: 'flex', gap: 12 }}>
-              {aiMode === 'INTERACTIVE' && (
-                <button onClick={resetToChatMode} style={styles.navTextBtn}>退出互动</button>
-              )}
-              <button onClick={() => setShowSettings(true)} style={styles.navIconBtn}><FaCog size={18} /></button>
-              <button onClick={() => setIsAiOpen(false)} style={styles.navIconBtn}><FaTimes size={20} /></button>
-            </div>
+            <button onClick={() => setShowSettings(true)} style={styles.navIconBtn}><FaCog size={20} /></button>
           </div>
 
           <div ref={historyRef} style={styles.chatBody}>
-            {messages.length === 0 && (
+            {messages.length === 0 && !loading && (
               <div style={styles.emptyState}>
                 <FaRobot size={40} color="#cbd5e1" />
                 <p style={{ color: '#94a3b8', marginTop: 10, fontSize: '0.9rem' }}>
@@ -723,6 +683,8 @@ export default function AIChatDock() {
                 </p>
               </div>
             )}
+            
+            {messages.length === 0 && loading && <TypingIndicator/>}
 
             {messages.map((m, i) => (
               <div key={m.id || i} style={{ ...styles.messageRow, alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
@@ -803,7 +765,6 @@ export default function AIChatDock() {
                   <FaVolumeUp className="animate-pulse" /> 正在朗读... <FaStop />
                 </div>
               )}
-              {/* ✅ [UI改造] 调整输入框布局和交互 */}
               <div style={styles.inputBox}>
                 <textarea
                   ref={textareaRef}
@@ -846,6 +807,7 @@ export default function AIChatDock() {
             </div>
           </div>
 
+          {/* Modals remain unchanged */}
           {showLoginTip && (
             <div style={styles.paywallOverlay}>
               <div style={{ ...styles.paywallModal, maxWidth: 300 }}>
