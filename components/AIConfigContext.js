@@ -8,7 +8,7 @@ const USER_KEY = 'hsk_user';
 
 const AIContext = createContext();
 
-// --- 辅助函数：激活码校验 (保持不变) ---
+// --- 辅助函数 (无变动) ---
 const validateActivationCode = (code) => {
   if (!code) return { isValid: false, error: '请输入激活码' };
   const c = code.trim().toUpperCase();
@@ -26,18 +26,12 @@ const validateActivationCode = (code) => {
 };
 
 export const AIProvider = ({ children }) => {
-  /* ======================
-     1. 用户 / 激活 / 状态
-  ====================== */
+  // --- State 定义无变动 ---
   const [user, setUser] = useState(null);
   const [isActivated, setIsActivated] = useState(false);
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
 
-  /* ======================
-     2. AI 配置
-  ====================== */
   const [config, setConfig] = useState(() => {
-    // ✅ 修复 #1: 使用函数初始化 state，只在首次渲染时从 localStorage 读取一次。
     try {
       const savedConfig = localStorage.getItem(CONFIG_KEY);
       const initialConfig = {
@@ -54,16 +48,12 @@ export const AIProvider = ({ children }) => {
       };
       return savedConfig ? { ...initialConfig, ...JSON.parse(savedConfig) } : initialConfig;
     } catch (e) {
-      return {}; // 返回一个空对象或默认值
+      return {};
     }
   });
 
-  /* ======================
-     3. 会话与 UI 状态
-  ====================== */
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [sessions, setSessions] = useState(() => {
-    // ✅ 修复 #2: 同样使用函数初始化，只读取一次。
     try {
       const savedSessions = localStorage.getItem(SESSIONS_KEY);
       const initialSessions = savedSessions ? JSON.parse(savedSessions) : [];
@@ -80,17 +70,12 @@ export const AIProvider = ({ children }) => {
   const [remainingQuota, setRemainingQuota] = useState(0);
   const TOTAL_FREE_QUOTA = 60; 
 
-  /* ======================
-     4. 核心模式与任务上下文
-  ====================== */
   const [aiMode, setAiMode] = useState('CHAT');
   const [activeTask, setActiveTask] = useState(null); 
   const [pageContext, setPageContext] = useState('');
 
-  /* ======================
-     5. System Prompt (保持不变)
-  ====================== */
-    const SYSTEM_PROMPTS = {
+  // --- System Prompts 无变动 ---
+  const SYSTEM_PROMPTS = {
     CHAT: `你是一位专业且博学的汉语老师，你的唯一使命是教【缅甸学生】学习汉语。记住，你的学生是缅甸人，语言习惯和思维方式都与中文不同。
 
 【当前教学等级】：{{LEVEL}}
@@ -139,11 +124,7 @@ export const AIProvider = ({ children }) => {
 SUGGESTIONS: Q1|||Q2|||Q3`
   };
 
-
-  /* ======================
-     6. 初始化与本地存储 (重构)
-  ====================== */
-  // ✅ 修复 #3: 这是最关键的修复。将所有初始化逻辑合并到一个 useEffect 中，并确保它只运行一次。
+  // --- 初始化与本地存储 useEffects 无变动 ---
   useEffect(() => {
     try {
       const cachedUser = localStorage.getItem(USER_KEY);
@@ -152,7 +133,6 @@ SUGGESTIONS: Q1|||Q2|||Q3`
         setUser(u);
         if (u.unlocked_levels) {
           setIsActivated(true);
-          // 在这里更新用户等级
           const levels = u.unlocked_levels.split(',');
           let highest = levels[levels.length - 1];
           if (highest.startsWith('H') && !highest.startsWith('HSK')) {
@@ -161,17 +141,13 @@ SUGGESTIONS: Q1|||Q2|||Q3`
           setConfig(c => ({ ...c, userLevel: highest }));
         }
       }
-    } catch (e) {
-      console.error("Failed to parse user from localStorage", e);
-    }
+    } catch (e) { console.error("Failed to parse user from localStorage", e); }
     
-    // 初始化 currentSessionId
-    if (sessions.length > 0) {
+    if (sessions.length > 0 && !currentSessionId) {
       setCurrentSessionId(sessions[0].id);
     }
-  }, []); // <-- 空依赖数组，确保这个 effect 只在挂载时运行一次！
+  }, []);
 
-  // ✅ 修复 #4: 创建独立的 effect 来持久化数据。它们的依赖项是各自的数据，不会互相干扰。
   useEffect(() => {
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
   }, [config]);
@@ -182,10 +158,7 @@ SUGGESTIONS: Q1|||Q2|||Q3`
     }
   }, [sessions]);
 
-
-  /* ======================
-     7. Google 登录 (保持不变)
-  ====================== */
+  // --- Google 登录及其他 API 交互函数无变动 ---
   useEffect(() => {
     if (isGoogleLoaded && window.google) {
         window.google.accounts.id.initialize({
@@ -208,17 +181,12 @@ SUGGESTIONS: Q1|||Q2|||Q3`
         localStorage.setItem(USER_KEY, JSON.stringify(data));
         if (data.unlocked_levels) setIsActivated(true);
         syncQuota(data.email);
-    } catch (e) {
-        console.error("Login failed", e);
-    }
+    } catch (e) { console.error("Login failed", e); }
   };
 
   const login = () => window.google?.accounts.id.prompt();
   const logout = () => { localStorage.removeItem(USER_KEY); setUser(null); setIsActivated(false); };
 
-  /* ======================
-     8. 权限与 API 交互 (保持不变)
-  ====================== */
   const syncQuota = async (email) => {
     try {
         const res = await fetch('/api/can-use-ai', {
@@ -269,12 +237,9 @@ SUGGESTIONS: Q1|||Q2|||Q3`
     } catch(e) { return { success: false, error: '网络错误' }; }
   };
 
-  /* ======================
-     9. Prompt 动态生成逻辑 (保持不变)
-  ====================== */
+  // --- Prompt 生成逻辑无变动 ---
   const finalSystemPrompt = useMemo(() => {
     let template = aiMode === 'INTERACTIVE' ? SYSTEM_PROMPTS.INTERACTIVE : SYSTEM_PROMPTS.CHAT;
-    
     let displayLevel = config.userLevel || 'HSK 1';
     const taskId = activeTask?.id || "";
     const lowerId = taskId.toLowerCase();
@@ -299,12 +264,8 @@ SUGGESTIONS: Q1|||Q2|||Q3`
         template = template.replace('{{CONTEXT}}', pageContext ? pageContext.substring(0, 1000) : '通用对话');
     }
     return template;
-  }, [config.userLevel, aiMode, activeTask, pageContext, SYSTEM_PROMPTS.INTERACTIVE, SYSTEM_PROMPTS.CHAT]);
+  }, [config.userLevel, aiMode, activeTask, pageContext]);
 
-  /* ======================
-     10. 会话切换逻辑 (优化)
-  ====================== */
-  // ✅ 修复 #5: 使用 useCallback 包装，防止不必要的重渲染。
   const selectSession = useCallback((sessionId) => {
       setCurrentSessionId(sessionId);
       const session = sessions.find(s => s.id === sessionId);
@@ -315,23 +276,40 @@ SUGGESTIONS: Q1|||Q2|||Q3`
       } else if (session && session.title.includes('解析')) {
           setAiMode('INTERACTIVE');
       }
-  }, [sessions]); // 依赖项是 sessions
+  }, [sessions]);
 
-  /* ======================
-     11. 触发器函数 (优化)
-  ====================== */
+  // --- 触发器函数 (核心修改) ---
+  
   const triggerInteractiveAI = useCallback((payload) => {
     setAiMode('INTERACTIVE');
     setActiveTask({ ...payload, timestamp: Date.now() });
     setIsAiOpen(true);
   }, []);
 
-  const triggerAI = useCallback((title, content, id = null) => {
+  // ✅ [核心修改] 重构 triggerAI 函数，使其能够处理预设回复
+  const triggerAI = useCallback((title, content, id = null, aiPreAnswer = null) => {
       setAiMode('CHAT');
-      setActiveTask({ title, content, id, timestamp: Date.now() }); 
-      setPageContext(`课件标题: ${title}\n内容: ${content}`);
+
+      let finalContent;
+      // 如果有预设回复，构造一个“指令式”的 Prompt
+      if (aiPreAnswer) {
+        finalContent = `你好，我需要你扮演一名专业的汉语老师来讲解“${title}”这个语法点。这里有一份为你准备好的标准讲解稿，请你严格根据这份稿件的内容，用更生动、有条理、对缅甸学生友好的方式重新组织和呈现。你可以使用 Markdown 格式（如标题、列表、粗体）来美化排版，但【绝对不允许】添加讲解稿中没有的知识点或例子。\n\n【标准讲解稿】:\n---\n${aiPreAnswer}`;
+      } else {
+        // 如果没有预设回复，使用原来的逻辑
+        finalContent = content;
+        setPageContext(`课件标题: ${title}\n内容: ${content}`);
+      }
+
+      setActiveTask({ 
+        title: title, 
+        // 这里的 content 变成了我们构造好的最终 prompt
+        content: finalContent, 
+        id: id, 
+        timestamp: Date.now() 
+      }); 
+      
       setIsAiOpen(true);
-  }, []);
+  }, []); // 依赖项为空，因为它不依赖于外部可变状态
 
   const updatePageContext = useCallback((content) => {
     if (aiMode !== 'INTERACTIVE') setPageContext(content);
@@ -351,7 +329,8 @@ SUGGESTIONS: Q1|||Q2|||Q3`
         canUseAI, remainingQuota, TOTAL_FREE_QUOTA,
         handleActivate, handleGoogleCallback,
         activeTask, aiMode, systemPrompt: finalSystemPrompt,
-        triggerInteractiveAI, updatePageContext, resetToChatMode, triggerAI
+        triggerInteractiveAI, updatePageContext, resetToChatMode, triggerAI,
+        // 我们不再需要 triggerDirectReply，因为 triggerAI 已经包含了它的功能
     }}>
       <Script
         src="https://accounts.google.com/gsi/client"
