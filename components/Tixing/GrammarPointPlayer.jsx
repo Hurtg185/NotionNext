@@ -209,7 +209,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
 
   const { play, stop, activeId } = useRobustTTS();
 
-  // 数据标准化 (增加容错读取)
+  // 数据标准化
   const normalizedPoints = useMemo(() => {
     if (!Array.isArray(grammarPoints)) return [];
     return grammarPoints.map((item, idx) => ({
@@ -219,8 +219,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
       videoUrl: item['视频链接'] || item.videoUrl || '',
       videoPoster: item['视频封面'] || item.poster || '', 
       explanationRaw: item['语法详解'] || '',
-      // ⬇️ 修改点：多尝试几个key，确保读到脚本
-      script: item['讲解脚本'] || item['script'] || item['Teaching Script'] || '', 
+      script: item['讲解脚本'] || '', // 确保从JSON中读取到了脚本
       attention: item['注意事项'] || '',
       dialogues: (item['例句列表'] || []).map((ex, i) => {
         const s = (ex.speaker || '').toUpperCase();
@@ -238,26 +237,22 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
   const currentPoint = normalizedPoints[currentIndex];
 
   // =================================================================================
-  // 核心逻辑：构造 AI 上下文 (重点修改：脚本置顶)
+  // 核心逻辑：构造 AI 上下文
   // =================================================================================
   const constructFullAIContent = useCallback((point) => {
     if (!point) return '';
+    let content = `【语法标题】：${point.title}\n`;
+    content += `【核心句型】：${point.pattern}\n\n`;
     
-    let content = '';
-
-    // --- 🚨 重点修改：把脚本放在最最最前面，让 AI 第一眼就看到 ---
-    // 使用特殊的标记 <<<SCRIPT_MODE>>>，配合 AIContext 中的 Prompt
-    if (point.script && point.script.length > 5) {
-        content += `<<<SCRIPT_MODE_START>>>\n`;
-        content += `${point.script}\n`;
-        content += `<<<SCRIPT_MODE_END>>>\n\n`;
-        content += `(系统指令：检测到上方有脚本。请忽略所有通用模板，直接扮演老师，用生动的语气讲出上面的脚本内容！)\n\n`;
-        content += `=========================\n\n`;
+    // --- 重点修改：如果有脚本，把脚本放在最显眼的位置，并加分割线 ---
+    if (point.script) {
+        content += `\n======== 【参考讲解脚本】START ========\n`;
+        content += point.script;
+        content += `\n======== 【参考讲解脚本】END ========\n\n`;
+        content += `(注意：请完全基于上述脚本进行教学，不要自己总结)\n\n`;
     }
     // --------------------------------------------------------
 
-    content += `【语法标题】：${point.title}\n`;
-    content += `【核心句型】：${point.pattern}\n\n`;
     content += `【详解内容】：\n${point.explanationRaw}\n\n`;
     
     if (point.attention) {
@@ -273,7 +268,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
     return content;
   }, []);
 
-  // 触发 AI 讲解
+  // 触发 AI 讲解 (手动点击)
   const handleAskAI = useCallback(() => {
     if (!currentPoint) return;
     playSFX('click');
@@ -286,8 +281,10 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
   useEffect(() => {
     if (currentPoint) {
       const fullContent = constructFullAIContent(currentPoint);
+      // 1. 更新上下文，确保随时可读
       updatePageContext(fullContent);
 
+      // 2. 如果 AI 窗口已经打开，翻页时自动触发新内容的讲解
       if (isAiOpen) {
         const levelId = `${level.replace(/\s+/g, '').toLowerCase()}_grammar_${currentPoint.id}`;
         triggerAI(currentPoint.title, fullContent, levelId);
@@ -345,6 +342,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
 
   return (
     <div style={styles.container}>
+      {/* 悬浮 AI 按钮 */}
       <button style={styles.aiFloatBtn} onClick={handleAskAI}>
         <FaRobot /> AI 讲解
       </button>
@@ -358,6 +356,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
                 
                 <h2 style={styles.title}>{gp.title}</h2>
 
+                {/* 核心句型 + 视频 */}
                 <div style={styles.headerRow}>
                   <div style={styles.patternCard}>
                     <div style={styles.cardLabel}><FaBookReader /> 核心句型</div>
@@ -389,6 +388,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
                   )}
                 </div>
 
+                {/* 语法详解 */}
                 <div style={styles.section}>
                   <div style={styles.sectionHeader}>📝 语法详解</div>
                   <div style={styles.textBody}>
@@ -400,6 +400,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
                   </div>
                 </div>
 
+                {/* 注意事项 */}
                 {gp.attention && (
                   <div style={styles.section}>
                     <div style={{...styles.sectionHeader, color: '#ef4444'}}>
@@ -415,6 +416,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
                   </div>
                 )}
 
+                {/* 对话模块 */}
                 <div style={styles.section}>
                   <div style={styles.sectionHeader}>💬 场景对话</div>
                   <div style={styles.chatList}>
@@ -465,6 +467,9 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
   );
 };
 
+// =================================================================================
+// ===== 5. 样式定义 =====
+// =================================================================================
 const styles = {
   container: { position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#fff' },
   aiFloatBtn: { position: 'absolute', top: '12px', right: '16px', zIndex: 50, background: '#4f46e5', color: '#fff', border: 'none', borderRadius: '20px', padding: '6px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 4px 10px rgba(79, 70, 229, 0.3)', cursor: 'pointer', fontWeight: 'bold' },
