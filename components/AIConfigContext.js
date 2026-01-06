@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect, useMemo } from 'react';
+import React, { createContext, useState, useContext, useEffect, useMemo, useCallback } from 'react';
 import Script from 'next/script';
 
 // --- 常量定义 ---
@@ -8,18 +8,16 @@ const USER_KEY = 'hsk_user';
 
 const AIContext = createContext();
 
-// --- 辅助函数：激活码校验 (修复：统一匹配逻辑) ---
+// --- 辅助函数：激活码校验 (保持不变) ---
 const validateActivationCode = (code) => {
   if (!code) return { isValid: false, error: '请输入激活码' };
   const c = code.trim().toUpperCase();
   if (!c.includes('-JHM-')) return { isValid: false, error: '格式错误' };
   
   const parts = c.split('-');
-  // 支持旧版 H1 和新版 HSK1 写法，统一映射逻辑后续处理
   const VALID = ['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'H7-9', 'SP', 'HSK1', 'HSK2', 'HSK3'];
   
-  // 简单归一化检查
-  const levelPart = parts[0].replace('HSK', 'H'); // 统一暂存为 H1, H2 格式方便校验
+  const levelPart = parts[0].replace('HSK', 'H');
   if (!VALID.some(v => v.replace('HSK', 'H') === levelPart)) {
       return { isValid: false, error: '等级不支持' };
   }
@@ -36,26 +34,48 @@ export const AIProvider = ({ children }) => {
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
 
   /* ======================
-     2. AI 配置 (默认等级统一为 "HSK 1")
+     2. AI 配置
   ====================== */
-  const [config, setConfig] = useState({
-    apiKey: '',
-    baseUrl: 'https://integrate.api.nvidia.com/v1', 
-    modelId: 'deepseek-ai/deepseek-v3.2',
-    userLevel: 'HSK 1', 
-    showPinyin: true, 
-    autoSendStt: false, 
-    ttsSpeed: 1,
-    ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural',
-    sttLang: 'zh-CN',
-    soundEnabled: true
+  const [config, setConfig] = useState(() => {
+    // ✅ 修复 #1: 使用函数初始化 state，只在首次渲染时从 localStorage 读取一次。
+    try {
+      const savedConfig = localStorage.getItem(CONFIG_KEY);
+      const initialConfig = {
+        apiKey: '',
+        baseUrl: 'https://integrate.api.nvidia.com/v1', 
+        modelId: 'deepseek-ai/deepseek-v3.2',
+        userLevel: 'HSK 1', 
+        showPinyin: true, 
+        autoSendStt: false, 
+        ttsSpeed: 1,
+        ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural',
+        sttLang: 'zh-CN',
+        soundEnabled: true
+      };
+      return savedConfig ? { ...initialConfig, ...JSON.parse(savedConfig) } : initialConfig;
+    } catch (e) {
+      return {}; // 返回一个空对象或默认值
+    }
   });
 
   /* ======================
      3. 会话与 UI 状态
   ====================== */
   const [isAiOpen, setIsAiOpen] = useState(false);
-  const [sessions, setSessions] = useState([]);
+  const [sessions, setSessions] = useState(() => {
+    // ✅ 修复 #2: 同样使用函数初始化，只读取一次。
+    try {
+      const savedSessions = localStorage.getItem(SESSIONS_KEY);
+      const initialSessions = savedSessions ? JSON.parse(savedSessions) : [];
+      if (initialSessions.length === 0) {
+        return [{ id: Date.now(), title: '新对话', messages: [], date: new Date().toISOString() }];
+      }
+      return initialSessions;
+    } catch (e) {
+      return [{ id: Date.now(), title: '新对话', messages: [], date: new Date().toISOString() }];
+    }
+  });
+
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [remainingQuota, setRemainingQuota] = useState(0);
   const TOTAL_FREE_QUOTA = 60; 
@@ -68,10 +88,9 @@ export const AIProvider = ({ children }) => {
   const [pageContext, setPageContext] = useState('');
 
   /* ======================
-     5. System Prompt (核心修复：SP修正 + 灵活性指令)
+     5. System Prompt (保持不变)
   ====================== */
-  const SYSTEM_PROMPTS = {
-    // ✅ [核心改造] 强化了对缅甸学生的身份认知，并增加了对“易错点”等上下文的优先处理指令
+    const SYSTEM_PROMPTS = {
     CHAT: `你是一位专业且博学的汉语老师，你的唯一使命是教【缅甸学生】学习汉语。记住，你的学生是缅甸人，语言习惯和思维方式都与中文不同。
 
 【当前教学等级】：{{LEVEL}}
@@ -120,56 +139,52 @@ export const AIProvider = ({ children }) => {
 SUGGESTIONS: Q1|||Q2|||Q3`
   };
 
+
   /* ======================
-     6. 初始化与本地存储
+     6. 初始化与本地存储 (重构)
   ====================== */
+  // ✅ 修复 #3: 这是最关键的修复。将所有初始化逻辑合并到一个 useEffect 中，并确保它只运行一次。
   useEffect(() => {
-    const cachedUser = localStorage.getItem(USER_KEY);
-    if (cachedUser) {
-      try {
+    try {
+      const cachedUser = localStorage.getItem(USER_KEY);
+      if (cachedUser) {
         const u = JSON.parse(cachedUser);
         setUser(u);
-        if (u.unlocked_levels) setIsActivated(true);
-      } catch (e) {}
+        if (u.unlocked_levels) {
+          setIsActivated(true);
+          // 在这里更新用户等级
+          const levels = u.unlocked_levels.split(',');
+          let highest = levels[levels.length - 1];
+          if (highest.startsWith('H') && !highest.startsWith('HSK')) {
+              highest = highest.replace('H', 'HSK ');
+          }
+          setConfig(c => ({ ...c, userLevel: highest }));
+        }
+      }
+    } catch (e) {
+      console.error("Failed to parse user from localStorage", e);
     }
+    
+    // 初始化 currentSessionId
+    if (sessions.length > 0) {
+      setCurrentSessionId(sessions[0].id);
+    }
+  }, []); // <-- 空依赖数组，确保这个 effect 只在挂载时运行一次！
 
-    const savedConfig = localStorage.getItem(CONFIG_KEY);
-    if (savedConfig) {
-      try { setConfig((c) => ({ ...c, ...JSON.parse(savedConfig) })); } catch (e) {}
-    }
-
-    const savedSessions = localStorage.getItem(SESSIONS_KEY);
-    let initialSessions = [];
-    if (savedSessions) {
-        try { initialSessions = JSON.parse(savedSessions); } catch(e) {}
-    }
-    if (initialSessions.length === 0) {
-        const newSession = { id: Date.now(), title: '新对话', messages: [], date: new Date().toISOString() };
-        initialSessions = [newSession];
-    }
-    setSessions(initialSessions);
-    if (!currentSessionId && initialSessions.length > 0) {
-        setCurrentSessionId(initialSessions[0].id);
-    }
-  }, []);
-
-  useEffect(() => { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); }, [config]);
-  useEffect(() => { if(sessions.length > 0) localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions)); }, [sessions]);
+  // ✅ 修复 #4: 创建独立的 effect 来持久化数据。它们的依赖项是各自的数据，不会互相干扰。
+  useEffect(() => {
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+  }, [config]);
 
   useEffect(() => {
-    if (user?.unlocked_levels) {
-      const levels = user.unlocked_levels.split(',');
-      let highest = levels[levels.length - 1];
-      // 简单标准化：确保 config 里存的是 "HSK 1" 这种格式
-      if (highest.startsWith('H') && !highest.startsWith('HSK')) {
-          highest = highest.replace('H', 'HSK ');
-      }
-      setConfig((c) => ({ ...c, userLevel: highest }));
+    if (sessions.length > 0) {
+      localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
     }
-  }, [user]);
+  }, [sessions]);
+
 
   /* ======================
-     7. Google 登录 (保留)
+     7. Google 登录 (保持不变)
   ====================== */
   useEffect(() => {
     if (isGoogleLoaded && window.google) {
@@ -202,7 +217,7 @@ SUGGESTIONS: Q1|||Q2|||Q3`
   const logout = () => { localStorage.removeItem(USER_KEY); setUser(null); setIsActivated(false); };
 
   /* ======================
-     8. 权限与 API 交互
+     8. 权限与 API 交互 (保持不变)
   ====================== */
   const syncQuota = async (email) => {
     try {
@@ -219,12 +234,11 @@ SUGGESTIONS: Q1|||Q2|||Q3`
   const canUseAI = async () => {
       if (isActivated) return true;
       if (!user) return false;
-      return true; // 简化前端判断，主要由后端控制
+      return true;
   };
 
   const recordUsage = async () => {
-      if (isActivated) return;
-      if (!user) return;
+      if (isActivated || !user) return;
       try {
           await fetch('/api/record-ai-usage', {
               method: 'POST',
@@ -256,15 +270,10 @@ SUGGESTIONS: Q1|||Q2|||Q3`
   };
 
   /* ======================
-     9. Prompt 动态生成逻辑 (核心修复：等级判定优先级)
+     9. Prompt 动态生成逻辑 (保持不变)
   ====================== */
   const finalSystemPrompt = useMemo(() => {
     let template = aiMode === 'INTERACTIVE' ? SYSTEM_PROMPTS.INTERACTIVE : SYSTEM_PROMPTS.CHAT;
-    
-    // 优先级逻辑：
-    // 1. 如果 activeTask ID 包含 "hsk1" -> HSK 1
-    // 2. 如果 activeTask ID 包含 "sp" -> 口语专项
-    // 3. 否则使用用户配置的 userLevel
     
     let displayLevel = config.userLevel || 'HSK 1';
     const taskId = activeTask?.id || "";
@@ -275,7 +284,6 @@ SUGGESTIONS: Q1|||Q2|||Q3`
     else if (lowerId.includes('hsk3')) displayLevel = 'HSK 3';
     else if (lowerId.includes('sp')) displayLevel = '口语专项 (Spoken Chinese)';
     
-    // 二次保险：防止 userLevel 本身是 "SP" 时被误读
     if (displayLevel === 'SP' || displayLevel === 'sp') {
         displayLevel = '口语专项 (Spoken Chinese)';
     }
@@ -288,59 +296,52 @@ SUGGESTIONS: Q1|||Q2|||Q3`
         template = template.replace('{{QUESTION}}', activeTask.question || '');
         template = template.replace('{{USER_CHOICE}}', activeTask.userChoice || '');
     } else {
-        template = template.replace('{{CONTEXT}}', pageContext ? pageContext.substring(0, 1000) : '通用对话'); // 增加上下文长度
+        template = template.replace('{{CONTEXT}}', pageContext ? pageContext.substring(0, 1000) : '通用对话');
     }
     return template;
-  }, [config.userLevel, aiMode, activeTask, pageContext]);
+  }, [config.userLevel, aiMode, activeTask, pageContext, SYSTEM_PROMPTS.INTERACTIVE, SYSTEM_PROMPTS.CHAT]);
 
   /* ======================
-     10. 会话切换逻辑 (核心修复：切换会话时清除旧任务)
+     10. 会话切换逻辑 (优化)
   ====================== */
-  const selectSession = (sessionId) => {
+  // ✅ 修复 #5: 使用 useCallback 包装，防止不必要的重渲染。
+  const selectSession = useCallback((sessionId) => {
       setCurrentSessionId(sessionId);
       const session = sessions.find(s => s.id === sessionId);
       
-      // 如果切换到的会话不是“解析”类会话，或者是空对话，
-      // 必须立刻清除 activeTask，否则 AI 还会以为你在做上一道题。
       if (session && !session.title.includes('解析')) {
           setAiMode('CHAT');
           setActiveTask(null);
       } else if (session && session.title.includes('解析')) {
-          // 如果切回解析会话，恢复模式（可选，保持逻辑闭环）
           setAiMode('INTERACTIVE');
       }
-  };
+  }, [sessions]); // 依赖项是 sessions
 
   /* ======================
-     11. 触发器函数
+     11. 触发器函数 (优化)
   ====================== */
-  
-  // 1. 触发互动题解析
-  const triggerInteractiveAI = (payload) => {
+  const triggerInteractiveAI = useCallback((payload) => {
     setAiMode('INTERACTIVE');
-    // 这部分逻辑现在由 AIChatDock.js 处理，这里只负责设置状态
     setActiveTask({ ...payload, timestamp: Date.now() });
     setIsAiOpen(true);
-  };
+  }, []);
 
-  // 2. 触发课件内容讲解 (支持传入 id 进行等级锁定)
-  const triggerAI = (title, content, id = null) => {
+  const triggerAI = useCallback((title, content, id = null) => {
       setAiMode('CHAT');
       setActiveTask({ title, content, id, timestamp: Date.now() }); 
       setPageContext(`课件标题: ${title}\n内容: ${content}`);
       setIsAiOpen(true);
-  };
+  }, []);
 
-  const updatePageContext = (content) => {
+  const updatePageContext = useCallback((content) => {
     if (aiMode !== 'INTERACTIVE') setPageContext(content);
-  };
+  }, [aiMode]);
 
-  const resetToChatMode = () => {
+  const resetToChatMode = useCallback(() => {
       setAiMode('CHAT');
       setActiveTask(null);
       setPageContext('');
-      // 创建新对话的逻辑在 AIChatDock.js 中完成，这里只重置状态
-  };
+  }, []);
 
   return (
     <AIContext.Provider value={{
