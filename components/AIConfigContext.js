@@ -17,12 +17,12 @@ const validateActivationCode = (code) => {
   const parts = c.split('-');
   const VALID = ['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'H7-9', 'SP', 'HSK1', 'HSK2', 'HSK3'];
   
-  const levelPart = parts.replace('HSK', 'H');
+  const levelPart = parts[0].replace('HSK', 'H');
   if (!VALID.some(v => v.replace('HSK', 'H') === levelPart)) {
       return { isValid: false, error: '等级不支持' };
   }
   
-  return { isValid: true, level: parts };
+  return { isValid: true, level: parts[0] };
 };
 
 // 新增一个辅助 Hook，用于追踪上一次的状态
@@ -57,7 +57,18 @@ export const AIProvider = ({ children }) => {
       };
       return savedConfig ? { ...initialConfig, ...JSON.parse(savedConfig) } : initialConfig;
     } catch (e) {
-      return {};
+      return {
+        apiKey: '',
+        baseUrl: 'https://integrate.api.nvidia.com/v1', 
+        modelId: 'deepseek-ai/deepseek-v3.2',
+        userLevel: 'HSK 1', 
+        showPinyin: true, 
+        autoSendStt: false, 
+        ttsSpeed: 1,
+        ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural',
+        sttLang: 'zh-CN',
+        soundEnabled: true
+      };
     }
   });
 
@@ -153,7 +164,7 @@ SUGGESTIONS: Q1|||Q2|||Q3`
     } catch (e) { console.error("Failed to parse user from localStorage", e); }
     
     if (sessions.length > 0 && !currentSessionId) {
-      setCurrentSessionId(sessions.id);
+      setCurrentSessionId(sessions[0].id);
     }
   }, []);
 
@@ -250,7 +261,6 @@ SUGGESTIONS: Q1|||Q2|||Q3`
   const triggerAI = useCallback((title, content, id = null, aiPreAnswer = null) => {
       setAiMode('CHAT');
       let finalContent;
-      // ✅ [语法修复] 这里是关键！确保字符串使用反引号 ` 包裹
       if (aiPreAnswer) {
         finalContent = `你好，我需要你扮演一名专业的汉语老师来讲解“${title}”这个语法点。这里有一份为你准备好的标准讲解稿，请你严格根据这份稿件的内容，用更生动、有条理、对缅甸学生友好的方式重新组织和呈现。你可以使用 Markdown 格式（如标题、列表、粗体）来美化排版，但【绝对不允许】添加讲解稿中没有的知识点或例子。\n\n【标准讲解稿】:\n---\n${aiPreAnswer}`;
       } else {
@@ -263,19 +273,18 @@ SUGGESTIONS: Q1|||Q2|||Q3`
         timestamp: Date.now() 
       }); 
       setIsAiOpen(true);
-  }, []); // 依赖项为空，因为它不依赖于外部可变状态
+  }, []);
 
   // 监听 AI 助手的打开事件
   const prevIsAiOpen = usePrevious(isAiOpen);
   useEffect(() => {
     if (!prevIsAiOpen && isAiOpen) {
       const session = sessions.find(s => s.id === currentSessionId);
-      if (pageContext && session && session.messages.length === 0 && session.title.startsWith('新对话')) {
+      if (aiMode === 'GRAMMAR_READY' && pageContext && session && session.messages.length === 0 && session.title.startsWith('新对话')) {
         triggerAI(pageContext.title, pageContext.content, pageContext.id, pageContext.aiPreAnswer);
       }
     }
-  }, [isAiOpen, prevIsAiOpen, pageContext, sessions, currentSessionId, triggerAI]);
-
+  }, [isAiOpen, prevIsAiOpen, aiMode, pageContext, sessions, currentSessionId, triggerAI]);
 
   // --- Prompt 生成逻辑 ---
   const finalSystemPrompt = useMemo(() => {
@@ -301,10 +310,10 @@ SUGGESTIONS: Q1|||Q2|||Q3`
         template = template.replace('{{QUESTION}}', activeTask.question || '');
         template = template.replace('{{USER_CHOICE}}', activeTask.userChoice || '');
     } else {
-      const contextString = (pageContext && typeof pageContext.content === 'string') 
-        ? pageContext.content 
-        : '通用对话';
-      template = template.replace('{{CONTEXT}}', contextString.substring(0, 1500));
+        const contextString = (pageContext && typeof pageContext.content === 'string') 
+          ? pageContext.content 
+          : '通用对话';
+        template = template.replace('{{CONTEXT}}', contextString);
     }
     return template;
   }, [config.userLevel, aiMode, activeTask, pageContext]);
@@ -330,12 +339,11 @@ SUGGESTIONS: Q1|||Q2|||Q3`
     setActiveTask({ ...payload, timestamp: Date.now() });
     setIsAiOpen(true);
   }, []);
-
-  const updatePageContext = useCallback((contextObject) => {
-    if (aiMode !== 'INTERACTIVE') {
-      setPageContext(contextObject);
-    }
-  }, [aiMode]);
+  
+  const prepareGrammarTask = useCallback((taskPayload) => {
+    setAiMode('GRAMMAR_READY'); 
+    setPageContext(taskPayload);
+  }, []);
 
   const resetToChatMode = useCallback(() => {
       setAiMode('CHAT');
@@ -351,7 +359,10 @@ SUGGESTIONS: Q1|||Q2|||Q3`
         canUseAI, remainingQuota, TOTAL_FREE_QUOTA,
         handleActivate, handleGoogleCallback,
         activeTask, aiMode, systemPrompt: finalSystemPrompt,
-        triggerInteractiveAI, updatePageContext, resetToChatMode, triggerAI,
+        triggerInteractiveAI, 
+        prepareGrammarTask, 
+        resetToChatMode,
+        triggerAI 
     }}>
       <Script
         src="https://accounts.google.com/gsi/client"
