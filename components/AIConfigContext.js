@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect, useMemo, useCallback } from 'react';
+import React, { createContext, useState, useContext, useEffect, useMemo, useCallback, useRef } from 'react';
 import Script from 'next/script';
 
 // --- 常量定义 ---
@@ -25,8 +25,17 @@ const validateActivationCode = (code) => {
   return { isValid: true, level: parts[0] };
 };
 
+// 新增一个辅助 Hook，用于追踪上一次的状态
+function usePrevious(value) {
+  const ref = useRef();
+  useEffect(() => {
+    ref.current = value;
+  });
+  return ref.current;
+}
+
 export const AIProvider = ({ children }) => {
-  // --- State 定义无变动 ---
+  // --- State 定义 ---
   const [user, setUser] = useState(null);
   const [isActivated, setIsActivated] = useState(false);
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
@@ -72,9 +81,9 @@ export const AIProvider = ({ children }) => {
 
   const [aiMode, setAiMode] = useState('CHAT');
   const [activeTask, setActiveTask] = useState(null); 
-  const [pageContext, setPageContext] = useState('');
+  const [pageContext, setPageContext] = useState(null); 
 
-  // --- System Prompts 无变动 ---
+  // --- System Prompts (无变动) ---
   const SYSTEM_PROMPTS = {
     CHAT: `你是一位专业且博学的汉语老师，你的唯一使命是教【缅甸学生】学习汉语。记住，你的学生是缅甸人，语言习惯和思维方式都与中文不同。
 
@@ -124,7 +133,7 @@ export const AIProvider = ({ children }) => {
 SUGGESTIONS: Q1|||Q2|||Q3`
   };
 
-  // --- 初始化与本地存储 useEffects 无变动 ---
+  // --- 初始化与本地存储 (无变动) ---
   useEffect(() => {
     try {
       const cachedUser = localStorage.getItem(USER_KEY);
@@ -158,7 +167,7 @@ SUGGESTIONS: Q1|||Q2|||Q3`
     }
   }, [sessions]);
 
-  // --- Google 登录及其他 API 交互函数无变动 ---
+  // --- Google 登录及其他 API 交互 ---
   useEffect(() => {
     if (isGoogleLoaded && window.google) {
         window.google.accounts.id.initialize({
@@ -237,7 +246,24 @@ SUGGESTIONS: Q1|||Q2|||Q3`
     } catch(e) { return { success: false, error: '网络错误' }; }
   };
 
-  // --- Prompt 生成逻辑无变动 ---
+  // ✅ [核心修复] 新增 useEffect 来监听 AI 助手的打开事件
+  const prevIsAiOpen = usePrevious(isAiOpen);
+  useEffect(() => {
+    // 检查 AI 是否是从“关闭”变为“打开”
+    if (!prevIsAiOpen && isAiOpen) {
+      const session = sessions.find(s => s.id === currentSessionId);
+      // 如果 AI 打开时，桌上正好有待办任务 (pageContext)，
+      // 并且当前会话是一个还没开始的“新对话”...
+      if (pageContext && session && session.messages.length === 0 && session.title.startsWith('新对话')) {
+        // ...那么就自动触发 AI 讲解！
+        triggerAI(pageContext.title, pageContext.content, pageContext.id, pageContext.aiPreAnswer);
+      }
+    }
+    // 依赖项中加入 triggerAI 以确保函数是最新版本
+  }, [isAiOpen, prevIsAiOpen, pageContext, sessions, currentSessionId, triggerAI]);
+
+
+  // --- Prompt 生成逻辑 (微调) ---
   const finalSystemPrompt = useMemo(() => {
     let template = aiMode === 'INTERACTIVE' ? SYSTEM_PROMPTS.INTERACTIVE : SYSTEM_PROMPTS.CHAT;
     let displayLevel = config.userLevel || 'HSK 1';
@@ -261,11 +287,16 @@ SUGGESTIONS: Q1|||Q2|||Q3`
         template = template.replace('{{QUESTION}}', activeTask.question || '');
         template = template.replace('{{USER_CHOICE}}', activeTask.userChoice || '');
     } else {
-        template = template.replace('{{CONTEXT}}', pageContext ? pageContext.substring(0, 1000) : '通用对话');
+      // 让 System Prompt 能理解新的 pageContext 对象
+      const contextString = (pageContext && typeof pageContext.content === 'string') 
+        ? pageContext.content 
+        : '通用对话';
+      template = template.replace('{{CONTEXT}}', contextString.substring(0, 1500));
     }
     return template;
   }, [config.userLevel, aiMode, activeTask, pageContext]);
 
+  // --- 会话切换逻辑 (微调) ---
   const selectSession = useCallback((sessionId) => {
       setCurrentSessionId(sessionId);
       const session = sessions.find(s => s.id === sessionId);
@@ -273,12 +304,13 @@ SUGGESTIONS: Q1|||Q2|||Q3`
       if (session && !session.title.includes('解析')) {
           setAiMode('CHAT');
           setActiveTask(null);
+          setPageContext(null); // 切换到非任务会话时，清空页面上下文
       } else if (session && session.title.includes('解析')) {
           setAiMode('INTERACTIVE');
       }
   }, [sessions]);
 
-  // --- 触发器函数 (核心修改) ---
+  // --- 触发器函数 (保持我们之前的最终版本) ---
   
   const triggerInteractiveAI = useCallback((payload) => {
     setAiMode('INTERACTIVE');
@@ -286,39 +318,33 @@ SUGGESTIONS: Q1|||Q2|||Q3`
     setIsAiOpen(true);
   }, []);
 
-  // ✅ [核心修改] 重构 triggerAI 函数，使其能够处理预设回复
   const triggerAI = useCallback((title, content, id = null, aiPreAnswer = null) => {
       setAiMode('CHAT');
-
       let finalContent;
-      // 如果有预设回复，构造一个“指令式”的 Prompt
       if (aiPreAnswer) {
         finalContent = `你好，我需要你扮演一名专业的汉语老师来讲解“${title}”这个语法点。这里有一份为你准备好的标准讲解稿，请你严格根据这份稿件的内容，用更生动、有条理、对缅甸学生友好的方式重新组织和呈现。你可以使用 Markdown 格式（如标题、列表、粗体）来美化排版，但【绝对不允许】添加讲解稿中没有的知识点或例子。\n\n【标准讲解稿】:\n---\n${aiPreAnswer}`;
       } else {
-        // 如果没有预设回复，使用原来的逻辑
         finalContent = content;
-        setPageContext(`课件标题: ${title}\n内容: ${content}`);
       }
-
       setActiveTask({ 
         title: title, 
-        // 这里的 content 变成了我们构造好的最终 prompt
         content: finalContent, 
         id: id, 
         timestamp: Date.now() 
       }); 
-      
       setIsAiOpen(true);
-  }, []); // 依赖项为空，因为它不依赖于外部可变状态
+  }, []);
 
-  const updatePageContext = useCallback((content) => {
-    if (aiMode !== 'INTERACTIVE') setPageContext(content);
+  const updatePageContext = useCallback((contextObject) => {
+    if (aiMode !== 'INTERACTIVE') {
+      setPageContext(contextObject);
+    }
   }, [aiMode]);
 
   const resetToChatMode = useCallback(() => {
       setAiMode('CHAT');
       setActiveTask(null);
-      setPageContext('');
+      setPageContext(null); // 重置时也清空页面上下文
   }, []);
 
   return (
@@ -330,7 +356,6 @@ SUGGESTIONS: Q1|||Q2|||Q3`
         handleActivate, handleGoogleCallback,
         activeTask, aiMode, systemPrompt: finalSystemPrompt,
         triggerInteractiveAI, updatePageContext, resetToChatMode, triggerAI,
-        // 我们不再需要 triggerDirectReply，因为 triggerAI 已经包含了它的功能
     }}>
       <Script
         src="https://accounts.google.com/gsi/client"
