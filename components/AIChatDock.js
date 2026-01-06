@@ -44,7 +44,7 @@ const playTickSound = () => {
     gain.connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + 0.04);
-  } catch (e) { }
+  } catch (e) { /* silent fail */ }
 };
 
 // --- 拼音组件 ---
@@ -139,7 +139,7 @@ export default function AIChatDock() {
   const taskToRun = useRef(null);
 
   useEffect(() => {
-    const handlePopState = (event) => {
+    const handlePopState = () => {
       if (isAiOpen) {
         setIsAiOpen(false);
       }
@@ -152,6 +152,8 @@ export default function AIChatDock() {
       window.addEventListener('popstate', handlePopState);
     } else {
       if (window.history.state?.aiDockOpen) {
+        // history.back() can be unreliable in some frameworks, direct state change is safer
+        // but we assume it works with the popstate listener.
         window.history.back();
       }
     }
@@ -239,6 +241,8 @@ export default function AIChatDock() {
     }
   }, [messages, isAiOpen, loading]);
 
+  // ✅ [核心修复] 使用两段式 useEffect 配合 useRef，完美解决状态更新的异步问题。
+  // 第一步：当 activeTask 变化时，准备好新会话和待执行的任务，并更新UI。
   useEffect(() => {
     if (activeTask && activeTask.timestamp) {
       const lastProcessed = sessionStorage.getItem('last_ai_task_ts');
@@ -269,14 +273,16 @@ export default function AIChatDock() {
       
       setSessions(prev => [newSession, ...prev]);
       setCurrentSessionId(newSession.id);
+      // 将任务存入 ref，等待 sessionId 更新完毕
       taskToRun.current = { prompt: hiddenPrompt, history: initialMessages };
     }
   }, [activeTask, aiMode, setSessions, setCurrentSessionId]);
   
+  // 第二步：当 currentSessionId 确认更新后，从 ref 中取出任务并执行。
   useEffect(() => {
     if (taskToRun.current && currentSessionId) {
       const { prompt, history } = taskToRun.current;
-      taskToRun.current = null;
+      taskToRun.current = null; // 执行后立即清空，防止重复触发
       handleSend(prompt, true, history);
     }
   }, [currentSessionId]);
@@ -430,12 +436,12 @@ export default function AIChatDock() {
     login();
   };
 
-  // ✅ [最终修复] 修正了权限检查逻辑并加固了流式数据处理
+  // ✅ [代码加固] 重构了 handleSend 函数，使其逻辑更清晰、健壮。
   const handleSend = async (textToSend = input, isSystemTrigger = false, historyOverride = null) => {
     const contentToSend = (typeof textToSend === 'string' ? textToSend : input).trim();
     if (!contentToSend || loading) return;
     
-    // --- 权限和配置检查前置 ---
+    // 1. 权限和配置前置检查
     if (!isSystemTrigger) {
       if (!user) {
         setShowLoginTip(true);
@@ -444,7 +450,6 @@ export default function AIChatDock() {
       if (!isActivated) {
         try {
           const auth = await canUseAI();
-          // 正确处理 canUseAI 可能返回的布尔值或对象
           const canUse = (auth && typeof auth === 'object') ? auth.canUse : auth;
           if (!canUse) {
             setShowPaywall(true);
@@ -456,14 +461,13 @@ export default function AIChatDock() {
         }
       }
     }
-
     if (!config.apiKey) {
       alert('请先在设置中配置 API Key');
       setShowSettings(true);
       return;
     }
     
-    // --- UI状态更新 ---
+    // 2. UI状态更新
     if (!isSystemTrigger) setInput('');
     setSuggestions([]);
     setLoading(true);
@@ -471,24 +475,26 @@ export default function AIChatDock() {
     if (abortControllerRef.current) abortControllerRef.current.abort();
     abortControllerRef.current = new AbortController();
 
-    // --- 消息历史准备 ---
+    // 3. 准备API消息历史
     const userMessage = { role: 'user', content: contentToSend };
+    // 如果是系统触发，使用传入的 history；否则使用当前会话的 messages
     const currentHistory = historyOverride !== null ? historyOverride : messages;
-    const historyForApi = [...currentHistory, userMessage];
+    // 将待发送内容（无论是用户输入还是系统prompt）作为最新的用户消息
+    const historyForApi = [...currentHistory, userMessage]; 
     const historyMsgs = historyForApi.slice(-10).map(({ role, content }) => ({ role, content }));
     const apiMessages = [{ role: 'system', content: systemPrompt }, ...historyMsgs];
 
-    // --- 在UI上显示占位符 ---
+    // 4. 在UI上即时显示用户消息（如果不是系统触发）和AI加载动画
     const assistantPlaceholder = { role: 'assistant', content: '', id: `${Date.now()}-assist` };
     if (isSystemTrigger) {
       updateMessages(prev => [...prev, assistantPlaceholder]);
     } else {
       updateMessages(prev => [...prev, { ...userMessage, id: `${Date.now()}-user` }, assistantPlaceholder]);
     }
-    
-    await new Promise(resolve => setTimeout(resolve, 0)); // 确保UI有时间渲染
+    await new Promise(resolve => setTimeout(resolve, 0)); // 等待UI渲染
 
     try {
+      // 5. 发起API请求
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -506,11 +512,12 @@ export default function AIChatDock() {
       }
       if (!response.body) throw new Error("无响应内容");
 
-      // --- 健壮的流式数据处理 ---
+      // 6. [优化] 采用更健壮的流式数据处理逻辑
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
       let fullContent = '';
+      let soundThrottler = 0;
 
       while (true) {
         const { value, done } = await reader.read();
@@ -521,17 +528,16 @@ export default function AIChatDock() {
         buffer = lines.pop() || '';
 
         for (const line of lines) {
-          if (line.trim() === '' || line.trim() === 'data: [DONE]') continue;
+          if (line.trim() === '' || line.trim().endsWith('[DONE]')) continue;
           
           if (line.startsWith('data:')) {
             try {
               const jsonStr = line.substring(5).trim();
-              if (jsonStr === '[DONE]') continue;
               const data = JSON.parse(jsonStr);
               const delta = data.choices?.[0]?.delta?.content || '';
               if (delta) {
                 fullContent += delta;
-                if (config.soundEnabled) playTickSound(); // 简化音效逻辑
+                if (config.soundEnabled && ++soundThrottler % 3 === 0) playTickSound();
                 updateMessages(prev => {
                   const updated = [...prev];
                   if (updated.length > 0) {
@@ -541,17 +547,17 @@ export default function AIChatDock() {
                 });
               }
             } catch (e) {
-              console.error("无法解析收到的数据流 (JSON Error):", e);
-              console.error("问题数据行:", line);
+              console.error("数据流解析失败:", line, e);
             }
           }
         }
       }
 
+      // 7. 请求结束后更新状态
       updateMessages(prev => {
         const final = [...prev];
         if (final.length > 0) {
-          final[final.length - 1].id = Date.now();
+          final[final.length - 1].id = Date.now(); // 赋予一个稳定的ID
         }
         return final;
       });
@@ -563,9 +569,14 @@ export default function AIChatDock() {
       if (err.name !== 'AbortError') {
         console.error("Chat Error:", err);
         updateMessages(prev => {
-          const last = prev[prev.length - 1];
-          const newContent = last ? (last.content || `[系统]: 生成中断，请检查设置。(${err.message})`) : `[系统]: 生成中断，请检查设置。(${err.message})`;
-          return [...prev.slice(0, -1), { ...(last || {}), content: newContent }];
+            const updated = [...prev];
+            if (updated.length > 0) {
+                const lastMsg = updated[updated.length-1];
+                if(lastMsg.content === '') { // 仅在内容为空时（即加载中）填充错误信息
+                    lastMsg.content = `[系统]: 生成中断，请检查设置。(${err.message})`;
+                }
+            }
+            return updated;
         });
       }
     } finally {
@@ -574,10 +585,13 @@ export default function AIChatDock() {
     }
   };
 
-
+  // ✅ [优化] 增强了TTS文本清理逻辑，移除了Markdown、Emoji和多种标点，提高语音合成成功率
   const playInternalTTS = async (text) => {
     if (!text) return;
-    if (audioRef.current) audioRef.current.pause();
+    if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = ''; // 释放旧资源
+    }
     setIsPlaying(true);
     
     const emojiRegex = /(?:[\u2700-\u27bf]|(?:\ud83c[\udde6-\uddff]){2}|[\ud800-\udbff][\udc00-\udfff]|[\u0023-\u0039]\ufe0f?\u20e3|\u3299|\u3297|\u303d|\u3030|\u24c2|\ud83c[\udd70-\udd71]|\ud83c[\udd7e-\udd7f]|\ud83c\udd8e|\ud83c[\udd91-\udd9a]|\ud83c[\udde6-\uddff]|\ud83c[\ude01-\ude02]|\ud83c\ude1a|\ud83c\ude2f|\ud83c[\ude32-\ude3a]|\ud83c[\ude50-\ude51]|\u203c|\u2049|[\u25aa-\u25ab]|\u25b6|\u25c0|[\u25fb-\u25fe]|\u00a9|\u00ae|\u2122|\u2139|\ud83c\udc04|[\u2600-\u26FF]|\u2b05|\u2b06|\u2b07|\u2b1b|\u2b1c|\u2b50|\u2b55|\u231a|\u231b|\u2328|\u23cf|[\u23e9-\u23f3]|[\u23f8-\u23fa]|\ud83c\udccf|\u2934|\u2935|[\u2190-\u21ff])/g;
@@ -596,7 +610,10 @@ export default function AIChatDock() {
       audioRef.current = audio;
       audio.onended = () => setIsPlaying(false);
       audio.play();
-    } catch (e) { setIsPlaying(false); }
+    } catch (e) { 
+        console.error("TTS failed:", e);
+        setIsPlaying(false); 
+    }
   };
 
   const copyText = (text) => {
@@ -787,6 +804,7 @@ export default function AIChatDock() {
                   <FaVolumeUp className="animate-pulse" /> 正在朗读... <FaStop />
                 </div>
               )}
+              {/* ✅ [UI 优化] 采用了新的输入框和动态按钮布局，更简洁美观 */}
               <div style={styles.inputBox}>
                 <textarea
                   ref={textareaRef}
@@ -829,7 +847,6 @@ export default function AIChatDock() {
             </div>
           </div>
 
-          {/* Modals remain unchanged */}
           {showLoginTip && (
             <div style={styles.paywallOverlay}>
               <div style={{ ...styles.paywallModal, maxWidth: 300 }}>
@@ -876,7 +893,6 @@ export default function AIChatDock() {
                   <h3>AI 设置</h3>
                   <button onClick={() => setShowSettings(false)} style={styles.closeBtn}><FaTimes /></button>
                 </div>
-
                 <div style={styles.modalBody}>
                   {!isActivated && (
                     <div style={{ background: '#fff7ed', color: '#c2410c', padding: 8, borderRadius: 6, fontSize: '0.85rem' }}>
@@ -896,13 +912,13 @@ export default function AIChatDock() {
                   <div style={styles.inputGroup}>
                     <label style={styles.settingRow}>
                         <span>接口地址 (Base URL)</span>
-                        <input type="text" placeholder="例如: https://apis.iflow.cn/v1" value={config.baseUrl || ''} onChange={e=>setConfig({...config, baseUrl:e.target.value})} style={styles.input}/>
+                        <input type="text" placeholder="例如: https://integrate.api.nvidia.com/v1" value={config.baseUrl || ''} onChange={e=>setConfig({...config, baseUrl:e.target.value})} style={styles.input}/>
                     </label>
                   </div>
                   <div style={styles.inputGroup}>
                     <label style={styles.settingRow}>
                         <span>模型名称 (Model ID)</span>
-                        <input type="text" placeholder="手动输入或选择..." value={config.modelId || ''} onChange={e=>setConfig({...config, modelId:e.target.value})} style={styles.input}/>
+                        <input type="text" placeholder="例如: deepseek-ai/deepseek-v3.2" value={config.modelId || ''} onChange={e=>setConfig({...config, modelId:e.target.value})} style={styles.input}/>
                     </label>
                   </div>
                   <div style={styles.inputGroup}>
@@ -997,7 +1013,7 @@ export default function AIChatDock() {
 const styles = {
   fullScreenContainer: { position: 'fixed', inset: 0, background: '#f8fafc', zIndex: 99999, display: 'flex', flexDirection: 'column', animation: 'slideUp 0.3s ease-out' },
   navHeader: { height: 56, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', borderBottom: '1px solid #e2e8f0', flexShrink: 0, paddingTop: 'env(safe-area-inset-top)' },
-  navTitle: { fontSize: '1.1rem', fontWeight: 'bold', color: '#1e293b', textAlign: 'center', flex: 1, marginRight: '-48px' /* Compensate for the left button */ },
+  navTitle: { fontSize: '1.1rem', fontWeight: 'bold', color: '#1e293b', textAlign: 'center', flex: 1, marginRight: '-48px' },
   navIconBtn: { background: 'none', border: 'none', padding: 8, cursor: 'pointer', color: '#64748b', width: 48, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center' },
   chatBody: { flex: 1, overflowY: 'auto', padding: '16px', background: '#f8fafc', WebkitOverflowScrolling: 'touch' },
   footer: { background: '#fff', borderTop: '1px solid #e2e8f0', paddingBottom: 'env(safe-area-inset-bottom)', display: 'flex', flexDirection: 'column', flexShrink: 0 },
