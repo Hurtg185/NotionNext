@@ -17,12 +17,12 @@ const validateActivationCode = (code) => {
   const parts = c.split('-');
   const VALID = ['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'H7-9', 'SP', 'HSK1', 'HSK2', 'HSK3'];
   
-  const levelPart = parts[0].replace('HSK', 'H');
+  const levelPart = parts.replace('HSK', 'H');
   if (!VALID.some(v => v.replace('HSK', 'H') === levelPart)) {
       return { isValid: false, error: '等级不支持' };
   }
   
-  return { isValid: true, level: parts[0] };
+  return { isValid: true, level: parts };
 };
 
 // 新增一个辅助 Hook，用于追踪上一次的状态
@@ -153,7 +153,7 @@ SUGGESTIONS: Q1|||Q2|||Q3`
     } catch (e) { console.error("Failed to parse user from localStorage", e); }
     
     if (sessions.length > 0 && !currentSessionId) {
-      setCurrentSessionId(sessions[0].id);
+      setCurrentSessionId(sessions.id);
     }
   }, []);
 
@@ -246,24 +246,38 @@ SUGGESTIONS: Q1|||Q2|||Q3`
     } catch(e) { return { success: false, error: '网络错误' }; }
   };
 
-  // ✅ [核心修复] 新增 useEffect 来监听 AI 助手的打开事件
+  // 触发器函数需要先定义，才能在 useEffect 中使用
+  const triggerAI = useCallback((title, content, id = null, aiPreAnswer = null) => {
+      setAiMode('CHAT');
+      let finalContent;
+      // ✅ [语法修复] 这里是关键！确保字符串使用反引号 ` 包裹
+      if (aiPreAnswer) {
+        finalContent = `你好，我需要你扮演一名专业的汉语老师来讲解“${title}”这个语法点。这里有一份为你准备好的标准讲解稿，请你严格根据这份稿件的内容，用更生动、有条理、对缅甸学生友好的方式重新组织和呈现。你可以使用 Markdown 格式（如标题、列表、粗体）来美化排版，但【绝对不允许】添加讲解稿中没有的知识点或例子。\n\n【标准讲解稿】:\n---\n${aiPreAnswer}`;
+      } else {
+        finalContent = content;
+      }
+      setActiveTask({ 
+        title: title, 
+        content: finalContent, 
+        id: id, 
+        timestamp: Date.now() 
+      }); 
+      setIsAiOpen(true);
+  }, []); // 依赖项为空，因为它不依赖于外部可变状态
+
+  // 监听 AI 助手的打开事件
   const prevIsAiOpen = usePrevious(isAiOpen);
   useEffect(() => {
-    // 检查 AI 是否是从“关闭”变为“打开”
     if (!prevIsAiOpen && isAiOpen) {
       const session = sessions.find(s => s.id === currentSessionId);
-      // 如果 AI 打开时，桌上正好有待办任务 (pageContext)，
-      // 并且当前会话是一个还没开始的“新对话”...
       if (pageContext && session && session.messages.length === 0 && session.title.startsWith('新对话')) {
-        // ...那么就自动触发 AI 讲解！
         triggerAI(pageContext.title, pageContext.content, pageContext.id, pageContext.aiPreAnswer);
       }
     }
-    // 依赖项中加入 triggerAI 以确保函数是最新版本
   }, [isAiOpen, prevIsAiOpen, pageContext, sessions, currentSessionId, triggerAI]);
 
 
-  // --- Prompt 生成逻辑 (微调) ---
+  // --- Prompt 生成逻辑 ---
   const finalSystemPrompt = useMemo(() => {
     let template = aiMode === 'INTERACTIVE' ? SYSTEM_PROMPTS.INTERACTIVE : SYSTEM_PROMPTS.CHAT;
     let displayLevel = config.userLevel || 'HSK 1';
@@ -287,7 +301,6 @@ SUGGESTIONS: Q1|||Q2|||Q3`
         template = template.replace('{{QUESTION}}', activeTask.question || '');
         template = template.replace('{{USER_CHOICE}}', activeTask.userChoice || '');
     } else {
-      // 让 System Prompt 能理解新的 pageContext 对象
       const contextString = (pageContext && typeof pageContext.content === 'string') 
         ? pageContext.content 
         : '通用对话';
@@ -296,7 +309,7 @@ SUGGESTIONS: Q1|||Q2|||Q3`
     return template;
   }, [config.userLevel, aiMode, activeTask, pageContext]);
 
-  // --- 会话切换逻辑 (微调) ---
+  // --- 会话切换逻辑 ---
   const selectSession = useCallback((sessionId) => {
       setCurrentSessionId(sessionId);
       const session = sessions.find(s => s.id === sessionId);
@@ -304,35 +317,18 @@ SUGGESTIONS: Q1|||Q2|||Q3`
       if (session && !session.title.includes('解析')) {
           setAiMode('CHAT');
           setActiveTask(null);
-          setPageContext(null); // 切换到非任务会话时，清空页面上下文
+          setPageContext(null);
       } else if (session && session.title.includes('解析')) {
           setAiMode('INTERACTIVE');
       }
   }, [sessions]);
 
-  // --- 触发器函数 (保持我们之前的最终版本) ---
+  // --- 其他触发器函数 ---
   
   const triggerInteractiveAI = useCallback((payload) => {
     setAiMode('INTERACTIVE');
     setActiveTask({ ...payload, timestamp: Date.now() });
     setIsAiOpen(true);
-  }, []);
-
-  const triggerAI = useCallback((title, content, id = null, aiPreAnswer = null) => {
-      setAiMode('CHAT');
-      let finalContent;
-      if (aiPreAnswer) {
-        finalContent = `你好，我需要你扮演一名专业的汉语老师来讲解“${title}”这个语法点。这里有一份为你准备好的标准讲解稿，请你严格根据这份稿件的内容，用更生动、有条理、对缅甸学生友好的方式重新组织和呈现。你可以使用 Markdown 格式（如标题、列表、粗体）来美化排版，但【绝对不允许】添加讲解稿中没有的知识点或例子。\n\n【标准讲解稿】:\n---\n${aiPreAnswer}`;
-      } else {
-        finalContent = content;
-      }
-      setActiveTask({ 
-        title: title, 
-        content: finalContent, 
-        id: id, 
-        timestamp: Date.now() 
-      }); 
-      setIsAiOpen(true);
   }, []);
 
   const updatePageContext = useCallback((contextObject) => {
@@ -344,7 +340,7 @@ SUGGESTIONS: Q1|||Q2|||Q3`
   const resetToChatMode = useCallback(() => {
       setAiMode('CHAT');
       setActiveTask(null);
-      setPageContext(null); // 重置时也清空页面上下文
+      setPageContext(null);
   }, []);
 
   return (
