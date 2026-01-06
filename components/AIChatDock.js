@@ -430,19 +430,36 @@ export default function AIChatDock() {
     login();
   };
 
-  // ✅ [最终修复] 彻底重写了数据流处理逻辑，确保能正确显示AI响应
+  // ✅ [最终修复] 修正了权限检查逻辑并加固了流式数据处理
   const handleSend = async (textToSend = input, isSystemTrigger = false, historyOverride = null) => {
     const contentToSend = (typeof textToSend === 'string' ? textToSend : input).trim();
     if (!contentToSend || loading) return;
+    
+    if (!isSystemTrigger) {
+      if (!user) {
+        setShowLoginTip(true);
+        return;
+      }
+      if (!isActivated) {
+        try {
+          const auth = await canUseAI();
+          // 正确处理 canUseAI 返回的布尔值或对象
+          const canUse = typeof auth === 'object' ? auth.canUse : auth;
+          if (!canUse) {
+            setShowPaywall(true);
+            return;
+          }
+        } catch (e) {
+          alert("网络校验失败，请检查网络连接");
+          return;
+        }
+      }
+    }
 
-    if (!isSystemTrigger && !user) { setShowLoginTip(true); return; }
-    if (!config.apiKey) { alert('请先在设置中配置 API Key'); setShowSettings(true); return; }
-    if (!isSystemTrigger && !isActivated) {
-      try {
-        const auth = await canUseAI();
-        const canUse = (auth && typeof auth === 'object') ? auth.canUse : auth;
-        if (!canUse) { setShowPaywall(true); return; }
-      } catch (e) { alert("网络校验失败，请检查网络连接"); return; }
+    if (!config.apiKey) {
+      alert('请先在设置中配置 API Key');
+      setShowSettings(true);
+      return;
     }
     
     if (!isSystemTrigger) setInput('');
@@ -509,6 +526,7 @@ export default function AIChatDock() {
               const delta = data.choices?.[0]?.delta?.content || '';
               if (delta) {
                 fullContent += delta;
+                if (config.soundEnabled) playTickSound(); // Simplified sound logic
                 updateMessages(prev => {
                   const updated = [...prev];
                   if (updated.length > 0) {
