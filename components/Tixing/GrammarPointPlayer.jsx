@@ -1,323 +1,366 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import PropTypes from 'prop-types';
-import { useTransition, animated } from '@react-spring/web';
-import { pinyin } from 'pinyin-pro';
-import ReactPlayer from 'react-player';
-import {
-  FaChevronRight, 
-  FaExclamationTriangle, 
-  FaBookReader
-} from 'react-icons/fa';
-import { useAI } from '../AIConfigContext';
+import React, { createContext, useState, useContext, useEffect, useMemo, useCallback, useRef } from 'react';
+import Script from 'next/script';
 
-// =================================================================================
-// ===== 文本渲染组件 (已移除所有 TTS 相关逻辑) =====
-// =================================================================================
-const PinyinText = ({ text, color = '#000000', bold = false, strikethrough = false }) => {
-  if (!text) return null;
-  const displayable = text.replace(/\*\*|~~|\{\{|\}\}|###/g, '');
-  const regex = /([\u4e00-\u9fa5]+)/g;
-  const parts = displayable.split(regex);
+// --- 常量定义 ---
+const CONFIG_KEY = 'ai_global_config_v14';
+const SESSIONS_KEY = 'ai_global_sessions_v14';
+const USER_KEY = 'hsk_user';
 
-  return (
-    <span
-      style={{
-        lineHeight: '2.4', 
-        wordBreak: 'break-word', 
-        color: color,
-        fontWeight: bold ? '700' : '400', 
-        fontSize: '1.1rem',
-        textDecoration: strikethrough ? 'line-through' : 'none',
-        textDecorationColor: color, 
-        textDecorationThickness: '2px'
-      }}
-    >
-      {parts.map((part, idx) => {
-        if (/[\u4e00-\u9fa5]/.test(part)) {
-          const pyArray = pinyin(part, { type: 'array', toneType: 'symbol' });
-          return part.split('').map((char, cIdx) => (
-            <ruby key={`${idx}-${cIdx}`} style={{ rubyPosition: 'over', margin: '0 1px' }}>
-              {char}<rt style={{ fontSize: '0.6em', userSelect: 'none', color: '#64748b' }}>{pyArray[cIdx] || ''}</rt>
-            </ruby>
-          ));
-        } else {
-          return <span key={idx} style={{ fontFamily: '"Padauk", "Myanmar3", sans-serif' }}>{part}</span>;
-        }
-      })}
-    </span>
-  );
+const AIContext = createContext();
+
+// --- 辅助函数 (无变动) ---
+const validateActivationCode = (code) => {
+  if (!code) return { isValid: false, error: '请输入激活码' };
+  const c = code.trim().toUpperCase();
+  if (!c.includes('-JHM-')) return { isValid: false, error: '格式错误' };
+  
+  const parts = c.split('-');
+  const VALID = ['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'H7-9', 'SP', 'HSK1', 'HSK2', 'HSK3'];
+  
+  const levelPart = parts.replace('HSK', 'H');
+  if (!VALID.some(v => v.replace('HSK', 'H') === levelPart)) {
+      return { isValid: false, error: '等级不支持' };
+  }
+  
+  return { isValid: true, level: parts };
 };
 
-const RichTextRenderer = ({ content }) => {
-  if (!content) return null;
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-      {content.split('\n').map((line, idx) => {
-        const trimmed = line.trim();
-        if (!trimmed) return <div key={idx} style={{ height: '8px' }} />;
-
-        if (trimmed.startsWith('###')) {
-          return <h3 key={idx} style={styles.h3}>{trimmed.replace(/###\s?/, '')}</h3>;
-        }
-
-        return (
-          <div key={idx} style={styles.textRow}>
-            {trimmed.split(/(\*\*.*?\*\*|~~.*?~~|\{\{.*?\}\})/g).map((part, pIdx) => {
-              if (part.startsWith('**') && part.endsWith('**')) {
-                return (
-                  <span key={pIdx} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                    <span style={{ fontSize: '0.6rem', color: '#0000ff' }}>▪️</span>
-                    <PinyinText text={part.slice(2, -2)} color="#0000ff" bold={true} />
-                  </span>
-                );
-              } 
-              if (part.startsWith('~~') && part.endsWith('~~')) {
-                return <PinyinText key={pIdx} text={part.slice(2, -2)} color="#ef4444" strikethrough={true} />;
-              }
-              if (part.startsWith('{{') && part.endsWith('}}')) {
-                return <PinyinText key={pIdx} text={part.slice(2, -2)} color="#eab308" bold={true} />;
-              }
-              
-              return <PinyinText key={pIdx} text={part} />;
-            })}
-          </div>
-        );
-      })}
-    </div>
-  );
-};
-
-// =================================================================================
-// ===== 主组件 GrammarPointPlayer =====
-// =================================================================================
-const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
-  const { prepareGrammarTask, resetToChatMode } = useAI();
-
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
-  
-  const playerContainerRef = useRef(null);
-  const contentRef = useRef(null);
-
-  const normalizedPoints = useMemo(() => {
-    if (!Array.isArray(grammarPoints)) return [];
-    return grammarPoints.map((item, idx) => ({
-      id: item.id || idx,
-      title: item['语法标题'] || '',
-      pattern: item['句型结构'] || '',
-      videoUrl: item['视频链接'] || item.videoUrl || '',
-      videoPoster: item['视频封面'] || item.poster || '', 
-      explanationRaw: item['语法详解'] || '',
-      attention: item['注意事项'] || '',
-      aiPreAnswer: item['讲解脚本'] || '',
-      dialogues: (item['例句列表'] || []).map((ex, i) => {
-        const s = (ex.speaker || '').toUpperCase();
-        const isBoy = s === 'B' || s.includes('男') || s.includes('BOY');
-        return { id: ex.id || i, isMale: isBoy, sentence: ex['句子'] || '', translation: ex['翻译'] || '' };
-      })
-    }));
-  }, [grammarPoints]);
-
-  const currentPoint = normalizedPoints[currentIndex];
-  
-  // ✅ 当用户切换语法点时，主动告诉AI系统：“准备好讲解这个任务！”
+// 新增一个辅助 Hook，用于追踪上一次的状态
+function usePrevious(value) {
+  const ref = useRef();
   useEffect(() => {
-    if (currentPoint) {
-      const levelId = `${level.replace(/\s+/g, '').toLowerCase()}_grammar_${currentPoint.id}`;
-      
-      // 构造通用内容，以防没有讲解脚本
-      let genericContent = `请为我讲解“${currentPoint.title}”这个语法点。\n\n【参考资料】:\n`;
-      genericContent += `核心句型：${currentPoint.pattern}\n`;
-      genericContent += `详解：${currentPoint.explanationRaw}\n`;
-      if (currentPoint.attention) {
-        genericContent += `注意事项：${currentPoint.attention}\n`;
-      }
-      
-      // 调用新的函数，将任务信息“预加载”到AI上下文中
-      prepareGrammarTask({
-        title: currentPoint.title,
-        content: genericContent,
-        id: levelId,
-        aiPreAnswer: currentPoint.aiPreAnswer,
-      });
+    ref.current = value;
+  });
+  return ref.current;
+}
+
+export const AIProvider = ({ children }) => {
+  // --- State 定义 ---
+  const [user, setUser] = useState(null);
+  const [isActivated, setIsActivated] = useState(false);
+  const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
+
+  const [config, setConfig] = useState(() => {
+    try {
+      const savedConfig = localStorage.getItem(CONFIG_KEY);
+      const initialConfig = {
+        apiKey: '',
+        baseUrl: 'https://integrate.api.nvidia.com/v1', 
+        modelId: 'deepseek-ai/deepseek-v3.2',
+        userLevel: 'HSK 1', 
+        showPinyin: true, 
+        autoSendStt: false, 
+        ttsSpeed: 1,
+        ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural',
+        sttLang: 'zh-CN',
+        soundEnabled: true
+      };
+      return savedConfig ? { ...initialConfig, ...JSON.parse(savedConfig) } : initialConfig;
+    } catch (e) {
+      return {};
     }
+  });
 
-    // 当组件卸载（用户离开语法学习页面）时，清除这个预备任务
-    return () => {
-      resetToChatMode();
-    };
-  }, [currentIndex, currentPoint, level, prepareGrammarTask, resetToChatMode]);
+  const [isAiOpen, setIsAiOpen] = useState(false);
+  const [sessions, setSessions] = useState(() => {
+    try {
+      const savedSessions = localStorage.getItem(SESSIONS_KEY);
+      const initialSessions = savedSessions ? JSON.parse(savedSessions) : [];
+      if (initialSessions.length === 0) {
+        return [{ id: Date.now(), title: '新对话', messages: [], date: new Date().toISOString() }];
+      }
+      return initialSessions;
+    } catch (e) {
+      return [{ id: Date.now(), title: '新对话', messages: [], date: new Date().toISOString() }];
+    }
+  });
 
-  // --- UI 交互逻辑 (已移除TTS) ---
+  const [currentSessionId, setCurrentSessionId] = useState(null);
+  const [remainingQuota, setRemainingQuota] = useState(0);
+  const TOTAL_FREE_QUOTA = 60; 
 
+  const [aiMode, setAiMode] = useState('CHAT');
+  const [activeTask, setActiveTask] = useState(null); 
+  const [pageContext, setPageContext] = useState(null); 
+
+  // --- System Prompts (无变动) ---
+  const SYSTEM_PROMPTS = {
+    CHAT: `你是一位专业且博学的汉语老师，你的唯一使命是教【缅甸学生】学习汉语。记住，你的学生是缅甸人，语言习惯和思维方式都与中文不同。
+
+【当前教学等级】：{{LEVEL}}
+【注意】：如果等级显示 SP，表示“口语专项/专业口语 (Speaking Practice)”，绝对禁止将其解释为 "Sponsored Program" 或其他商业含义。
+
+【最高指令：优先级与详尽度】
+1.【优先响应具体任务】：如果用户的第一个问题是要求解释某个具体的语法点，请先提供一个**高度概括的核心总结**和1-2个关键例句。完成这个初始任务后，再进入自由问答模式。
+2.【深度结合参考内容】：**请仔细分析【当前参考内容】({{CONTEXT}})。如果其中包含“易错点”、“常见错误”、“注意”等关键词，必须在你的回答中优先讲解这些内容，帮助学生避免犯错。**
+3.【当前教学等级】：{{LEVEL}}
+
+【语言强制执行规则】
+- HSK 1 / HSK 2：必须以【缅甸语为主】讲解逻辑，中文仅作为关键词或例句。
+- HSK 3 / HSK 4：采取“中文+缅甸语”对照讲解。
+- HSK 5 以上 / SP：中文讲解为主，难点辅以缅甸语。
+
+【回答结构】
+1. 一秒直达 ：用一个缅甸语中最接近的词或语法结构来类比。
+- 格式：这个语法点就像缅甸语里的 [XXX]。
+ 2. 功能对比 ：一句话说明该语法在中文里的作用，并点出它与缅语（SOV语序）最大的不同（例如：缅语靠助词，中文靠语序）。
+ 3. 核心法则 ：**公式**：[使用简单符号表示，如：主语 + 把 + 宾语 + 动词 + 结果]
+**口诀**：[一句简单、押韵或好记的中文顺口溜]
+**绝对禁忌**：[列出一个缅甸学习者绝对不能犯的原则性错误]
+ 4. 三步拆解 (Step-by-Step)
+- ① **基础句型**：最简单的标准例句。
+- ② **常用变式**：对应的否定句或疑问句。
+- ③ **缅语者易错点**：由于缅语思维导致的错句 (❌) -> 正确句子 (✅) -> 简述原因。
+
+ 5. 生活实战 (Scenarios)
+围绕一个生活场景（如：职场、购物、仰光生活），给出三个中缅对照句。
+- 要求：中文句子必须包含拼音，并用 "-> <-" 标出语法核心。
+6. 追问建议 (格式：SUGGESTIONS: 建议1|||建议2|||建议3)`,
+
+    INTERACTIVE: `你是一名汉语语法私教。当前处于【错题专项深度解析】模式。
+【当前等级】：{{LEVEL}}
+【题目 ID】：{{TASK_ID}}
+
+【背景信息】
+- 语法点：{{GRAMMAR}}
+- 题目：{{QUESTION}}
+- 学生误选：{{USER_CHOICE}}
+
+【核心工作逻辑】
+1. **补课模式**：针对学生的错选 {{USER_CHOICE}}，用缅甸语深度拆解思维漏洞，并举出生活中的尴尬场景来对比正确用法。严禁直接给答案。
+2. **智能切换（重要）**：如果学生在对话中问了**与本题无关**的内容（例如：“那个词是什么意思？”、“你好”），请**立即停止**错题解析模式，切换回普通老师身份回答学生的问题。不要强行把新问题和错题扯上关系。
+
+SUGGESTIONS: Q1|||Q2|||Q3`
+  };
+
+  // --- 初始化与本地存储 (无变动) ---
   useEffect(() => {
-    const handleFsChange = () => {
-      const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
-      setIsVideoPlaying(isFs);
-    };
-    document.addEventListener('fullscreenchange', handleFsChange);
-    document.addEventListener('webkitfullscreenchange', handleFsChange);
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFsChange);
-      document.removeEventListener('webkitfullscreenchange', handleFsChange);
-    };
+    try {
+      const cachedUser = localStorage.getItem(USER_KEY);
+      if (cachedUser) {
+        const u = JSON.parse(cachedUser);
+        setUser(u);
+        if (u.unlocked_levels) {
+          setIsActivated(true);
+          const levels = u.unlocked_levels.split(',');
+          let highest = levels[levels.length - 1];
+          if (highest.startsWith('H') && !highest.startsWith('HSK')) {
+              highest = highest.replace('H', 'HSK ');
+          }
+          setConfig(c => ({ ...c, userLevel: highest }));
+        }
+      }
+    } catch (e) { console.error("Failed to parse user from localStorage", e); }
+    
+    if (sessions.length > 0 && !currentSessionId) {
+      setCurrentSessionId(sessions.id);
+    }
   }, []);
 
   useEffect(() => {
-    if (contentRef.current) contentRef.current.scrollTop = 0;
-  }, [currentIndex]);
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+  }, [config]);
 
-  const transitions = useTransition(currentIndex, {
-    key: currentIndex,
-    from: { opacity: 0, transform: 'translate3d(30px,0,0)' },
-    enter: { opacity: 1, transform: 'translate3d(0,0,0)' },
-    leave: { opacity: 0, transform: 'translate3d(-30px,0,0)', position: 'absolute' },
-  });
-
-  const handleNext = () => {
-    if (currentIndex < normalizedPoints.length - 1) {
-      setCurrentIndex(p => p + 1);
-    } else if (onComplete) {
-      onComplete();
+  useEffect(() => {
+    if (sessions.length > 0) {
+      localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
     }
+  }, [sessions]);
+
+  // --- Google 登录及其他 API 交互 ---
+  useEffect(() => {
+    if (isGoogleLoaded && window.google) {
+        window.google.accounts.id.initialize({
+            client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID, 
+            callback: handleGoogleCallback,
+            auto_select: false
+        });
+    }
+  }, [isGoogleLoaded]);
+
+  const handleGoogleCallback = async (response) => {
+    try {
+        const res = await fetch('/api/verify-google', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: response.credential }),
+        });
+        const data = await res.json();
+        setUser(data);
+        localStorage.setItem(USER_KEY, JSON.stringify(data));
+        if (data.unlocked_levels) setIsActivated(true);
+        syncQuota(data.email);
+    } catch (e) { console.error("Login failed", e); }
   };
 
-  const handleVideoFullScreen = () => {
-    const el = playerContainerRef.current;
-    if (el) {
-      if (el.requestFullscreen) el.requestFullscreen();
-      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-    }
+  const login = () => window.google?.accounts.id.prompt();
+  const logout = () => { localStorage.removeItem(USER_KEY); setUser(null); setIsActivated(false); };
+
+  const syncQuota = async (email) => {
+    try {
+        const res = await fetch('/api/can-use-ai', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+        });
+        const data = await res.json();
+        setRemainingQuota(data.remaining);
+    } catch (e) {}
   };
 
-  if (!currentPoint) return null;
+  const canUseAI = async () => {
+      if (isActivated) return true;
+      if (!user) return false;
+      return true;
+  };
+
+  const recordUsage = async () => {
+      if (isActivated || !user) return;
+      try {
+          await fetch('/api/record-ai-usage', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: user.email })
+          });
+          setRemainingQuota(prev => Math.max(0, prev - 1));
+      } catch (e) {}
+  };
+
+  const handleActivate = async (code) => {
+    if (!user) return { success: false, error: '请先登录' };
+    const check = validateActivationCode(code);
+    if (!check.isValid) return check;
+    try {
+        const res = await fetch('/api/activate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: user.email, code }),
+        });
+        const data = await res.json();
+        if (!res.ok) return { success: false, error: data.error };
+        const newUser = { ...user, unlocked_levels: data.new_unlocked_levels };
+        setUser(newUser);
+        localStorage.setItem(USER_KEY, JSON.stringify(newUser));
+        setIsActivated(true);
+        return { success: true };
+    } catch(e) { return { success: false, error: '网络错误' }; }
+  };
+
+  // 触发器函数需要先定义，才能在 useEffect 中使用
+  const triggerAI = useCallback((title, content, id = null, aiPreAnswer = null) => {
+      setAiMode('CHAT');
+      let finalContent;
+      // ✅ [语法修复] 这里是关键！确保字符串使用反引号 ` 包裹
+      if (aiPreAnswer) {
+        finalContent = `你好，我需要你扮演一名专业的汉语老师来讲解“${title}”这个语法点。这里有一份为你准备好的标准讲解稿，请你严格根据这份稿件的内容，用更生动、有条理、对缅甸学生友好的方式重新组织和呈现。你可以使用 Markdown 格式（如标题、列表、粗体）来美化排版，但【绝对不允许】添加讲解稿中没有的知识点或例子。\n\n【标准讲解稿】:\n---\n${aiPreAnswer}`;
+      } else {
+        finalContent = content;
+      }
+      setActiveTask({ 
+        title: title, 
+        content: finalContent, 
+        id: id, 
+        timestamp: Date.now() 
+      }); 
+      setIsAiOpen(true);
+  }, []); // 依赖项为空，因为它不依赖于外部可变状态
+
+  // 监听 AI 助手的打开事件
+  const prevIsAiOpen = usePrevious(isAiOpen);
+  useEffect(() => {
+    if (!prevIsAiOpen && isAiOpen) {
+      const session = sessions.find(s => s.id === currentSessionId);
+      if (pageContext && session && session.messages.length === 0 && session.title.startsWith('新对话')) {
+        triggerAI(pageContext.title, pageContext.content, pageContext.id, pageContext.aiPreAnswer);
+      }
+    }
+  }, [isAiOpen, prevIsAiOpen, pageContext, sessions, currentSessionId, triggerAI]);
+
+
+  // --- Prompt 生成逻辑 ---
+  const finalSystemPrompt = useMemo(() => {
+    let template = aiMode === 'INTERACTIVE' ? SYSTEM_PROMPTS.INTERACTIVE : SYSTEM_PROMPTS.CHAT;
+    let displayLevel = config.userLevel || 'HSK 1';
+    const taskId = activeTask?.id || "";
+    const lowerId = taskId.toLowerCase();
+    
+    if (lowerId.includes('hsk1')) displayLevel = 'HSK 1';
+    else if (lowerId.includes('hsk2')) displayLevel = 'HSK 2';
+    else if (lowerId.includes('hsk3')) displayLevel = 'HSK 3';
+    else if (lowerId.includes('sp')) displayLevel = '口语专项 (Spoken Chinese)';
+    
+    if (displayLevel === 'SP' || displayLevel === 'sp') {
+        displayLevel = '口语专项 (Spoken Chinese)';
+    }
+
+    template = template.replace(/{{LEVEL}}/g, displayLevel);
+    
+    if (aiMode === 'INTERACTIVE' && activeTask) {
+        template = template.replace('{{TASK_ID}}', taskId || '未知');
+        template = template.replace('{{GRAMMAR}}', activeTask.grammarPoint || '通用语法');
+        template = template.replace('{{QUESTION}}', activeTask.question || '');
+        template = template.replace('{{USER_CHOICE}}', activeTask.userChoice || '');
+    } else {
+      const contextString = (pageContext && typeof pageContext.content === 'string') 
+        ? pageContext.content 
+        : '通用对话';
+      template = template.replace('{{CONTEXT}}', contextString.substring(0, 1500));
+    }
+    return template;
+  }, [config.userLevel, aiMode, activeTask, pageContext]);
+
+  // --- 会话切换逻辑 ---
+  const selectSession = useCallback((sessionId) => {
+      setCurrentSessionId(sessionId);
+      const session = sessions.find(s => s.id === sessionId);
+      
+      if (session && !session.title.includes('解析')) {
+          setAiMode('CHAT');
+          setActiveTask(null);
+          setPageContext(null);
+      } else if (session && session.title.includes('解析')) {
+          setAiMode('INTERACTIVE');
+      }
+  }, [sessions]);
+
+  // --- 其他触发器函数 ---
+  
+  const triggerInteractiveAI = useCallback((payload) => {
+    setAiMode('INTERACTIVE');
+    setActiveTask({ ...payload, timestamp: Date.now() });
+    setIsAiOpen(true);
+  }, []);
+
+  const updatePageContext = useCallback((contextObject) => {
+    if (aiMode !== 'INTERACTIVE') {
+      setPageContext(contextObject);
+    }
+  }, [aiMode]);
+
+  const resetToChatMode = useCallback(() => {
+      setAiMode('CHAT');
+      setActiveTask(null);
+      setPageContext(null);
+  }, []);
 
   return (
-    <div style={styles.container}>
-      {transitions((style, i) => {
-        const gp = normalizedPoints[i];
-        return (
-          <animated.div style={{ ...styles.page, ...style }}>
-            <div style={styles.scrollContainer} ref={contentRef}>
-              <div style={styles.contentWrapper}>
-                
-                <h2 style={styles.title}>{gp.title}</h2>
-
-                <div style={styles.headerRow}>
-                  <div style={styles.patternCard}>
-                    <div style={styles.cardLabel}><FaBookReader /> 核心句型</div>
-                    <div style={styles.patternText}>
-                      <PinyinText text={gp.pattern} color="#1e40af" bold />
-                    </div>
-                  </div>
-
-                  {gp.videoUrl ? (
-                    <div 
-                      style={styles.videoBox} 
-                      ref={playerContainerRef} 
-                      onClick={handleVideoFullScreen}
-                    >
-                      <ReactPlayer 
-                        url={gp.videoUrl} 
-                        width="100%" 
-                        height="100%" 
-                        playing={isVideoPlaying}
-                        light={gp.videoPoster || true} 
-                        config={{ file: { attributes: { controlsList: 'nodownload' }}}} 
-                      />
-                      <div style={styles.videoOverlay}>点击全屏</div>
-                    </div>
-                  ) : (
-                    <div style={{...styles.videoBox, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-                        <span style={{fontSize: '2rem'}}>📖</span>
-                    </div>
-                  )}
-                </div>
-
-                <div style={styles.section}>
-                  <div style={styles.sectionHeader}>📝 语法详解</div>
-                  <div style={styles.textBody}>
-                    <RichTextRenderer content={gp.explanationRaw} />
-                  </div>
-                </div>
-
-                {gp.attention && (
-                  <div style={styles.section}>
-                    <div style={{...styles.sectionHeader, color: '#ef4444'}}>
-                      <FaExclamationTriangle /> 注意事项
-                    </div>
-                    <div style={styles.attentionBox}>
-                       <RichTextRenderer content={gp.attention} />
-                    </div>
-                  </div>
-                )}
-
-                <div style={styles.section}>
-                  <div style={styles.sectionHeader}>💬 场景对话</div>
-                  <div style={styles.chatList}>
-                    {gp.dialogues.map((ex, idx) => {
-                      const isMale = ex.isMale;
-                      return (
-                        <div key={idx} style={{ ...styles.chatRow, flexDirection: isMale ? 'row-reverse' : 'row' }}>
-                          <img 
-                            src={isMale ? "https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/10111437211381.jpg" : "https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/images.jpeg"}
-                            style={styles.chatAvatar} alt="avatar" 
-                          />
-                          <div style={{...styles.bubbleWrapper, alignItems: isMale ? 'flex-end' : 'flex-start'}}>
-                             <div style={{ ...styles.chatBubble, background: isMale ? '#eff6ff' : '#fff1f2', border: isMale ? '1px solid #bfdbfe' : '1px solid #fbcfe8' }}>
-                                <div style={isMale ? styles.tailR : styles.tailL} />
-                                <PinyinText text={ex.sentence} />
-                                <div style={styles.chatTranslation}>{ex.translation}</div>
-                             </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                
-                <button style={styles.submitBtn} onClick={handleNext}>
-                  {currentIndex === normalizedPoints.length - 1 ? '完成学习' : '下一页'} <FaChevronRight size={14} />
-                </button>
-                <div style={{ height: '60px' }} />
-              </div>
-            </div>
-          </animated.div>
-        );
-      })}
-    </div>
+    <AIContext.Provider value={{
+        user, login, logout, isActivated, isGoogleLoaded, config, setConfig,
+        sessions, setSessions, currentSessionId, setCurrentSessionId: selectSession,
+        isAiOpen, setIsAiOpen,
+        canUseAI, remainingQuota, TOTAL_FREE_QUOTA,
+        handleActivate, handleGoogleCallback,
+        activeTask, aiMode, systemPrompt: finalSystemPrompt,
+        triggerInteractiveAI, updatePageContext, resetToChatMode, triggerAI,
+    }}>
+      <Script
+        src="https://accounts.google.com/gsi/client"
+        strategy="lazyOnload"
+        onLoad={() => setIsGoogleLoaded(true)}
+      />
+      {children}
+    </AIContext.Provider>
   );
 };
 
-// --- 样式定义 (无变动) ---
-const styles = {
-  container: { position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#fff' },
-  page: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'white' },
-  scrollContainer: { flex: 1, overflowY: 'auto', padding: '20px 16px 40px' },
-  contentWrapper: { maxWidth: '600px', margin: '0 auto' },
-  title: { fontSize: '1.4rem', fontWeight: '800', textAlign: 'center', color: '#000', marginBottom: '20px' },
-  h3: { fontSize: '1.1rem', color: '#000', borderLeft: '4px solid #3b82f6', paddingLeft: '10px', marginTop: '20px', marginBottom: '10px' },
-  headerRow: { display: 'flex', gap: '10px', marginBottom: '24px', alignItems: 'stretch' },
-  patternCard: { flex: 1, background: '#f8fafc', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', justifyContent: 'center' },
-  videoBox: { width: '100px', height: '150px', borderRadius: '12px', overflow: 'hidden', background: '#000', position: 'relative', cursor: 'pointer' },
-  videoOverlay: { position: 'absolute', bottom: 0, width: '100%', background: 'rgba(0,0,0,0.5)', color: '#fff', fontSize: '9px', textAlign: 'center', padding: '2px 0' },
-  cardLabel: { fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold', marginBottom: '6px' },
-  patternText: { fontSize: '1.15rem', textAlign: 'center' },
-  section: { marginBottom: '25px' },
-  sectionHeader: { fontSize: '1rem', fontWeight: 'bold', marginBottom: '10px', color: '#000', display: 'flex', alignItems: 'center', gap: '6px' },
-  textRow: { padding: '4px 0' },
-  textBody: { fontSize: '1.05rem', color: '#000' },
-  attentionBox: { border: '1px dashed #ef4444', borderRadius: '12px', padding: '14px' },
-  chatList: { display: 'flex', flexDirection: 'column', gap: '16px' },
-  chatRow: { display: 'flex', gap: '10px' },
-  chatAvatar: { width: 34, height: 34, borderRadius: '50%', border: '1px solid #eee' },
-  bubbleWrapper: { maxWidth: '85%', display: 'flex', flexDirection: 'column' },
-  chatBubble: { padding: '12px', position: 'relative', borderRadius: '16px', boxShadow: '0 2px 5px rgba(0,0,0,0.03)' },
-  tailL: { position: 'absolute', top: '12px', left: '-5px', borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderRight: '6px solid #fff1f2' },
-  tailR: { position: 'absolute', top: '12px', right: '-5px', borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '6px solid #eff6ff' },
-  chatTranslation: { fontSize: '0.85rem', color: '#64748b', marginTop: '4px' },
-  submitBtn: { width: '100%', background: '#000', color: 'white', border: 'none', padding: '14px 0', borderRadius: '30px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' },
-};
-
-export default GrammarPointPlayer;
+export const useAI = () => useContext(AIContext);
