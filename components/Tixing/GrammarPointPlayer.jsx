@@ -4,8 +4,9 @@ import { useTransition, animated } from '@react-spring/web';
 import { pinyin } from 'pinyin-pro';
 import ReactPlayer from 'react-player';
 import {
-  FaPause, FaPlay, FaChevronRight, FaVolumeUp, 
-  FaExclamationTriangle, FaBookReader, FaRobot
+  FaChevronRight, 
+  FaExclamationTriangle, 
+  FaBookReader
 } from 'react-icons/fa';
 import { useAI } from '../AIConfigContext';
 
@@ -22,7 +23,7 @@ const playSFX = (type) => {
 };
 
 // =================================================================================
-// ===== 1. 健壮的 TTS Hook =====
+// ===== 1. 健壮的 TTS Hook (保留点读功能) =====
 // =================================================================================
 function useRobustTTS() {
   const [playerState, setPlayerState] = useState({
@@ -82,6 +83,7 @@ function useRobustTTS() {
       return;
     }
 
+    // 自动检测语言选择语音包
     const targetVoice = voiceOverride || (/[\u1000-\u109F]/.test(text) ? 'my-MM-NilarNeural' : 'zh-CN-XiaoxiaoMultilingualNeural');
 
     try {
@@ -199,7 +201,8 @@ const RichTextRenderer = ({ content, onPlayText, activeTtsId }) => {
 // ===== 3. 主组件 GrammarPointPlayer =====
 // =================================================================================
 const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
-  const { triggerAI, updatePageContext, isAiOpen } = useAI();
+  // 只保留 updatePageContext 用于被动更新上下文，不引入 triggerAI
+  const { updatePageContext } = useAI();
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
@@ -219,7 +222,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
       videoUrl: item['视频链接'] || item.videoUrl || '',
       videoPoster: item['视频封面'] || item.poster || '', 
       explanationRaw: item['语法详解'] || '',
-      script: item['讲解脚本'] || '', // 确保从JSON中读取到了脚本
+      script: item['讲解脚本'] || '', // 保留字段但不会主动朗读
       attention: item['注意事项'] || '',
       dialogues: (item['例句列表'] || []).map((ex, i) => {
         const s = (ex.speaker || '').toUpperCase();
@@ -237,22 +240,21 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
   const currentPoint = normalizedPoints[currentIndex];
 
   // =================================================================================
-  // 核心逻辑：构造 AI 上下文
+  // 上下文同步逻辑 (被动)
   // =================================================================================
   const constructFullAIContent = useCallback((point) => {
     if (!point) return '';
-    let content = `【语法标题】：${point.title}\n`;
-    content += `【核心句型】：${point.pattern}\n\n`;
-    
-    // --- 重点修改：如果有脚本，把脚本放在最显眼的位置，并加分割线 ---
-    if (point.script) {
-        content += `\n======== 【参考讲解脚本】START ========\n`;
-        content += point.script;
-        content += `\n======== 【参考讲解脚本】END ========\n\n`;
-        content += `(注意：请完全基于上述脚本进行教学，不要自己总结)\n\n`;
-    }
-    // --------------------------------------------------------
+    let content = '';
 
+    // 依然保留脚本标记，以便用户手动打开 AI 时能获得最佳体验
+    if (point.script && point.script.length > 5) {
+        content += `<<<SCRIPT_MODE_START>>>\n`;
+        content += `${point.script}\n`;
+        content += `<<<SCRIPT_MODE_END>>>\n\n`;
+    }
+
+    content += `【语法标题】：${point.title}\n`;
+    content += `【核心句型】：${point.pattern}\n\n`;
     content += `【详解内容】：\n${point.explanationRaw}\n\n`;
     
     if (point.attention) {
@@ -268,29 +270,13 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
     return content;
   }, []);
 
-  // 触发 AI 讲解 (手动点击)
-  const handleAskAI = useCallback(() => {
-    if (!currentPoint) return;
-    playSFX('click');
-    const fullContent = constructFullAIContent(currentPoint);
-    const levelId = `${level.replace(/\s+/g, '').toLowerCase()}_grammar_${currentPoint.id}`;
-    triggerAI(currentPoint.title, fullContent, levelId);
-  }, [currentPoint, level, constructFullAIContent, triggerAI]);
-
-  // 自动同步与触发逻辑
+  // 仅在切换页面时静默更新 AI 的上下文，不触发弹窗，不朗读
   useEffect(() => {
     if (currentPoint) {
       const fullContent = constructFullAIContent(currentPoint);
-      // 1. 更新上下文，确保随时可读
-      updatePageContext(fullContent);
-
-      // 2. 如果 AI 窗口已经打开，翻页时自动触发新内容的讲解
-      if (isAiOpen) {
-        const levelId = `${level.replace(/\s+/g, '').toLowerCase()}_grammar_${currentPoint.id}`;
-        triggerAI(currentPoint.title, fullContent, levelId);
-      }
+      updatePageContext(fullContent); 
     }
-  }, [currentIndex, currentPoint, isAiOpen, level, updatePageContext, triggerAI, constructFullAIContent]);
+  }, [currentIndex, currentPoint, updatePageContext, constructFullAIContent]);
 
   // =================================================================================
   // UI 交互
@@ -310,7 +296,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
   }, []);
 
   useEffect(() => {
-    stop();
+    stop(); // 翻页时停止 TTS 播放
     if (contentRef.current) contentRef.current.scrollTop = 0;
   }, [currentIndex, stop]);
 
@@ -342,10 +328,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
 
   return (
     <div style={styles.container}>
-      {/* 悬浮 AI 按钮 */}
-      <button style={styles.aiFloatBtn} onClick={handleAskAI}>
-        <FaRobot /> AI 讲解
-      </button>
+      {/* 移除了所有 AI 悬浮按钮 */}
 
       {transitions((style, i) => {
         const gp = normalizedPoints[i];
@@ -472,23 +455,29 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
 // =================================================================================
 const styles = {
   container: { position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#fff' },
-  aiFloatBtn: { position: 'absolute', top: '12px', right: '16px', zIndex: 50, background: '#4f46e5', color: '#fff', border: 'none', borderRadius: '20px', padding: '6px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 4px 10px rgba(79, 70, 229, 0.3)', cursor: 'pointer', fontWeight: 'bold' },
+  // 移除了 aiFloatBtn 样式
+  
   page: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'white' },
   scrollContainer: { flex: 1, overflowY: 'auto', padding: '20px 16px 40px' },
   contentWrapper: { maxWidth: '600px', margin: '0 auto' },
+
   title: { fontSize: '1.4rem', fontWeight: '800', textAlign: 'center', color: '#000', marginBottom: '20px' },
   h3: { fontSize: '1.1rem', color: '#000', borderLeft: '4px solid #3b82f6', paddingLeft: '10px', marginTop: '20px', marginBottom: '10px' },
+  
   headerRow: { display: 'flex', gap: '10px', marginBottom: '24px', alignItems: 'stretch' },
   patternCard: { flex: 1, background: '#f8fafc', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', justifyContent: 'center' },
   videoBox: { width: '100px', height: '150px', borderRadius: '12px', overflow: 'hidden', background: '#000', position: 'relative', cursor: 'pointer' },
   videoOverlay: { position: 'absolute', bottom: 0, width: '100%', background: 'rgba(0,0,0,0.5)', color: '#fff', fontSize: '9px', textAlign: 'center', padding: '2px 0' },
+
   cardLabel: { fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold', marginBottom: '6px' },
   patternText: { fontSize: '1.15rem', textAlign: 'center' },
+
   section: { marginBottom: '25px' },
   sectionHeader: { fontSize: '1rem', fontWeight: 'bold', marginBottom: '10px', color: '#000', display: 'flex', alignItems: 'center', gap: '6px' },
   textRow: { padding: '4px 0' },
   textBody: { fontSize: '1.05rem', color: '#000' },
   attentionBox: { border: '1px dashed #ef4444', borderRadius: '12px', padding: '14px' },
+
   chatList: { display: 'flex', flexDirection: 'column', gap: '16px' },
   chatRow: { display: 'flex', gap: '10px' },
   chatAvatar: { width: 34, height: 34, borderRadius: '50%', border: '1px solid #eee' },
@@ -497,9 +486,11 @@ const styles = {
   tailL: { position: 'absolute', top: '12px', left: '-5px', borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderRight: '6px solid #fff1f2' },
   tailR: { position: 'absolute', top: '12px', right: '-5px', borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '6px solid #eff6ff' },
   chatTranslation: { fontSize: '0.85rem', color: '#64748b', marginTop: '4px' },
+
   submitBtn: { width: '100%', background: '#000', color: 'white', border: 'none', padding: '14px 0', borderRadius: '30px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' },
 };
 
+// 全局内联样式注入
 if (typeof document !== 'undefined' && !document.getElementById('gp-player-style')) {
   const style = document.createElement('style');
   style.id = 'gp-player-style';
