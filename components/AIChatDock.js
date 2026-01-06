@@ -152,8 +152,6 @@ export default function AIChatDock() {
       window.addEventListener('popstate', handlePopState);
     } else {
       if (window.history.state?.aiDockOpen) {
-        // history.back() can be unreliable in some frameworks, direct state change is safer
-        // but we assume it works with the popstate listener.
         window.history.back();
       }
     }
@@ -241,8 +239,6 @@ export default function AIChatDock() {
     }
   }, [messages, isAiOpen, loading]);
 
-  // ✅ [核心修复] 使用两段式 useEffect 配合 useRef，完美解决状态更新的异步问题。
-  // 第一步：当 activeTask 变化时，准备好新会话和待执行的任务，并更新UI。
   useEffect(() => {
     if (activeTask && activeTask.timestamp) {
       const lastProcessed = sessionStorage.getItem('last_ai_task_ts');
@@ -273,16 +269,14 @@ export default function AIChatDock() {
       
       setSessions(prev => [newSession, ...prev]);
       setCurrentSessionId(newSession.id);
-      // 将任务存入 ref，等待 sessionId 更新完毕
       taskToRun.current = { prompt: hiddenPrompt, history: initialMessages };
     }
   }, [activeTask, aiMode, setSessions, setCurrentSessionId]);
   
-  // 第二步：当 currentSessionId 确认更新后，从 ref 中取出任务并执行。
   useEffect(() => {
     if (taskToRun.current && currentSessionId) {
       const { prompt, history } = taskToRun.current;
-      taskToRun.current = null; // 执行后立即清空，防止重复触发
+      taskToRun.current = null;
       handleSend(prompt, true, history);
     }
   }, [currentSessionId]);
@@ -436,12 +430,10 @@ export default function AIChatDock() {
     login();
   };
 
-  // ✅ [代码加固] 重构了 handleSend 函数，使其逻辑更清晰、健壮。
   const handleSend = async (textToSend = input, isSystemTrigger = false, historyOverride = null) => {
     const contentToSend = (typeof textToSend === 'string' ? textToSend : input).trim();
-    if (!contentToSend || loading) return;
+    if ((!isSystemTrigger && !contentToSend) || loading) return;
     
-    // 1. 权限和配置前置检查
     if (!isSystemTrigger) {
       if (!user) {
         setShowLoginTip(true);
@@ -467,7 +459,6 @@ export default function AIChatDock() {
       return;
     }
     
-    // 2. UI状态更新
     if (!isSystemTrigger) setInput('');
     setSuggestions([]);
     setLoading(true);
@@ -475,26 +466,22 @@ export default function AIChatDock() {
     if (abortControllerRef.current) abortControllerRef.current.abort();
     abortControllerRef.current = new AbortController();
 
-    // 3. 准备API消息历史
     const userMessage = { role: 'user', content: contentToSend };
-    // 如果是系统触发，使用传入的 history；否则使用当前会话的 messages
     const currentHistory = historyOverride !== null ? historyOverride : messages;
-    // 将待发送内容（无论是用户输入还是系统prompt）作为最新的用户消息
-    const historyForApi = [...currentHistory, userMessage]; 
+    const historyForApi = [...currentHistory, userMessage];
     const historyMsgs = historyForApi.slice(-10).map(({ role, content }) => ({ role, content }));
     const apiMessages = [{ role: 'system', content: systemPrompt }, ...historyMsgs];
 
-    // 4. 在UI上即时显示用户消息（如果不是系统触发）和AI加载动画
+    // ✅✅✅ [代码修复] ✅✅✅
+    // 无论消息是用户手动发送还是系统触发，都应该在UI上同时显示“用户提问”和“AI等待中”的占位符。
+    // 之前的 `if (isSystemTrigger)` 逻辑只显示了AI占位符，导致了空白页面的Bug。
+    // 统一使用以下逻辑，确保用户能看到自己的提问，解决了界面空白和卡死的感觉。
     const assistantPlaceholder = { role: 'assistant', content: '', id: `${Date.now()}-assist` };
-    if (isSystemTrigger) {
-      updateMessages(prev => [...prev, assistantPlaceholder]);
-    } else {
-      updateMessages(prev => [...prev, { ...userMessage, id: `${Date.now()}-user` }, assistantPlaceholder]);
-    }
-    await new Promise(resolve => setTimeout(resolve, 0)); // 等待UI渲染
+    updateMessages(prev => [...prev, { ...userMessage, id: `${Date.now()}-user` }, assistantPlaceholder]);
+    
+    await new Promise(resolve => setTimeout(resolve, 0));
 
     try {
-      // 5. 发起API请求
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -512,7 +499,6 @@ export default function AIChatDock() {
       }
       if (!response.body) throw new Error("无响应内容");
 
-      // 6. [优化] 采用更健壮的流式数据处理逻辑
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
@@ -553,11 +539,10 @@ export default function AIChatDock() {
         }
       }
 
-      // 7. 请求结束后更新状态
       updateMessages(prev => {
         const final = [...prev];
         if (final.length > 0) {
-          final[final.length - 1].id = Date.now(); // 赋予一个稳定的ID
+          final[final.length - 1].id = Date.now();
         }
         return final;
       });
@@ -571,8 +556,8 @@ export default function AIChatDock() {
         updateMessages(prev => {
             const updated = [...prev];
             if (updated.length > 0) {
-                const lastMsg = updated[updated.length-1];
-                if(lastMsg.content === '') { // 仅在内容为空时（即加载中）填充错误信息
+                const lastMsg = updated[updated.length - 1];
+                if (lastMsg && lastMsg.content === '') {
                     lastMsg.content = `[系统]: 生成中断，请检查设置。(${err.message})`;
                 }
             }
@@ -585,12 +570,11 @@ export default function AIChatDock() {
     }
   };
 
-  // ✅ [优化] 增强了TTS文本清理逻辑，移除了Markdown、Emoji和多种标点，提高语音合成成功率
   const playInternalTTS = async (text) => {
     if (!text) return;
     if (audioRef.current) {
         audioRef.current.pause();
-        audioRef.current.src = ''; // 释放旧资源
+        audioRef.current.src = '';
     }
     setIsPlaying(true);
     
@@ -804,7 +788,6 @@ export default function AIChatDock() {
                   <FaVolumeUp className="animate-pulse" /> 正在朗读... <FaStop />
                 </div>
               )}
-              {/* ✅ [UI 优化] 采用了新的输入框和动态按钮布局，更简洁美观 */}
               <div style={styles.inputBox}>
                 <textarea
                   ref={textareaRef}
@@ -893,6 +876,7 @@ export default function AIChatDock() {
                   <h3>AI 设置</h3>
                   <button onClick={() => setShowSettings(false)} style={styles.closeBtn}><FaTimes /></button>
                 </div>
+
                 <div style={styles.modalBody}>
                   {!isActivated && (
                     <div style={{ background: '#fff7ed', color: '#c2410c', padding: 8, borderRadius: 6, fontSize: '0.85rem' }}>
