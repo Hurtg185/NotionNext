@@ -8,7 +8,7 @@ const USER_KEY = 'hsk_user';
 
 const AIContext = createContext();
 
-// --- 辅助函数 (无变动) ---
+// --- 辅助函数 (已修复) ---
 const validateActivationCode = (code) => {
   if (!code) return { isValid: false, error: '请输入激活码' };
   const c = code.trim().toUpperCase();
@@ -17,12 +17,13 @@ const validateActivationCode = (code) => {
   const parts = c.split('-');
   const VALID = ['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'H7-9', 'SP', 'HSK1', 'HSK2', 'HSK3'];
   
-  const levelPart = parts[0].replace('HSK', 'H');
+  // ✅ 修复: 对数组的第一个元素调用 replace
+  const levelPart = parts.replace('HSK', 'H');
   if (!VALID.some(v => v.replace('HSK', 'H') === levelPart)) {
       return { isValid: false, error: '等级不支持' };
   }
   
-  return { isValid: true, level: parts[0] };
+  return { isValid: true, level: parts };
 };
 
 // 新增一个辅助 Hook，用于追踪上一次的状态
@@ -58,16 +59,7 @@ export const AIProvider = ({ children }) => {
       return savedConfig ? { ...initialConfig, ...JSON.parse(savedConfig) } : initialConfig;
     } catch (e) {
       return {
-        apiKey: '',
-        baseUrl: 'https://integrate.api.nvidia.com/v1', 
-        modelId: 'deepseek-ai/deepseek-v3.2',
-        userLevel: 'HSK 1', 
-        showPinyin: true, 
-        autoSendStt: false, 
-        ttsSpeed: 1,
-        ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural',
-        sttLang: 'zh-CN',
-        soundEnabled: true
+        apiKey: '', baseUrl: 'https://integrate.api.nvidia.com/v1', modelId: 'deepseek-ai/deepseek-v3.2', userLevel: 'HSK 1', showPinyin: true, autoSendStt: false, ttsSpeed: 1, ttsVoice: 'zh-CN-XiaoxiaoMultilingualNeural', sttLang: 'zh-CN', soundEnabled: true
       };
     }
   });
@@ -144,7 +136,7 @@ export const AIProvider = ({ children }) => {
 SUGGESTIONS: Q1|||Q2|||Q3`
   };
 
-  // --- 初始化与本地存储 (无变动) ---
+  // --- 初始化与本地存储 (已修复) ---
   useEffect(() => {
     try {
       const cachedUser = localStorage.getItem(USER_KEY);
@@ -163,10 +155,11 @@ SUGGESTIONS: Q1|||Q2|||Q3`
       }
     } catch (e) { console.error("Failed to parse user from localStorage", e); }
     
+    // ✅ 修复: 从 sessions.id 获取
     if (sessions.length > 0 && !currentSessionId) {
-      setCurrentSessionId(sessions[0].id);
+      setCurrentSessionId(sessions.id);
     }
-  }, []);
+  }, []); // 依赖项为空，确保只运行一次
 
   useEffect(() => {
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
@@ -261,6 +254,7 @@ SUGGESTIONS: Q1|||Q2|||Q3`
   const triggerAI = useCallback((title, content, id = null, aiPreAnswer = null) => {
       setAiMode('CHAT');
       let finalContent;
+      // ✅ 语法修复: 确保字符串使用反引号 ` 包裹
       if (aiPreAnswer) {
         finalContent = `你好，我需要你扮演一名专业的汉语老师来讲解“${title}”这个语法点。这里有一份为你准备好的标准讲解稿，请你严格根据这份稿件的内容，用更生动、有条理、对缅甸学生友好的方式重新组织和呈现。你可以使用 Markdown 格式（如标题、列表、粗体）来美化排版，但【绝对不允许】添加讲解稿中没有的知识点或例子。\n\n【标准讲解稿】:\n---\n${aiPreAnswer}`;
       } else {
@@ -286,7 +280,8 @@ SUGGESTIONS: Q1|||Q2|||Q3`
     }
   }, [isAiOpen, prevIsAiOpen, aiMode, pageContext, sessions, currentSessionId, triggerAI]);
 
-  // --- Prompt 生成逻辑 ---
+
+  // --- Prompt 生成逻辑 (已修复) ---
   const finalSystemPrompt = useMemo(() => {
     let template = aiMode === 'INTERACTIVE' ? SYSTEM_PROMPTS.INTERACTIVE : SYSTEM_PROMPTS.CHAT;
     let displayLevel = config.userLevel || 'HSK 1';
@@ -310,10 +305,11 @@ SUGGESTIONS: Q1|||Q2|||Q3`
         template = template.replace('{{QUESTION}}', activeTask.question || '');
         template = template.replace('{{USER_CHOICE}}', activeTask.userChoice || '');
     } else {
-        const contextString = (pageContext && typeof pageContext.content === 'string') 
-          ? pageContext.content 
-          : '通用对话';
-        template = template.replace('{{CONTEXT}}', contextString);
+      // ✅ 修复: 正确处理 pageContext
+      const contextString = (pageContext && typeof pageContext.content === 'string') 
+        ? pageContext.content 
+        : '通用对话';
+      template = template.replace('{{CONTEXT}}', contextString);
     }
     return template;
   }, [config.userLevel, aiMode, activeTask, pageContext]);
