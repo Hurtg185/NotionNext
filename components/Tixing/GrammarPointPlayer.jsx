@@ -199,7 +199,8 @@ const RichTextRenderer = ({ content, onPlayText, activeTtsId }) => {
 // ===== 3. 主组件 GrammarPointPlayer =====
 // =================================================================================
 const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
-  const { triggerAI, updatePageContext, isAiOpen } = useAI();
+  // ✅ [修改 1/3] 只引入需要的功能，不再需要 triggerAI
+  const { updatePageContext } = useAI();
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
@@ -219,8 +220,8 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
       videoPoster: item['视频封面'] || item.poster || '', 
       explanationRaw: item['语法详解'] || '',
       attention: item['注意事项'] || '',
-      // ✅ [核心修复 1/3] 从数据源中正确读取您的讲解脚本
-      aiPreAnswer: item['讲解脚本'] || item.aiPreAnswer || '',
+      // 我们仍然读取讲解脚本，用于构造最完整的内容包
+      aiPreAnswer: item['讲解脚本'] || '',
       dialogues: (item['例句列表'] || []).map((ex, i) => {
         const s = (ex.speaker || '').toUpperCase();
         const isBoy = s === 'B' || s.includes('男') || s.includes('BOY');
@@ -236,48 +237,34 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
 
   const currentPoint = normalizedPoints[currentIndex];
   
+  // ✅ [修改 2/3] 构造内容包的逻辑保持不变，但我们现在加入了讲解脚本
   const constructFullAIContent = useCallback((point) => {
     if (!point) return '';
-    let content = `【语法标题】：${point.title}\n`;
-    content += `【核心句型】：${point.pattern}\n\n`;
-    content += `【详解内容】：\n${point.explanationRaw}\n\n`;
     
-    if (point.attention) {
-      content += `【注意事项/易错点】：\n${point.attention}\n\n`;
+    // 如果有预设脚本，我们就构造一个特殊的上下文，让AI知道要优先使用它
+    if (point.aiPreAnswer) {
+      return `你好，请根据我提供的【标准讲解稿】，为我讲解“${point.title}”这个语法点。请严格按照稿件内容来组织你的回复，可以使用Markdown美化排版。\n\n【标准讲解稿】:\n---\n${point.aiPreAnswer}`;
     }
     
-    if (point.dialogues && point.dialogues.length > 0) {
-      content += `【参考例句】：\n`;
-      point.dialogues.forEach((d, i) => {
-        content += `${i+1}. ${d.sentence} (${d.translation})\n`;
-      });
+    // 如果没有，就拼接一个通用的上下文
+    let content = `请为我讲解“${point.title}”这个语法点。\n\n【参考资料】:\n`;
+    content += `核心句型：${point.pattern}\n`;
+    content += `详解：${point.explanationRaw}\n`;
+    if (point.attention) {
+      content += `注意事项：${point.attention}\n`;
     }
     return content;
   }, []);
 
-  // ✅ [核心修复 2/3] 触发 AI 讲解时，将讲解脚本作为第4个参数传递过去
-  const handleAskAI = useCallback(() => {
-    if (!currentPoint) return;
-    playSFX('click');
-    const fullContent = constructFullAIContent(currentPoint);
-    const levelId = `${level.replace(/\s+/g, '').toLowerCase()}_grammar_${currentPoint.id}`;
-    // 现在，我们将 currentPoint.aiPreAnswer 传递给 triggerAI
-    triggerAI(currentPoint.title, fullContent, levelId, currentPoint.aiPreAnswer);
-  }, [currentPoint, level, constructFullAIContent, triggerAI]);
-
-  // ✅ [核心修复 3/3] 在自动触发时，同样将讲解脚本作为第4个参数传递
+  // ✅ [修改 3/3] 简化自动同步逻辑，现在它只负责更新上下文
   useEffect(() => {
     if (currentPoint) {
       const fullContent = constructFullAIContent(currentPoint);
+      // 当用户翻页时，静默地把当前页面的所有信息更新到AI的“记忆”里。
+      // 这样，当用户点击全局AI按钮时，AI就知道该讲什么了。
       updatePageContext(fullContent);
-
-      if (isAiOpen) {
-        const levelId = `${level.replace(/\s+/g, '').toLowerCase()}_grammar_${currentPoint.id}`;
-        // 同样，在这里传递 currentPoint.aiPreAnswer
-        triggerAI(currentPoint.title, fullContent, levelId, currentPoint.aiPreAnswer);
-      }
     }
-  }, [currentIndex, currentPoint, isAiOpen, level, updatePageContext, triggerAI, constructFullAIContent]);
+  }, [currentIndex, currentPoint, updatePageContext, constructFullAIContent]);
 
   // --- 以下 UI 交互逻辑无变动 ---
 
@@ -327,9 +314,8 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
 
   return (
     <div style={styles.container}>
-      <button style={styles.aiFloatBtn} onClick={handleAskAI}>
-        <FaRobot /> AI 讲解
-      </button>
+      {/* ✅ [修改] 删除了重复的AI按钮 */}
+      {/* <button style={styles.aiFloatBtn} onClick={handleAskAI}>...</button> */}
 
       {transitions((style, i) => {
         const gp = normalizedPoints[i];
@@ -450,7 +436,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
 // --- 以下样式定义无变动 ---
 const styles = {
   container: { position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#fff' },
-  aiFloatBtn: { position: 'absolute', top: '12px', right: '16px', zIndex: 50, background: '#4f46e5', color: '#fff', border: 'none', borderRadius: '20px', padding: '6px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 4px 10px rgba(79, 70, 229, 0.3)', cursor: 'pointer', fontWeight: 'bold' },
+  // aiFloatBtn 样式被移除
   page: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'white' },
   scrollContainer: { flex: 1, overflowY: 'auto', padding: '20px 16px 40px' },
   contentWrapper: { maxWidth: '600px', margin: '0 auto' },
