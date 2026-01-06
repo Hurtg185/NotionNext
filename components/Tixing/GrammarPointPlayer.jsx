@@ -4,119 +4,16 @@ import { useTransition, animated } from '@react-spring/web';
 import { pinyin } from 'pinyin-pro';
 import ReactPlayer from 'react-player';
 import {
-  FaPause, FaPlay, FaChevronRight, FaVolumeUp, 
-  FaExclamationTriangle, FaBookReader, FaRobot
+  FaChevronRight, 
+  FaExclamationTriangle, 
+  FaBookReader
 } from 'react-icons/fa';
 import { useAI } from '../AIConfigContext';
 
 // =================================================================================
-// ===== 0. 音效工具 (无变动) =====
+// ===== 文本渲染组件 (已移除所有 TTS 相关逻辑) =====
 // =================================================================================
-const playSFX = (type) => {
-  if (typeof window === 'undefined') return;
-  const audio = new Audio(
-    type === 'switch' ? '/sounds/switch-card.mp3' : '/sounds/click.mp3'
-  );
-  audio.volume = 0.5;
-  audio.play().catch(() => {});
-};
-
-// =================================================================================
-// ===== 1. 健壮的 TTS Hook (无变动) =====
-// =================================================================================
-function useRobustTTS() {
-  const [playerState, setPlayerState] = useState({
-    isPlaying: false,
-    activeId: null,
-    loadingId: null,
-  });
-
-  const audioRef = useRef(null);
-  const audioUrlRef = useRef(null);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      cleanupAudio();
-    };
-  }, []);
-
-  const cleanupAudio = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.removeAttribute('src');
-      audioRef.current.load();
-    }
-    if (audioUrlRef.current) {
-      URL.revokeObjectURL(audioUrlRef.current);
-      audioUrlRef.current = null;
-    }
-    audioRef.current = null;
-  }, []);
-
-  const play = useCallback(async (text, uniqueId, voiceOverride = null) => {
-    playSFX('click');
-    if (playerState.activeId === uniqueId && audioRef.current) {
-      if (audioRef.current.paused) {
-        audioRef.current.play();
-        setPlayerState(prev => ({ ...prev, isPlaying: true }));
-      } else {
-        audioRef.current.pause();
-        setPlayerState(prev => ({ ...prev, isPlaying: false }));
-      }
-      return;
-    }
-
-    cleanupAudio();
-    setPlayerState({ isPlaying: false, activeId: uniqueId, loadingId: uniqueId });
-
-    const cleanText = String(text)
-      .replace(/\*\*|~~|\{\{|\}\}|###/g, '')
-      .replace(/<[^>]+>/g, '')
-      .trim();
-
-    if (!cleanText) {
-      setPlayerState({ isPlaying: false, activeId: null, loadingId: null });
-      return;
-    }
-
-    const targetVoice = voiceOverride || (/[\u1000-\u109F]/.test(text) ? 'my-MM-NilarNeural' : 'zh-CN-XiaoxiaoMultilingualNeural');
-
-    try {
-      const url = `/api/tts?t=${encodeURIComponent(cleanText)}&v=${targetVoice}&_ts=${Date.now()}`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('TTS API Error');
-      const blob = await response.blob();
-      
-      if (!mountedRef.current) return;
-
-      const blobUrl = URL.createObjectURL(blob);
-      audioUrlRef.current = blobUrl;
-      const audio = new Audio(blobUrl);
-      audioRef.current = audio;
-
-      audio.onended = () => {
-         if (!mountedRef.current) return;
-         setPlayerState({ isPlaying: false, activeId: null, loadingId: null });
-      };
-
-      await audio.play();
-      setPlayerState({ isPlaying: true, activeId: uniqueId, loadingId: null });
-    } catch (e) {
-      console.error("TTS Play failed:", e);
-      setPlayerState({ isPlaying: false, activeId: null, loadingId: null });
-    }
-  }, [playerState.activeId, cleanupAudio]);
-
-  return { ...playerState, play, stop: cleanupAudio };
-}
-
-// =================================================================================
-// ===== 2. 文本渲染组件 (无变动) =====
-// =================================================================================
-const PinyinText = ({ text, onClick, color = '#000000', bold = false, strikethrough = false }) => {
+const PinyinText = ({ text, color = '#000000', bold = false, strikethrough = false }) => {
   if (!text) return null;
   const displayable = text.replace(/\*\*|~~|\{\{|\}\}|###/g, '');
   const regex = /([\u4e00-\u9fa5]+)/g;
@@ -124,14 +21,12 @@ const PinyinText = ({ text, onClick, color = '#000000', bold = false, strikethro
 
   return (
     <span
-      onClick={(e) => { if(onClick) { e.stopPropagation(); onClick(text); } }}
       style={{
         lineHeight: '2.4', 
         wordBreak: 'break-word', 
         color: color,
         fontWeight: bold ? '700' : '400', 
-        fontSize: '1.1rem', 
-        cursor: onClick ? 'pointer' : 'default',
+        fontSize: '1.1rem',
         textDecoration: strikethrough ? 'line-through' : 'none',
         textDecorationColor: color, 
         textDecorationThickness: '2px'
@@ -153,7 +48,7 @@ const PinyinText = ({ text, onClick, color = '#000000', bold = false, strikethro
   );
 };
 
-const RichTextRenderer = ({ content, onPlayText, activeTtsId }) => {
+const RichTextRenderer = ({ content }) => {
   if (!content) return null;
 
   return (
@@ -166,8 +61,6 @@ const RichTextRenderer = ({ content, onPlayText, activeTtsId }) => {
           return <h3 key={idx} style={styles.h3}>{trimmed.replace(/###\s?/, '')}</h3>;
         }
 
-        const segmentId = `seg_${idx}`;
-
         return (
           <div key={idx} style={styles.textRow}>
             {trimmed.split(/(\*\*.*?\*\*|~~.*?~~|\{\{.*?\}\})/g).map((part, pIdx) => {
@@ -175,18 +68,18 @@ const RichTextRenderer = ({ content, onPlayText, activeTtsId }) => {
                 return (
                   <span key={pIdx} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                     <span style={{ fontSize: '0.6rem', color: '#0000ff' }}>▪️</span>
-                    <PinyinText text={part.slice(2, -2)} onClick={() => onPlayText(trimmed, segmentId)} color="#0000ff" bold={true} />
+                    <PinyinText text={part.slice(2, -2)} color="#0000ff" bold={true} />
                   </span>
                 );
               } 
               if (part.startsWith('~~') && part.endsWith('~~')) {
-                return <PinyinText key={pIdx} text={part.slice(2, -2)} onClick={() => onPlayText(trimmed, segmentId)} color="#ef4444" strikethrough={true} />;
+                return <PinyinText key={pIdx} text={part.slice(2, -2)} color="#ef4444" strikethrough={true} />;
               }
               if (part.startsWith('{{') && part.endsWith('}}')) {
-                return <PinyinText key={pIdx} text={part.slice(2, -2)} onClick={() => onPlayText(trimmed, segmentId)} color="#eab308" bold={true} />;
+                return <PinyinText key={pIdx} text={part.slice(2, -2)} color="#eab308" bold={true} />;
               }
               
-              return <PinyinText key={pIdx} text={part} onClick={() => onPlayText(trimmed, segmentId)} />;
+              return <PinyinText key={pIdx} text={part} />;
             })}
           </div>
         );
@@ -196,19 +89,16 @@ const RichTextRenderer = ({ content, onPlayText, activeTtsId }) => {
 };
 
 // =================================================================================
-// ===== 3. 主组件 GrammarPointPlayer =====
+// ===== 主组件 GrammarPointPlayer =====
 // =================================================================================
 const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
-  // ✅ [修改 1/3] 只引入需要的功能，不再需要 triggerAI
-  const { updatePageContext } = useAI();
+  const { prepareGrammarTask, resetToChatMode } = useAI();
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   
   const playerContainerRef = useRef(null);
   const contentRef = useRef(null);
-
-  const { play, stop, activeId } = useRobustTTS();
 
   const normalizedPoints = useMemo(() => {
     if (!Array.isArray(grammarPoints)) return [];
@@ -220,53 +110,46 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
       videoPoster: item['视频封面'] || item.poster || '', 
       explanationRaw: item['语法详解'] || '',
       attention: item['注意事项'] || '',
-      // 我们仍然读取讲解脚本，用于构造最完整的内容包
       aiPreAnswer: item['讲解脚本'] || '',
       dialogues: (item['例句列表'] || []).map((ex, i) => {
         const s = (ex.speaker || '').toUpperCase();
         const isBoy = s === 'B' || s.includes('男') || s.includes('BOY');
-        return {
-          id: ex.id || i, 
-          isMale: isBoy,
-          sentence: ex['句子'] || ex.sentence || '',
-          translation: ex['翻译'] || ex.translation || '',
-        };
+        return { id: ex.id || i, isMale: isBoy, sentence: ex['句子'] || '', translation: ex['翻译'] || '' };
       })
     }));
   }, [grammarPoints]);
 
   const currentPoint = normalizedPoints[currentIndex];
   
-  // ✅ [修改 2/3] 构造内容包的逻辑保持不变，但我们现在加入了讲解脚本
-  const constructFullAIContent = useCallback((point) => {
-    if (!point) return '';
-    
-    // 如果有预设脚本，我们就构造一个特殊的上下文，让AI知道要优先使用它
-    if (point.aiPreAnswer) {
-      return `你好，请根据我提供的【标准讲解稿】，为我讲解“${point.title}”这个语法点。请严格按照稿件内容来组织你的回复，可以使用Markdown美化排版。\n\n【标准讲解稿】:\n---\n${point.aiPreAnswer}`;
-    }
-    
-    // 如果没有，就拼接一个通用的上下文
-    let content = `请为我讲解“${point.title}”这个语法点。\n\n【参考资料】:\n`;
-    content += `核心句型：${point.pattern}\n`;
-    content += `详解：${point.explanationRaw}\n`;
-    if (point.attention) {
-      content += `注意事项：${point.attention}\n`;
-    }
-    return content;
-  }, []);
-
-  // ✅ [修改 3/3] 简化自动同步逻辑，现在它只负责更新上下文
+  // ✅ 当用户切换语法点时，主动告诉AI系统：“准备好讲解这个任务！”
   useEffect(() => {
     if (currentPoint) {
-      const fullContent = constructFullAIContent(currentPoint);
-      // 当用户翻页时，静默地把当前页面的所有信息更新到AI的“记忆”里。
-      // 这样，当用户点击全局AI按钮时，AI就知道该讲什么了。
-      updatePageContext(fullContent);
+      const levelId = `${level.replace(/\s+/g, '').toLowerCase()}_grammar_${currentPoint.id}`;
+      
+      // 构造通用内容，以防没有讲解脚本
+      let genericContent = `请为我讲解“${currentPoint.title}”这个语法点。\n\n【参考资料】:\n`;
+      genericContent += `核心句型：${currentPoint.pattern}\n`;
+      genericContent += `详解：${currentPoint.explanationRaw}\n`;
+      if (currentPoint.attention) {
+        genericContent += `注意事项：${currentPoint.attention}\n`;
+      }
+      
+      // 调用新的函数，将任务信息“预加载”到AI上下文中
+      prepareGrammarTask({
+        title: currentPoint.title,
+        content: genericContent,
+        id: levelId,
+        aiPreAnswer: currentPoint.aiPreAnswer,
+      });
     }
-  }, [currentIndex, currentPoint, updatePageContext, constructFullAIContent]);
 
-  // --- 以下 UI 交互逻辑无变动 ---
+    // 当组件卸载（用户离开语法学习页面）时，清除这个预备任务
+    return () => {
+      resetToChatMode();
+    };
+  }, [currentIndex, currentPoint, level, prepareGrammarTask, resetToChatMode]);
+
+  // --- UI 交互逻辑 (已移除TTS) ---
 
   useEffect(() => {
     const handleFsChange = () => {
@@ -282,9 +165,8 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
   }, []);
 
   useEffect(() => {
-    stop();
     if (contentRef.current) contentRef.current.scrollTop = 0;
-  }, [currentIndex, stop]);
+  }, [currentIndex]);
 
   const transitions = useTransition(currentIndex, {
     key: currentIndex,
@@ -294,7 +176,6 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
   });
 
   const handleNext = () => {
-    playSFX('switch');
     if (currentIndex < normalizedPoints.length - 1) {
       setCurrentIndex(p => p + 1);
     } else if (onComplete) {
@@ -314,9 +195,6 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
 
   return (
     <div style={styles.container}>
-      {/* ✅ [修改] 删除了重复的AI按钮 */}
-      {/* <button style={styles.aiFloatBtn} onClick={handleAskAI}>...</button> */}
-
       {transitions((style, i) => {
         const gp = normalizedPoints[i];
         return (
@@ -329,7 +207,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
                 <div style={styles.headerRow}>
                   <div style={styles.patternCard}>
                     <div style={styles.cardLabel}><FaBookReader /> 核心句型</div>
-                    <div onClick={() => play(gp.pattern, `pat_${gp.id}`)} style={styles.patternText}>
+                    <div style={styles.patternText}>
                       <PinyinText text={gp.pattern} color="#1e40af" bold />
                     </div>
                   </div>
@@ -360,11 +238,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
                 <div style={styles.section}>
                   <div style={styles.sectionHeader}>📝 语法详解</div>
                   <div style={styles.textBody}>
-                    <RichTextRenderer 
-                      content={gp.explanationRaw} 
-                      onPlayText={play} 
-                      activeTtsId={activeId}
-                    />
+                    <RichTextRenderer content={gp.explanationRaw} />
                   </div>
                 </div>
 
@@ -374,11 +248,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
                       <FaExclamationTriangle /> 注意事项
                     </div>
                     <div style={styles.attentionBox}>
-                       <RichTextRenderer 
-                        content={gp.attention} 
-                        onPlayText={play} 
-                        activeTtsId={activeId}
-                       />
+                       <RichTextRenderer content={gp.attention} />
                     </div>
                   </div>
                 )}
@@ -388,29 +258,16 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
                   <div style={styles.chatList}>
                     {gp.dialogues.map((ex, idx) => {
                       const isMale = ex.isMale;
-                      const voice = isMale ? 'zh-CN-YunxiNeural' : 'zh-CN-XiaoyouNeural';
-                      const exId = `ex_${gp.id}_${idx}`;
                       return (
-                        <div key={idx} 
-                             style={{ ...styles.chatRow, flexDirection: isMale ? 'row-reverse' : 'row' }} 
-                        >
+                        <div key={idx} style={{ ...styles.chatRow, flexDirection: isMale ? 'row-reverse' : 'row' }}>
                           <img 
-                            src={isMale 
-                                ? "https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/10111437211381.jpg" 
-                                : "https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/images.jpeg"}
+                            src={isMale ? "https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/10111437211381.jpg" : "https://audio.886.best/chinese-vocab-audio/%E5%9B%BE%E7%89%87/images.jpeg"}
                             style={styles.chatAvatar} alt="avatar" 
                           />
                           <div style={{...styles.bubbleWrapper, alignItems: isMale ? 'flex-end' : 'flex-start'}}>
-                             <div 
-                               onClick={() => play(ex.sentence, exId, voice)}
-                               style={{ 
-                                 ...styles.chatBubble, 
-                                 background: isMale ? '#eff6ff' : '#fff1f2', 
-                                 border: isMale ? '1px solid #bfdbfe' : '1px solid #fbcfe8' 
-                               }}
-                             >
+                             <div style={{ ...styles.chatBubble, background: isMale ? '#eff6ff' : '#fff1f2', border: isMale ? '1px solid #bfdbfe' : '1px solid #fbcfe8' }}>
                                 <div style={isMale ? styles.tailR : styles.tailL} />
-                                <PinyinText text={ex.sentence} bold={activeId === exId} />
+                                <PinyinText text={ex.sentence} />
                                 <div style={styles.chatTranslation}>{ex.translation}</div>
                              </div>
                           </div>
@@ -433,10 +290,9 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
   );
 };
 
-// --- 以下样式定义无变动 ---
+// --- 样式定义 (无变动) ---
 const styles = {
   container: { position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#fff' },
-  // aiFloatBtn 样式被移除
   page: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'white' },
   scrollContainer: { flex: 1, overflowY: 'auto', padding: '20px 16px 40px' },
   contentWrapper: { maxWidth: '600px', margin: '0 auto' },
@@ -457,7 +313,7 @@ const styles = {
   chatRow: { display: 'flex', gap: '10px' },
   chatAvatar: { width: 34, height: 34, borderRadius: '50%', border: '1px solid #eee' },
   bubbleWrapper: { maxWidth: '85%', display: 'flex', flexDirection: 'column' },
-  chatBubble: { padding: '12px', position: 'relative', borderRadius: '16px', cursor: 'pointer', boxShadow: '0 2px 5px rgba(0,0,0,0.03)' },
+  chatBubble: { padding: '12px', position: 'relative', borderRadius: '16px', boxShadow: '0 2px 5px rgba(0,0,0,0.03)' },
   tailL: { position: 'absolute', top: '12px', left: '-5px', borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderRight: '6px solid #fff1f2' },
   tailR: { position: 'absolute', top: '12px', right: '-5px', borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '6px solid #eff6ff' },
   chatTranslation: { fontSize: '0.85rem', color: '#64748b', marginTop: '4px' },
