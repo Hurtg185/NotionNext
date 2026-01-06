@@ -241,14 +241,20 @@ SUGGESTIONS: Q1|||Q2|||Q3`
     setIsAiOpen(true);
   }, []);
 
+  // 监听 AI 助手的打开事件
+  // ❌ [核心修改]：注释掉了自动触发逻辑。现在打开 AI 窗口不会自动发送消息了。
   const prevIsAiOpen = usePrevious(isAiOpen);
   useEffect(() => {
+    /* 
+    // 原有逻辑：检测到打开且是新对话，自动触发。
+    // 现已屏蔽，只保留 pageContext 的被动更新。
     if (!prevIsAiOpen && isAiOpen) {
       const session = sessions.find(s => s.id === currentSessionId);
       if (pageContext && session && session.messages.length === 0 && session.title.startsWith('新对话')) {
         triggerAI(pageContext.title, pageContext.content, pageContext.id, pageContext.aiPreAnswer);
       }
     }
+    */
   }, [isAiOpen, prevIsAiOpen, pageContext, sessions, currentSessionId, triggerAI]);
 
   const finalSystemPrompt = useMemo(() => {
