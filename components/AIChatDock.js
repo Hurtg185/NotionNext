@@ -239,7 +239,6 @@ export default function AIChatDock() {
     }
   }, [messages, isAiOpen, loading]);
 
-  // ✅ [核心改造] 第1步：监听新任务，创建新会话，并准备好要“偷偷”发送的指令
   useEffect(() => {
     if (activeTask && activeTask.timestamp) {
       const lastProcessed = sessionStorage.getItem('last_ai_task_ts');
@@ -274,11 +273,10 @@ export default function AIChatDock() {
     }
   }, [activeTask, aiMode, setSessions, setCurrentSessionId]);
   
-  // ✅ [核心改造] 第2步：一旦新会话ID设置好，就执行“偷偷”发送指令的任务
   useEffect(() => {
     if (taskToRun.current && currentSessionId) {
       const { prompt, history } = taskToRun.current;
-      taskToRun.current = null; // 立即清除任务，防止重复执行
+      taskToRun.current = null;
       handleSend(prompt, true, history);
     }
   }, [currentSessionId]);
@@ -347,7 +345,6 @@ export default function AIChatDock() {
     const newSession = { id: Date.now(), title: '新对话', messages: [], date: new Date().toISOString() };
     setSessions(prev => [newSession, ...prev]);
     setCurrentSessionId(newSession.id);
-    setShowSidebar(false);
     resetToChatMode();
   };
 
@@ -433,7 +430,7 @@ export default function AIChatDock() {
     login();
   };
 
-  // ✅ [核心改造] 第3步：重写 handleSend 函数，修复发送逻辑并支持隐藏初始指令
+  // ✅ [最终修复] 彻底重写了数据流处理逻辑，确保能正确显示AI响应
   const handleSend = async (textToSend = input, isSystemTrigger = false, historyOverride = null) => {
     const contentToSend = (typeof textToSend === 'string' ? textToSend : input).trim();
     if (!contentToSend || loading) return;
@@ -443,7 +440,8 @@ export default function AIChatDock() {
     if (!isSystemTrigger && !isActivated) {
       try {
         const auth = await canUseAI();
-        if (!auth.canUse) { setShowPaywall(true); return; }
+        const canUse = (auth && typeof auth === 'object') ? auth.canUse : auth;
+        if (!canUse) { setShowPaywall(true); return; }
       } catch (e) { alert("网络校验失败，请检查网络连接"); return; }
     }
     
@@ -456,16 +454,15 @@ export default function AIChatDock() {
 
     const userMessage = { role: 'user', content: contentToSend };
     const currentHistory = historyOverride !== null ? historyOverride : messages;
-    
     const historyForApi = [...currentHistory, userMessage];
     const historyMsgs = historyForApi.slice(-10).map(({ role, content }) => ({ role, content }));
     const apiMessages = [{ role: 'system', content: systemPrompt }, ...historyMsgs];
 
     const assistantPlaceholder = { role: 'assistant', content: '', id: `${Date.now()}-assist` };
     if (isSystemTrigger) {
-      updateMessages([...currentHistory, assistantPlaceholder]);
+      updateMessages(prev => [...prev, assistantPlaceholder]);
     } else {
-      updateMessages([...currentHistory, { ...userMessage, id: `${Date.now()}-user` }, assistantPlaceholder]);
+      updateMessages(prev => [...prev, { ...userMessage, id: `${Date.now()}-user` }, assistantPlaceholder]);
     }
     
     await new Promise(resolve => setTimeout(resolve, 0));
@@ -477,11 +474,7 @@ export default function AIChatDock() {
         body: JSON.stringify({
           messages: apiMessages,
           email: user?.email,
-          config: {
-            apiKey: config.apiKey?.trim(),
-            baseUrl: config.baseUrl?.trim(),
-            modelId: config.modelId?.trim()
-          }
+          config: { apiKey: config.apiKey?.trim(), baseUrl: config.baseUrl?.trim(), modelId: config.modelId?.trim() }
         }),
         signal: abortControllerRef.current.signal
       });
@@ -494,46 +487,54 @@ export default function AIChatDock() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let done = false;
+      let buffer = '';
       let fullContent = '';
-      
-      while (!done) {
-        const { value, done: readerDone } = await reader.read();
-        done = readerDone;
-        const chunk = decoder.decode(value, { stream: true });
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
         
-        fullContent += chunk;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
 
-        updateMessages(prev => {
-          const updated = [...prev];
-          if(updated.length > 0) {
-            updated[updated.length - 1].content = fullContent;
+        for (const line of lines) {
+          if (line.trim() === '' || line.trim() === 'data: [DONE]') continue;
+          
+          if (line.startsWith('data:')) {
+            try {
+              const jsonStr = line.substring(5).trim();
+              if (jsonStr === '[DONE]') continue;
+              const data = JSON.parse(jsonStr);
+              const delta = data.choices?.[0]?.delta?.content || '';
+              if (delta) {
+                fullContent += delta;
+                updateMessages(prev => {
+                  const updated = [...prev];
+                  if (updated.length > 0) {
+                    updated[updated.length - 1].content = fullContent;
+                  }
+                  return updated;
+                });
+              }
+            } catch (e) {
+              console.error("无法解析收到的数据流 (JSON Error):", e);
+              console.error("问题数据行:", line);
+            }
           }
-          return updated;
-        });
-      }
-
-      let cleanContent = fullContent;
-      if (cleanContent.startsWith("data: ")) {
-          // Handle potential stream format inconsistencies
-          try {
-              const jsonData = JSON.parse(cleanContent.substring(6));
-              cleanContent = jsonData.choices[0].delta.content || "";
-          } catch(e) {
-             // Fallback for simple text
-          }
+        }
       }
 
       updateMessages(prev => {
         const final = [...prev];
         if (final.length > 0) {
-          final[final.length - 1] = { ...final[final.length - 1], content: cleanContent, id: Date.now() };
+          final[final.length - 1].id = Date.now();
         }
         return final;
       });
       
       if (!isSystemTrigger && !isActivated) await recordUsage();
-      if (config.autoTTS) playInternalTTS(cleanContent);
+      if (config.autoTTS) playInternalTTS(fullContent);
 
     } catch (err) {
       if (err.name !== 'AbortError') {
@@ -549,6 +550,7 @@ export default function AIChatDock() {
       abortControllerRef.current = null;
     }
   };
+
 
   const playInternalTTS = async (text) => {
     if (!text) return;
@@ -665,7 +667,6 @@ export default function AIChatDock() {
             </div>
           </div>
 
-          {/* ✅ [UI改造] 移除了最右侧的关闭按钮 */}
           <div style={styles.navHeader}>
             <button onClick={() => setShowSidebar(true)} style={styles.navIconBtn}><FaList size={20} /></button>
             <div style={styles.navTitle}>
@@ -684,8 +685,6 @@ export default function AIChatDock() {
               </div>
             )}
             
-            {messages.length === 0 && loading && <TypingIndicator/>}
-
             {messages.map((m, i) => (
               <div key={m.id || i} style={{ ...styles.messageRow, alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
                 <div style={{ ...styles.bubbleWrapper, alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
@@ -975,9 +974,8 @@ export default function AIChatDock() {
 const styles = {
   fullScreenContainer: { position: 'fixed', inset: 0, background: '#f8fafc', zIndex: 99999, display: 'flex', flexDirection: 'column', animation: 'slideUp 0.3s ease-out' },
   navHeader: { height: 56, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', borderBottom: '1px solid #e2e8f0', flexShrink: 0, paddingTop: 'env(safe-area-inset-top)' },
-  navTitle: { fontSize: '1.1rem', fontWeight: 'bold', color: '#1e293b', textAlign: 'center', flex: 1 },
-  navIconBtn: { background: 'none', border: 'none', padding: 8, cursor: 'pointer', color: '#64748b' },
-  navTextBtn: { background: 'none', border: '1px solid #e0e7ff', borderRadius: 4, padding: '4px 8px', color: '#4f46e5', fontSize: '0.8rem', cursor: 'pointer' },
+  navTitle: { fontSize: '1.1rem', fontWeight: 'bold', color: '#1e293b', textAlign: 'center', flex: 1, marginRight: '-48px' /* Compensate for the left button */ },
+  navIconBtn: { background: 'none', border: 'none', padding: 8, cursor: 'pointer', color: '#64748b', width: 48, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center' },
   chatBody: { flex: 1, overflowY: 'auto', padding: '16px', background: '#f8fafc', WebkitOverflowScrolling: 'touch' },
   footer: { background: '#fff', borderTop: '1px solid #e2e8f0', paddingBottom: 'env(safe-area-inset-bottom)', display: 'flex', flexDirection: 'column', flexShrink: 0 },
   floatingBtn: { position: 'fixed', width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #4f46e5)', boxShadow: '0 8px 20px rgba(79, 70, 229, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, cursor: 'grab', touchAction: 'none' },
