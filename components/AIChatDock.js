@@ -27,36 +27,51 @@ const STT_LANGS = [
 
 const LONG_PRESS_DURATION = 600;
 
-// --- 简易音效引擎 ---
+// --- 升级版音效引擎 ---
+// 解决 AudioContext 自动挂起和初始化问题
+let audioCtx = null;
+
+const initAudioContext = () => {
+    if (!audioCtx && typeof window !== 'undefined') {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) {
+            audioCtx = new AudioContext();
+        }
+    }
+    // 尝试恢复挂起的上下文
+    if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+};
+
 const playTickSound = () => {
   if (typeof window === 'undefined') return;
+  
   try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    
-    if (!audioCtx) audioCtx = new AudioContext();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+    initAudioContext();
+    if (!audioCtx) return;
 
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     
-    // 换成 triangle (三角波) 或 square (方波) 听感更硬，像按键音
+    // 使用三角波，听感更硬、更清脆
     osc.type = 'triangle'; 
     
-    // 频率从 800Hz 快速降到 100Hz，模拟敲击后的共鸣
-    osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.05);
+    // 频率从 800Hz 快速降到 100Hz，模拟机械按键声
+    const now = audioCtx.currentTime;
+    osc.frequency.setValueAtTime(800, now);
+    osc.frequency.exponentialRampToValueAtTime(100, now + 0.05);
     
-    // 音量控制：非常短促的淡出
-    gain.gain.setValueAtTime(0.03, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.04);
+    // 音量控制：短促淡出
+    gain.gain.setValueAtTime(0.1, now); // 稍微调大一点初始音量
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
     
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.04);
-  } catch (e) { console.error(e); }
+    osc.start(now);
+    osc.stop(now + 0.05);
+  } catch (e) { console.error('Sound play error:', e); }
 };
 
 // --- 拼音组件 ---
@@ -114,7 +129,7 @@ export default function AIChatDock() {
     user, login, config, setConfig, sessions, setSessions,
     currentSessionId, setCurrentSessionId, isAiOpen, setIsAiOpen,
     activeTask, aiMode, resetToChatMode, 
-    systemPrompt, simpleSystemPrompt, // 🟢 引入 simpleSystemPrompt
+    systemPrompt, simpleSystemPrompt,
     isActivated, canUseAI, recordUsage, remainingQuota, TOTAL_FREE_QUOTA
   } = useAI();
 
@@ -151,6 +166,447 @@ export default function AIChatDock() {
   const recognitionRef = useRef(null);
   const textareaRef = useRef(null);
   const taskToRun = useRef(null);
+
+  // ========== 移动端选择优化集成开始 ==========
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isAiOpen) return;
+
+    class MobileSelectHelper {
+      constructor() {
+        this.selectedText = '';
+        this.selectedRange = null;
+        this.selectionBox = null;
+        this.styleElement = null;
+        this.toolbar = null;
+        this.toggleBtn = null;
+        this.init();
+      }
+
+      init() {
+        this.createSelectionUI();
+        this.bindEvents();
+      }
+
+      // 创建选择相关UI
+      createSelectionUI() {
+        // 创建固定的选择操作栏
+        const toolbar = document.createElement('div');
+        toolbar.id = 'mobile-select-toolbar';
+        toolbar.innerHTML = `
+            <div class="selected-preview"></div>
+            <div class="toolbar-buttons">
+                <button class="tool-btn" data-action="read">🔊 朗读</button>
+                <button class="tool-btn" data-action="copy">📋 复制</button>
+                <button class="tool-btn" data-action="clear">✕</button>
+            </div>
+        `;
+        document.body.appendChild(toolbar);
+        this.toolbar = toolbar;
+
+        // 添加样式
+        const style = document.createElement('style');
+        style.id = 'mobile-select-styles';
+        style.textContent = `
+            #mobile-select-toolbar {
+                position: fixed;
+                bottom: -200px;
+                left: 10px;
+                right: 10px;
+                background: #1a1a2e;
+                border: 1px solid #4a9eff;
+                border-radius: 12px;
+                padding: 10px;
+                z-index: 10000;
+                transition: bottom 0.3s ease;
+                box-shadow: 0 -4px 20px rgba(74, 158, 255, 0.3);
+            }
+
+            #mobile-select-toolbar.show {
+                bottom: 80px;
+            }
+
+            #mobile-select-toolbar .selected-preview {
+                color: #fff;
+                font-size: 14px;
+                padding: 8px;
+                background: rgba(74, 158, 255, 0.1);
+                border-radius: 6px;
+                margin-bottom: 8px;
+                max-height: 60px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            #mobile-select-toolbar .toolbar-buttons {
+                display: flex;
+                gap: 8px;
+            }
+
+            #mobile-select-toolbar .tool-btn {
+                flex: 1;
+                padding: 10px;
+                border: none;
+                border-radius: 8px;
+                background: #4a9eff;
+                color: white;
+                font-size: 14px;
+                cursor: pointer;
+            }
+
+            #mobile-select-toolbar .tool-btn:active {
+                background: #3a8eef;
+                transform: scale(0.95);
+            }
+
+            #mobile-select-toolbar .tool-btn[data-action="clear"] {
+                flex: 0.3;
+                background: #666;
+            }
+
+            /* 保持选中高亮 */
+            .persistent-highlight {
+                background: rgba(74, 158, 255, 0.3) !important;
+                border-radius: 2px;
+            }
+
+            /* 字符选择模式的样式 */
+            .char-selectable {
+                cursor: pointer;
+            }
+
+            .char-selectable .char-span {
+                display: inline;
+                padding: 2px 0;
+            }
+
+            .char-selectable .char-span.selected {
+                background: rgba(74, 158, 255, 0.4);
+            }
+
+            .char-selectable .char-span:active {
+                background: rgba(74, 158, 255, 0.6);
+            }
+
+            /* 选择模式切换按钮 */
+            #select-mode-toggle {
+                position: fixed;
+                bottom: 140px;
+                right: 15px;
+                width: 50px;
+                height: 50px;
+                border-radius: 50%;
+                background: #4a9eff;
+                border: none;
+                color: white;
+                font-size: 20px;
+                z-index: 9999;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+                display: none;
+            }
+
+            @media (max-width: 768px) {
+                #select-mode-toggle {
+                    display: block;
+                }
+            }
+
+            /* 字符选择模式指示器 */
+            .char-select-mode #select-mode-toggle {
+                background: #ff6b6b;
+            }
+
+            .char-select-mode .char-selectable .char-span {
+                border-bottom: 1px dashed rgba(74, 158, 255, 0.5);
+            }
+        `;
+        document.head.appendChild(style);
+        this.styleElement = style;
+
+        // 创建选择模式切换按钮
+        const toggleBtn = document.createElement('button');
+        toggleBtn.id = 'select-mode-toggle';
+        toggleBtn.innerHTML = '✋';
+        toggleBtn.title = '切换精确选择模式';
+        document.body.appendChild(toggleBtn);
+        this.toggleBtn = toggleBtn;
+      }
+
+      bindEvents() {
+        this.onSelectionChange = this.handleSelectionChange.bind(this);
+        this.onToolbarClick = this.handleToolbarClick.bind(this);
+        this.onToggleClick = this.handleToggleClick.bind(this);
+        this.onTouchEnd = this.handleTouchEnd.bind(this);
+
+        document.addEventListener('selectionchange', this.onSelectionChange);
+        this.toolbar.addEventListener('click', this.onToolbarClick);
+        this.toggleBtn.addEventListener('click', this.onToggleClick);
+        document.addEventListener('touchend', this.onTouchEnd);
+      }
+
+      destroy() {
+        document.removeEventListener('selectionchange', this.onSelectionChange);
+        document.removeEventListener('touchend', this.onTouchEnd);
+        
+        if (this.toolbar) {
+            this.toolbar.removeEventListener('click', this.onToolbarClick);
+            this.toolbar.remove();
+        }
+        if (this.toggleBtn) {
+            this.toggleBtn.removeEventListener('click', this.onToggleClick);
+            this.toggleBtn.remove();
+        }
+        if (this.styleElement) {
+            this.styleElement.remove();
+        }
+        
+        document.body.classList.remove('char-select-mode');
+        this.disableCharSelectMode();
+        this.clearSelection();
+      }
+
+      handleToolbarClick(e) {
+        const action = e.target.dataset.action;
+        if (action === 'read') {
+          this.readSelection();
+        } else if (action === 'copy') {
+          this.copySelection();
+        } else if (action === 'clear') {
+          this.clearSelection();
+        }
+      }
+
+      handleToggleClick() {
+        document.body.classList.toggle('char-select-mode');
+        if (document.body.classList.contains('char-select-mode')) {
+          this.enableCharSelectMode();
+          this.toggleBtn.innerHTML = '📝';
+        } else {
+          this.disableCharSelectMode();
+          this.toggleBtn.innerHTML = '✋';
+        }
+      }
+
+      handleTouchEnd(e) {
+         if (e.target.closest('#mobile-select-toolbar') || e.target.closest('#select-mode-toggle')) return;
+         setTimeout(() => {
+           this.preserveSelection();
+         }, 100);
+      }
+
+      handleSelectionChange() {
+        const selection = window.getSelection();
+        const text = selection.toString().trim();
+
+        if (text && text.length > 0) {
+          this.selectedText = this.filterPinyin(text);
+
+          if (selection.rangeCount > 0) {
+            this.selectedRange = selection.getRangeAt(0).cloneRange();
+          }
+          this.showToolbar();
+        }
+      }
+
+      filterPinyin(text) {
+        // 尝试过滤掉拼音字母，只保留中文和标点
+        const chineseOnly = text.replace(/[a-zA-Zāáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ\s]/g, '');
+        if (chineseOnly.length > 0) {
+          return chineseOnly;
+        }
+        return text;
+      }
+
+      preserveSelection() {
+        // 移除旧的高亮
+        document.querySelectorAll('.persistent-highlight').forEach(el => {
+          const parent = el.parentNode;
+          parent.replaceChild(document.createTextNode(el.textContent), el);
+          parent.normalize();
+        });
+
+        if (this.selectedRange) {
+          try {
+            const highlight = document.createElement('span');
+            highlight.className = 'persistent-highlight';
+            this.selectedRange.surroundContents(highlight);
+          } catch (e) {
+            // 忽略跨节点选择错误
+          }
+        }
+      }
+
+      showToolbar() {
+        const preview = this.toolbar.querySelector('.selected-preview');
+        const displayText = this.selectedText.length > 30
+          ? this.selectedText.substring(0, 30) + '...'
+          : this.selectedText;
+        preview.textContent = `已选择: ${displayText}`;
+        this.toolbar.classList.add('show');
+      }
+
+      hideToolbar() {
+        this.toolbar.classList.remove('show');
+      }
+
+      readSelection() {
+        if (this.selectedText) {
+          // 使用原生语音合成，速度快
+          const utterance = new SpeechSynthesisUtterance(this.selectedText);
+          utterance.lang = 'zh-CN';
+          utterance.rate = 0.8;
+          speechSynthesis.cancel();
+          speechSynthesis.speak(utterance);
+        }
+      }
+
+      copySelection() {
+        if (this.selectedText) {
+          navigator.clipboard.writeText(this.selectedText).then(() => {
+            this.showToast('已复制到剪贴板');
+          });
+        }
+      }
+
+      clearSelection() {
+        window.getSelection().removeAllRanges();
+        document.querySelectorAll('.persistent-highlight').forEach(el => {
+          const parent = el.parentNode;
+          parent.replaceChild(document.createTextNode(el.textContent), el);
+          parent.normalize();
+        });
+        this.selectedText = '';
+        this.selectedRange = null;
+        this.hideToolbar();
+      }
+
+      showToast(msg) {
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            z-index: 99999;
+        `;
+        toast.textContent = msg;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 1500);
+      }
+
+      // ========== 精确字符选择模式 ==========
+
+      enableCharSelectMode() {
+        // 针对 React Markdown 结构调整选择器
+        const selector = '.notion-md p, .notion-md li, .notion-md h1, .notion-md h2, .notion-md h3, .chinese-char';
+        
+        document.querySelectorAll(selector).forEach(el => {
+          if (el.classList.contains('char-processed')) return;
+
+          const text = el.textContent;
+          // 只有含中文的才处理
+          if (!/[\u4e00-\u9fa5]/.test(text)) return;
+
+          el.innerHTML = '';
+          el.classList.add('char-selectable', 'char-processed');
+
+          for (let char of text) {
+            const span = document.createElement('span');
+            span.className = 'char-span';
+            span.textContent = char;
+            span.dataset.char = char;
+            el.appendChild(span);
+          }
+        });
+
+        this.bindCharSelectEvents();
+      }
+
+      disableCharSelectMode() {
+        document.querySelectorAll('.char-selectable').forEach(el => {
+          el.innerHTML = el.textContent;
+          el.classList.remove('char-selectable', 'char-processed');
+        });
+      }
+
+      bindCharSelectEvents() {
+        let isSelecting = false;
+        let startChar = null;
+
+        document.querySelectorAll('.char-selectable').forEach(container => {
+          const onTouchStart = (e) => {
+            if (!document.body.classList.contains('char-select-mode')) return;
+
+            const char = e.target.closest('.char-span');
+            if (char) {
+              e.preventDefault();
+              isSelecting = true;
+              startChar = char;
+              document.querySelectorAll('.char-span.selected').forEach(c => c.classList.remove('selected'));
+              char.classList.add('selected');
+            }
+          };
+
+          const onTouchMove = (e) => {
+            if (!isSelecting || !document.body.classList.contains('char-select-mode')) return;
+
+            const touch = e.touches[0];
+            const element = document.elementFromPoint(touch.clientX, touch.clientY);
+            const char = element?.closest('.char-span');
+
+            if (char && startChar) {
+              e.preventDefault();
+              const container = startChar.parentElement;
+              if (container !== char.parentElement) return;
+
+              const chars = Array.from(container.querySelectorAll('.char-span'));
+              const startIdx = chars.indexOf(startChar);
+              const endIdx = chars.indexOf(char);
+              const [from, to] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
+
+              chars.forEach((c, i) => {
+                if (i >= from && i <= to) c.classList.add('selected');
+                else c.classList.remove('selected');
+              });
+            }
+          };
+
+          const onTouchEnd = () => {
+            if (!document.body.classList.contains('char-select-mode')) return;
+            isSelecting = false;
+            startChar = null;
+            const selected = Array.from(document.querySelectorAll('.char-span.selected'))
+              .map(c => c.textContent)
+              .join('');
+
+            if (selected) {
+              this.selectedText = selected;
+              this.showToolbar();
+            }
+          };
+          
+          container.addEventListener('touchstart', onTouchStart);
+          container.addEventListener('touchmove', onTouchMove);
+          container.addEventListener('touchend', onTouchEnd);
+        });
+      }
+    }
+
+    // 初始化移动端选择助手
+    let mobileHelper = null;
+    if ('ontouchstart' in window) {
+      mobileHelper = new MobileSelectHelper();
+    }
+
+    return () => {
+        if (mobileHelper) mobileHelper.destroy();
+    };
+  }, [isAiOpen]);
+  // ========== 移动端选择优化集成结束 ==========
 
   // 处理返回键关闭
   useEffect(() => {
@@ -236,7 +692,7 @@ export default function AIChatDock() {
     );
   }, [currentSessionId, setSessions, aiMode]);
 
-  // --- 选区监听注册 ---
+  // --- 选区监听注册 (仅桌面端或非触屏使用，避免冲突) ---
   useEffect(() => {
     if (typeof window !== 'undefined') {
       document.addEventListener('selectionchange', handleSelectionChange);
@@ -307,6 +763,9 @@ export default function AIChatDock() {
 
   // --- 选区处理逻辑 ---
   const handleSelectionChange = () => {
+    // 如果是移动端，交由 MobileSelectHelper 处理，避免双重 UI
+    if ('ontouchstart' in window) return;
+
     if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
 
     selectionTimerRef.current = setTimeout(() => {
@@ -486,7 +945,7 @@ export default function AIChatDock() {
       });
   };
 
-  // --- 发送逻辑 (核心修改：使用 Context 中处理好的 System Prompts) ---
+  // --- 发送逻辑 ---
   const handleSend = async (textToSend = input, isSystemTrigger = false, historyOverride = null) => {
     const contentToSend = (typeof textToSend === 'string' ? textToSend : input).trim();
     if (!contentToSend || loading) return;
@@ -510,21 +969,17 @@ export default function AIChatDock() {
 
     const userMessage = { role: 'user', content: contentToSend };
     
-    // --- 🟢 核心修改开始：使用 Context 动态 Prompt ---
     let apiMessages = [];
     
     if (isSystemTrigger && aiMode === 'CHAT' && activeTask) {
-        // 👉 情况1：自动触发（新课讲解） -> 使用 systemPrompt (包含 2.0 流程 + 强制覆盖指令)
         apiMessages = [
             { role: 'system', content: systemPrompt }, 
             { role: 'user', content: contentToSend }
         ];
     } else {
-        // 👉 情况2：用户追问 / 自由聊天 -> 使用 simpleSystemPrompt (简易模式 + HSK1 语言指令)
         const currentHistory = historyOverride !== null ? historyOverride : messages;
         const historyForApi = [...currentHistory, userMessage];
         
-        // 截取最近 10 条，避免上下文过长
         const historyMsgs = historyForApi.slice(-10).map(({ role, content }) => ({ role, content }));
         
         apiMessages = [
@@ -532,7 +987,6 @@ export default function AIChatDock() {
             ...historyMsgs
         ];
     }
-    // --- 🟢 核心修改结束：移除了硬编码和手动拼接逻辑 ---
 
     const assistantPlaceholder = { role: 'assistant', content: '', id: `${Date.now()}-assist` };
     if (isSystemTrigger) {
