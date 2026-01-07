@@ -28,8 +28,6 @@ const STT_LANGS = [
 const LONG_PRESS_DURATION = 600;
 
 // --- 简易音效引擎 ---
-let audioCtx = null;
-
 const playTickSound = () => {
   if (typeof window === 'undefined') return;
   try {
@@ -42,17 +40,22 @@ const playTickSound = () => {
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+    // 换成 triangle (三角波) 或 square (方波) 听感更硬，像按键音
+    osc.type = 'triangle'; 
     
-    gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+    // 频率从 800Hz 快速降到 100Hz，模拟敲击后的共鸣
+    osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.05);
+    
+    // 音量控制：非常短促的淡出
+    gain.gain.setValueAtTime(0.03, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.04);
     
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     
     osc.start();
-    osc.stop(audioCtx.currentTime + 0.05);
+    osc.stop(audioCtx.currentTime + 0.04);
   } catch (e) { console.error(e); }
 };
 
