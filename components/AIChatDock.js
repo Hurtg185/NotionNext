@@ -27,31 +27,42 @@ const STT_LANGS = [
 
 const LONG_PRESS_DURATION = 600;
 
-// --- 简易音效引擎 ---
+// --- 简易音效引擎 (修复版) ---
+// 使用 Ref 存储 Context 防止重复创建
+let audioCtx = null;
+
 const playTickSound = () => {
   if (typeof window === 'undefined') return;
   try {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return;
-    const ctx = new AudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
+    
+    // 初始化或恢复 Context
+    if (!audioCtx) audioCtx = new AudioContext();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(800, ctx.currentTime);
-    gain.gain.setValueAtTime(0.02, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
+    // 稍微提高频率，听起来更像机械键盘
+    osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+    
+    gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+    
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(audioCtx.destination);
+    
     osc.start();
-    osc.stop(ctx.currentTime + 0.04);
-  } catch (e) { }
+    osc.stop(audioCtx.currentTime + 0.05);
+  } catch (e) { console.error(e); }
 };
 
 // --- 拼音组件 ---
 const PinyinRenderer = ({ text, show }) => {
   if (!show || !text) return text;
   const cleanText = typeof text === 'string' ? text : String(text);
-  // 只匹配汉字
   const regex = /([\u4e00-\u9fa5]+)/g;
   const parts = cleanText.split(regex);
   return (
@@ -65,7 +76,6 @@ const PinyinRenderer = ({ text, show }) => {
               {charArray.map((char, i) => (
                 <ruby key={i} style={{ rubyPosition: 'over', margin: '0 1px' }}>
                   {char}
-                  {/* 核心修复：userSelect: 'none' 确保划词时不选中拼音 */}
                   <rt style={{ fontSize: '0.6em', color: '#64748b', fontWeight: 'normal', userSelect: 'none', WebkitUserSelect: 'none', fontFamily: 'Arial' }}>
                     {pyArray[i]}
                   </rt>
@@ -248,7 +258,6 @@ export default function AIChatDock() {
   }, [messages, isAiOpen, loading]);
 
   // --- 自动触发逻辑 (Active Task) ---
-  // 这里只处理 "自动触发" 的消息构建
   useEffect(() => {
     if (activeTask && activeTask.timestamp) {
       const lastProcessed = sessionStorage.getItem('last_ai_task_ts');
@@ -259,7 +268,6 @@ export default function AIChatDock() {
       let newSessionTitle;
       let initialMessages = [];
 
-      // 自动触发时，使用 "2.0 格式"
       if (aiMode === 'INTERACTIVE') {
         newSessionTitle = `${activeTask.grammarPoint} - 错题分析`;
         hiddenPrompt = `我正在做这道题，请帮我分析一下：\n- **题目**: "${activeTask.question}"\n- **我的选择**: "${activeTask.userChoice}"\n- **涉及语法点**: ${activeTask.grammarPoint}`;
@@ -296,41 +304,43 @@ export default function AIChatDock() {
     }
   }, [currentSessionId]);
 
-  // --- 选区处理逻辑 (1秒显示) ---
+  // --- 选区处理逻辑 ---
   const handleSelectionChange = () => {
     if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
 
-    // 🔴 改为 1000ms (1秒)
     selectionTimerRef.current = setTimeout(() => {
         const selection = window.getSelection();
         if (!selection || selection.rangeCount === 0) return;
         
         const text = selection.toString().trim();
-        // 只有在 AI 窗口打开且有选中文字时才显示
         if (text.length > 0 && isAiOpen) {
           const range = selection.getRangeAt(0);
           const rect = range.getBoundingClientRect();
           
-          // 计算位置：显示在文字上方 50px，水平居中
           let top = rect.top - 50; 
           let left = rect.left + (rect.width / 2);
           
-          // 如果 rect.top 太小（文字在顶端），则显示在下方
           if (top < 10) top = rect.bottom + 10;
           
           setSelectionMenu({ show: true, x: left, y: top, text: text });
           setIsCopied(false);
         } else {
-            setSelectionMenu(prev => ({ ...prev, show: false }));
+           // 只有当没有选区时才关闭，点击菜单操作不应导致关闭
+           if (!text && !selectionMenu.show) {
+               setSelectionMenu(prev => ({ ...prev, show: false }));
+           }
         }
-    }, 1000); 
+    }, 600); // 稍微缩短反应时间
   };
 
   const handleOutsideClick = (e) => {
-    // 点击非菜单区域关闭菜单
     const menu = document.getElementById('selection-popover');
     if (menu && !menu.contains(e.target)) {
-      setSelectionMenu(prev => ({ ...prev, show: false }));
+        // 如果点击的不是菜单，且选区为空，才关闭
+        const selection = window.getSelection();
+        if (!selection || selection.toString().length === 0) {
+            setSelectionMenu(prev => ({ ...prev, show: false }));
+        }
     }
     const sttMenu = document.getElementById('stt-lang-menu');
     if (sttMenu && !sttMenu.contains(e.target)) {
@@ -340,14 +350,12 @@ export default function AIChatDock() {
 
   const handleTranslateSelection = () => {
     if (!selectionMenu.text) return;
-    // 使用纯文本发送，拼音已被 PinyinRenderer 的 user-select: none 隔离
     handleSend(`请用缅文详细解释这段文字：\n"${selectionMenu.text}"`);
     setSelectionMenu(prev => ({ ...prev, show: false }));
-    window.getSelection().removeAllRanges();
+    // 移除这行，保留选区：window.getSelection().removeAllRanges();
   };
 
   const handleContextMenu = (e) => {
-      // 阻止原生右键，使用我们的小菜单
       e.preventDefault();
       return false;
   };
@@ -465,7 +473,24 @@ export default function AIChatDock() {
     login();
   };
 
-  // --- 发送逻辑 (核心修改：区分自动触发和普通聊天) ---
+  // --- 停止生成 ---
+  const handleStop = () => {
+      if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+          abortControllerRef.current = null;
+      }
+      setLoading(false);
+      updateMessages(prev => {
+          const last = prev[prev.length - 1];
+          // 如果最后一条是机器人的空消息或者不完整消息，可以标记一下
+          if (last.role === 'assistant') {
+              return [...prev.slice(0, -1), { ...last, content: last.content + ' (已停止)' }];
+          }
+          return prev;
+      });
+  };
+
+  // --- 发送逻辑 ---
   const handleSend = async (textToSend = input, isSystemTrigger = false, historyOverride = null) => {
     const contentToSend = (typeof textToSend === 'string' ? textToSend : input).trim();
     if (!contentToSend || loading) return;
@@ -489,36 +514,28 @@ export default function AIChatDock() {
 
     const userMessage = { role: 'user', content: contentToSend };
     
-    // --- 构造消息列表 ---
     let apiMessages = [];
-    
-    // 🔴 核心逻辑：区分 Prompt
     const BASIC_PROMPT = `你是一名拥有10年经验的汉语教师，擅长用缅甸语辅助教学。请耐心回答学生的问题。`;
     
     if (isSystemTrigger && aiMode === 'CHAT' && activeTask) {
-        // 🔴 情况1：自动触发 -> 使用带 2.0 格式要求的 System Prompt
         apiMessages = [
-            { role: 'system', content: systemPrompt }, // 这里的 systemPrompt 包含了 2.0 格式
+            { role: 'system', content: systemPrompt },
             { role: 'user', content: contentToSend }
         ];
     } else {
-        // 🔴 情况2：自由聊天 / 追问 -> 使用基础 Prompt，不带 2.0 格式
         const currentHistory = historyOverride !== null ? historyOverride : messages;
         const historyForApi = [...currentHistory, userMessage];
         const historyMsgs = historyForApi.slice(-10).map(({ role, content }) => ({ role, content }));
         apiMessages = [{ role: 'system', content: BASIC_PROMPT }, ...historyMsgs];
     }
 
-    // --- 【全局强制语言控制】 ---
-    // 无论哪种 Prompt，只要是 HSK1-2，都必须追加缅语指令
     const level = config.userLevel || 'H1';
     const isLowLevel = ['H1', 'H2', 'HSK1', 'HSK2'].some(l => level.toUpperCase().includes(l));
     if (isLowLevel) {
         if (apiMessages.length > 0 && apiMessages[0].role === 'system') {
-            apiMessages[0].content += "\n\n【System Override】: The user is a BEGINNER (HSK 1-2). You MUST use **Burmese (缅甸语)** for all explanations, context, and logic analysis. Only use Chinese for the specific vocabulary/sentences being taught. Do NOT use long paragraphs of Chinese.";
+            apiMessages[0].content += "\n\n【System Override】: The user is a BEGINNER (HSK 1-2). You MUST use **Burmese (缅甸语)** for all explanations, context, and logic analysis. Only use Chinese for the specific vocabulary/sentences being taught.";
         }
     }
-    // ----------------------------
 
     const assistantPlaceholder = { role: 'assistant', content: '', id: `${Date.now()}-assist` };
     if (isSystemTrigger) {
@@ -573,6 +590,9 @@ export default function AIChatDock() {
               if (delta) {
                 rawFullContent += delta;
                 
+                // --- 修复打字音效调用 ---
+                if (config.soundEnabled) playTickSound();
+
                 // --- 气囊解析逻辑 ---
                 const suggestionRegex = /<<<SUGGESTIONS:(.*?)>>>/s;
                 const match = rawFullContent.match(suggestionRegex);
@@ -636,34 +656,40 @@ export default function AIChatDock() {
     if (audioRef.current) audioRef.current.pause();
     setIsPlaying(true);
     
-    // --- TTS 净化逻辑 (核心修复：允许缅甸语 \u1000-\u109F) ---
-    // 1. 移除 markdown 链接
+    // --- TTS 净化逻辑 ---
     let clean = text.replace(/\[(.*?)\]\(.*?\)/g, '$1');
-    // 2. 移除 markdown 符号
     clean = clean.replace(/[*#`>~\-\[\]_]/g, '');
-    
-    // 3. 🔴 允许 中文、英文、数字、空格、以及缅甸语(\u1000-\u109F)
-    // 之前因为过滤了所有非中文/英文，导致缅文被删空了
     clean = clean.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s\u1000-\u109F]/g, ' ');
-    
-    // 4. 移除多余空格
     clean = clean.replace(/\s+/g, ' ').trim();
         
-    const rate = Math.round((config.ttsSpeed - 1) * 100);
-    const url = `/api/tts?t=${encodeURIComponent(clean)}&v=${config.ttsVoice}&r=${rate}%`;
+    const rate = Math.round((config.ttsSpeed - 1) * 100); // Edge TTS 格式可能不同，这里假设接口兼容
+    
+    // 🔴 修复：修改为用户提供的接口
+    const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(clean)}&v=${config.ttsVoice}`;
+    
     try {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const audio = new Audio(URL.createObjectURL(blob));
+      // 直接使用 Audio 播放远程链接
+      const audio = new Audio(url);
       audioRef.current = audio;
+      
+      // 监听错误，万一接口挂了
+      audio.onerror = () => {
+          setIsPlaying(false);
+          alert("TTS 服务暂时不可用");
+      };
+
       audio.onended = () => setIsPlaying(false);
-      audio.play();
-    } catch (e) { setIsPlaying(false); }
+      await audio.play();
+    } catch (e) { 
+        console.error(e);
+        setIsPlaying(false); 
+    }
   };
 
   const copyText = (text) => {
     navigator.clipboard.writeText(text);
     setIsCopied(true);
+    // 稍微延迟关闭菜单，给用户反馈时间
     setTimeout(() => setSelectionMenu(prev => ({ ...prev, show: false })), 800);
   };
 
@@ -689,7 +715,6 @@ export default function AIChatDock() {
       }
   };
 
-  // --- 辅助函数：给 Markdown 组件包裹拼音 ---
   const renderWithPinyin = (children) => {
     return React.Children.map(children, c => 
       typeof c === 'string' ? <PinyinRenderer text={c} show={config.showPinyin} /> : c
@@ -698,7 +723,7 @@ export default function AIChatDock() {
 
   return (
     <>
-      {/* 选词菜单 - 提升 zIndex */}
+      {/* 选词菜单 */}
       {selectionMenu.show && (
         <div id="selection-popover" style={{ ...styles.popover, left: selectionMenu.x, top: selectionMenu.y }}>
           <button onClick={handleTranslateSelection} style={styles.popBtn} title="解释/翻译"><FaLanguage size={14} /> 解释</button>
@@ -795,7 +820,6 @@ export default function AIChatDock() {
                         {m.content === '' && loading && i === messages.length - 1 ? (
                           <TypingIndicator />
                         ) : (
-                          // Markdown 渲染组件，应用拼音逻辑
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             components={{
@@ -807,7 +831,8 @@ export default function AIChatDock() {
                               ul: ({ children }) => <ul style={styles.ul}>{children}</ul>,
                               li: ({ children }) => <li style={styles.li}>{renderWithPinyin(children)}</li>,
                               del: ({ children }) => <del style={styles.del}>{renderWithPinyin(children)}</del>,
-                              table: ({ children }) => <div style={{ overflowX: 'auto' }}><table style={styles.table}>{children}</table></div>,
+                              // 修复表格溢出问题
+                              table: ({ children }) => <div style={styles.tableWrapper}><table style={styles.table}>{children}</table></div>,
                               th: ({ children }) => <th style={styles.th}>{renderWithPinyin(children)}</th>,
                               td: ({ children }) => <td style={styles.td}>{renderWithPinyin(children)}</td>
                             }}
@@ -846,10 +871,8 @@ export default function AIChatDock() {
             {!loading && suggestions.length > 0 && (
               <div style={styles.scrollSuggestionContainer}>
                 {suggestions.map((s, idx) => (
-                  // 气囊点击：直接发送文字
                   <button key={idx} onClick={() => handleSend(s)} style={styles.scrollSuggestionBtn}>
                     <FaLightbulb color="#4f46e5" size={10} style={{ marginRight: 6 }} />
-                    {/* 给气囊内的文字也加上拼音渲染 */}
                     <PinyinRenderer text={s} show={config.showPinyin} />
                   </button>
                 ))}
@@ -872,7 +895,12 @@ export default function AIChatDock() {
                   rows={1}
                 />
                 <div style={{position: 'relative'}}>
-                    {input.trim().length > 0 ? (
+                    {/* 按钮逻辑：Loading时显示停止，有输入时显示发送，否则显示麦克风 */}
+                    {loading ? (
+                         <button onClick={handleStop} style={{ ...styles.dynamicInputBtn, background: '#ef4444' }}>
+                             <FaStop size={18} color="#fff" />
+                         </button>
+                    ) : input.trim().length > 0 ? (
                         <button onClick={() => handleSend()} disabled={loading} style={styles.dynamicInputBtn}>
                             <FaPaperPlane size={20} color="#fff" />
                         </button>
@@ -903,7 +931,7 @@ export default function AIChatDock() {
             </div>
           </div>
 
-          {/* Modals remain unchanged */}
+          {/* Login Tip Modal */}
           {showLoginTip && (
             <div style={styles.paywallOverlay}>
               <div style={{ ...styles.paywallModal, maxWidth: 300 }}>
@@ -917,6 +945,7 @@ export default function AIChatDock() {
             </div>
           )}
 
+          {/* Paywall Modal */}
           {showPaywall && (
             <div style={styles.paywallOverlay}>
               <div style={styles.paywallModal}>
@@ -936,6 +965,7 @@ export default function AIChatDock() {
             </div>
           )}
 
+          {/* Settings Modal */}
           {showSettings && (
             <div
               style={styles.settingsOverlay}
@@ -994,12 +1024,6 @@ export default function AIChatDock() {
                             style={{...styles.input, fontFamily: 'monospace'}}
                             placeholder="sk-..."
                         />
-                        <div 
-                            style={{fontSize: '0.8rem', color: '#6366f1', marginTop: 4, cursor: 'pointer', textDecoration: 'underline'}}
-                            onClick={() => window.open('https://build.nvidia.com/explore/discover', '_blank')}
-                        >
-                        👉 教程：如何免费获取 NVIDIA 大模型 API Key？
-                        </div>
                     </label>
                   </div>
                   <div style={styles.switchRow}>
@@ -1071,9 +1095,9 @@ export default function AIChatDock() {
 const styles = {
   fullScreenContainer: { position: 'fixed', inset: 0, background: '#f8fafc', zIndex: 99999, display: 'flex', flexDirection: 'column', animation: 'slideUp 0.3s ease-out' },
   navHeader: { height: 56, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', borderBottom: '1px solid #e2e8f0', flexShrink: 0, paddingTop: 'env(safe-area-inset-top)' },
-  navTitle: { fontSize: '1.1rem', fontWeight: 'bold', color: '#1e293b', textAlign: 'center', flex: 1, marginRight: '-48px' /* Compensate for the left button */ },
+  navTitle: { fontSize: '1.1rem', fontWeight: 'bold', color: '#1e293b', textAlign: 'center', flex: 1, marginRight: '-48px' },
   navIconBtn: { background: 'none', border: 'none', padding: 8, cursor: 'pointer', color: '#64748b', width: 48, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  // 关键修复：强制允许选中文本
+  // 修改：userSelect: 'text' 确保所有区域文字可选
   chatBody: { flex: 1, overflowY: 'auto', padding: '16px', background: '#f8fafc', WebkitOverflowScrolling: 'touch', userSelect: 'text', WebkitUserSelect: 'text' },
   footer: { background: '#fff', borderTop: '1px solid #e2e8f0', paddingBottom: 'env(safe-area-inset-bottom)', display: 'flex', flexDirection: 'column', flexShrink: 0 },
   floatingBtn: { position: 'fixed', width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #4f46e5)', boxShadow: '0 8px 20px rgba(79, 70, 229, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, cursor: 'grab', touchAction: 'none' },
@@ -1103,9 +1127,13 @@ const styles = {
   ul: { paddingLeft: '1.2em' },
   li: { marginBottom: '4px' },
   del: { textDecoration: 'line-through', color: '#ef4444', opacity: 0.7 },
-  table: { width: '100%', borderCollapse: 'collapse', margin: '10px 0', fontSize: '0.9em' },
-  th: { border: '1px solid #e2e8f0', padding: '6px 10px', background: '#f8fafc', fontWeight: '600', textAlign: 'left' },
-  td: { border: '1px solid #e2e8f0', padding: '6px 10px', verticalAlign: 'top' },
+  // 修改：表格容器样式
+  tableWrapper: { overflowX: 'auto', width: '100%', margin: '10px 0' },
+  // 修改：表格固定布局，防止无限撑开
+  table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.9em', tableLayout: 'fixed', minWidth: '300px' },
+  th: { border: '1px solid #e2e8f0', padding: '6px 10px', background: '#f8fafc', fontWeight: '600', textAlign: 'left', wordBreak: 'break-word' },
+  // 修改：单元格强制换行
+  td: { border: '1px solid #e2e8f0', padding: '6px 10px', verticalAlign: 'top', wordBreak: 'break-word' },
   scrollSuggestionContainer: { display: 'flex', flexWrap: 'wrap', gap: 12, padding: '12px 16px 8px 16px', overflowY: 'auto', maxHeight: 100 },
   scrollSuggestionBtn: { flexShrink: 0, background: '#ffffff', border: '1px solid #e0e7ff', borderRadius: '20px', padding: '8px 16px', fontSize: '0.88rem', color: '#4f46e5', cursor: 'pointer', display: 'flex', alignItems: 'center', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.08)', fontWeight: '500' },
   inputContainer: { padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 8 },
@@ -1115,7 +1143,6 @@ const styles = {
   dynamicInputBtn: { width: 44, height: 44, borderRadius: '50%', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s', flexShrink: 0, background: '#6366f1', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.2)' },
   sttLangMenu: { position: 'absolute', bottom: '120%', right: 0, background: '#fff', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.15)', padding: 8, width: 140, zIndex: 20 },
   sttLangItem: { padding: '8px 10px', borderRadius: 6, fontSize: '0.9rem', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  // 关键修复：Z-Index 提升到最高
   popover: { position: 'fixed', transform: 'translateX(-50%)', background: '#1e293b', borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 4px 15px rgba(0,0,0,0.3)', zIndex: 999999, color: '#fff', whiteSpace: 'nowrap' },
   popArrow: { position: 'absolute', bottom: -6, left: '50%', marginLeft: -6, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '6px solid #1e293b' },
   popBtn: { background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem' },
