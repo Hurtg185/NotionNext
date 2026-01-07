@@ -27,8 +27,7 @@ const STT_LANGS = [
 
 const LONG_PRESS_DURATION = 600;
 
-// --- 简易音效引擎 (修复版) ---
-// 使用 Ref 存储 Context 防止重复创建
+// --- 简易音效引擎 ---
 let audioCtx = null;
 
 const playTickSound = () => {
@@ -37,7 +36,6 @@ const playTickSound = () => {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return;
     
-    // 初始化或恢复 Context
     if (!audioCtx) audioCtx = new AudioContext();
     if (audioCtx.state === 'suspended') audioCtx.resume();
 
@@ -45,7 +43,6 @@ const playTickSound = () => {
     const gain = audioCtx.createGain();
     
     osc.type = 'sine';
-    // 稍微提高频率，听起来更像机械键盘
     osc.frequency.setValueAtTime(600, audioCtx.currentTime);
     
     gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
@@ -113,7 +110,8 @@ export default function AIChatDock() {
   const {
     user, login, config, setConfig, sessions, setSessions,
     currentSessionId, setCurrentSessionId, isAiOpen, setIsAiOpen,
-    activeTask, aiMode, resetToChatMode, systemPrompt,
+    activeTask, aiMode, resetToChatMode, 
+    systemPrompt, simpleSystemPrompt, // 🟢 引入 simpleSystemPrompt
     isActivated, canUseAI, recordUsage, remainingQuota, TOTAL_FREE_QUOTA
   } = useAI();
 
@@ -325,18 +323,16 @@ export default function AIChatDock() {
           setSelectionMenu({ show: true, x: left, y: top, text: text });
           setIsCopied(false);
         } else {
-           // 只有当没有选区时才关闭，点击菜单操作不应导致关闭
            if (!text && !selectionMenu.show) {
                setSelectionMenu(prev => ({ ...prev, show: false }));
            }
         }
-    }, 600); // 稍微缩短反应时间
+    }, 600);
   };
 
   const handleOutsideClick = (e) => {
     const menu = document.getElementById('selection-popover');
     if (menu && !menu.contains(e.target)) {
-        // 如果点击的不是菜单，且选区为空，才关闭
         const selection = window.getSelection();
         if (!selection || selection.toString().length === 0) {
             setSelectionMenu(prev => ({ ...prev, show: false }));
@@ -352,7 +348,6 @@ export default function AIChatDock() {
     if (!selectionMenu.text) return;
     handleSend(`请用缅文详细解释这段文字：\n"${selectionMenu.text}"`);
     setSelectionMenu(prev => ({ ...prev, show: false }));
-    // 移除这行，保留选区：window.getSelection().removeAllRanges();
   };
 
   const handleContextMenu = (e) => {
@@ -473,7 +468,6 @@ export default function AIChatDock() {
     login();
   };
 
-  // --- 停止生成 ---
   const handleStop = () => {
       if (abortControllerRef.current) {
           abortControllerRef.current.abort();
@@ -482,7 +476,6 @@ export default function AIChatDock() {
       setLoading(false);
       updateMessages(prev => {
           const last = prev[prev.length - 1];
-          // 如果最后一条是机器人的空消息或者不完整消息，可以标记一下
           if (last.role === 'assistant') {
               return [...prev.slice(0, -1), { ...last, content: last.content + ' (已停止)' }];
           }
@@ -490,7 +483,7 @@ export default function AIChatDock() {
       });
   };
 
-  // --- 发送逻辑 ---
+  // --- 发送逻辑 (核心修改：使用 Context 中处理好的 System Prompts) ---
   const handleSend = async (textToSend = input, isSystemTrigger = false, historyOverride = null) => {
     const contentToSend = (typeof textToSend === 'string' ? textToSend : input).trim();
     if (!contentToSend || loading) return;
@@ -514,28 +507,29 @@ export default function AIChatDock() {
 
     const userMessage = { role: 'user', content: contentToSend };
     
+    // --- 🟢 核心修改开始：使用 Context 动态 Prompt ---
     let apiMessages = [];
-    const BASIC_PROMPT = `你是一名拥有10年经验的汉语教师，擅长用缅甸语辅助教学。请耐心回答学生的问题。`;
     
     if (isSystemTrigger && aiMode === 'CHAT' && activeTask) {
+        // 👉 情况1：自动触发（新课讲解） -> 使用 systemPrompt (包含 2.0 流程 + 强制覆盖指令)
         apiMessages = [
-            { role: 'system', content: systemPrompt },
+            { role: 'system', content: systemPrompt }, 
             { role: 'user', content: contentToSend }
         ];
     } else {
+        // 👉 情况2：用户追问 / 自由聊天 -> 使用 simpleSystemPrompt (简易模式 + HSK1 语言指令)
         const currentHistory = historyOverride !== null ? historyOverride : messages;
         const historyForApi = [...currentHistory, userMessage];
+        
+        // 截取最近 10 条，避免上下文过长
         const historyMsgs = historyForApi.slice(-10).map(({ role, content }) => ({ role, content }));
-        apiMessages = [{ role: 'system', content: BASIC_PROMPT }, ...historyMsgs];
+        
+        apiMessages = [
+            { role: 'system', content: simpleSystemPrompt }, 
+            ...historyMsgs
+        ];
     }
-
-    const level = config.userLevel || 'H1';
-    const isLowLevel = ['H1', 'H2', 'HSK1', 'HSK2'].some(l => level.toUpperCase().includes(l));
-    if (isLowLevel) {
-        if (apiMessages.length > 0 && apiMessages[0].role === 'system') {
-            apiMessages[0].content += "\n\n【System Override】: The user is a BEGINNER (HSK 1-2). You MUST use **Burmese (缅甸语)** for all explanations, context, and logic analysis. Only use Chinese for the specific vocabulary/sentences being taught.";
-        }
-    }
+    // --- 🟢 核心修改结束：移除了硬编码和手动拼接逻辑 ---
 
     const assistantPlaceholder = { role: 'assistant', content: '', id: `${Date.now()}-assist` };
     if (isSystemTrigger) {
@@ -590,10 +584,8 @@ export default function AIChatDock() {
               if (delta) {
                 rawFullContent += delta;
                 
-                // --- 修复打字音效调用 ---
                 if (config.soundEnabled) playTickSound();
 
-                // --- 气囊解析逻辑 ---
                 const suggestionRegex = /<<<SUGGESTIONS:(.*?)>>>/s;
                 const match = rawFullContent.match(suggestionRegex);
                 let contentToDisplay = rawFullContent;
@@ -656,23 +648,17 @@ export default function AIChatDock() {
     if (audioRef.current) audioRef.current.pause();
     setIsPlaying(true);
     
-    // --- TTS 净化逻辑 ---
     let clean = text.replace(/\[(.*?)\]\(.*?\)/g, '$1');
     clean = clean.replace(/[*#`>~\-\[\]_]/g, '');
     clean = clean.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s\u1000-\u109F]/g, ' ');
     clean = clean.replace(/\s+/g, ' ').trim();
         
-    const rate = Math.round((config.ttsSpeed - 1) * 100); // Edge TTS 格式可能不同，这里假设接口兼容
-    
-    // 🔴 修复：修改为用户提供的接口
     const url = `https://t.leftsite.cn/tts?t=${encodeURIComponent(clean)}&v=${config.ttsVoice}`;
     
     try {
-      // 直接使用 Audio 播放远程链接
       const audio = new Audio(url);
       audioRef.current = audio;
       
-      // 监听错误，万一接口挂了
       audio.onerror = () => {
           setIsPlaying(false);
           alert("TTS 服务暂时不可用");
@@ -689,7 +675,6 @@ export default function AIChatDock() {
   const copyText = (text) => {
     navigator.clipboard.writeText(text);
     setIsCopied(true);
-    // 稍微延迟关闭菜单，给用户反馈时间
     setTimeout(() => setSelectionMenu(prev => ({ ...prev, show: false })), 800);
   };
 
@@ -723,7 +708,6 @@ export default function AIChatDock() {
 
   return (
     <>
-      {/* 选词菜单 */}
       {selectionMenu.show && (
         <div id="selection-popover" style={{ ...styles.popover, left: selectionMenu.x, top: selectionMenu.y }}>
           <button onClick={handleTranslateSelection} style={styles.popBtn} title="解释/翻译"><FaLanguage size={14} /> 解释</button>
@@ -831,7 +815,6 @@ export default function AIChatDock() {
                               ul: ({ children }) => <ul style={styles.ul}>{children}</ul>,
                               li: ({ children }) => <li style={styles.li}>{renderWithPinyin(children)}</li>,
                               del: ({ children }) => <del style={styles.del}>{renderWithPinyin(children)}</del>,
-                              // 修复表格溢出问题
                               table: ({ children }) => <div style={styles.tableWrapper}><table style={styles.table}>{children}</table></div>,
                               th: ({ children }) => <th style={styles.th}>{renderWithPinyin(children)}</th>,
                               td: ({ children }) => <td style={styles.td}>{renderWithPinyin(children)}</td>
@@ -895,7 +878,6 @@ export default function AIChatDock() {
                   rows={1}
                 />
                 <div style={{position: 'relative'}}>
-                    {/* 按钮逻辑：Loading时显示停止，有输入时显示发送，否则显示麦克风 */}
                     {loading ? (
                          <button onClick={handleStop} style={{ ...styles.dynamicInputBtn, background: '#ef4444' }}>
                              <FaStop size={18} color="#fff" />
