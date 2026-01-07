@@ -82,14 +82,25 @@ export const AIProvider = ({ children }) => {
   const [activeTask, setActiveTask] = useState(null);
   const [pageContext, setPageContext] = useState(null);
 
-  // --- System Prompts (核心修改：极简剧本模式) ---
+  // --- System Prompts ---
   const SYSTEM_PROMPTS = {
+    // 基础聊天与追问模式（非 2.0 流程）
+    SIMPLE: `你是一名专业的汉语教师，面对的是母语为缅甸语的学生。
+当前学生等级：{{LEVEL}}。
+请用最简洁、直接的方式回答学生的问题。
+如果学生是在追问之前的语法点，直接解答疑惑即可，不要重复“情境导入”或“表格”。
+⚠️ 语言要求：
+- HSK 1-2：必须用 **缅甸语** 解释逻辑和背景，中文仅用于例句。
+- HSK 3+：可以使用简单的中文解释，配合缅语辅助。`,
+
+    // 2.0 完整教学流程（用于新课讲解）
     CHAT: `你是一位拥有 10 年以上经验的汉语教师，长期教授母语为缅甸语（SOV 结构）的学生。你不仅精通汉语与缅甸语，更精通“缅甸语思维 → 汉语思维”的矫正训练。
 在生成任何内容之前，你必须先根据 {{LEVEL}} 选择语言与教学策略：
 ▶ hsk1 / hsk2（零起点 / 初级）：
-- 缅甸语 ≥ 70%
+- **核心指令**：解释说明文字必须 100% 使用缅甸语！严禁使用中文进行逻辑讲解。
 - 中文只用于：句型公式 / 关键词 / 例句
 - 教学目标：敢说、不怕错、先能用
+
 ▶ hsk3 / hsk4（中级）：
 - 中缅对照讲解
 - 明确指出：哪里是缅语思维，哪里是汉语思维
@@ -99,14 +110,14 @@ export const AIProvider = ({ children }) => {
 - 以中文为主
 - 仅在“思维冲突点”使用缅甸语补充
 - 教学目标：表达自然度
-⚠️ 语言比例必须贯穿全文，前后不得失衡。
-【第二优先级：语言分工与使用边界（强制）】
 
+【第二优先级：语言分工与使用边界（强制）】
 一、只能使用【中文】的内容：
 1. 所有万能句型 / 公式
 2. 所有语法功能词与关键词（如：吗 / 在 / 的 / 有 / 什么）
 3. 所有例句中的中文句子
 4. 正确 / 错误对照中的“中文本身”
+
 二、只能使用【缅甸语】的内容：
 1. 情境说明与背景铺垫
 2. 功能解释与比喻说明
@@ -122,7 +133,6 @@ export const AIProvider = ({ children }) => {
 如出现语言越界，视为输出失败。
 
 【第三优先级：翻译与表达铁律】
-
 1. 所有缅甸语必须：
 - 口语化、自然
 - 符合真实日常对话
@@ -134,14 +144,12 @@ export const AIProvider = ({ children }) => {
 
 ━━━━━━━━━━━━━━━━
 【第四优先级：纠错核心（每课必做）】
-
 每一课必须明确回答一个问题：
 👉 “缅甸学生为什么会自然地这样说，但中文不能这样说？”
-
 错误分析必须：
 - 明确对应某个缅语助词、结构或语序
 - 说明：是缅语里的什么习惯导致了这个错误
-- ❌ 不允许只说“这样不对”
+
 ━━━━━━━━━━━━━━━━
 【2.0 教学流程（增强详细版）】
 
@@ -198,6 +206,7 @@ export const AIProvider = ({ children }) => {
 ━━━━━━━━━━━━━━━━
 【当前参考内容】：
 {{CONTEXT}}`,
+
     INTERACTIVE: `你是一名汉语语法私教。当前处于【错题专项深度解析】模式。
 【当前等级】：{{LEVEL}}
 【题目 ID】：{{TASK_ID}}
@@ -329,28 +338,19 @@ SUGGESTIONS: Q1|||Q2|||Q3`
     setIsAiOpen(true);
   }, []);
 
-  // 监听 AI 助手的打开事件
-  // ❌ [核心修改]：注释掉了自动触发逻辑。现在打开 AI 窗口不会自动发送消息了。
   const prevIsAiOpen = usePrevious(isAiOpen);
   useEffect(() => {
-    /* 
-    // 原有逻辑：检测到打开且是新对话，自动触发。
-    // 现已屏蔽，只保留 pageContext 的被动更新。
-    if (!prevIsAiOpen && isAiOpen) {
-      const session = sessions.find(s => s.id === currentSessionId);
-      if (pageContext && session && session.messages.length === 0 && session.title.startsWith('新对话')) {
-        triggerAI(pageContext.title, pageContext.content, pageContext.id, pageContext.aiPreAnswer);
-      }
-    }
-    */
+     // 自动触发逻辑已移除，改由 UI 组件手动调用
   }, [isAiOpen, prevIsAiOpen, pageContext, sessions, currentSessionId, triggerAI]);
 
+  // --- 核心修改：动态生成 Prompt，增强 HSK1 缅语权重 ---
   const finalSystemPrompt = useMemo(() => {
     let template = aiMode === 'INTERACTIVE' ? SYSTEM_PROMPTS.INTERACTIVE : SYSTEM_PROMPTS.CHAT;
     let displayLevel = config.userLevel || 'HSK 1';
     const taskId = activeTask?.id || "";
     const lowerId = taskId.toLowerCase();
 
+    // 统一等级名称
     if (lowerId.includes('hsk1')) displayLevel = 'HSK 1';
     else if (lowerId.includes('hsk2')) displayLevel = 'HSK 2';
     else if (lowerId.includes('hsk3')) displayLevel = 'HSK 3';
@@ -367,11 +367,27 @@ SUGGESTIONS: Q1|||Q2|||Q3`
       const contextString = (pageContext && typeof pageContext.content === 'string')
         ? pageContext.content
         : (activeTask && typeof activeTask.content === 'string' ? activeTask.content : '通用对话');
-      // 增加截断长度至 8000，确保长脚本不被截断
+      // 增加截断长度至 8000
       template = template.replace('{{CONTEXT}}', contextString.substring(0, 8000));
     }
+
+    // 🔥 核心修改：强制缅甸语补丁 🔥
+    // 如果是 HSK 1-2，在最后面追加一段强指令。位置越靠后，AI 越听话。
+    const isLowLevel = ['H1', 'H2', 'HSK1', 'HSK2', 'HSK 1', 'HSK 2'].some(l => displayLevel.toUpperCase().includes(l));
+    if (isLowLevel) {
+        template += `\n\n【⚠️ SYSTEM OVERRIDE / 强制语言指令】\n当前用户是初学者 (${displayLevel})。\n请务必严格遵守：\n1. **解释、逻辑分析、背景介绍**：必须 100% 使用【缅甸语】。\n2. **仅**在教学词汇和例句中使用【中文】。\n3. 禁止输出大段的中文解释，学生看不懂。`;
+    }
+
     return template;
   }, [config.userLevel, aiMode, activeTask, pageContext]);
+
+  // --- 新增：简易 Prompt 生成 (用于追问) ---
+  const finalSimplePrompt = useMemo(() => {
+      let template = SYSTEM_PROMPTS.SIMPLE;
+      let displayLevel = config.userLevel || 'HSK 1';
+      template = template.replace(/{{LEVEL}}/g, displayLevel);
+      return template;
+  }, [config.userLevel]);
 
   const selectSession = useCallback((sessionId) => {
     setCurrentSessionId(sessionId);
@@ -411,7 +427,9 @@ SUGGESTIONS: Q1|||Q2|||Q3`
       isAiOpen, setIsAiOpen,
       canUseAI, remainingQuota, TOTAL_FREE_QUOTA,
       handleActivate, handleGoogleCallback,
-      activeTask, aiMode, systemPrompt: finalSystemPrompt,
+      activeTask, aiMode, 
+      systemPrompt: finalSystemPrompt,      // 用于新课讲解 (2.0)
+      simpleSystemPrompt: finalSimplePrompt, // 用于日常追问 (不含 2.0 流程)
       triggerInteractiveAI, updatePageContext, resetToChatMode, triggerAI,
     }}>
       <Script
