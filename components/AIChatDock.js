@@ -51,29 +51,27 @@ const playTickSound = () => {
     initAudioContext();
     if (!audioCtx) return;
 
+    const t = audioCtx.currentTime;
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     
-    // 使用三角波，听感更硬、更清脆
-    osc.type = 'triangle'; 
+    // 使用正弦波 (Sine)，声音最圆润
+    osc.type = 'sine';
     
-    // 频率从 800Hz 快速降到 100Hz，模拟机械按键声
-    const now = audioCtx.currentTime;
-    osc.frequency.setValueAtTime(800, now);
-    osc.frequency.exponentialRampToValueAtTime(100, now + 0.05);
+    // 频率固定在 800Hz 左右，不下降，像水滴
+    osc.frequency.setValueAtTime(800, t);
     
-    // 音量控制：短促淡出
-    gain.gain.setValueAtTime(0.1, now); // 稍微调大一点初始音量
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+    // 音量极短
+    gain.gain.setValueAtTime(0.08, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
     
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     
-    osc.start(now);
-    osc.stop(now + 0.05);
+    osc.start(t);
+    osc.stop(t + 0.05);
   } catch (e) { console.error('Sound play error:', e); }
 };
-
 // --- 拼音组件 ---
 const PinyinRenderer = ({ text, show }) => {
   if (!show || !text) return text;
