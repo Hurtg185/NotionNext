@@ -51,6 +51,7 @@ const playTickSound = () => {
 const PinyinRenderer = ({ text, show }) => {
   if (!show || !text) return text;
   const cleanText = typeof text === 'string' ? text : String(text);
+  // 只匹配汉字
   const regex = /([\u4e00-\u9fa5]+)/g;
   const parts = cleanText.split(regex);
   return (
@@ -130,7 +131,7 @@ export default function AIChatDock() {
 
   const settingsTouchStart = useRef(0);
   const longPressTimerRef = useRef(null);
-  const selectionTimerRef = useRef(null); // 新增：用于延迟显示菜单
+  const selectionTimerRef = useRef(null);
 
   const audioRef = useRef(null);
   const historyRef = useRef(null);
@@ -139,6 +140,7 @@ export default function AIChatDock() {
   const textareaRef = useRef(null);
   const taskToRun = useRef(null);
 
+  // 处理返回键关闭
   useEffect(() => {
     const handlePopState = (event) => {
       if (isAiOpen) {
@@ -162,6 +164,7 @@ export default function AIChatDock() {
     };
   }, [isAiOpen, setIsAiOpen]);
   
+  // 加载收藏
   useEffect(() => {
     try {
       const storedBookmarks = localStorage.getItem('ai_bookmarks');
@@ -221,6 +224,7 @@ export default function AIChatDock() {
     );
   }, [currentSessionId, setSessions, aiMode]);
 
+  // --- 选区监听注册 ---
   useEffect(() => {
     if (typeof window !== 'undefined') {
       document.addEventListener('selectionchange', handleSelectionChange);
@@ -235,12 +239,14 @@ export default function AIChatDock() {
     };
   }, [isAiOpen]);
 
+  // 滚动到底部
   useEffect(() => {
     if (historyRef.current && isAiOpen) {
       historyRef.current.scrollTop = historyRef.current.scrollHeight;
     }
   }, [messages, isAiOpen, loading]);
 
+  // --- 自动触发逻辑 (Active Task) ---
   useEffect(() => {
     if (activeTask && activeTask.timestamp) {
       const lastProcessed = sessionStorage.getItem('last_ai_task_ts');
@@ -251,19 +257,12 @@ export default function AIChatDock() {
       let newSessionTitle;
       let initialMessages = [];
 
-      // --- 核心修复：AI语言强制控制 ---
-      // 根据用户等级，强制在 Prompt 尾部添加语言指令，利用 AI 的"近因效应"确保它听话
-      const level = config.userLevel || 'H1';
-      const isLowLevel = ['H1', 'H2', 'HSK1', 'HSK2'].some(l => level.toUpperCase().includes(l));
+      // 这里只处理“语法讲解”和“错题分析”的格式指令
+      // 语言强制指令 (Burmese) 将在 handleSend 中统一注入，确保全局生效
       
-      const langInstruction = isLowLevel 
-          ? "\n\n【System Override】: The user is a BEGINNER (HSK 1-2). You MUST use **Burmese (缅甸语)** for all explanations, context, and logic analysis. Only use Chinese for the specific vocabulary/sentences being taught. Do NOT use long paragraphs of Chinese."
-          : "";
-      // ---------------------------------------
-
       if (aiMode === 'INTERACTIVE') {
         newSessionTitle = `${activeTask.grammarPoint} - 错题分析`;
-        hiddenPrompt = `我正在做这道题，请帮我分析一下：\n- **题目**: "${activeTask.question}"\n- **我的选择**: "${activeTask.userChoice}"\n- **涉及语法点**: ${activeTask.grammarPoint}${langInstruction}`;
+        hiddenPrompt = `我正在做这道题，请帮我分析一下：\n- **题目**: "${activeTask.question}"\n- **我的选择**: "${activeTask.userChoice}"\n- **涉及语法点**: ${activeTask.grammarPoint}`;
         initialMessages.push({ role: 'assistant', content: `好的，我们来分析这道关于 **${activeTask.grammarPoint}** 的题目。`, id: Date.now() });
       } else if (aiMode === 'CHAT' && activeTask.content) {
         newSessionTitle = activeTask.title || '语法讲解';
@@ -271,7 +270,7 @@ export default function AIChatDock() {
 要求：
 1. 必须包含：情境导入、心里有数、语序对照表、最安全句型、必踩的坑。
 2. 重点词汇请务必使用 **加粗**（例如：**把**字句），方便我查看拼音。
-3. 请分段清晰，多使用 H3 (###) 标题。${langInstruction}`;
+3. 请分段清晰，多使用 H3 (###) 标题。`;
       } else {
         return;
       }
@@ -287,7 +286,7 @@ export default function AIChatDock() {
       setCurrentSessionId(newSession.id);
       taskToRun.current = { prompt: hiddenPrompt, history: initialMessages };
     }
-  }, [activeTask, aiMode, setSessions, setCurrentSessionId, config.userLevel]);
+  }, [activeTask, aiMode, setSessions, setCurrentSessionId]);
 
   useEffect(() => {
     if (taskToRun.current && currentSessionId) {
@@ -297,9 +296,8 @@ export default function AIChatDock() {
     }
   }, [currentSessionId]);
 
-  // --- 选区处理逻辑 (延迟显示 + 不消失) ---
+  // --- 选区处理逻辑 (核心修复) ---
   const handleSelectionChange = () => {
-    // 每次选区变化，先清除旧定时器
     if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
 
     // 2秒延迟，确保用户选完
@@ -314,22 +312,22 @@ export default function AIChatDock() {
           const rect = range.getBoundingClientRect();
           
           // 计算位置：显示在文字上方 50px，水平居中
-          // 如果 rect.top 太小（文字在顶端），则显示在下方
           let top = rect.top - 50; 
           let left = rect.left + (rect.width / 2);
           
+          // 如果 rect.top 太小（文字在顶端），则显示在下方
           if (top < 10) top = rect.bottom + 10;
           
           setSelectionMenu({ show: true, x: left, y: top, text: text });
           setIsCopied(false);
         } else {
-            // 如果没有文字，隐藏菜单
             setSelectionMenu(prev => ({ ...prev, show: false }));
         }
-    }, 2000); // 延迟 2000 毫秒
+    }, 2000); 
   };
 
   const handleOutsideClick = (e) => {
+    // 点击非菜单区域关闭菜单
     const menu = document.getElementById('selection-popover');
     if (menu && !menu.contains(e.target)) {
       setSelectionMenu(prev => ({ ...prev, show: false }));
@@ -343,14 +341,12 @@ export default function AIChatDock() {
   const handleTranslateSelection = () => {
     if (!selectionMenu.text) return;
     handleSend(`请用缅文详细解释这段文字：\n"${selectionMenu.text}"`);
-    // 只有点击“解释”时才清除选区，方便阅读
     setSelectionMenu(prev => ({ ...prev, show: false }));
     window.getSelection().removeAllRanges();
   };
 
-  // --- 阻止原生右键菜单 ---
   const handleContextMenu = (e) => {
-      // 只有在聊天内容区域内才阻止，防止影响输入框操作
+      // 阻止原生右键，使用我们的小菜单
       e.preventDefault();
       return false;
   };
@@ -468,7 +464,9 @@ export default function AIChatDock() {
     login();
   };
 
+  // --- 发送逻辑 (核心修改：全局语言注入) ---
   const handleSend = async (textToSend = input, isSystemTrigger = false, historyOverride = null) => {
+    // 优先使用传入参数 textToSend (处理气囊点击)
     const contentToSend = (typeof textToSend === 'string' ? textToSend : input).trim();
     if (!contentToSend || loading) return;
 
@@ -491,18 +489,33 @@ export default function AIChatDock() {
 
     const userMessage = { role: 'user', content: contentToSend };
     
+    // --- 构造消息列表 ---
     let apiMessages = [];
     if (isSystemTrigger && aiMode === 'CHAT' && activeTask) {
+        // 系统触发：使用 System Prompt + 用户指令
         apiMessages = [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: contentToSend }
         ];
     } else {
+        // 自由聊天：System Prompt + 历史记录 + 新消息
         const currentHistory = historyOverride !== null ? historyOverride : messages;
         const historyForApi = [...currentHistory, userMessage];
         const historyMsgs = historyForApi.slice(-10).map(({ role, content }) => ({ role, content }));
         apiMessages = [{ role: 'system', content: systemPrompt }, ...historyMsgs];
     }
+
+    // --- 【全局强制语言控制】 ---
+    // 无论是否是自动触发，只要是 HSK1-2，就强制在 System Prompt 中追加缅语指令
+    const level = config.userLevel || 'H1';
+    const isLowLevel = ['H1', 'H2', 'HSK1', 'HSK2'].some(l => level.toUpperCase().includes(l));
+    if (isLowLevel) {
+        // 修改 apiMessages 中的 system 消息内容
+        if (apiMessages.length > 0 && apiMessages[0].role === 'system') {
+            apiMessages[0].content += "\n\n【System Override】: The user is a BEGINNER (HSK 1-2). You MUST use **Burmese (缅甸语)** for all explanations, context, and logic analysis. Only use Chinese for the specific vocabulary/sentences being taught. Do NOT use long paragraphs of Chinese.";
+        }
+    }
+    // ----------------------------
 
     const assistantPlaceholder = { role: 'assistant', content: '', id: `${Date.now()}-assist` };
     if (isSystemTrigger) {
@@ -582,7 +595,7 @@ export default function AIChatDock() {
                 });
               }
             } catch (e) {
-              console.error("无法解析收到的数据流 (JSON Error):", e);
+              console.error("无法解析流:", e);
             }
           }
         }
@@ -621,16 +634,9 @@ export default function AIChatDock() {
     setIsPlaying(true);
     
     // --- TTS 净化逻辑 ---
-    // 移除 markdown 链接格式
     let clean = text.replace(/\[(.*?)\]\(.*?\)/g, '$1');
-    // 移除 markdown 符号
     clean = clean.replace(/[*#`>~\-\[\]_]/g, '');
-    
-    // 移除所有标点符号（中英文）和特殊字符，只保留中文字、英文字母、数字和空格
-    // 这能有效防止朗读 "comma", "period" 或者表情符号
     clean = clean.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g, ' ');
-    
-    // 移除多余空格
     clean = clean.replace(/\s+/g, ' ').trim();
         
     const rate = Math.round((config.ttsSpeed - 1) * 100);
@@ -648,7 +654,6 @@ export default function AIChatDock() {
   const copyText = (text) => {
     navigator.clipboard.writeText(text);
     setIsCopied(true);
-    // 复制不清除选区，只隐藏菜单
     setTimeout(() => setSelectionMenu(prev => ({ ...prev, show: false })), 800);
   };
 
@@ -683,6 +688,7 @@ export default function AIChatDock() {
 
   return (
     <>
+      {/* 选词菜单 - 提升 zIndex */}
       {selectionMenu.show && (
         <div id="selection-popover" style={{ ...styles.popover, left: selectionMenu.x, top: selectionMenu.y }}>
           <button onClick={handleTranslateSelection} style={styles.popBtn} title="解释/翻译"><FaLanguage size={14} /> 解释</button>
@@ -779,10 +785,10 @@ export default function AIChatDock() {
                         {m.content === '' && loading && i === messages.length - 1 ? (
                           <TypingIndicator />
                         ) : (
+                          // Markdown 渲染组件，应用拼音逻辑
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             components={{
-                              // 修复拼音显示不全问题，覆盖更多标签
                               h1: ({ children }) => <h1 style={styles.h1}>{renderWithPinyin(children)}</h1>,
                               h2: ({ children }) => <h2 style={styles.h2}>{renderWithPinyin(children)}</h2>,
                               h3: ({ children }) => <h3 style={styles.h3}>{renderWithPinyin(children)}</h3>,
@@ -831,7 +837,9 @@ export default function AIChatDock() {
               <div style={styles.scrollSuggestionContainer}>
                 {suggestions.map((s, idx) => (
                   <button key={idx} onClick={() => handleSend(s)} style={styles.scrollSuggestionBtn}>
-                    <FaLightbulb color="#4f46e5" size={10} style={{ marginRight: 6 }} />{s}
+                    <FaLightbulb color="#4f46e5" size={10} style={{ marginRight: 6 }} />
+                    {/* 给气囊内的文字也加上拼音渲染 */}
+                    <PinyinRenderer text={s} show={config.showPinyin} />
                   </button>
                 ))}
               </div>
@@ -1054,7 +1062,8 @@ const styles = {
   navHeader: { height: 56, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', borderBottom: '1px solid #e2e8f0', flexShrink: 0, paddingTop: 'env(safe-area-inset-top)' },
   navTitle: { fontSize: '1.1rem', fontWeight: 'bold', color: '#1e293b', textAlign: 'center', flex: 1, marginRight: '-48px' /* Compensate for the left button */ },
   navIconBtn: { background: 'none', border: 'none', padding: 8, cursor: 'pointer', color: '#64748b', width: 48, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  chatBody: { flex: 1, overflowY: 'auto', padding: '16px', background: '#f8fafc', WebkitOverflowScrolling: 'touch', userSelect: 'text' /* 允许选中 */ },
+  // 关键修复：强制允许选中文本
+  chatBody: { flex: 1, overflowY: 'auto', padding: '16px', background: '#f8fafc', WebkitOverflowScrolling: 'touch', userSelect: 'text', WebkitUserSelect: 'text' },
   footer: { background: '#fff', borderTop: '1px solid #e2e8f0', paddingBottom: 'env(safe-area-inset-bottom)', display: 'flex', flexDirection: 'column', flexShrink: 0 },
   floatingBtn: { position: 'fixed', width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #4f46e5)', boxShadow: '0 8px 20px rgba(79, 70, 229, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, cursor: 'grab', touchAction: 'none' },
   sidebar: { position: 'fixed', top: 0, left: 0, width: '80%', maxWidth: 300, bottom: 0, background: '#fff', borderRight: '1px solid #e2e8f0', zIndex: 100000, transition: 'transform 0.3s ease', display: 'flex', flexDirection: 'column', paddingTop: 'env(safe-area-inset-top)' },
@@ -1095,7 +1104,8 @@ const styles = {
   dynamicInputBtn: { width: 44, height: 44, borderRadius: '50%', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s', flexShrink: 0, background: '#6366f1', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.2)' },
   sttLangMenu: { position: 'absolute', bottom: '120%', right: 0, background: '#fff', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.15)', padding: 8, width: 140, zIndex: 20 },
   sttLangItem: { padding: '8px 10px', borderRadius: 6, fontSize: '0.9rem', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  popover: { position: 'fixed', transform: 'translateX(-50%)', background: '#1e293b', borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 4px 15px rgba(0,0,0,0.3)', zIndex: 11000, color: '#fff', whiteSpace: 'nowrap' },
+  // 关键修复：Z-Index 提升到最高
+  popover: { position: 'fixed', transform: 'translateX(-50%)', background: '#1e293b', borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 4px 15px rgba(0,0,0,0.3)', zIndex: 999999, color: '#fff', whiteSpace: 'nowrap' },
   popArrow: { position: 'absolute', bottom: -6, left: '50%', marginLeft: -6, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '6px solid #1e293b' },
   popBtn: { background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem' },
   popDivider: { width: 1, height: 16, background: 'rgba(255,255,255,0.3)' },
