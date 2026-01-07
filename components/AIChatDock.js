@@ -173,7 +173,7 @@ export default function AIChatDock() {
   const recognitionRef = useRef(null);
 
   // =======================================================
-  // ✅ 核心逻辑 1：拦截手机物理返回键 / 侧滑手势
+  // 核心逻辑：拦截手机物理返回键 / 侧滑手势
   // =======================================================
   useEffect(() => {
     if (isAiOpen) {
@@ -193,6 +193,7 @@ export default function AIChatDock() {
     return session ? session.messages : [];
   }, [sessions, currentSessionId]);
 
+  // 更新消息状态的辅助函数
   const updateMessages = (updater) => {
     if (!currentSessionId) return;
     setSessions(prevSessions => 
@@ -200,6 +201,7 @@ export default function AIChatDock() {
         if (s.id === currentSessionId) {
             const newMsgs = typeof updater === 'function' ? updater(s.messages) : updater;
             let newTitle = s.title;
+            // 自动更新标题
             if (aiMode === 'CHAT' && s.title === '新对话' && newMsgs.length > 0) {
                 const firstUserMsg = newMsgs.find(m => m.role === 'user');
                 if(firstUserMsg) newTitle = firstUserMsg.content.substring(0, 15);
@@ -211,6 +213,180 @@ export default function AIChatDock() {
     );
   };
 
+  // 内部 TTS 播放
+  const playInternalTTS = async (text) => {
+    if (!text) return;
+    if (audioRef.current) audioRef.current.pause();
+    setIsPlaying(true);
+    const clean = text.replace(/[*#`>~\-\[\]]/g, '');   
+    const rate = Math.round((config.ttsSpeed - 1) * 100);  
+    const url = `/api/tts?t=${encodeURIComponent(clean)}&v=${config.ttsVoice}&r=${rate}%`;  
+    try {  
+      const res = await fetch(url);  
+      const blob = await res.blob();  
+      const audio = new Audio(URL.createObjectURL(blob));  
+      audioRef.current = audio;  
+      audio.onended = () => setIsPlaying(false);  
+      audio.play();  
+    } catch (e) { setIsPlaying(false); }
+  };
+
+  // =======================================================
+  // ✅ 核心修复：handleSend 定义在 useEffect 之前
+  // =======================================================
+  const handleSend = async (textToSend = input, isSystemTrigger = false) => {
+    if (!textToSend.trim() || loading) return;
+    if (!isSystemTrigger && !user) { setShowLoginTip(true); return; }
+    if (!config.apiKey) { alert('请先在设置中配置 API Key'); setShowSettings(true); return; }
+    
+    // 权限检查
+    if (!isSystemTrigger && !isActivated) {
+        try {
+            const auth = await canUseAI(); 
+            const canUse = (auth && typeof auth === 'object') ? auth.canUse : auth;
+            if (!canUse) { setShowPaywall(true); return; }
+        } catch (e) { alert("网络校验失败，请检查网络连接"); return; }
+    }
+
+    const userText = textToSend;  
+    if (!isSystemTrigger) setInput('');  
+    setSuggestions([]); 
+    setLoading(true);  
+    
+    if (abortControllerRef.current) abortControllerRef.current.abort();  
+    abortControllerRef.current = new AbortController();  
+
+    const userMsg = { role: 'user', content: userText };
+    updateMessages(prev => [...prev, userMsg, { role: 'assistant', content: '' }]);
+
+    // 构建消息列表：Interactive 模式下使用特定的 payload
+    let apiMessages = [];
+    if (aiMode === 'INTERACTIVE' && activeTask) {
+        // AIConfigContext 已经帮我们生成了 systemPrompt，
+        // 这里我们需要构建一个符合 interactive 上下文的 user message
+        const interactivePayload = `
+【学生等级】${config.userLevel || 'H1'}
+【语法点】${activeTask.grammarPoint}
+【题目】${activeTask.question}
+【学生选择】${activeTask.userChoice}
+请严格按照System Prompt的规则进行教学。
+        `;
+        apiMessages = [{ role: 'system', content: systemPrompt }, { role: 'user', content: interactivePayload }];
+    } else {
+        const historyMsgs = messages.slice(-6).map(m => ({role: m.role, content: m.content}));
+        apiMessages = [{ role: 'system', content: systemPrompt }, ...historyMsgs, userMsg];  
+    }
+
+    try {  
+      const response = await fetch('/api/chat', {  
+        method: 'POST',  
+        headers: { 'Content-Type': 'application/json' },  
+        body: JSON.stringify({  
+          messages: apiMessages,
+          email: user?.email, 
+          config: { 
+              apiKey: config.apiKey?.trim(), 
+              baseUrl: config.baseUrl?.trim(), 
+              modelId: config.modelId?.trim() 
+          }  
+        }),  
+        signal: abortControllerRef.current.signal  
+      });  
+
+      if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`API 请求失败: ${response.status} - ${errText}`);
+      }
+      if (!response.body) throw new Error("无响应内容");
+
+      const reader = response.body.getReader();  
+      const decoder = new TextDecoder();  
+      let done = false;  
+      let fullContent = '';  
+      let buffer = '';
+      let soundThrottler = 0;
+
+      while (!done) {  
+        const { value, done: readerDone } = await reader.read();  
+        done = readerDone;  
+        const chunk = decoder.decode(value, { stream: true });  
+        buffer += chunk;  
+        
+        const lines = buffer.split('\n');  
+        buffer = lines.pop(); 
+
+        for (const line of lines) {  
+            const trimmed = line.trim();  
+            if (!trimmed || trimmed === 'data: [DONE]') continue;  
+            if (trimmed.startsWith('data:')) {  
+                try {  
+                    const jsonStr = trimmed.replace(/^data:\s?/, ''); 
+                    if (jsonStr === '[DONE]') continue;
+                    
+                    const data = JSON.parse(jsonStr);  
+                    const delta = data.choices?.[0]?.delta?.content || '';  
+                    if (delta) {  
+                        fullContent += delta;  
+                        if (config.soundEnabled) {
+                            soundThrottler++;
+                            if (soundThrottler % 3 === 0) playTickSound(); 
+                        }
+                        updateMessages(prev => {  
+                            const last = prev[prev.length - 1];  
+                            const list = prev.slice(0, -1);
+                            return [...list, { ...last, content: fullContent }];  
+                        });  
+                    }  
+                } catch (e) { }  
+            }  
+        }  
+      } 
+      
+      // --- 增强的追问解析逻辑 ---
+      // 使用正则查找建议部分，支持 SUGGESTIONS:, [建议]: 等多种格式，忽略大小写
+      const suggestionRegex = /(?:SUGGESTIONS:|\[建议\]:|【建议】:|Follow-up:)\s*([\s\S]*)$/i;
+      let cleanContent = fullContent;
+      let rawSuggestionsStr = '';
+
+      const match = fullContent.match(suggestionRegex);
+      if (match) {
+          // 找到建议部分，从主内容中移除
+          cleanContent = fullContent.replace(suggestionRegex, '').trim();
+          rawSuggestionsStr = match[1];
+      }
+
+      updateMessages(prev => [...prev.slice(0, -1), { role: 'assistant', content: cleanContent }]);
+
+      if (rawSuggestionsStr) {
+          // 支持 ||| 或 换行符 分割
+          const splitRegex = /\|\|\||\||\n/; 
+          const finalSuggestions = rawSuggestionsStr
+              .split(splitRegex)
+              .map(s => s.trim().replace(/^(\d+[\.、\s]+|Q\d+[:：]\s?)/, '')) // 去掉 "1.", "Q1:" 等前缀
+              .filter(s => s && s.length > 2) // 过滤掉太短的杂质
+              .slice(0, 10);
+          setSuggestions(finalSuggestions);
+      }
+      // 自动触发不扣费
+      if (!isSystemTrigger && !isActivated) await recordUsage(); 
+      if (config.autoTTS) playInternalTTS(cleanContent);
+    } catch (err) {  
+      if (err.name !== 'AbortError') {  
+          console.error("Chat Error:", err);
+          updateMessages(prev => {
+              const last = prev[prev.length - 1];
+              return [...prev.slice(0, -1), { ...last, content: last.content || `[系统]: 生成中断，请检查设置。(${err.message})` }];
+          });
+      }  
+    } finally {  
+      setLoading(false);  
+      abortControllerRef.current = null;  
+    }
+  };
+
+  // =======================================================
+  // ✅ 核心修复：useEffect 现在可以正确调用 handleSend 了
+  // =======================================================
   useEffect(() => {
     if (typeof window !== 'undefined') {
         document.addEventListener('selectionchange', handleSelectionChange);
@@ -230,13 +406,12 @@ export default function AIChatDock() {
     }
   }, [messages, isAiOpen, loading]);
 
-  // 自动发送任务
+  // 自动发送任务 (错题自动提交)
   useEffect(() => {
       if (aiMode === 'INTERACTIVE' && activeTask && activeTask.timestamp) {
           const lastProcessed = sessionStorage.getItem('last_ai_task_ts');
           if (lastProcessed !== String(activeTask.timestamp)) {
-              // 注意：这里发送的 textToSend 只是显示给用户的 UI 文本
-              // 实际发送给 AI 的 Prompt 是由 AIConfigContext 的 systemPrompt 决定的
+              // 这里的文字仅用于界面显示，实际 Prompt 由 handleSend 内部逻辑决定
               const displayMsg = `(自动提交) 我做错了这道题，请帮我分析：\n"${activeTask.question}"\n我选择了：${activeTask.userChoice}`;
               handleSend(displayMsg, true); 
               sessionStorage.setItem('last_ai_task_ts', String(activeTask.timestamp));
@@ -370,170 +545,6 @@ export default function AIChatDock() {
       login();
   };
 
-  const handleSend = async (textToSend = input, isSystemTrigger = false) => {
-    if (!textToSend.trim() || loading) return;
-    if (!isSystemTrigger && !user) { setShowLoginTip(true); return; }
-    if (!config.apiKey) { alert('请先在设置中配置 API Key'); setShowSettings(true); return; }
-    if (!isSystemTrigger && !isActivated) {
-        try {
-            const auth = await canUseAI(); 
-            const canUse = (auth && typeof auth === 'object') ? auth.canUse : auth;
-            if (!canUse) { setShowPaywall(true); return; }
-        } catch (e) { alert("网络校验失败，请检查网络连接"); return; }
-    }
-
-    const userText = textToSend;  
-    if (!isSystemTrigger) setInput('');  
-    setSuggestions([]); 
-    setLoading(true);  
-    
-    if (abortControllerRef.current) abortControllerRef.current.abort();  
-    abortControllerRef.current = new AbortController();  
-
-    const userMsg = { role: 'user', content: userText };
-    updateMessages(prev => [...prev, userMsg, { role: 'assistant', content: '' }]);
-
-    // 构建消息列表：Interactive 模式下使用特定的 payload，否则使用历史记录
-    let apiMessages = [];
-    if (aiMode === 'INTERACTIVE' && activeTask) {
-        // AIConfigContext 已经帮我们生成了 systemPrompt，
-        // 这里我们需要构建一个符合 interactive 上下文的 user message
-        const interactivePayload = `
-【学生等级】${config.userLevel || 'H1'}
-【语法点】${activeTask.grammarPoint}
-【题目】${activeTask.question}
-【学生选择】${activeTask.userChoice}
-请严格按照System Prompt的规则进行教学。
-        `;
-        apiMessages = [{ role: 'system', content: systemPrompt }, { role: 'user', content: interactivePayload }];
-    } else {
-        const historyMsgs = messages.slice(-6).map(m => ({role: m.role, content: m.content}));
-        apiMessages = [{ role: 'system', content: systemPrompt }, ...historyMsgs, userMsg];  
-    }
-
-    try {  
-      const response = await fetch('/api/chat', {  
-        method: 'POST',  
-        headers: { 'Content-Type': 'application/json' },  
-        body: JSON.stringify({  
-          messages: apiMessages,
-          email: user?.email, 
-          config: { 
-              apiKey: config.apiKey?.trim(), 
-              baseUrl: config.baseUrl?.trim(), 
-              modelId: config.modelId?.trim() 
-          }  
-        }),  
-        signal: abortControllerRef.current.signal  
-      });  
-
-      if (!response.ok) {
-          const errText = await response.text();
-          throw new Error(`API 请求失败: ${response.status} - ${errText}`);
-      }
-      if (!response.body) throw new Error("无响应内容");
-
-      const reader = response.body.getReader();  
-      const decoder = new TextDecoder();  
-      let done = false;  
-      let fullContent = '';  
-      let buffer = '';
-      let soundThrottler = 0;
-
-      while (!done) {  
-        const { value, done: readerDone } = await reader.read();  
-        done = readerDone;  
-        const chunk = decoder.decode(value, { stream: true });  
-        buffer += chunk;  
-        
-        const lines = buffer.split('\n');  
-        buffer = lines.pop(); 
-
-        for (const line of lines) {  
-            const trimmed = line.trim();  
-            if (!trimmed || trimmed === 'data: [DONE]') continue;  
-            if (trimmed.startsWith('data:')) {  
-                try {  
-                    const jsonStr = trimmed.replace(/^data:\s?/, ''); 
-                    if (jsonStr === '[DONE]') continue;
-                    
-                    const data = JSON.parse(jsonStr);  
-                    const delta = data.choices?.[0]?.delta?.content || '';  
-                    if (delta) {  
-                        fullContent += delta;  
-                        if (config.soundEnabled) {
-                            soundThrottler++;
-                            if (soundThrottler % 3 === 0) playTickSound(); 
-                        }
-                        updateMessages(prev => {  
-                            const last = prev[prev.length - 1];  
-                            const list = prev.slice(0, -1);
-                            return [...list, { ...last, content: fullContent }];  
-                        });  
-                    }  
-                } catch (e) { }  
-            }  
-        }  
-      } 
-      
-      // --- 增强的追问解析逻辑 ---
-      // 使用正则查找建议部分，支持 SUGGESTIONS:, [建议]: 等多种格式，忽略大小写
-      const suggestionRegex = /(?:SUGGESTIONS:|\[建议\]:|【建议】:|Follow-up:)\s*([\s\S]*)$/i;
-      let cleanContent = fullContent;
-      let rawSuggestionsStr = '';
-
-      const match = fullContent.match(suggestionRegex);
-      if (match) {
-          // 找到建议部分，从主内容中移除
-          cleanContent = fullContent.replace(suggestionRegex, '').trim();
-          rawSuggestionsStr = match[1];
-      }
-
-      updateMessages(prev => [...prev.slice(0, -1), { role: 'assistant', content: cleanContent }]);
-
-      if (rawSuggestionsStr) {
-          // 支持 ||| 或 换行符 分割
-          const splitRegex = /\|\|\||\||\n/; 
-          const finalSuggestions = rawSuggestionsStr
-              .split(splitRegex)
-              .map(s => s.trim().replace(/^(\d+[\.、\s]+|Q\d+[:：]\s?)/, '')) // 去掉 "1.", "Q1:" 等前缀
-              .filter(s => s && s.length > 2) // 过滤掉太短的杂质
-              .slice(0, 10);
-          setSuggestions(finalSuggestions);
-      }
-      if (!isSystemTrigger && !isActivated) await recordUsage(); 
-      if (config.autoTTS) playInternalTTS(cleanContent);
-    } catch (err) {  
-      if (err.name !== 'AbortError') {  
-          console.error("Chat Error:", err);
-          updateMessages(prev => {
-              const last = prev[prev.length - 1];
-              return [...prev.slice(0, -1), { ...last, content: last.content || `[系统]: 生成中断，请检查设置。(${err.message})` }];
-          });
-      }  
-    } finally {  
-      setLoading(false);  
-      abortControllerRef.current = null;  
-    }
-  };
-
-  const playInternalTTS = async (text) => {
-    if (!text) return;
-    if (audioRef.current) audioRef.current.pause();
-    setIsPlaying(true);
-    const clean = text.replace(/[*#`>~\-\[\]]/g, '');   
-    const rate = Math.round((config.ttsSpeed - 1) * 100);  
-    const url = `/api/tts?t=${encodeURIComponent(clean)}&v=${config.ttsVoice}&r=${rate}%`;  
-    try {  
-      const res = await fetch(url);  
-      const blob = await res.blob();  
-      const audio = new Audio(URL.createObjectURL(blob));  
-      audioRef.current = audio;  
-      audio.onended = () => setIsPlaying(false);  
-      audio.play();  
-    } catch (e) { setIsPlaying(false); }
-  };
-
   const copyText = (text) => {
     navigator.clipboard.writeText(text);
     setIsCopied(true);
@@ -657,9 +668,9 @@ export default function AIChatDock() {
                                             <ReactMarkdown
                                                 remarkPlugins={[remarkGfm]} 
                                                 components={{
-                                                    // H1: 大标题，深蓝色
+                                                    // H1: 大标题，深蓝色，底部横线
                                                     h1: ({children}) => <h1 style={styles.h1}>{renderWithPinyin(children, config.showPinyin)}</h1>,
-                                                    // H2: 二级标题，带下划线，紫色
+                                                    // H2: 二级标题，左侧紫色竖条，字体稍小
                                                     h2: ({children}) => <h2 style={styles.h2}>{renderWithPinyin(children, config.showPinyin)}</h2>,
                                                     // H3: 小标题，深灰色
                                                     h3: ({children}) => <h3 style={styles.h3}>{renderWithPinyin(children, config.showPinyin)}</h3>,
@@ -887,17 +898,25 @@ export default function AIChatDock() {
         @keyframes pulse { 0% {transform:scale(1);} 50% {transform:scale(1.2);} 100% {transform:scale(1);} }
         .animate-pulse { animation: pulse 1.5s infinite; }
         .notion-md { font-family: -apple-system, system-ui, sans-serif; color: #333; line-height: 1.8; }
-        /* 列表缩进增强 */
+        
+        /* 列表缩进增强 - 3级层次清晰 */
         .notion-md ul { padding-left: 1.2em; list-style: none; margin: 0.5em 0; }
-        .notion-md ul ul { padding-left: 1.5em; margin: 0.2em 0; border-left: 2px solid #e2e8f0; }
-        .notion-md ul ul ul { padding-left: 1.5em; border-left: 2px solid #e0e7ff; }
+        .notion-md ul ul { padding-left: 1.5em; margin: 0.3em 0; border-left: 2px solid #e2e8f0; }
+        .notion-md ul ul ul { padding-left: 1.5em; border-left: 2px solid #cbd5e1; margin: 0.2em 0; }
         
         .notion-md li { position: relative; padding-left: 0.4em; margin-bottom: 6px; }
+        
+        /* 1级列表点 */
         .notion-md > ul > li::before {
             content: "•"; font-size: 1.2em; position: absolute; left: -0.8em; top: -0.1em; color: #4f46e5;
         }
+        /* 2级列表点 */
         .notion-md ul ul > li::before {
-            content: "◦"; font-size: 1.2em; position: absolute; left: -0.8em; top: -0.1em; color: #64748b;
+            content: "◦"; font-size: 1.2em; position: absolute; left: -0.8em; top: -0.1em; color: #64748b; font-weight: bold;
+        }
+        /* 3级列表点 */
+        .notion-md ul ul ul > li::before {
+            content: "-"; font-size: 1.2em; position: absolute; left: -0.8em; top: -0.1em; color: #94a3b8;
         }
       `}</style>
     </>
@@ -956,7 +975,7 @@ const styles = {
   msgActionBar: { display: 'flex', gap: 12, marginTop: 4, paddingLeft: 2, opacity: 0.6 },
   msgActionBtn: { background:'none', border:'none', color:'#94a3b8', cursor:'pointer', padding:'2px 4px', fontSize:'0.85rem', display: 'flex', alignItems: 'center', gap: 4 },
   
-  // --- Rich Text Styles ---
+  // --- 富文本排版样式 ---
   h1: { fontSize: '1.3em', fontWeight: 800, margin: '1em 0 0.6em 0', color:'#1e3a8a', borderBottom: '2px solid #e0e7ff', paddingBottom: 6 },
   h2: { fontSize: '1.15em', fontWeight: 700, margin: '0.8em 0 0.4em 0', color:'#4f46e5', paddingLeft: 8, borderLeft: '4px solid #4f46e5' },
   h3: { fontSize: '1.05em', fontWeight: 600, margin: '0.6em 0 0.3em 0', color:'#334155' },
@@ -970,7 +989,7 @@ const styles = {
   th: { border: '1px solid #e2e8f0', padding: '6px 10px', background: '#f1f5f9', fontWeight: '600', textAlign: 'left', color:'#475569' },
   td: { border: '1px solid #e2e8f0', padding: '6px 10px', verticalAlign: 'top', color:'#334155' },
   
-  // --- Suggestion Airbags ---
+  // --- 追问气囊样式 ---
   scrollSuggestionContainer: { 
       display: 'flex', gap: 8, padding: '12px 16px 8px 16px', overflowX: 'auto', 
       whiteSpace: 'nowrap', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch', msOverflowStyle: 'none'
