@@ -249,18 +249,25 @@ export default function AIChatDock() {
       let newSessionTitle;
       let initialMessages = [];
 
+      // --- 新增逻辑：根据等级强制追加语言要求 ---
+      const level = config.userLevel || 'H1';
+      const isLowLevel = ['H1', 'H2', 'HSK1', 'HSK2'].some(l => level.toUpperCase().includes(l));
+      const langInstruction = isLowLevel 
+          ? "\n\n【重要强制要求】：面对HSK1-2级学生，除核心词汇/例句外，讲解部分、背景引入、心理辅导必须使用【缅甸语】(Burmese)！请勿使用大段中文。"
+          : "";
+      // ---------------------------------------
+
       if (aiMode === 'INTERACTIVE') {
         newSessionTitle = `${activeTask.grammarPoint} - 错题分析`;
-        hiddenPrompt = `我正在做这道题，请帮我分析一下：\n- **题目**: "${activeTask.question}"\n- **我的选择**: "${activeTask.userChoice}"\n- **涉及语法点**: ${activeTask.grammarPoint}`;
+        hiddenPrompt = `我正在做这道题，请帮我分析一下：\n- **题目**: "${activeTask.question}"\n- **我的选择**: "${activeTask.userChoice}"\n- **涉及语法点**: ${activeTask.grammarPoint}${langInstruction}`;
         initialMessages.push({ role: 'assistant', content: `好的，我们来分析这道关于 **${activeTask.grammarPoint}** 的题目。`, id: Date.now() });
       } else if (aiMode === 'CHAT' && activeTask.content) {
         newSessionTitle = activeTask.title || '语法讲解';
-        // ✅ 修改指令：要求执行 2.0 流程，并强制要求富文本排版
         hiddenPrompt = `老师，请针对语法点【${activeTask.title}】，严格按照你系统指令中的“2.0 教学流程（增强详细版）”给我一份深度讲解。
 要求：
 1. 必须包含：情境导入、心里有数、语序对照表、最安全句型、必踩的坑。
 2. 重点词汇请务必使用 **加粗**（例如：**把**字句），方便我查看拼音。
-3. 请分段清晰，多使用 H3 (###) 标题。`;
+3. 请分段清晰，多使用 H3 (###) 标题。${langInstruction}`;
       } else {
         return;
       }
@@ -276,8 +283,7 @@ export default function AIChatDock() {
       setCurrentSessionId(newSession.id);
       taskToRun.current = { prompt: hiddenPrompt, history: initialMessages };
     }
-  }, [activeTask, aiMode, setSessions, setCurrentSessionId]);
-  
+  }, [activeTask, aiMode, setSessions, setCurrentSessionId, config.userLevel]); // 依赖项增加了 config.userLevel
   useEffect(() => {
     if (taskToRun.current && currentSessionId) {
       const { prompt, history } = taskToRun.current;
@@ -506,6 +512,7 @@ export default function AIChatDock() {
       const decoder = new TextDecoder();
       let buffer = '';
       let fullContent = '';
+      let rawFullContent = ''; // 新增：用于暂存原始文本，包含 <<<SUGGESTIONS>>>
 
       while (true) {
         const { value, done } = await reader.read();
@@ -525,7 +532,27 @@ export default function AIChatDock() {
               const data = JSON.parse(jsonStr);
               const delta = data.choices?.[0]?.delta?.content || '';
               if (delta) {
-                fullContent += delta;
+                rawFullContent += delta; // 累加原始数据
+
+                // --- 核心修复：解析气囊标记 <<<SUGGESTIONS: ... >>> ---
+                const suggestionRegex = /<<<SUGGESTIONS:(.*?)>>>/s;
+                const match = rawFullContent.match(suggestionRegex);
+                let contentToDisplay = rawFullContent;
+
+                if (match) {
+                    // 1. 从显示文本中移除标记
+                    contentToDisplay = rawFullContent.replace(match[0], '').trim();
+                    // 2. 提取气囊内容
+                    const suggestionsStr = match[1];
+                    if (suggestionsStr) {
+                        const newSuggestions = suggestionsStr.split('|').map(s => s.trim()).filter(s => s);
+                        setSuggestions(newSuggestions); // 更新气囊状态
+                    }
+                }
+                // ----------------------------------------------------
+
+                fullContent = contentToDisplay; // 更新实际显示的内容
+                
                 updateMessages(prev => {
                   const updated = [...prev];
                   if (updated.length > 0) {
@@ -541,7 +568,6 @@ export default function AIChatDock() {
           }
         }
       }
-
       updateMessages(prev => {
         const final = [...prev];
         if (final.length > 0) {
