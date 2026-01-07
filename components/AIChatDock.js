@@ -62,7 +62,6 @@ const playTickSound = () => {
 const PinyinRenderer = ({ text, show }) => {
   if (!show || !text) return text; 
   const cleanText = typeof text === 'string' ? text : String(text);
-  // 正则拆分：中文 vs 非中文
   const regex = /([\u4e00-\u9fa5]+)/g; 
   const parts = cleanText.split(regex);
   return (
@@ -98,7 +97,6 @@ const PinyinRenderer = ({ text, show }) => {
 };
 
 // --- 辅助：递归遍历 Children 并应用 Pinyin ---
-// 解决 ReactMarkdown 中 strong/em/li 内部无法显示拼音的问题
 const renderWithPinyin = (children, showPinyin) => {
     return React.Children.map(children, child => {
         if (typeof child === 'string') {
@@ -141,7 +139,7 @@ export default function AIChatDock() {
   } = useAI();
 
   const [showSettings, setShowSettings] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(false); // 全屏模式下，侧边栏作为历史记录抽屉
+  const [showSidebar, setShowSidebar] = useState(false); 
   const [showPaywall, setShowPaywall] = useState(false); 
   const [showLoginTip, setShowLoginTip] = useState(false);
 
@@ -154,17 +152,13 @@ export default function AIChatDock() {
   
   const [selectionMenu, setSelectionMenu] = useState({ show: false, x: 0, y: 0, text: '' });
   const [isCopied, setIsCopied] = useState(false); 
-
-  // API Key 显示状态，默认显示
   const [showKeyText, setShowKeyText] = useState(true);
 
-  // 悬浮按钮位置 (仅当关闭时使用)
+  // 悬浮按钮位置
   const [btnPos, setBtnPos] = useState({ right: 20, bottom: 40 });
   const draggingRef = useRef(false);
   const dragStartPos = useRef({ x: 0, y: 0 });
   const btnStartPos = useRef({ right: 0, bottom: 0 });
-
-  // 设置页手势相关
   const settingsTouchStart = useRef(0);
 
   const audioRef = useRef(null);
@@ -172,9 +166,7 @@ export default function AIChatDock() {
   const abortControllerRef = useRef(null);
   const recognitionRef = useRef(null);
 
-  // =======================================================
-  // 核心逻辑：拦截手机物理返回键 / 侧滑手势
-  // =======================================================
+  // 拦截返回键
   useEffect(() => {
     if (isAiOpen) {
       window.history.pushState({ aiDockOpen: true }, '');
@@ -193,7 +185,6 @@ export default function AIChatDock() {
     return session ? session.messages : [];
   }, [sessions, currentSessionId]);
 
-  // 更新消息状态的辅助函数
   const updateMessages = (updater) => {
     if (!currentSessionId) return;
     setSessions(prevSessions => 
@@ -201,7 +192,6 @@ export default function AIChatDock() {
         if (s.id === currentSessionId) {
             const newMsgs = typeof updater === 'function' ? updater(s.messages) : updater;
             let newTitle = s.title;
-            // 自动更新标题
             if (aiMode === 'CHAT' && s.title === '新对话' && newMsgs.length > 0) {
                 const firstUserMsg = newMsgs.find(m => m.role === 'user');
                 if(firstUserMsg) newTitle = firstUserMsg.content.substring(0, 15);
@@ -213,7 +203,6 @@ export default function AIChatDock() {
     );
   };
 
-  // 内部 TTS 播放
   const playInternalTTS = async (text) => {
     if (!text) return;
     if (audioRef.current) audioRef.current.pause();
@@ -232,14 +221,13 @@ export default function AIChatDock() {
   };
 
   // =======================================================
-  // ✅ 核心修复：handleSend 定义在 useEffect 之前
+  // ✅ 核心修复：把 handleSend 提到 useEffect 之前
   // =======================================================
   const handleSend = async (textToSend = input, isSystemTrigger = false) => {
     if (!textToSend.trim() || loading) return;
     if (!isSystemTrigger && !user) { setShowLoginTip(true); return; }
     if (!config.apiKey) { alert('请先在设置中配置 API Key'); setShowSettings(true); return; }
     
-    // 权限检查
     if (!isSystemTrigger && !isActivated) {
         try {
             const auth = await canUseAI(); 
@@ -259,11 +247,8 @@ export default function AIChatDock() {
     const userMsg = { role: 'user', content: userText };
     updateMessages(prev => [...prev, userMsg, { role: 'assistant', content: '' }]);
 
-    // 构建消息列表：Interactive 模式下使用特定的 payload
     let apiMessages = [];
     if (aiMode === 'INTERACTIVE' && activeTask) {
-        // AIConfigContext 已经帮我们生成了 systemPrompt，
-        // 这里我们需要构建一个符合 interactive 上下文的 user message
         const interactivePayload = `
 【学生等级】${config.userLevel || 'H1'}
 【语法点】${activeTask.grammarPoint}
@@ -342,15 +327,12 @@ export default function AIChatDock() {
         }  
       } 
       
-      // --- 增强的追问解析逻辑 ---
-      // 使用正则查找建议部分，支持 SUGGESTIONS:, [建议]: 等多种格式，忽略大小写
       const suggestionRegex = /(?:SUGGESTIONS:|\[建议\]:|【建议】:|Follow-up:)\s*([\s\S]*)$/i;
       let cleanContent = fullContent;
       let rawSuggestionsStr = '';
 
       const match = fullContent.match(suggestionRegex);
       if (match) {
-          // 找到建议部分，从主内容中移除
           cleanContent = fullContent.replace(suggestionRegex, '').trim();
           rawSuggestionsStr = match[1];
       }
@@ -358,16 +340,14 @@ export default function AIChatDock() {
       updateMessages(prev => [...prev.slice(0, -1), { role: 'assistant', content: cleanContent }]);
 
       if (rawSuggestionsStr) {
-          // 支持 ||| 或 换行符 分割
           const splitRegex = /\|\|\||\||\n/; 
           const finalSuggestions = rawSuggestionsStr
               .split(splitRegex)
-              .map(s => s.trim().replace(/^(\d+[\.、\s]+|Q\d+[:：]\s?)/, '')) // 去掉 "1.", "Q1:" 等前缀
-              .filter(s => s && s.length > 2) // 过滤掉太短的杂质
+              .map(s => s.trim().replace(/^(\d+[\.、\s]+|Q\d+[:：]\s?)/, '')) 
+              .filter(s => s && s.length > 2)
               .slice(0, 10);
           setSuggestions(finalSuggestions);
       }
-      // 自动触发不扣费
       if (!isSystemTrigger && !isActivated) await recordUsage(); 
       if (config.autoTTS) playInternalTTS(cleanContent);
     } catch (err) {  
@@ -385,7 +365,7 @@ export default function AIChatDock() {
   };
 
   // =======================================================
-  // ✅ 核心修复：useEffect 现在可以正确调用 handleSend 了
+  // ✅ 自动发送逻辑放在 handleSend 定义之后
   // =======================================================
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -406,18 +386,19 @@ export default function AIChatDock() {
     }
   }, [messages, isAiOpen, loading]);
 
-  // 自动发送任务 (错题自动提交)
+  // 自动提交错题
   useEffect(() => {
       if (aiMode === 'INTERACTIVE' && activeTask && activeTask.timestamp) {
           const lastProcessed = sessionStorage.getItem('last_ai_task_ts');
           if (lastProcessed !== String(activeTask.timestamp)) {
-              // 这里的文字仅用于界面显示，实际 Prompt 由 handleSend 内部逻辑决定
+              // 这里的文字只用于显示给用户，后端 AI prompt 由 handleSend 内部逻辑决定
               const displayMsg = `(自动提交) 我做错了这道题，请帮我分析：\n"${activeTask.question}"\n我选择了：${activeTask.userChoice}`;
+              // 关键点：handleSend 必须在当前作用域可见
               handleSend(displayMsg, true); 
               sessionStorage.setItem('last_ai_task_ts', String(activeTask.timestamp));
           }
       }
-  }, [activeTask, aiMode]);
+  }, [activeTask, aiMode]); // handleSend is stable but if defined inside component, implicitly depends on it. Ideally use callback but direct call works if defined before.
 
   const handleSelectionChange = () => {
      if (window.selectionTimeout) clearTimeout(window.selectionTimeout);
@@ -451,7 +432,6 @@ export default function AIChatDock() {
       window.getSelection().removeAllRanges();
   };
 
-  // 悬浮球拖拽逻辑
   const handleTouchStart = (e) => {
     draggingRef.current = false;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -668,24 +648,17 @@ export default function AIChatDock() {
                                             <ReactMarkdown
                                                 remarkPlugins={[remarkGfm]} 
                                                 components={{
-                                                    // H1: 大标题，深蓝色，底部横线
                                                     h1: ({children}) => <h1 style={styles.h1}>{renderWithPinyin(children, config.showPinyin)}</h1>,
-                                                    // H2: 二级标题，左侧紫色竖条，字体稍小
                                                     h2: ({children}) => <h2 style={styles.h2}>{renderWithPinyin(children, config.showPinyin)}</h2>,
-                                                    // H3: 小标题，深灰色
                                                     h3: ({children}) => <h3 style={styles.h3}>{renderWithPinyin(children, config.showPinyin)}</h3>,
-                                                    // P: 正文，递归处理 Pinyin
                                                     p: ({children}) => <p style={styles.p}>{renderWithPinyin(children, config.showPinyin)}</p>,
-                                                    // Strong: 重点词，洋红色 + 加粗，且必须显示拼音
                                                     strong: ({children}) => (
                                                       <strong style={styles.strong}>
                                                         {renderWithPinyin(children, config.showPinyin)}
                                                       </strong>
                                                     ),
-                                                    // List: 列表，递归处理
                                                     ul: ({children}) => <ul style={styles.ul}>{children}</ul>,
                                                     li: ({children}) => <li style={styles.li}>{renderWithPinyin(children, config.showPinyin)}</li>,
-                                                    // Blockquote: 引用块，用于解释或例句背景
                                                     blockquote: ({children}) => <blockquote style={styles.blockquote}>{children}</blockquote>,
                                                     del: ({children}) => <del style={styles.del}>{children}</del>,
                                                     table: ({children}) => <div style={{overflowX:'auto'}}><table style={styles.table}>{children}</table></div>,
