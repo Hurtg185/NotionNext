@@ -255,7 +255,12 @@ export default function AIChatDock() {
         initialMessages.push({ role: 'assistant', content: `好的，我们来分析这道关于 **${activeTask.grammarPoint}** 的题目。`, id: Date.now() });
       } else if (aiMode === 'CHAT' && activeTask.content) {
         newSessionTitle = activeTask.title || '语法讲解';
-        hiddenPrompt = `你好，请根据我正在学习的【${activeTask.title}】这个语法点，用缅甸语给我一个简洁明了的核心解释，并举1-2个最常用的例子。`;
+        // ✅ 修改指令：要求执行 2.0 流程，并强制要求富文本排版
+        hiddenPrompt = `老师，请针对语法点【${activeTask.title}】，严格按照你系统指令中的“2.0 教学流程（增强详细版）”给我一份深度讲解。
+要求：
+1. 必须包含：情境导入、心里有数、语序对照表、最安全句型、必踩的坑。
+2. 重点词汇请务必使用 **加粗**（例如：**把**字句），方便我查看拼音。
+3. 请分段清晰，多使用 H3 (###) 标题。`;
       } else {
         return;
       }
@@ -453,10 +458,22 @@ export default function AIChatDock() {
     abortControllerRef.current = new AbortController();
 
     const userMessage = { role: 'user', content: contentToSend };
-    const currentHistory = historyOverride !== null ? historyOverride : messages;
-    const historyForApi = [...currentHistory, userMessage];
-    const historyMsgs = historyForApi.slice(-10).map(({ role, content }) => ({ role, content }));
-    const apiMessages = [{ role: 'system', content: systemPrompt }, ...historyMsgs];
+    
+    // ✅ 修改：针对自动触发的语法教学，优化发送逻辑
+    let apiMessages = [];
+    if (isSystemTrigger && aiMode === 'CHAT' && activeTask) {
+        // 系统触发的语法讲解：只发 System Prompt 和 当前指令，确保 AI 满血输出 2.0 流程
+        apiMessages = [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: contentToSend }
+        ];
+    } else {
+        // 普通对话：保留历史记录
+        const currentHistory = historyOverride !== null ? historyOverride : messages;
+        const historyForApi = [...currentHistory, userMessage];
+        const historyMsgs = historyForApi.slice(-10).map(({ role, content }) => ({ role, content }));
+        apiMessages = [{ role: 'system', content: systemPrompt }, ...historyMsgs];
+    }
 
     const assistantPlaceholder = { role: 'assistant', content: '', id: `${Date.now()}-assist` };
     if (isSystemTrigger) {
