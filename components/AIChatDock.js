@@ -27,8 +27,7 @@ const STT_LANGS = [
 
 const LONG_PRESS_DURATION = 600;
 
-// --- 升级版音效引擎 ---
-// 解决 AudioContext 自动挂起和初始化问题
+// --- 音效引擎 (机械键盘版) ---
 let audioCtx = null;
 
 const initAudioContext = () => {
@@ -38,7 +37,6 @@ const initAudioContext = () => {
             audioCtx = new AudioContext();
         }
     }
-    // 尝试恢复挂起的上下文
     if (audioCtx && audioCtx.state === 'suspended') {
         audioCtx.resume();
     }
@@ -55,41 +53,53 @@ const playTickSound = () => {
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     
-    // 使用正弦波 (Sine)，声音最圆润
-    osc.type = 'sine';
+    // 使用方波 (Square)，模拟机械键盘的清脆感
+    osc.type = 'square';
     
-    // 频率固定在 800Hz 左右，不下降，像水滴
-    osc.frequency.setValueAtTime(800, t);
+    // 频率：从 600Hz 瞬间降到 300Hz，模拟触底声
+    osc.frequency.setValueAtTime(600, t);
+    osc.frequency.exponentialRampToValueAtTime(300, t + 0.03);
     
-    // 音量极短
-    gain.gain.setValueAtTime(0.08, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+    // 音量包络：极短冲击
+    gain.gain.setValueAtTime(0.05, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
     
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     
     osc.start(t);
-    osc.stop(t + 0.05);
+    osc.stop(t + 0.03);
   } catch (e) { console.error('Sound play error:', e); }
 };
-// --- 拼音组件 ---
+
+// --- 拼音组件 (修复版) ---
 const PinyinRenderer = ({ text, show }) => {
   if (!show || !text) return text;
   const cleanText = typeof text === 'string' ? text : String(text);
+  // 匹配中文字符块
   const regex = /([\u4e00-\u9fa5]+)/g;
   const parts = cleanText.split(regex);
+
   return (
-    <span style={{ userSelect: 'text' }}>
+    <span style={{ userSelect: 'text', lineHeight: '1.8' }}>
       {parts.map((part, index) => {
         if (/[\u4e00-\u9fa5]/.test(part)) {
+          // 获取拼音数组
           const pyArray = pinyin(part, { type: 'array', toneType: 'symbol' });
           const charArray = part.split('');
           return (
-            <span key={index} style={{ whiteSpace: 'nowrap', marginRight: '2px' }}>
+            <span key={index} style={{ whiteSpace: 'nowrap', margin: '0 2px' }}>
               {charArray.map((char, i) => (
                 <ruby key={i} style={{ rubyPosition: 'over', margin: '0 1px' }}>
                   {char}
-                  <rt style={{ fontSize: '0.6em', color: '#64748b', fontWeight: 'normal', userSelect: 'none', WebkitUserSelect: 'none', fontFamily: 'Arial' }}>
+                  <rt style={{ 
+                    fontSize: '0.6em', 
+                    color: '#64748b', 
+                    fontWeight: 'normal', 
+                    userSelect: 'none', 
+                    fontFamily: 'Arial',
+                    transform: 'translateY(-2px)' 
+                  }}>
                     {pyArray[i]}
                   </rt>
                 </ruby>
@@ -164,447 +174,6 @@ export default function AIChatDock() {
   const recognitionRef = useRef(null);
   const textareaRef = useRef(null);
   const taskToRun = useRef(null);
-
-  // ========== 移动端选择优化集成开始 ==========
-  useEffect(() => {
-    if (typeof window === 'undefined' || !isAiOpen) return;
-
-    class MobileSelectHelper {
-      constructor() {
-        this.selectedText = '';
-        this.selectedRange = null;
-        this.selectionBox = null;
-        this.styleElement = null;
-        this.toolbar = null;
-        this.toggleBtn = null;
-        this.init();
-      }
-
-      init() {
-        this.createSelectionUI();
-        this.bindEvents();
-      }
-
-      // 创建选择相关UI
-      createSelectionUI() {
-        // 创建固定的选择操作栏
-        const toolbar = document.createElement('div');
-        toolbar.id = 'mobile-select-toolbar';
-        toolbar.innerHTML = `
-            <div class="selected-preview"></div>
-            <div class="toolbar-buttons">
-                <button class="tool-btn" data-action="read">🔊 朗读</button>
-                <button class="tool-btn" data-action="copy">📋 复制</button>
-                <button class="tool-btn" data-action="clear">✕</button>
-            </div>
-        `;
-        document.body.appendChild(toolbar);
-        this.toolbar = toolbar;
-
-        // 添加样式
-        const style = document.createElement('style');
-        style.id = 'mobile-select-styles';
-        style.textContent = `
-            #mobile-select-toolbar {
-                position: fixed;
-                bottom: -200px;
-                left: 10px;
-                right: 10px;
-                background: #1a1a2e;
-                border: 1px solid #4a9eff;
-                border-radius: 12px;
-                padding: 10px;
-                z-index: 10000;
-                transition: bottom 0.3s ease;
-                box-shadow: 0 -4px 20px rgba(74, 158, 255, 0.3);
-            }
-
-            #mobile-select-toolbar.show {
-                bottom: 80px;
-            }
-
-            #mobile-select-toolbar .selected-preview {
-                color: #fff;
-                font-size: 14px;
-                padding: 8px;
-                background: rgba(74, 158, 255, 0.1);
-                border-radius: 6px;
-                margin-bottom: 8px;
-                max-height: 60px;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-            }
-
-            #mobile-select-toolbar .toolbar-buttons {
-                display: flex;
-                gap: 8px;
-            }
-
-            #mobile-select-toolbar .tool-btn {
-                flex: 1;
-                padding: 10px;
-                border: none;
-                border-radius: 8px;
-                background: #4a9eff;
-                color: white;
-                font-size: 14px;
-                cursor: pointer;
-            }
-
-            #mobile-select-toolbar .tool-btn:active {
-                background: #3a8eef;
-                transform: scale(0.95);
-            }
-
-            #mobile-select-toolbar .tool-btn[data-action="clear"] {
-                flex: 0.3;
-                background: #666;
-            }
-
-            /* 保持选中高亮 */
-            .persistent-highlight {
-                background: rgba(74, 158, 255, 0.3) !important;
-                border-radius: 2px;
-            }
-
-            /* 字符选择模式的样式 */
-            .char-selectable {
-                cursor: pointer;
-            }
-
-            .char-selectable .char-span {
-                display: inline;
-                padding: 2px 0;
-            }
-
-            .char-selectable .char-span.selected {
-                background: rgba(74, 158, 255, 0.4);
-            }
-
-            .char-selectable .char-span:active {
-                background: rgba(74, 158, 255, 0.6);
-            }
-
-            /* 选择模式切换按钮 */
-            #select-mode-toggle {
-                position: fixed;
-                bottom: 140px;
-                right: 15px;
-                width: 50px;
-                height: 50px;
-                border-radius: 50%;
-                background: #4a9eff;
-                border: none;
-                color: white;
-                font-size: 20px;
-                z-index: 9999;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-                display: none;
-            }
-
-            @media (max-width: 768px) {
-                #select-mode-toggle {
-                    display: block;
-                }
-            }
-
-            /* 字符选择模式指示器 */
-            .char-select-mode #select-mode-toggle {
-                background: #ff6b6b;
-            }
-
-            .char-select-mode .char-selectable .char-span {
-                border-bottom: 1px dashed rgba(74, 158, 255, 0.5);
-            }
-        `;
-        document.head.appendChild(style);
-        this.styleElement = style;
-
-        // 创建选择模式切换按钮
-        const toggleBtn = document.createElement('button');
-        toggleBtn.id = 'select-mode-toggle';
-        toggleBtn.innerHTML = '✋';
-        toggleBtn.title = '切换精确选择模式';
-        document.body.appendChild(toggleBtn);
-        this.toggleBtn = toggleBtn;
-      }
-
-      bindEvents() {
-        this.onSelectionChange = this.handleSelectionChange.bind(this);
-        this.onToolbarClick = this.handleToolbarClick.bind(this);
-        this.onToggleClick = this.handleToggleClick.bind(this);
-        this.onTouchEnd = this.handleTouchEnd.bind(this);
-
-        document.addEventListener('selectionchange', this.onSelectionChange);
-        this.toolbar.addEventListener('click', this.onToolbarClick);
-        this.toggleBtn.addEventListener('click', this.onToggleClick);
-        document.addEventListener('touchend', this.onTouchEnd);
-      }
-
-      destroy() {
-        document.removeEventListener('selectionchange', this.onSelectionChange);
-        document.removeEventListener('touchend', this.onTouchEnd);
-        
-        if (this.toolbar) {
-            this.toolbar.removeEventListener('click', this.onToolbarClick);
-            this.toolbar.remove();
-        }
-        if (this.toggleBtn) {
-            this.toggleBtn.removeEventListener('click', this.onToggleClick);
-            this.toggleBtn.remove();
-        }
-        if (this.styleElement) {
-            this.styleElement.remove();
-        }
-        
-        document.body.classList.remove('char-select-mode');
-        this.disableCharSelectMode();
-        this.clearSelection();
-      }
-
-      handleToolbarClick(e) {
-        const action = e.target.dataset.action;
-        if (action === 'read') {
-          this.readSelection();
-        } else if (action === 'copy') {
-          this.copySelection();
-        } else if (action === 'clear') {
-          this.clearSelection();
-        }
-      }
-
-      handleToggleClick() {
-        document.body.classList.toggle('char-select-mode');
-        if (document.body.classList.contains('char-select-mode')) {
-          this.enableCharSelectMode();
-          this.toggleBtn.innerHTML = '📝';
-        } else {
-          this.disableCharSelectMode();
-          this.toggleBtn.innerHTML = '✋';
-        }
-      }
-
-      handleTouchEnd(e) {
-         if (e.target.closest('#mobile-select-toolbar') || e.target.closest('#select-mode-toggle')) return;
-         setTimeout(() => {
-           this.preserveSelection();
-         }, 100);
-      }
-
-      handleSelectionChange() {
-        const selection = window.getSelection();
-        const text = selection.toString().trim();
-
-        if (text && text.length > 0) {
-          this.selectedText = this.filterPinyin(text);
-
-          if (selection.rangeCount > 0) {
-            this.selectedRange = selection.getRangeAt(0).cloneRange();
-          }
-          this.showToolbar();
-        }
-      }
-
-      filterPinyin(text) {
-        // 尝试过滤掉拼音字母，只保留中文和标点
-        const chineseOnly = text.replace(/[a-zA-Zāáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ\s]/g, '');
-        if (chineseOnly.length > 0) {
-          return chineseOnly;
-        }
-        return text;
-      }
-
-      preserveSelection() {
-        // 移除旧的高亮
-        document.querySelectorAll('.persistent-highlight').forEach(el => {
-          const parent = el.parentNode;
-          parent.replaceChild(document.createTextNode(el.textContent), el);
-          parent.normalize();
-        });
-
-        if (this.selectedRange) {
-          try {
-            const highlight = document.createElement('span');
-            highlight.className = 'persistent-highlight';
-            this.selectedRange.surroundContents(highlight);
-          } catch (e) {
-            // 忽略跨节点选择错误
-          }
-        }
-      }
-
-      showToolbar() {
-        const preview = this.toolbar.querySelector('.selected-preview');
-        const displayText = this.selectedText.length > 30
-          ? this.selectedText.substring(0, 30) + '...'
-          : this.selectedText;
-        preview.textContent = `已选择: ${displayText}`;
-        this.toolbar.classList.add('show');
-      }
-
-      hideToolbar() {
-        this.toolbar.classList.remove('show');
-      }
-
-      readSelection() {
-        if (this.selectedText) {
-          // 使用原生语音合成，速度快
-          const utterance = new SpeechSynthesisUtterance(this.selectedText);
-          utterance.lang = 'zh-CN';
-          utterance.rate = 0.8;
-          speechSynthesis.cancel();
-          speechSynthesis.speak(utterance);
-        }
-      }
-
-      copySelection() {
-        if (this.selectedText) {
-          navigator.clipboard.writeText(this.selectedText).then(() => {
-            this.showToast('已复制到剪贴板');
-          });
-        }
-      }
-
-      clearSelection() {
-        window.getSelection().removeAllRanges();
-        document.querySelectorAll('.persistent-highlight').forEach(el => {
-          const parent = el.parentNode;
-          parent.replaceChild(document.createTextNode(el.textContent), el);
-          parent.normalize();
-        });
-        this.selectedText = '';
-        this.selectedRange = null;
-        this.hideToolbar();
-      }
-
-      showToast(msg) {
-        const toast = document.createElement('div');
-        toast.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.8);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 8px;
-            z-index: 99999;
-        `;
-        toast.textContent = msg;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 1500);
-      }
-
-      // ========== 精确字符选择模式 ==========
-
-      enableCharSelectMode() {
-        // 针对 React Markdown 结构调整选择器
-        const selector = '.notion-md p, .notion-md li, .notion-md h1, .notion-md h2, .notion-md h3, .chinese-char';
-        
-        document.querySelectorAll(selector).forEach(el => {
-          if (el.classList.contains('char-processed')) return;
-
-          const text = el.textContent;
-          // 只有含中文的才处理
-          if (!/[\u4e00-\u9fa5]/.test(text)) return;
-
-          el.innerHTML = '';
-          el.classList.add('char-selectable', 'char-processed');
-
-          for (let char of text) {
-            const span = document.createElement('span');
-            span.className = 'char-span';
-            span.textContent = char;
-            span.dataset.char = char;
-            el.appendChild(span);
-          }
-        });
-
-        this.bindCharSelectEvents();
-      }
-
-      disableCharSelectMode() {
-        document.querySelectorAll('.char-selectable').forEach(el => {
-          el.innerHTML = el.textContent;
-          el.classList.remove('char-selectable', 'char-processed');
-        });
-      }
-
-      bindCharSelectEvents() {
-        let isSelecting = false;
-        let startChar = null;
-
-        document.querySelectorAll('.char-selectable').forEach(container => {
-          const onTouchStart = (e) => {
-            if (!document.body.classList.contains('char-select-mode')) return;
-
-            const char = e.target.closest('.char-span');
-            if (char) {
-              e.preventDefault();
-              isSelecting = true;
-              startChar = char;
-              document.querySelectorAll('.char-span.selected').forEach(c => c.classList.remove('selected'));
-              char.classList.add('selected');
-            }
-          };
-
-          const onTouchMove = (e) => {
-            if (!isSelecting || !document.body.classList.contains('char-select-mode')) return;
-
-            const touch = e.touches[0];
-            const element = document.elementFromPoint(touch.clientX, touch.clientY);
-            const char = element?.closest('.char-span');
-
-            if (char && startChar) {
-              e.preventDefault();
-              const container = startChar.parentElement;
-              if (container !== char.parentElement) return;
-
-              const chars = Array.from(container.querySelectorAll('.char-span'));
-              const startIdx = chars.indexOf(startChar);
-              const endIdx = chars.indexOf(char);
-              const [from, to] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
-
-              chars.forEach((c, i) => {
-                if (i >= from && i <= to) c.classList.add('selected');
-                else c.classList.remove('selected');
-              });
-            }
-          };
-
-          const onTouchEnd = () => {
-            if (!document.body.classList.contains('char-select-mode')) return;
-            isSelecting = false;
-            startChar = null;
-            const selected = Array.from(document.querySelectorAll('.char-span.selected'))
-              .map(c => c.textContent)
-              .join('');
-
-            if (selected) {
-              this.selectedText = selected;
-              this.showToolbar();
-            }
-          };
-          
-          container.addEventListener('touchstart', onTouchStart);
-          container.addEventListener('touchmove', onTouchMove);
-          container.addEventListener('touchend', onTouchEnd);
-        });
-      }
-    }
-
-    // 初始化移动端选择助手
-    let mobileHelper = null;
-    if ('ontouchstart' in window) {
-      mobileHelper = new MobileSelectHelper();
-    }
-
-    return () => {
-        if (mobileHelper) mobileHelper.destroy();
-    };
-  }, [isAiOpen]);
-  // ========== 移动端选择优化集成结束 ==========
 
   // 处理返回键关闭
   useEffect(() => {
@@ -690,7 +259,7 @@ export default function AIChatDock() {
     );
   }, [currentSessionId, setSessions, aiMode]);
 
-  // --- 选区监听注册 (仅桌面端或非触屏使用，避免冲突) ---
+  // --- 选区监听注册 ---
   useEffect(() => {
     if (typeof window !== 'undefined') {
       document.addEventListener('selectionchange', handleSelectionChange);
@@ -729,11 +298,7 @@ export default function AIChatDock() {
         initialMessages.push({ role: 'assistant', content: `好的，我们来分析这道关于 **${activeTask.grammarPoint}** 的题目。`, id: Date.now() });
       } else if (aiMode === 'CHAT' && activeTask.content) {
         newSessionTitle = activeTask.title || '语法讲解';
-        hiddenPrompt = `老师，请针对语法点【${activeTask.title}】，严格按照你系统指令中的“2.0 教学流程（增强详细版）”给我一份深度讲解。
-要求：
-1. 必须包含：情境导入、心里有数、语序对照表、最安全句型、必踩的坑。
-2. 重点词汇请务必使用 **加粗**（例如：**把**字句），方便我查看拼音。
-3. 请分段清晰，多使用 H3 (###) 标题。`;
+        hiddenPrompt = `老师，请针对语法点【${activeTask.title}】，严格按照你系统指令中的“2.0 教学流程（增强详细版）”给我一份深度讲解。`;
       } else {
         return;
       }
@@ -759,11 +324,8 @@ export default function AIChatDock() {
     }
   }, [currentSessionId]);
 
-  // --- 选区处理逻辑 ---
+  // --- 选区处理逻辑 (修复版) ---
   const handleSelectionChange = () => {
-    // 如果是移动端，交由 MobileSelectHelper 处理，避免双重 UI
-    if ('ontouchstart' in window) return;
-
     if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
 
     selectionTimerRef.current = setTimeout(() => {
@@ -775,9 +337,11 @@ export default function AIChatDock() {
           const range = selection.getRangeAt(0);
           const rect = range.getBoundingClientRect();
           
+          // 计算菜单位置，在选区上方
           let top = rect.top - 50; 
           let left = rect.left + (rect.width / 2);
           
+          // 防止溢出顶部
           if (top < 10) top = rect.bottom + 10;
           
           setSelectionMenu({ show: true, x: left, y: top, text: text });
@@ -794,6 +358,7 @@ export default function AIChatDock() {
     const menu = document.getElementById('selection-popover');
     if (menu && !menu.contains(e.target)) {
         const selection = window.getSelection();
+        // 如果点击外部且没有选区，关闭菜单
         if (!selection || selection.toString().length === 0) {
             setSelectionMenu(prev => ({ ...prev, show: false }));
         }
@@ -802,6 +367,16 @@ export default function AIChatDock() {
     if (sttMenu && !sttMenu.contains(e.target)) {
         setShowSttLangMenu(false);
     }
+  };
+
+  // 新增：AI 解释功能
+  const handleExplainSelection = () => {
+    if (!selectionMenu.text) return;
+    const prompt = `请用缅甸语详细解释这个词/句子：\n"${selectionMenu.text}"\n如果是词汇，请提供发音、意思和例句。`;
+    handleSend(prompt);
+    setSelectionMenu(prev => ({ ...prev, show: false }));
+    // 清除选区
+    window.getSelection().removeAllRanges();
   };
 
   const handleTranslateSelection = () => {
@@ -959,7 +534,7 @@ export default function AIChatDock() {
     }
     
     if (!isSystemTrigger) setInput('');
-    setSuggestions([]);
+    setSuggestions([]); // 清空旧建议
     setLoading(true);
 
     if (abortControllerRef.current) abortControllerRef.current.abort();
@@ -977,7 +552,6 @@ export default function AIChatDock() {
     } else {
         const currentHistory = historyOverride !== null ? historyOverride : messages;
         const historyForApi = [...currentHistory, userMessage];
-        
         const historyMsgs = historyForApi.slice(-10).map(({ role, content }) => ({ role, content }));
         
         apiMessages = [
@@ -1041,15 +615,19 @@ export default function AIChatDock() {
                 
                 if (config.soundEnabled) playTickSound();
 
+                // 核心修复：流式解析 Suggestions
+                // 使用 /s 确保 . 匹配换行符
                 const suggestionRegex = /<<<SUGGESTIONS:(.*?)>>>/s;
                 const match = rawFullContent.match(suggestionRegex);
                 let contentToDisplay = rawFullContent;
 
                 if (match) {
+                    // 从正文中移除建议标签，只显示内容
                     contentToDisplay = rawFullContent.replace(match[0], '').trim();
                     const suggestionsStr = match[1];
                     if (suggestionsStr) {
                         const newSuggestions = suggestionsStr.split('|').map(s => s.trim()).filter(s => s);
+                        // 实时更新建议状态
                         setSuggestions(newSuggestions);
                     }
                 }
@@ -1103,6 +681,7 @@ export default function AIChatDock() {
     if (audioRef.current) audioRef.current.pause();
     setIsPlaying(true);
     
+    // 清理文本，只留汉字字母数字
     let clean = text.replace(/\[(.*?)\]\(.*?\)/g, '$1');
     clean = clean.replace(/[*#`>~\-\[\]_]/g, '');
     clean = clean.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s\u1000-\u109F]/g, ' ');
@@ -1165,9 +744,14 @@ export default function AIChatDock() {
     <>
       {selectionMenu.show && (
         <div id="selection-popover" style={{ ...styles.popover, left: selectionMenu.x, top: selectionMenu.y }}>
-          <button onClick={handleTranslateSelection} style={styles.popBtn} title="解释/翻译"><FaLanguage size={14} /> 解释</button>
+          {/* 机器人解释按钮 */}
+          <button onClick={handleExplainSelection} style={styles.popBtn} title="AI 解释">
+            <FaRobot size={14} color="#60a5fa" /> 解释
+          </button>
           <div style={styles.popDivider}></div>
-          <button onClick={() => playInternalTTS(selectionMenu.text)} style={styles.popBtn} title="朗读"><FaVolumeUp size={14} /> 朗读</button>
+          <button onClick={() => playInternalTTS(selectionMenu.text)} style={styles.popBtn} title="朗读">
+            <FaVolumeUp size={14} /> 朗读
+          </button>
           <div style={styles.popDivider}></div>
           <button onClick={() => copyText(selectionMenu.text)} style={styles.popBtn} title="复制">
             {isCopied ? <FaCheck size={14} color="#4ade80" /> : <FaCopy size={14} />}
@@ -1306,6 +890,7 @@ export default function AIChatDock() {
           </div>
 
           <div style={styles.footer}>
+            {/* 追问气囊 - 只有在不加载且有建议时显示 */}
             {!loading && suggestions.length > 0 && (
               <div style={styles.scrollSuggestionContainer}>
                 {suggestions.map((s, idx) => (
