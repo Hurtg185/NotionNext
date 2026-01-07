@@ -9,7 +9,7 @@ const USER_KEY = 'hsk_user';
 
 const AIContext = createContext();
 
-// --- 辅助函数 (无变动) ---
+// --- 辅助函数 ---
 const validateActivationCode = (code) => {
   if (!code) return { isValid: false, error: '请输入激活码' };
   const c = code.trim().toUpperCase();
@@ -82,13 +82,14 @@ export const AIProvider = ({ children }) => {
   const [activeTask, setActiveTask] = useState(null);
   const [pageContext, setPageContext] = useState(null);
 
-  // --- System Prompts ---
+  // --- System Prompts 定义 ---
   const SYSTEM_PROMPTS = {
     // 基础聊天与追问模式（非 2.0 流程）
     SIMPLE: `你是一名专业的汉语教师，面对的是母语为缅甸语的学生。
 当前学生等级：{{LEVEL}}。
 请用最简洁、直接的方式回答学生的问题。
 如果学生是在追问之前的语法点，直接解答疑惑即可，不要重复“情境导入”或“表格”。
+
 ⚠️ 语言要求：
 - HSK 1-2：必须用 **缅甸语** 解释逻辑和背景，中文仅用于例句。
 - HSK 3+：可以使用简单的中文解释，配合缅语辅助。`,
@@ -343,18 +344,44 @@ SUGGESTIONS: Q1|||Q2|||Q3`
      // 自动触发逻辑已移除，改由 UI 组件手动调用
   }, [isAiOpen, prevIsAiOpen, pageContext, sessions, currentSessionId, triggerAI]);
 
-  // --- 核心修改：动态生成 Prompt，增强 HSK1 缅语权重 ---
+  // ================= 核心 Prompt 逻辑修复区 =================
+
+  // 1. 辅助：标准化 HSK 等级字符串 (移除空格，转大写)
+  const getCleanLevel = useCallback(() => {
+    return (config.userLevel || 'H1').replace(/\s+/g, '').toUpperCase();
+  }, [config.userLevel]);
+
+  // 2. 辅助：判断是否需要强制缅语 (H1, H2)
+  const shouldUseBurmese = useCallback(() => {
+    const level = getCleanLevel();
+    // 包含 H1, H2, HSK1, HSK2
+    return ['H1', 'H2', 'HSK1', 'HSK2'].some(l => level.includes(l));
+  }, [getCleanLevel]);
+
+  // 3. 辅助：获取强制缅语指令
+  const getBurmeseOverride = useCallback(() => {
+    if (!shouldUseBurmese()) return '';
+    return `\n\n【🚨 SYSTEM OVERRIDE / 强制语言指令】
+Current Level: ${config.userLevel} (BEGINNER)
+You MUST strictly follow:
+1. **Explanations, Logic, Background**: 100% in BURMESE (缅甸语).
+2. **Chinese**: ONLY for vocabulary and example sentences.
+3. DO NOT write long paragraphs in Chinese.`;
+  }, [config.userLevel, shouldUseBurmese]);
+
+  // 4. 计算：完整版 System Prompt (2.0 流程)
   const finalSystemPrompt = useMemo(() => {
     let template = aiMode === 'INTERACTIVE' ? SYSTEM_PROMPTS.INTERACTIVE : SYSTEM_PROMPTS.CHAT;
     let displayLevel = config.userLevel || 'HSK 1';
+    
     const taskId = activeTask?.id || "";
     const lowerId = taskId.toLowerCase();
-
-    // 统一等级名称
+    
+    // 统一等级显示名称
     if (lowerId.includes('hsk1')) displayLevel = 'HSK 1';
     else if (lowerId.includes('hsk2')) displayLevel = 'HSK 2';
     else if (lowerId.includes('hsk3')) displayLevel = 'HSK 3';
-    else if (lowerId.includes('sp')) displayLevel = '口语专项 (Spoken Chinese)';
+    else if (lowerId.includes('sp')) displayLevel = '口语专项';
 
     template = template.replace(/{{LEVEL}}/g, displayLevel);
 
@@ -371,23 +398,41 @@ SUGGESTIONS: Q1|||Q2|||Q3`
       template = template.replace('{{CONTEXT}}', contextString.substring(0, 8000));
     }
 
-    // 🔥 核心修改：强制缅甸语补丁 🔥
-    // 如果是 HSK 1-2，在最后面追加一段强指令。位置越靠后，AI 越听话。
-    const isLowLevel = ['H1', 'H2', 'HSK1', 'HSK2', 'HSK 1', 'HSK 2'].some(l => displayLevel.toUpperCase().includes(l));
-    if (isLowLevel) {
-        template += `\n\n【⚠️ SYSTEM OVERRIDE / 强制语言指令】\n当前用户是初学者 (${displayLevel})。\n请务必严格遵守：\n1. **解释、逻辑分析、背景介绍**：必须 100% 使用【缅甸语】。\n2. **仅**在教学词汇和例句中使用【中文】。\n3. 禁止输出大段的中文解释，学生看不懂。`;
+    // 🔥 核心补丁：如果等级低，强制追加缅语指令 🔥
+    if (shouldUseBurmese()) {
+        template += getBurmeseOverride();
     }
 
     return template;
-  }, [config.userLevel, aiMode, activeTask, pageContext]);
+  }, [config.userLevel, aiMode, activeTask, pageContext, shouldUseBurmese, getBurmeseOverride]);
 
-  // --- 新增：简易 Prompt 生成 (用于追问) ---
+  // 5. 计算：简洁版 System Prompt (追问专用)
   const finalSimplePrompt = useMemo(() => {
       let template = SYSTEM_PROMPTS.SIMPLE;
       let displayLevel = config.userLevel || 'HSK 1';
       template = template.replace(/{{LEVEL}}/g, displayLevel);
+      
+      // 🔥 核心补丁：如果等级低，强制追加缅语指令 🔥
+      if (shouldUseBurmese()) {
+          template += getBurmeseOverride();
+      }
+      
       return template;
-  }, [config.userLevel]);
+  }, [config.userLevel, shouldUseBurmese, getBurmeseOverride]);
+
+  // 6. 导出：动态获取 Prompt 的通用函数 (UI 可能需要)
+  const getSystemPrompt = useCallback((isSystemTrigger, currentAiMode) => {
+      if (currentAiMode === 'INTERACTIVE') return finalSystemPrompt; // 错题模式只有一种 Prompt
+      
+      // 这里的逻辑必须与 UI 保持一致
+      if (isSystemTrigger && currentAiMode === 'CHAT') {
+          return finalSystemPrompt; // 完整 2.0
+      } else {
+          return finalSimplePrompt; // 简洁版
+      }
+  }, [finalSystemPrompt, finalSimplePrompt]);
+
+  // ========================================================
 
   const selectSession = useCallback((sessionId) => {
     setCurrentSessionId(sessionId);
@@ -428,8 +473,17 @@ SUGGESTIONS: Q1|||Q2|||Q3`
       canUseAI, remainingQuota, TOTAL_FREE_QUOTA,
       handleActivate, handleGoogleCallback,
       activeTask, aiMode, 
-      systemPrompt: finalSystemPrompt,      // 用于新课讲解 (2.0)
-      simpleSystemPrompt: finalSimplePrompt, // 用于日常追问 (不含 2.0 流程)
+      
+      // 导出处理好的 Prompts
+      systemPrompt: finalSystemPrompt,      // 用于新课讲解 (包含 2.0 流程)
+      simpleSystemPrompt: finalSimplePrompt, // 用于日常追问 (轻量级)
+      
+      // 导出辅助函数供 UI 调用
+      SYSTEM_PROMPTS,
+      getSystemPrompt,
+      shouldUseBurmese,
+      getBurmeseOverride,
+      
       triggerInteractiveAI, updatePageContext, resetToChatMode, triggerAI,
     }}>
       <Script
