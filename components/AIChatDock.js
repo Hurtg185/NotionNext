@@ -65,7 +65,8 @@ const PinyinRenderer = ({ text, show }) => {
               {charArray.map((char, i) => (
                 <ruby key={i} style={{ rubyPosition: 'over', margin: '0 1px' }}>
                   {char}
-                  <rt style={{ fontSize: '0.6em', color: '#64748b', fontWeight: 'normal', userSelect: 'none', fontFamily: 'Arial' }}>
+                  {/* userSelect: 'none' 确保选中汉字时不选中拼音 */}
+                  <rt style={{ fontSize: '0.6em', color: '#64748b', fontWeight: 'normal', userSelect: 'none', WebkitUserSelect: 'none', fontFamily: 'Arial' }}>
                     {pyArray[i]}
                   </rt>
                 </ruby>
@@ -247,6 +248,7 @@ export default function AIChatDock() {
   }, [messages, isAiOpen, loading]);
 
   // --- 自动触发逻辑 (Active Task) ---
+  // 这里专门处理系统自动触发的教学任务，使用严格的 2.0 格式
   useEffect(() => {
     if (activeTask && activeTask.timestamp) {
       const lastProcessed = sessionStorage.getItem('last_ai_task_ts');
@@ -257,20 +259,25 @@ export default function AIChatDock() {
       let newSessionTitle;
       let initialMessages = [];
 
-      // 这里只处理“语法讲解”和“错题分析”的格式指令
-      // 语言强制指令 (Burmese) 将在 handleSend 中统一注入，确保全局生效
-      
+      // 语言指令 (Burmese) - 这里也加上，确保自动回复也是缅语
+      const level = config.userLevel || 'H1';
+      const isLowLevel = ['H1', 'H2', 'HSK1', 'HSK2'].some(l => level.toUpperCase().includes(l));
+      const langInstruction = isLowLevel 
+          ? "\n\n【System Override】: The user is a BEGINNER (HSK 1-2). You MUST use **Burmese (缅甸语)** for all explanations, context, and logic analysis. Only use Chinese for the specific vocabulary/sentences being taught. Do NOT use long paragraphs of Chinese."
+          : "";
+
       if (aiMode === 'INTERACTIVE') {
         newSessionTitle = `${activeTask.grammarPoint} - 错题分析`;
-        hiddenPrompt = `我正在做这道题，请帮我分析一下：\n- **题目**: "${activeTask.question}"\n- **我的选择**: "${activeTask.userChoice}"\n- **涉及语法点**: ${activeTask.grammarPoint}`;
+        hiddenPrompt = `我正在做这道题，请帮我分析一下：\n- **题目**: "${activeTask.question}"\n- **我的选择**: "${activeTask.userChoice}"\n- **涉及语法点**: ${activeTask.grammarPoint}${langInstruction}`;
         initialMessages.push({ role: 'assistant', content: `好的，我们来分析这道关于 **${activeTask.grammarPoint}** 的题目。`, id: Date.now() });
       } else if (aiMode === 'CHAT' && activeTask.content) {
         newSessionTitle = activeTask.title || '语法讲解';
+        // 🔴 这里的 2.0 格式仅在“自动触发”时使用
         hiddenPrompt = `老师，请针对语法点【${activeTask.title}】，严格按照你系统指令中的“2.0 教学流程（增强详细版）”给我一份深度讲解。
 要求：
 1. 必须包含：情境导入、心里有数、语序对照表、最安全句型、必踩的坑。
 2. 重点词汇请务必使用 **加粗**（例如：**把**字句），方便我查看拼音。
-3. 请分段清晰，多使用 H3 (###) 标题。`;
+3. 请分段清晰，多使用 H3 (###) 标题。${langInstruction}`;
       } else {
         return;
       }
@@ -286,7 +293,7 @@ export default function AIChatDock() {
       setCurrentSessionId(newSession.id);
       taskToRun.current = { prompt: hiddenPrompt, history: initialMessages };
     }
-  }, [activeTask, aiMode, setSessions, setCurrentSessionId]);
+  }, [activeTask, aiMode, setSessions, setCurrentSessionId, config.userLevel]);
 
   useEffect(() => {
     if (taskToRun.current && currentSessionId) {
@@ -296,11 +303,11 @@ export default function AIChatDock() {
     }
   }, [currentSessionId]);
 
-  // --- 选区处理逻辑 (核心修复) ---
+  // --- 选区处理逻辑 (1秒显示) ---
   const handleSelectionChange = () => {
     if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
 
-    // 2秒延迟，确保用户选完
+    // 🔴 改为 1000ms (1秒)
     selectionTimerRef.current = setTimeout(() => {
         const selection = window.getSelection();
         if (!selection || selection.rangeCount === 0) return;
@@ -323,7 +330,7 @@ export default function AIChatDock() {
         } else {
             setSelectionMenu(prev => ({ ...prev, show: false }));
         }
-    }, 2000); 
+    }, 1000); 
   };
 
   const handleOutsideClick = (e) => {
@@ -340,6 +347,7 @@ export default function AIChatDock() {
 
   const handleTranslateSelection = () => {
     if (!selectionMenu.text) return;
+    // 使用纯文本发送，拼音已被 PinyinRenderer 的 user-select: none 隔离
     handleSend(`请用缅文详细解释这段文字：\n"${selectionMenu.text}"`);
     setSelectionMenu(prev => ({ ...prev, show: false }));
     window.getSelection().removeAllRanges();
@@ -464,7 +472,7 @@ export default function AIChatDock() {
     login();
   };
 
-  // --- 发送逻辑 (核心修改：全局语言注入) ---
+  // --- 发送逻辑 (核心修改：区分自动触发和普通聊天) ---
   const handleSend = async (textToSend = input, isSystemTrigger = false, historyOverride = null) => {
     // 优先使用传入参数 textToSend (处理气囊点击)
     const contentToSend = (typeof textToSend === 'string' ? textToSend : input).trim();
@@ -492,13 +500,15 @@ export default function AIChatDock() {
     // --- 构造消息列表 ---
     let apiMessages = [];
     if (isSystemTrigger && aiMode === 'CHAT' && activeTask) {
-        // 系统触发：使用 System Prompt + 用户指令
+        // 🔴 情况1：系统自动触发（如“开始讲解”）
+        // 使用 System Prompt + 包含 2.0 结构要求的 Prompt
         apiMessages = [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: contentToSend }
         ];
     } else {
-        // 自由聊天：System Prompt + 历史记录 + 新消息
+        // 🔴 情况2：自由聊天 / 追问气囊
+        // 正常对话，不强制 2.0 结构，只传递普通上下文
         const currentHistory = historyOverride !== null ? historyOverride : messages;
         const historyForApi = [...currentHistory, userMessage];
         const historyMsgs = historyForApi.slice(-10).map(({ role, content }) => ({ role, content }));
@@ -507,10 +517,10 @@ export default function AIChatDock() {
 
     // --- 【全局强制语言控制】 ---
     // 无论是否是自动触发，只要是 HSK1-2，就强制在 System Prompt 中追加缅语指令
+    // 注意：这里只追加“语言要求”，不追加“2.0 结构要求”
     const level = config.userLevel || 'H1';
     const isLowLevel = ['H1', 'H2', 'HSK1', 'HSK2'].some(l => level.toUpperCase().includes(l));
     if (isLowLevel) {
-        // 修改 apiMessages 中的 system 消息内容
         if (apiMessages.length > 0 && apiMessages[0].role === 'system') {
             apiMessages[0].content += "\n\n【System Override】: The user is a BEGINNER (HSK 1-2). You MUST use **Burmese (缅甸语)** for all explanations, context, and logic analysis. Only use Chinese for the specific vocabulary/sentences being taught. Do NOT use long paragraphs of Chinese.";
         }
@@ -633,10 +643,17 @@ export default function AIChatDock() {
     if (audioRef.current) audioRef.current.pause();
     setIsPlaying(true);
     
-    // --- TTS 净化逻辑 ---
+    // --- TTS 净化逻辑 (修复：允许缅甸语 \u1000-\u109F) ---
+    // 1. 移除 markdown 链接
     let clean = text.replace(/\[(.*?)\]\(.*?\)/g, '$1');
+    // 2. 移除 markdown 符号
     clean = clean.replace(/[*#`>~\-\[\]_]/g, '');
-    clean = clean.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g, ' ');
+    
+    // 3. 🔴 关键修复：允许 中文、英文、数字、空格、以及缅甸语(\u1000-\u109F)
+    // 这样就不会因为过滤掉缅文导致不朗读了
+    clean = clean.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s\u1000-\u109F]/g, ' ');
+    
+    // 4. 移除多余空格
     clean = clean.replace(/\s+/g, ' ').trim();
         
     const rate = Math.round((config.ttsSpeed - 1) * 100);
@@ -836,6 +853,7 @@ export default function AIChatDock() {
             {!loading && suggestions.length > 0 && (
               <div style={styles.scrollSuggestionContainer}>
                 {suggestions.map((s, idx) => (
+                  // 气囊点击：直接发送文字
                   <button key={idx} onClick={() => handleSend(s)} style={styles.scrollSuggestionBtn}>
                     <FaLightbulb color="#4f46e5" size={10} style={{ marginRight: 6 }} />
                     {/* 给气囊内的文字也加上拼音渲染 */}
