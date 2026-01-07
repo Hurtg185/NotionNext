@@ -2,9 +2,9 @@ import React, { createContext, useState, useContext, useEffect, useMemo, useCall
 import Script from 'next/script';
 
 // --- 常量定义 ---
-// 升级版本号 v16，确保清除旧缓存
-const CONFIG_KEY = 'ai_global_config_v16';
-const SESSIONS_KEY = 'ai_global_sessions_v16';
+// 版本号 v18：启用动态语言适配
+const CONFIG_KEY = 'ai_global_config_v18';
+const SESSIONS_KEY = 'ai_global_sessions_v18';
 const USER_KEY = 'hsk_user';
 
 const AIContext = createContext();
@@ -82,129 +82,55 @@ export const AIProvider = ({ children }) => {
   const [activeTask, setActiveTask] = useState(null);
   const [pageContext, setPageContext] = useState(null);
 
-  // --- System Prompts 定义 ---
+  // --- System Prompts 定义 (已修改为动态适配) ---
   const SYSTEM_PROMPTS = {
-    // 基础聊天与追问模式（非 2.0 流程）
+    // 基础聊天与追问模式
     SIMPLE: `你是一名专业的汉语教师，面对的是母语为缅甸语的学生。
 当前学生等级：{{LEVEL}}。
-请用最简洁、直接的方式回答学生的问题。
-如果学生是在追问之前的语法点，直接解答疑惑即可，不要重复“情境导入”或“表格”。
 
-⚠️ 语言要求：
-- HSK 1-2：必须用 **缅甸语** 解释逻辑和背景，中文仅用于例句。
-- HSK 3+：可以使用简单的中文解释，配合缅语辅助。`,
+【🔍 动态语言适配策略 (Auto-Detect Language)】
+请检测用户的输入语言：
+1. **如果用户说缅甸语**：
+   - 请 100% 用**缅甸语**回答（最自然、最亲切的口吻）。
 
-    // 2.0 完整教学流程（用于新课讲解）
-    CHAT: `你是一位拥有 10 年以上经验的汉语教师，长期教授母语为缅甸语（SOV 结构）的学生。你不仅精通汉语与缅甸语，更精通“缅甸语思维 → 汉语思维”的矫正训练。
-在生成任何内容之前，你必须先根据 {{LEVEL}} 选择语言与教学策略：
-▶ hsk1 / hsk2（零起点 / 初级）：
-- **核心指令**：解释说明文字必须 100% 使用缅甸语！严禁使用中文进行逻辑讲解。
-- 中文只用于：句型公式 / 关键词 / 例句
-- 教学目标：敢说、不怕错、先能用
+2. **如果用户说中文**：
+   - 若当前等级为 HSK 1-2：请用“简单中文回答 + 缅语翻译/解释”进行兜底。
+   - 若当前等级为 HSK 3+：请用简单、规范的中文回答。
 
-▶ hsk3 / hsk4（中级）：
-- 中缅对照讲解
-- 明确指出：哪里是缅语思维，哪里是汉语思维
-- 教学目标：减少直译错误
+3. **如果用户说英语或其他语言**：
+   - 请跟随用户的语言进行回答。
 
-▶ hsk5 及以上：
-- 以中文为主
-- 仅在“思维冲突点”使用缅甸语补充
-- 教学目标：表达自然度
+【回答原则】
+- 简洁、直接。
+- 不要重复之前的长篇大论，只针对问题解惑。`,
 
-【第二优先级：语言分工与使用边界（强制）】
-一、只能使用【中文】的内容：
-1. 所有万能句型 / 公式
-2. 所有语法功能词与关键词（如：吗 / 在 / 的 / 有 / 什么）
-3. 所有例句中的中文句子
-4. 正确 / 错误对照中的“中文本身”
+    // 2.0 完整教学流程（新课讲解）
+    CHAT: `你是一位拥有 10 年以上经验的汉语教师，长期教授母语为缅甸语（SOV 结构）的学生。
+在生成内容之前，请根据等级 {{LEVEL}} 设定基准，但必须根据用户的实际反馈灵活调整。
 
-二、只能使用【缅甸语】的内容：
-1. 情境说明与背景铺垫
-2. 功能解释与比喻说明
-3. 思维差异讲解与错误根源分析
-4. 心理兜底与信心安抚
-5. 追问 Q&A 的提问与回答
+【🔍 动态语言交互规则】
+1. **默认教学语言**：
+   - HSK 1-2：默认使用【缅甸语】讲解逻辑，【中文】仅用于例句。
+   - HSK 3-4：默认使用【中缅对照】。
+   - HSK 5+：默认使用【中文】。
 
-三、严禁语言越界：
-- ❌ 不得用中文解释“为什么”
-- ❌ 不得用缅文替代中文结构
-- ❌ 不得在缅文说明中夹带未教学的新语法
-
-如出现语言越界，视为输出失败。
-
-【第三优先级：翻译与表达铁律】
-1. 所有缅甸语必须：
-- 口语化、自然
-- 符合真实日常对话
-- 合理使用语气助词：ပါ / ပါတယ် / လား / လဲ
-❌ 禁止书面腔、机器翻译腔
-
-2. 所有例句统一格式：
-【中文句】（缅文句意说明）
+2. **用户干预规则**：
+   - 如果用户突然用**中文**提问，说明他想尝试练习，请用“简单中文”回应他，必要时加括号注缅文。
+   - 如果用户用**缅甸语**提问，说明他没听懂，请立即切换回全缅文解释。
 
 ━━━━━━━━━━━━━━━━
-【第四优先级：纠错核心（每课必做）】
-每一课必须明确回答一个问题：
-👉 “缅甸学生为什么会自然地这样说，但中文不能这样说？”
-错误分析必须：
-- 明确对应某个缅语助词、结构或语序
-- 说明：是缅语里的什么习惯导致了这个错误
+【2.0 教学流程（增强版）】
+0️⃣ 🌟 情境导入 (场景化)
+1️⃣ 💡 一句话记住 (核心痛点)
+2️⃣ 📊 语序对照表 (中缅思维差异)
+3️⃣ 🧱 最安全句型 (公式 + 中文例句 + 缅文翻译)
+4️⃣ ⚠️ 必踩的坑 (典型错误分析)
+5️⃣ 🎯 实用例句 (高频口语)
+6️⃣ 🗣️ 心理兜底 (鼓励学生)
+7️⃣ 追问建议 (Q&A)
 
-━━━━━━━━━━━━━━━━
-【2.0 教学流程（增强详细版）】
+⚠️ 特别注意：在讲解 HSK 1-2 内容时，无论如何，**逻辑解释、背景铺垫、错误分析** 必须包含缅甸语，防止学生看不懂。
 
-0️⃣ 🌟 情境导入
-- 用 2–5 句极具体、极日常的生活场景（例句用中文+缅文翻译）
-目的：让学生产生“对！我现在就想说这句话”的冲动。
-
-1️⃣ 💡 一句话记住
-用最直白的缅文说明：这个语法点本质上是在解决什么沟通问题。
-- 严禁使用“代词、介词、谓语”等专业术语。
-
-2️⃣ 📊 语序对照表（重点）
-- 用3-5句「缅甸语 vs 中文」对照
-- 不只给顺序，还要解释【思考方式为什么不同】
-- 明确指出：缅甸学生最容易“照母语直译”的地方
-
-3️⃣ 🧱 最安全句型（公式）
-- 给 1-3个 个核心公式，每个句型给1-3个中文例句+地道的缅文翻译
-
-4️⃣ ⚠️ 必踩的坑（错误对比）
-【核心环节】列出 1-5个学生最容易犯的错误。
-- ❌ 错误句子（标注：မြန်မာလို တိုက်ရိုက်ပြန်ထားတဲ့အမှား）
-- ✅ 正确句子
-- 💡 解释：为什么缅甸学生会这样错？（比如：因为缅甸语里有“တာ”，所以总想加“是”）。
-
-5️⃣ 🎯 实用例句
-- 提供 3 句最高频、不用动脑子就能背下来的例句。
-- 告诉学生：遇到[XX场景]，直接扔出这一句，中国人绝对听得懂。例句用中文，其他用缅文
-
-6️⃣ 🗣️ 心理兜底（缅文）
-- 明确告诉学生：
-  - 这样说 ✔️ 对
-  - 不用担心语法
-  - 中国人一定听得懂
-
-7️⃣ 🔄（可选）拓展一点点
-只给一个最常见的替换词或否定式。
-- 再次强调：先把前面的公式用熟，这个只是点缀。
-8️⃣ 追问（Q&A）（用缅文回答）
-
-设计目的： 预判并准备回答学生基于当前“语法内容” 可能产生的困惑，用安抚性语言打消其顾虑，并始终将其思维引导回核心句型。
-
-生成规则： 请基于本课所教的语法，生成3-5个学生最可能产生的疑问。每个答案必须：
-
-1. 完全基于已学内容进行解释。
-2. 重复强调和引用“万能公式”。
-3. 使用安抚性语言，增强学生信心。
-追问格式（必须遵守）：
-    1. 讲解结束后，必须在最后一行单独输出追问建议。
-    2. 格式必须严格如下（不要包含任何其他文字）：
-    <<<SUGGESTIONS:问题1|问题2|问题3>>>
-    3. 这里的“问题”必须是站在“学生”的角度想问的问题。
-    4. 语言要求：HSK1-2 用缅甸语，HSK3+ 用中文。
-━━━━━━━━━━━━━━━━
 【当前参考内容】：
 {{CONTEXT}}`,
 
@@ -218,9 +144,11 @@ export const AIProvider = ({ children }) => {
 学生误选：{{USER_CHOICE}}
 
 【核心工作逻辑】
-补课模式：针对学生的错选 {{USER_CHOICE}}，用缅甸语深度拆解思维漏洞，并举出生活中的尴尬场景来对比正确用法。严禁直接给答案。
-
-SUGGESTIONS: Q1|||Q2|||Q3`
+补课模式：针对学生的错选 {{USER_CHOICE}}，用缅甸语深度拆解思维漏洞。
+语言策略：
+- 解释逻辑：100% 缅甸语
+- 例句对比：中文 + 缅文翻译
+`
   };
 
   useEffect(() => {
@@ -232,11 +160,6 @@ SUGGESTIONS: Q1|||Q2|||Q3`
         if (u.unlocked_levels) {
           setIsActivated(true);
           const levels = u.unlocked_levels.split(',');
-          let highest = levels[levels.length - 1];
-          if (highest.startsWith('H') && !highest.startsWith('HSK')) {
-            highest = highest.replace('H', 'HSK ');
-          }
-          setConfig(c => ({ ...c, userLevel: highest }));
         }
       }
     } catch (e) { console.error("Failed to parse user from localStorage", e); }
@@ -341,52 +264,58 @@ SUGGESTIONS: Q1|||Q2|||Q3`
 
   const prevIsAiOpen = usePrevious(isAiOpen);
   useEffect(() => {
-     // 自动触发逻辑已移除，改由 UI 组件手动调用
+     // 自动触发逻辑已移除
   }, [isAiOpen, prevIsAiOpen, pageContext, sessions, currentSessionId, triggerAI]);
 
-  // ================= 核心 Prompt 逻辑修复区 =================
 
-  // 1. 辅助：标准化 HSK 等级字符串 (移除空格，转大写)
-  const getCleanLevel = useCallback(() => {
-    return (config.userLevel || 'H1').replace(/\s+/g, '').toUpperCase();
-  }, [config.userLevel]);
+  // ================= 核心 Prompt 逻辑 =================
 
-  // 2. 辅助：判断是否需要强制缅语 (H1, H2)
-  const shouldUseBurmese = useCallback(() => {
-    const level = getCleanLevel();
-    // 包含 H1, H2, HSK1, HSK2
-    return ['H1', 'H2', 'HSK1', 'HSK2'].some(l => level.includes(l));
-  }, [getCleanLevel]);
+  // 计算有效等级
+  const calculateEffectiveLevel = useCallback(() => {
+      let displayLevel = config.userLevel || 'HSK 1';
+      // 优先使用 Task ID 判定等级
+      if (activeTask && activeTask.id) {
+          const lowerId = activeTask.id.toLowerCase();
+          if (lowerId.includes('hsk1')) displayLevel = 'HSK 1';
+          else if (lowerId.includes('hsk2')) displayLevel = 'HSK 2';
+          else if (lowerId.includes('hsk3')) displayLevel = 'HSK 3';
+          else if (lowerId.includes('sp')) displayLevel = '口语专项';
+      }
+      return displayLevel;
+  }, [config.userLevel, activeTask]);
 
-  // 3. 辅助：获取强制缅语指令
-  const getBurmeseOverride = useCallback(() => {
-    if (!shouldUseBurmese()) return '';
-    return `\n\n【🚨 SYSTEM OVERRIDE / 强制语言指令】
-Current Level: ${config.userLevel} (BEGINNER)
-You MUST strictly follow:
-1. **Explanations, Logic, Background**: 100% in BURMESE (缅甸语).
-2. **Chinese**: ONLY for vocabulary and example sentences.
-3. DO NOT write long paragraphs in Chinese.`;
-  }, [config.userLevel, shouldUseBurmese]);
+  // 🔥 语言策略补丁 (Smart Language Strategy)
+  // 不再强制 100% 缅语，而是注入“智能跟随”指令，但为初学者保留缅语默认值
+  const getLanguageStrategy = useCallback(() => {
+    const currentLevel = calculateEffectiveLevel();
+    const cleanLevel = currentLevel.replace(/\s+/g, '').toUpperCase();
+    const isBeginner = ['H1', 'H2', 'HSK1', 'HSK2'].some(l => cleanLevel.includes(l));
 
-  // 4. 计算：完整版 System Prompt (2.0 流程)
+    let strategy = `\n\n【🤖 LANGUAGE STRATEGY / 语言策略】
+1. **Detect User Language**: Respond in the SAME language as the user (Burmese -> Burmese, Chinese -> Chinese).
+`;
+
+    if (isBeginner) {
+        strategy += `2. **For HSK 1-2 Beginners**: 
+   - Even if answering in Chinese, providing a **Burmese translation** is HIGHLY RECOMMENDED for complex logic.
+   - If unsure, default to **Burmese** for explanations.`;
+    } else {
+        strategy += `2. **For Intermediate/Advanced**: 
+   - Use Chinese primarily. Use Burmese only for difficult concept clarification.`;
+    }
+
+    return strategy;
+  }, [calculateEffectiveLevel]);
+
+  // 4. 计算：完整版 System Prompt
   const finalSystemPrompt = useMemo(() => {
     let template = aiMode === 'INTERACTIVE' ? SYSTEM_PROMPTS.INTERACTIVE : SYSTEM_PROMPTS.CHAT;
-    let displayLevel = config.userLevel || 'HSK 1';
+    const displayLevel = calculateEffectiveLevel();
     
-    const taskId = activeTask?.id || "";
-    const lowerId = taskId.toLowerCase();
-    
-    // 统一等级显示名称
-    if (lowerId.includes('hsk1')) displayLevel = 'HSK 1';
-    else if (lowerId.includes('hsk2')) displayLevel = 'HSK 2';
-    else if (lowerId.includes('hsk3')) displayLevel = 'HSK 3';
-    else if (lowerId.includes('sp')) displayLevel = '口语专项';
-
     template = template.replace(/{{LEVEL}}/g, displayLevel);
 
     if (aiMode === 'INTERACTIVE' && activeTask) {
-      template = template.replace('{{TASK_ID}}', taskId || '未知');
+      template = template.replace('{{TASK_ID}}', activeTask.id || '未知');
       template = template.replace('{{GRAMMAR}}', activeTask.grammarPoint || '通用语法');
       template = template.replace('{{QUESTION}}', activeTask.question || '');
       template = template.replace('{{USER_CHOICE}}', activeTask.userChoice || '');
@@ -394,41 +323,34 @@ You MUST strictly follow:
       const contextString = (pageContext && typeof pageContext.content === 'string')
         ? pageContext.content
         : (activeTask && typeof activeTask.content === 'string' ? activeTask.content : '通用对话');
-      // 增加截断长度至 8000
       template = template.replace('{{CONTEXT}}', contextString.substring(0, 8000));
     }
 
-    // 🔥 核心补丁：如果等级低，强制追加缅语指令 🔥
-    if (shouldUseBurmese()) {
-        template += getBurmeseOverride();
-    }
+    // 注入动态策略
+    template += getLanguageStrategy();
 
     return template;
-  }, [config.userLevel, aiMode, activeTask, pageContext, shouldUseBurmese, getBurmeseOverride]);
+  }, [aiMode, activeTask, pageContext, calculateEffectiveLevel, getLanguageStrategy]);
 
   // 5. 计算：简洁版 System Prompt (追问专用)
   const finalSimplePrompt = useMemo(() => {
       let template = SYSTEM_PROMPTS.SIMPLE;
-      let displayLevel = config.userLevel || 'HSK 1';
+      const displayLevel = calculateEffectiveLevel();
       template = template.replace(/{{LEVEL}}/g, displayLevel);
       
-      // 🔥 核心补丁：如果等级低，强制追加缅语指令 🔥
-      if (shouldUseBurmese()) {
-          template += getBurmeseOverride();
-      }
+      // 注入动态策略
+      template += getLanguageStrategy();
       
       return template;
-  }, [config.userLevel, shouldUseBurmese, getBurmeseOverride]);
+  }, [calculateEffectiveLevel, getLanguageStrategy]);
 
-  // 6. 导出：动态获取 Prompt 的通用函数 (UI 可能需要)
+  // 6. 导出
   const getSystemPrompt = useCallback((isSystemTrigger, currentAiMode) => {
-      if (currentAiMode === 'INTERACTIVE') return finalSystemPrompt; // 错题模式只有一种 Prompt
-      
-      // 这里的逻辑必须与 UI 保持一致
+      if (currentAiMode === 'INTERACTIVE') return finalSystemPrompt;
       if (isSystemTrigger && currentAiMode === 'CHAT') {
-          return finalSystemPrompt; // 完整 2.0
+          return finalSystemPrompt;
       } else {
-          return finalSimplePrompt; // 简洁版
+          return finalSimplePrompt;
       }
   }, [finalSystemPrompt, finalSimplePrompt]);
 
@@ -474,15 +396,14 @@ You MUST strictly follow:
       handleActivate, handleGoogleCallback,
       activeTask, aiMode, 
       
-      // 导出处理好的 Prompts
-      systemPrompt: finalSystemPrompt,      // 用于新课讲解 (包含 2.0 流程)
-      simpleSystemPrompt: finalSimplePrompt, // 用于日常追问 (轻量级)
+      systemPrompt: finalSystemPrompt,     
+      simpleSystemPrompt: finalSimplePrompt, 
       
-      // 导出辅助函数供 UI 调用
       SYSTEM_PROMPTS,
       getSystemPrompt,
-      shouldUseBurmese,
-      getBurmeseOverride,
+      // 这里的辅助函数不需要改名，UI如果有用到可以继续用，或者忽略
+      shouldUseBurmese: () => true, 
+      getBurmeseOverride: getLanguageStrategy, 
       
       triggerInteractiveAI, updatePageContext, resetToChatMode, triggerAI,
     }}>
