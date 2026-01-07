@@ -53,25 +53,23 @@ const playTickSound = () => {
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     
-    // 使用方波 (Square)，模拟机械键盘的清脆感
-    osc.type = 'square';
+    // 使用正弦波 (Sine)，声音最圆润
+    osc.type = 'sine';
     
-    // 频率：从 600Hz 瞬间降到 300Hz，模拟触底声
-    osc.frequency.setValueAtTime(600, t);
-    osc.frequency.exponentialRampToValueAtTime(300, t + 0.03);
+    // 频率固定在 800Hz 左右，不下降，像水滴
+    osc.frequency.setValueAtTime(800, t);
     
-    // 音量包络：极短冲击
-    gain.gain.setValueAtTime(0.05, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+    // 音量极短
+    gain.gain.setValueAtTime(0.08, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
     
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     
     osc.start(t);
-    osc.stop(t + 0.03);
+    osc.stop(t + 0.05);
   } catch (e) { console.error('Sound play error:', e); }
 };
-
 // --- 拼音组件 (修复版) ---
 const PinyinRenderer = ({ text, show }) => {
   if (!show || !text) return text;
