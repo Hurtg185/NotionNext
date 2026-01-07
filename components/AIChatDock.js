@@ -130,6 +130,7 @@ export default function AIChatDock() {
 
   const settingsTouchStart = useRef(0);
   const longPressTimerRef = useRef(null);
+  const selectionTimerRef = useRef(null); // 新增：用于延迟显示菜单
 
   const audioRef = useRef(null);
   const historyRef = useRef(null);
@@ -227,6 +228,7 @@ export default function AIChatDock() {
       document.addEventListener('touchstart', handleOutsideClick);
     }
     return () => {
+      if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
       document.removeEventListener('selectionchange', handleSelectionChange);
       document.removeEventListener('mousedown', handleOutsideClick);
       document.removeEventListener('touchstart', handleOutsideClick);
@@ -249,11 +251,13 @@ export default function AIChatDock() {
       let newSessionTitle;
       let initialMessages = [];
 
-      // --- 新增逻辑：根据等级强制追加语言要求 ---
+      // --- 核心修复：AI语言强制控制 ---
+      // 根据用户等级，强制在 Prompt 尾部添加语言指令，利用 AI 的"近因效应"确保它听话
       const level = config.userLevel || 'H1';
       const isLowLevel = ['H1', 'H2', 'HSK1', 'HSK2'].some(l => level.toUpperCase().includes(l));
+      
       const langInstruction = isLowLevel 
-          ? "\n\n【重要强制要求】：面对HSK1-2级学生，除核心词汇/例句外，讲解部分、背景引入、心理辅导必须使用【缅甸语】(Burmese)！请勿使用大段中文。"
+          ? "\n\n【System Override】: The user is a BEGINNER (HSK 1-2). You MUST use **Burmese (缅甸语)** for all explanations, context, and logic analysis. Only use Chinese for the specific vocabulary/sentences being taught. Do NOT use long paragraphs of Chinese."
           : "";
       // ---------------------------------------
 
@@ -283,7 +287,8 @@ export default function AIChatDock() {
       setCurrentSessionId(newSession.id);
       taskToRun.current = { prompt: hiddenPrompt, history: initialMessages };
     }
-  }, [activeTask, aiMode, setSessions, setCurrentSessionId, config.userLevel]); // 依赖项增加了 config.userLevel
+  }, [activeTask, aiMode, setSessions, setCurrentSessionId, config.userLevel]);
+
   useEffect(() => {
     if (taskToRun.current && currentSessionId) {
       const { prompt, history } = taskToRun.current;
@@ -292,22 +297,36 @@ export default function AIChatDock() {
     }
   }, [currentSessionId]);
 
+  // --- 选区处理逻辑 (延迟显示 + 不消失) ---
   const handleSelectionChange = () => {
-    if (window.selectionTimeout) clearTimeout(window.selectionTimeout);
-    window.selectionTimeout = setTimeout(() => {
-      const selection = window.getSelection();
-      if (!selection || selection.rangeCount === 0) return;
-      const text = selection.toString().trim();
-      if (text.length > 0 && isAiOpen) {
-        const range = selection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        let top = rect.top - 60;
-        let left = rect.left + rect.width / 2;
-        if (top < 10) top = rect.bottom + 10;
-        setSelectionMenu({ show: true, x: left, y: top, text: text });
-        setIsCopied(false);
-      }
-    }, 200);
+    // 每次选区变化，先清除旧定时器
+    if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
+
+    // 2秒延迟，确保用户选完
+    selectionTimerRef.current = setTimeout(() => {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) return;
+        
+        const text = selection.toString().trim();
+        // 只有在 AI 窗口打开且有选中文字时才显示
+        if (text.length > 0 && isAiOpen) {
+          const range = selection.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          
+          // 计算位置：显示在文字上方 50px，水平居中
+          // 如果 rect.top 太小（文字在顶端），则显示在下方
+          let top = rect.top - 50; 
+          let left = rect.left + (rect.width / 2);
+          
+          if (top < 10) top = rect.bottom + 10;
+          
+          setSelectionMenu({ show: true, x: left, y: top, text: text });
+          setIsCopied(false);
+        } else {
+            // 如果没有文字，隐藏菜单
+            setSelectionMenu(prev => ({ ...prev, show: false }));
+        }
+    }, 2000); // 延迟 2000 毫秒
   };
 
   const handleOutsideClick = (e) => {
@@ -324,8 +343,16 @@ export default function AIChatDock() {
   const handleTranslateSelection = () => {
     if (!selectionMenu.text) return;
     handleSend(`请用缅文详细解释这段文字：\n"${selectionMenu.text}"`);
+    // 只有点击“解释”时才清除选区，方便阅读
     setSelectionMenu(prev => ({ ...prev, show: false }));
     window.getSelection().removeAllRanges();
+  };
+
+  // --- 阻止原生右键菜单 ---
+  const handleContextMenu = (e) => {
+      // 只有在聊天内容区域内才阻止，防止影响输入框操作
+      e.preventDefault();
+      return false;
   };
 
   const handleTouchStart = (e) => {
@@ -441,7 +468,6 @@ export default function AIChatDock() {
     login();
   };
 
-  // ✅ [最终修复] 彻底重写了数据流处理逻辑，确保能正确显示AI响应
   const handleSend = async (textToSend = input, isSystemTrigger = false, historyOverride = null) => {
     const contentToSend = (typeof textToSend === 'string' ? textToSend : input).trim();
     if (!contentToSend || loading) return;
@@ -465,16 +491,13 @@ export default function AIChatDock() {
 
     const userMessage = { role: 'user', content: contentToSend };
     
-    // ✅ 修改：针对自动触发的语法教学，优化发送逻辑
     let apiMessages = [];
     if (isSystemTrigger && aiMode === 'CHAT' && activeTask) {
-        // 系统触发的语法讲解：只发 System Prompt 和 当前指令，确保 AI 满血输出 2.0 流程
         apiMessages = [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: contentToSend }
         ];
     } else {
-        // 普通对话：保留历史记录
         const currentHistory = historyOverride !== null ? historyOverride : messages;
         const historyForApi = [...currentHistory, userMessage];
         const historyMsgs = historyForApi.slice(-10).map(({ role, content }) => ({ role, content }));
@@ -512,7 +535,7 @@ export default function AIChatDock() {
       const decoder = new TextDecoder();
       let buffer = '';
       let fullContent = '';
-      let rawFullContent = ''; // 新增：用于暂存原始文本，包含 <<<SUGGESTIONS>>>
+      let rawFullContent = '';
 
       while (true) {
         const { value, done } = await reader.read();
@@ -532,26 +555,23 @@ export default function AIChatDock() {
               const data = JSON.parse(jsonStr);
               const delta = data.choices?.[0]?.delta?.content || '';
               if (delta) {
-                rawFullContent += delta; // 累加原始数据
-
-                // --- 核心修复：解析气囊标记 <<<SUGGESTIONS: ... >>> ---
+                rawFullContent += delta;
+                
+                // --- 气囊解析逻辑 ---
                 const suggestionRegex = /<<<SUGGESTIONS:(.*?)>>>/s;
                 const match = rawFullContent.match(suggestionRegex);
                 let contentToDisplay = rawFullContent;
 
                 if (match) {
-                    // 1. 从显示文本中移除标记
                     contentToDisplay = rawFullContent.replace(match[0], '').trim();
-                    // 2. 提取气囊内容
                     const suggestionsStr = match[1];
                     if (suggestionsStr) {
                         const newSuggestions = suggestionsStr.split('|').map(s => s.trim()).filter(s => s);
-                        setSuggestions(newSuggestions); // 更新气囊状态
+                        setSuggestions(newSuggestions);
                     }
                 }
-                // ----------------------------------------------------
 
-                fullContent = contentToDisplay; // 更新实际显示的内容
+                fullContent = contentToDisplay;
                 
                 updateMessages(prev => {
                   const updated = [...prev];
@@ -563,11 +583,11 @@ export default function AIChatDock() {
               }
             } catch (e) {
               console.error("无法解析收到的数据流 (JSON Error):", e);
-              console.error("问题数据行:", line);
             }
           }
         }
       }
+
       updateMessages(prev => {
         const final = [...prev];
         if (final.length > 0) {
@@ -600,12 +620,18 @@ export default function AIChatDock() {
     if (audioRef.current) audioRef.current.pause();
     setIsPlaying(true);
     
-    const emojiRegex = /(?:[\u2700-\u27bf]|(?:\ud83c[\udde6-\uddff]){2}|[\ud800-\udbff][\udc00-\udfff]|[\u0023-\u0039]\ufe0f?\u20e3|\u3299|\u3297|\u303d|\u3030|\u24c2|\ud83c[\udd70-\udd71]|\ud83c[\udd7e-\udd7f]|\ud83c\udd8e|\ud83c[\udd91-\udd9a]|\ud83c[\udde6-\uddff]|\ud83c[\ude01-\ude02]|\ud83c\ude1a|\ud83c\ude2f|\ud83c[\ude32-\ude3a]|\ud83c[\ude50-\ude51]|\u203c|\u2049|[\u25aa-\u25ab]|\u25b6|\u25c0|[\u25fb-\u25fe]|\u00a9|\u00ae|\u2122|\u2139|\ud83c\udc04|[\u2600-\u26FF]|\u2b05|\u2b06|\u2b07|\u2b1b|\u2b1c|\u2b50|\u2b55|\u231a|\u231b|\u2328|\u23cf|[\u23e9-\u23f3]|[\u23f8-\u23fa]|\ud83c\udccf|\u2934|\u2935|[\u2190-\u21ff])/g;
-    const clean = text
-        .replace(/\[(.*?)\]\(.*?\)/g, '$1') 
-        .replace(/[*#`>~\-\[\]_]/g, '')
-        .replace(/[,\.。、·;；:：!！?？#~（）《》「」『』【】]/g, ' ') 
-        .replace(emojiRegex, '');
+    // --- TTS 净化逻辑 ---
+    // 移除 markdown 链接格式
+    let clean = text.replace(/\[(.*?)\]\(.*?\)/g, '$1');
+    // 移除 markdown 符号
+    clean = clean.replace(/[*#`>~\-\[\]_]/g, '');
+    
+    // 移除所有标点符号（中英文）和特殊字符，只保留中文字、英文字母、数字和空格
+    // 这能有效防止朗读 "comma", "period" 或者表情符号
+    clean = clean.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g, ' ');
+    
+    // 移除多余空格
+    clean = clean.replace(/\s+/g, ' ').trim();
         
     const rate = Math.round((config.ttsSpeed - 1) * 100);
     const url = `/api/tts?t=${encodeURIComponent(clean)}&v=${config.ttsVoice}&r=${rate}%`;
@@ -622,6 +648,7 @@ export default function AIChatDock() {
   const copyText = (text) => {
     navigator.clipboard.writeText(text);
     setIsCopied(true);
+    // 复制不清除选区，只隐藏菜单
     setTimeout(() => setSelectionMenu(prev => ({ ...prev, show: false })), 800);
   };
 
@@ -645,6 +672,13 @@ export default function AIChatDock() {
           textareaRef.current.style.height = 'auto';
           textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
       }
+  };
+
+  // --- 辅助函数：给 Markdown 组件包裹拼音 ---
+  const renderWithPinyin = (children) => {
+    return React.Children.map(children, c => 
+      typeof c === 'string' ? <PinyinRenderer text={c} show={config.showPinyin} /> : c
+    );
   };
 
   return (
@@ -718,7 +752,7 @@ export default function AIChatDock() {
             <button onClick={() => setShowSettings(true)} style={styles.navIconBtn}><FaCog size={20} /></button>
           </div>
 
-          <div ref={historyRef} style={styles.chatBody}>
+          <div ref={historyRef} style={styles.chatBody} onContextMenu={handleContextMenu}>
             {messages.length === 0 && !loading && (
               <div style={styles.emptyState}>
                 <FaRobot size={40} color="#cbd5e1" />
@@ -748,17 +782,18 @@ export default function AIChatDock() {
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             components={{
-                              h1: ({ children }) => <h1 style={styles.h1}>{children}</h1>,
-                              h2: ({ children }) => <h2 style={styles.h2}>{children}</h2>,
-                              h3: ({ children }) => <h3 style={styles.h3}>{children}</h3>,
-                              p: ({ children }) => <p style={styles.p}>{React.Children.map(children, c => typeof c === 'string' ? <PinyinRenderer text={c} show={config.showPinyin} /> : c)}</p>,
-                              strong: ({ children }) => <strong style={styles.strong}>{children}</strong>,
+                              // 修复拼音显示不全问题，覆盖更多标签
+                              h1: ({ children }) => <h1 style={styles.h1}>{renderWithPinyin(children)}</h1>,
+                              h2: ({ children }) => <h2 style={styles.h2}>{renderWithPinyin(children)}</h2>,
+                              h3: ({ children }) => <h3 style={styles.h3}>{renderWithPinyin(children)}</h3>,
+                              p: ({ children }) => <p style={styles.p}>{renderWithPinyin(children)}</p>,
+                              strong: ({ children }) => <strong style={styles.strong}>{renderWithPinyin(children)}</strong>,
                               ul: ({ children }) => <ul style={styles.ul}>{children}</ul>,
-                              li: ({ children }) => <li style={styles.li}>{children}</li>,
-                              del: ({ children }) => <del style={styles.del}>{children}</del>,
+                              li: ({ children }) => <li style={styles.li}>{renderWithPinyin(children)}</li>,
+                              del: ({ children }) => <del style={styles.del}>{renderWithPinyin(children)}</del>,
                               table: ({ children }) => <div style={{ overflowX: 'auto' }}><table style={styles.table}>{children}</table></div>,
-                              th: ({ children }) => <th style={styles.th}>{children}</th>,
-                              td: ({ children }) => <td style={styles.td}>{React.Children.map(children, c => typeof c === 'string' ? <PinyinRenderer text={c} show={config.showPinyin} /> : c)}</td>
+                              th: ({ children }) => <th style={styles.th}>{renderWithPinyin(children)}</th>,
+                              td: ({ children }) => <td style={styles.td}>{renderWithPinyin(children)}</td>
                             }}
                           >
                             {m.content}
@@ -1019,7 +1054,7 @@ const styles = {
   navHeader: { height: 56, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', borderBottom: '1px solid #e2e8f0', flexShrink: 0, paddingTop: 'env(safe-area-inset-top)' },
   navTitle: { fontSize: '1.1rem', fontWeight: 'bold', color: '#1e293b', textAlign: 'center', flex: 1, marginRight: '-48px' /* Compensate for the left button */ },
   navIconBtn: { background: 'none', border: 'none', padding: 8, cursor: 'pointer', color: '#64748b', width: 48, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  chatBody: { flex: 1, overflowY: 'auto', padding: '16px', background: '#f8fafc', WebkitOverflowScrolling: 'touch' },
+  chatBody: { flex: 1, overflowY: 'auto', padding: '16px', background: '#f8fafc', WebkitOverflowScrolling: 'touch', userSelect: 'text' /* 允许选中 */ },
   footer: { background: '#fff', borderTop: '1px solid #e2e8f0', paddingBottom: 'env(safe-area-inset-bottom)', display: 'flex', flexDirection: 'column', flexShrink: 0 },
   floatingBtn: { position: 'fixed', width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #4f46e5)', boxShadow: '0 8px 20px rgba(79, 70, 229, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, cursor: 'grab', touchAction: 'none' },
   sidebar: { position: 'fixed', top: 0, left: 0, width: '80%', maxWidth: 300, bottom: 0, background: '#fff', borderRight: '1px solid #e2e8f0', zIndex: 100000, transition: 'transform 0.3s ease', display: 'flex', flexDirection: 'column', paddingTop: 'env(safe-area-inset-top)' },
@@ -1051,7 +1086,7 @@ const styles = {
   table: { width: '100%', borderCollapse: 'collapse', margin: '10px 0', fontSize: '0.9em' },
   th: { border: '1px solid #e2e8f0', padding: '6px 10px', background: '#f8fafc', fontWeight: '600', textAlign: 'left' },
   td: { border: '1px solid #e2e8f0', padding: '6px 10px', verticalAlign: 'top' },
-  scrollSuggestionContainer: { display: 'flex', gap: 10, padding: '12px 16px 4px 16px', overflowX: 'auto', whiteSpace: 'nowrap', WebkitOverflowScrolling: 'touch' },
+  scrollSuggestionContainer: { display: 'flex', flexWrap: 'wrap', gap: 12, padding: '12px 16px 8px 16px', overflowY: 'auto', maxHeight: 100 },
   scrollSuggestionBtn: { flexShrink: 0, background: '#ffffff', border: '1px solid #e0e7ff', borderRadius: '20px', padding: '8px 16px', fontSize: '0.88rem', color: '#4f46e5', cursor: 'pointer', display: 'flex', alignItems: 'center', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.08)', fontWeight: '500' },
   inputContainer: { padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 8 },
   ttsBar: { background: '#eff6ff', color: '#2563eb', fontSize: '0.75rem', padding: '4px 10px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', alignSelf: 'flex-start' },
@@ -1060,7 +1095,7 @@ const styles = {
   dynamicInputBtn: { width: 44, height: 44, borderRadius: '50%', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s', flexShrink: 0, background: '#6366f1', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.2)' },
   sttLangMenu: { position: 'absolute', bottom: '120%', right: 0, background: '#fff', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.15)', padding: 8, width: 140, zIndex: 20 },
   sttLangItem: { padding: '8px 10px', borderRadius: 6, fontSize: '0.9rem', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  popover: { position: 'fixed', transform: 'translateX(-50%)', background: '#1e293b', borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 4px 15px rgba(0,0,0,0.3)', zIndex: 11000, color: '#fff' },
+  popover: { position: 'fixed', transform: 'translateX(-50%)', background: '#1e293b', borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 4px 15px rgba(0,0,0,0.3)', zIndex: 11000, color: '#fff', whiteSpace: 'nowrap' },
   popArrow: { position: 'absolute', bottom: -6, left: '50%', marginLeft: -6, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '6px solid #1e293b' },
   popBtn: { background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem' },
   popDivider: { width: 1, height: 16, background: 'rgba(255,255,255,0.3)' },
