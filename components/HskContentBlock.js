@@ -6,18 +6,22 @@ import {
   Sparkles, PlayCircle, Gem, MessageCircle,
   Crown, Heart, ChevronRight, Star, BookOpen,
   ChevronDown, ChevronUp, GraduationCap,
-  MessageSquareText, Headphones, Volume2, Globe, X
+  MessageSquareText, Headphones, Volume2, Globe, X,
+  Library
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
-import { useSwipeable } from 'react-swipeable'; // 引入手势库
+import { useSwipeable } from 'react-swipeable'; 
 
 // ==========================================
 // 1. 引入组件
 // ==========================================
 
-// 引入全屏 AI 助手组件 (替换原有的 GlosbeSearchCard)
+// 引入全屏 AI 助手组件
 import AIChatDrawer from './AiChatAssistant';
+
+// 引入新的书籍组件
+import BookLibrary from '@/components/BookLibrary';
 
 // 动态导入 WordCard 组件
 const WordCard = dynamic(
@@ -51,7 +55,7 @@ const getLevelPrice = (level) => {
   return prices[level] || "Contact Us";
 };
 
-// 拼音数据 (双语/缅语)
+// 拼音数据
 const pinyinMain = [
   { id: 'initials', title: '声母', sub: 'ဗျည်း', href: '/pinyin/initials', icon: Mic2, color: 'text-blue-500', bg: 'bg-blue-50' },
   { id: 'finals', title: '韵母', sub: 'သရ', href: '/pinyin/finals', icon: Music4, color: 'text-emerald-500', bg: 'bg-emerald-50' },
@@ -214,8 +218,8 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
   );
 };
 
-// 拼音面板组件 (布局调整)
-const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection, onOpenTranslator }) => {
+// 拼音面板组件 (布局调整 + 书籍入口)
+const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection, onOpenTranslator, onOpenBooks }) => {
   const router = useRouter();
 
   return (
@@ -254,32 +258,42 @@ const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection, onOpenTransla
       </button>
 
       {/* ==================================================== */}
-      {/* AI 翻译/助手入口 */}
+      {/* AI 翻译 + 免费书籍 (并排) */}
       {/* ==================================================== */}
-      <button 
-        onClick={onOpenTranslator} 
-        className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100/50 active:scale-95 transition-transform group"
-      >
-        <div className="flex items-center gap-3">
-          <div className="p-1.5 bg-white rounded-full text-blue-500 shadow-sm shrink-0">
-            <Globe size={16} />
+      <div className="grid grid-cols-2 gap-3">
+        {/* AI 翻译 */}
+        <button 
+          onClick={onOpenTranslator} 
+          className="flex flex-col items-center justify-center py-3 bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl active:scale-95 transition-transform"
+        >
+          <div className="flex items-center gap-1.5 mb-1 text-blue-600">
+             <Globe size={16} />
+             <span className="text-xs font-black">AI 翻译</span>
           </div>
-          <div className="text-left">
-            <span className="block text-xs font-black text-slate-700">AI 翻译 (Translator)</span>
-            <span className="block text-[10px] text-slate-500 font-medium">AI ဘာသာပြန်</span>
+          <span className="text-[9px] text-slate-500">AI ဘာသာပြန်</span>
+        </button>
+
+        {/* 免费书籍 (新功能) */}
+        <button 
+          onClick={onOpenBooks} 
+          className="flex flex-col items-center justify-center py-3 bg-gradient-to-br from-cyan-50 to-teal-50 border border-cyan-100 rounded-2xl active:scale-95 transition-transform"
+        >
+          <div className="flex items-center gap-1.5 mb-1 text-cyan-700">
+             <Library size={16} />
+             <span className="text-xs font-black">免费书籍</span>
           </div>
-        </div>
-        <ChevronRight size={16} className="text-blue-300" />
-      </button>
+          <span className="text-[9px] text-slate-500">စာကြည့်တိုက်</span>
+        </button>
+      </div>
       
       {/* 第四行：双收藏按钮 */}
       <div className="grid grid-cols-2 gap-3">
         {/* 单词收藏 */}
         <button 
           onClick={onOpenCollection}
-          className="flex flex-col items-center justify-center py-3 bg-white border border-blue-100 rounded-2xl shadow-sm active:scale-95 transition-transform"
+          className="flex flex-col items-center justify-center py-3 bg-white border border-slate-100 rounded-2xl shadow-sm active:scale-95 transition-transform"
         >
-          <div className="flex items-center gap-1.5 mb-1 text-blue-600">
+          <div className="flex items-center gap-1.5 mb-1 text-slate-600">
              <Star size={14} fill="currentColor"/>
              <span className="text-xs font-black">单词收藏</span>
           </div>
@@ -289,9 +303,9 @@ const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection, onOpenTransla
         {/* 口语收藏 */}
         <button 
           onClick={onOpenSpokenCollection}
-          className="flex flex-col items-center justify-center py-3 bg-white border border-emerald-100 rounded-2xl shadow-sm active:scale-95 transition-transform"
+          className="flex flex-col items-center justify-center py-3 bg-white border border-slate-100 rounded-2xl shadow-sm active:scale-95 transition-transform"
         >
-           <div className="flex items-center gap-1.5 mb-1 text-emerald-600">
+           <div className="flex items-center gap-1.5 mb-1 text-slate-600">
              <Volume2 size={14} fill="currentColor"/>
              <span className="text-xs font-black">口语收藏</span>
            </div>
@@ -311,44 +325,57 @@ export default function HskPageClient() {
   const [activeHskWords, setActiveHskWords] = useState(null);
   const [activeLevelTag, setActiveLevelTag] = useState(null);
   const [membership, setMembership] = useState({ open: false, level: null });
-  // 控制 AI 翻译 Drawer 状态
+  
+  // 状态控制
   const [isTranslatorOpen, setIsTranslatorOpen] = useState(false);
+  const [isBookLibraryOpen, setIsBookLibraryOpen] = useState(false);
 
   const isCardViewOpen = router.asPath.includes('#hsk-vocabulary');
 
   // ====================================================
-  // 手势控制逻辑 (新增)
+  // 手势控制逻辑
   // ====================================================
+  
+  // 全局手势（处理页面级的滑动）
   const swipeHandlers = useSwipeable({
     onSwipedRight: (eventData) => {
-      // 1. 如果 AI 翻译打开，右滑关闭
+      // 如果 AI 翻译打开，右滑关闭 (这个逻辑现在由 AI 容器上的特定 Handler 辅助)
       if (isTranslatorOpen) {
         setIsTranslatorOpen(false);
         return;
       }
-      // 2. 如果生词卡片 (WordCard) 打开 (通过 Hash 控制)，右滑返回上一级
+      // 如果书籍库打开
+      if (isBookLibraryOpen) {
+        setIsBookLibraryOpen(false);
+        return;
+      }
+      // 如果生词卡片打开
       if (isCardViewOpen) {
         router.back();
         return;
       }
     },
-    // 允许触摸滑动，防止误触
     trackMouse: true,
-    delta: 50, // 滑动距离超过 50px 触发
+    delta: 50,
     preventScrollOnSwipe: false 
+  });
+
+  // 专门为 AI Drawer 准备的手势 Wrapper
+  // 注意：如果 Drawer 是全屏覆盖，必须在 Drawer 外层直接绑定 swipe
+  const aiDrawerSwipeHandlers = useSwipeable({
+    onSwipedRight: () => setIsTranslatorOpen(false),
+    trackMouse: true
   });
 
   // ====================================================
   // 跳转逻辑
   // ====================================================
 
-  // 1. 普通跳转：进入口语首页 (点击 Banner)
   const handleSpokenGeneralClick = useCallback((e) => {
     if(e) e.preventDefault();
     router.push('/spoken');
   }, [router]);
 
-  // 2. 收藏跳转：进入口语收藏 (点击按钮)
   const handleSpokenCollectionClick = useCallback((e) => {
     if(e) e.preventDefault();
     router.push({
@@ -357,7 +384,6 @@ export default function HskPageClient() {
     });
   }, [router]);
 
-  // 处理生词本点击逻辑
   const handleVocabularyClick = useCallback((level) => {
     const levelNum = level?.level || 1;
     const words = hskWordsData[levelNum] || [];
@@ -366,7 +392,6 @@ export default function HskPageClient() {
     router.push({ pathname: router.pathname, query: { ...router.query, level: levelNum }, hash: 'hsk-vocabulary' }, undefined, { shallow: true });
   }, [router]);
 
-  // 处理生词收藏点击
   const handleCollectionClick = useCallback(() => {
     const savedIds = JSON.parse(localStorage.getItem(FAVORITES_STORAGE_KEY) || '[]');
     const allWords = [ ...(hskWordsData[1] || []), ...(hskWordsData[2] || []) ];
@@ -385,7 +410,7 @@ export default function HskPageClient() {
   }, [router]);
 
   return (
-    // 将手势监听器绑定到最外层容器
+    // 绑定基础手势
     <div {...swipeHandlers} className="min-h-screen bg-[#f8fafc] font-sans text-slate-900 pb-20 relative overflow-x-hidden max-w-md mx-auto shadow-2xl shadow-slate-200">
       
       <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-blue-50/50 to-transparent pointer-events-none" />
@@ -397,7 +422,6 @@ export default function HskPageClient() {
             <span className="text-[10px] font-bold text-blue-800 uppercase">Premium Class</span>
           </div>
           
-          {/* Messenger 风格按钮 */}
           <a href={FB_CHAT_LINK} target="_blank" rel="noopener noreferrer"
             className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white rounded-full shadow-sm border border-slate-100 active:scale-95 transition-all"
           >
@@ -410,12 +434,13 @@ export default function HskPageClient() {
           <PinyinSection 
             onOpenCollection={handleCollectionClick} 
             onOpenSpokenCollection={handleSpokenCollectionClick}
-            onOpenTranslator={() => setIsTranslatorOpen(true)} 
+            onOpenTranslator={() => setIsTranslatorOpen(true)}
+            onOpenBooks={() => setIsBookLibraryOpen(true)}
           />
         </div>
       </header>
 
-      {/* 口语练习横图入口 (缅语化) - 使用普通跳转 */}
+      {/* 口语练习横图 */}
       <div className="px-4 mt-4">
         <div 
           onClick={handleSpokenGeneralClick}
@@ -458,6 +483,7 @@ export default function HskPageClient() {
         </div>
       </div>
 
+      {/* 会员弹窗 */}
       <AnimatePresence>
         {membership.open && (
           <MembershipModal
@@ -469,14 +495,30 @@ export default function HskPageClient() {
       </AnimatePresence>
 
       {/* 
-         修改：使用 AIChatDrawer 代替原来的 TranslatorModal 
-         全屏效果由 AIChatDrawer 内部 CSS 控制
+         AI 翻译 Drawer 
+         修复：外层包裹 div 并绑定 aiDrawerSwipeHandlers，
+         确保在 Drawer 覆盖全屏时也能捕捉滑动事件
       */}
-      <AIChatDrawer 
-        isOpen={isTranslatorOpen} 
-        onClose={() => setIsTranslatorOpen(false)} 
-      />
+      {isTranslatorOpen && (
+        <div {...aiDrawerSwipeHandlers} className="fixed inset-0 z-[100]">
+           <AIChatDrawer 
+             isOpen={isTranslatorOpen} 
+             onClose={() => setIsTranslatorOpen(false)} 
+           />
+        </div>
+      )}
 
+      {/* 新增：免费图书馆 Drawer */}
+      <AnimatePresence>
+        {isBookLibraryOpen && (
+          <BookLibrary 
+            isOpen={isBookLibraryOpen}
+            onClose={() => setIsBookLibraryOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* 单词卡片 Drawer */}
       <WordCard
         isOpen={isCardViewOpen}
         words={activeHskWords || []}
