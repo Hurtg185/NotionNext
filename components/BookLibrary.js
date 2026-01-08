@@ -24,7 +24,7 @@ const BOOKS_DATA = [
     title: '实用口语 300 句',
     subTitle: 'လက်တွေ့သုံး စကားပြော',
     cover: 'https://images.unsplash.com/photo-1589829085413-56de8ae18c73?w=400&q=80',
-    pdfUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    pdfUrl: 'https://reader.zlib.fi/read/aed200cc9e27adfe2b703fc2e36f68304c4ded6662ecb42159503f1b4eede2f1/3635834/3fc1a9/hsk-2-standard-course.html?client_key=1fFLi67gBrNRP1j1iPy1&extension=pdf&signature=1c516e2bb836fd87086b18384c0ff1b1a2bd12aec42363620bc0334226c38455',
   }
 ];
 
