@@ -17,7 +17,7 @@ const BOOKS_DATA = [
     title: '汉语语法基础 (Basic Grammar)',
     subTitle: 'တရုတ်သဒ္ဒါအခြေခံ',
     cover: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400&q=80',
-    pdfUrl: 'https://raw.githubusercontent.com/mozilla/pdf.js/ba2edeae/web/compressed.tracemonkey-pldi-09.pdf', 
+    pdfUrl: 'https://audio.886.best/chinese-vocab-audio/%E4%B9%A6%E7%B1%8D/%E6%96%B0HSK%E8%AF%AD%E6%B3%95%E7%B2%BE%E8%AE%B2%E7%B2%BE%E7%BB%83%205%E7%BA%A7%20(%E6%A2%81%E9%B8%BF%E9%9B%81%E7%BC%96%E8%91%97)%20(Z-Library).pdf', 
   },
   {
     id: 'b2',
