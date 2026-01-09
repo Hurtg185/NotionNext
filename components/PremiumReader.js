@@ -280,4 +280,4 @@ export default function PremiumReader({ url, title, onClose }) {
       </AnimatePresence>
     </motion.div>
   );
-                  }
+}
