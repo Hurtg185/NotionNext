@@ -18,7 +18,7 @@ const BOOKS_DATA = [
     title: '汉语语法基础',
     subTitle: 'တရုတ်သဒ္ဒါအခြေခံ', 
     cover: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400&q=80',
-    pdfUrl: 'https://pdf-proxy.mfeng.workers.dev/pdf/chinese-vocab-audio/ffice.pdf',
+    pdfUrl: 'https://pdf-proxy.mfeng.workers.dev/pdf/chinese-vocab-audio/hsk1.pdf',
     category: 'Grammar',
     level: 'Beginner',
     pages: 128,
