@@ -33,7 +33,7 @@ export default function PremiumReader({ url, title, onClose }) {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
       
       // 使用你的 Worker 链接加载
-      const loadingTask = pdfjsLib.getDocument(url);
+      const loadingTask = pdfjsLib.getDocument({url,withCredentials: false,});
       const pdfDoc = await loadingTask.promise;
       setPdf(pdfDoc);
       setNumPages(pdfDoc.numPages);
