@@ -14,15 +14,42 @@ import {
   AlertCircle
 } from 'lucide-react';
 
-// 引入样式（必须！）
+// 引入样式
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
 // ==========================================
-// 1. 配置 Worker (关键)
+// 🔴 关键修复 1: 手动补全 URL.parse 方法
+// 解决 "TypeError: URL.parse is not a function" 报错
 // ==========================================
-// 使用 CDN 确保 worker 版本与 react-pdf 内部依赖版本一致
-// unpkg 是 react-pdf 官方推荐的 CDN 路径结构
+if (typeof window !== 'undefined' && !URL.parse) {
+  URL.parse = (string) => {
+    try {
+      return new URL(string);
+    } catch (err) {
+      return null;
+    }
+  };
+}
+
+// ==========================================
+// 🔴 关键修复 2: 手动补全 Promise.withResolvers
+// 新版 pdf.js 也可能依赖这个方法
+// ==========================================
+if (typeof Promise.withResolvers === 'undefined') {
+  Promise.withResolvers = function () {
+    let resolve, reject;
+    const promise = new Promise((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  };
+}
+
+// ==========================================
+// 3. 配置 Worker
+// ==========================================
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 export default function PremiumReader({ url, title, onClose }) {
@@ -31,20 +58,12 @@ export default function PremiumReader({ url, title, onClose }) {
   const [scale, setScale] = useState(1.2);
   const [loading, setLoading] = useState(true);
 
-  // ==========================================
-  // 2. 配置项 (解决中文显示 + 跨域流式传输)
-  // ==========================================
+  // 配置项
   const options = {
-    // 🔴 核心：解决中文乱码/空白问题
     cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
     cMapPacked: true,
-    
-    // 配合 Cloudflare Worker 的优化配置
-    disableStream: true, 
+    disableStream: true,
     disableAutoFetch: true,
-    
-    // 允许携带凭证(如需)
-    withCredentials: false,
   };
 
   function onDocumentLoadSuccess({ numPages }) {
@@ -55,7 +74,7 @@ export default function PremiumReader({ url, title, onClose }) {
   function onDocumentLoadError(error) {
     console.error('PDF Load Error:', error);
     setLoading(false);
-    alert('无法加载文档，请检查网络或跨域设置。');
+    // 这里不再弹窗 alert，避免无限弹窗，只在界面显示错误
   }
 
   const changePage = (offset) => {
@@ -73,7 +92,7 @@ export default function PremiumReader({ url, title, onClose }) {
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[200] bg-[#f8fafc] flex flex-col text-slate-800"
     >
-      {/* --- Header --- */}
+      {/* Header */}
       <header className="h-14 bg-white border-b flex items-center justify-between px-4 shadow-sm z-20 shrink-0">
         <button onClick={onClose} className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition">
           <ChevronLeft size={24} />
@@ -89,46 +108,46 @@ export default function PremiumReader({ url, title, onClose }) {
         </button>
       </header>
 
-      {/* --- Main Area --- */}
+      {/* Main Content */}
       <div className="flex-1 overflow-auto bg-slate-200 flex justify-center p-4 relative">
-        {/* Loading Spinner */}
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-200/50 z-10 backdrop-blur-[1px]">
              <Loader2 className="animate-spin text-blue-600" size={32} />
           </div>
         )}
 
-        {/* 
-            🔴 核心组件: Document + Page 
-            React-pdf 会自动处理 Canvas 渲染和清理
-        */}
         <Document
           file={url}
           onLoadSuccess={onDocumentLoadSuccess}
           onLoadError={onDocumentLoadError}
           onLoadStart={() => setLoading(true)}
-          loading={null} // 禁用默认 loading 文字，用上面的 Spinner
-          error={ // 自定义错误显示
+          loading={null}
+          options={options}
+          className="shadow-lg"
+          // 🔴 修复 Hydration Error: 确保加载时有占位符
+          noData={<div className="text-slate-400 mt-10">正在初始化 PDF...</div>}
+          error={
             <div className="flex flex-col items-center mt-20 text-slate-500">
               <AlertCircle size={40} className="text-red-400 mb-2" />
               <p>加载失败</p>
+              <p className="text-xs mt-2 text-slate-400">请检查网络或刷新页面</p>
             </div>
           }
-          options={options} // 传入上面定义的配置
-          className="shadow-lg"
         >
           <Page 
             pageNumber={pageNumber} 
             scale={scale} 
-            renderTextLayer={false} // 如果不需要复制文字，设为 false 可提升性能
-            renderAnnotationLayer={false} // 禁用链接层，提升性能
+            renderTextLayer={false} 
+            renderAnnotationLayer={false} 
             className="bg-white"
-            loading="" // 页面内部渲染时不显示额外文字
+            loading=""
+            // 🔴 修复高清屏模糊问题
+            devicePixelRatio={Math.min(window.devicePixelRatio, 2)}
           />
         </Document>
       </div>
 
-      {/* --- Footer --- */}
+      {/* Footer */}
       <footer className="h-20 bg-white border-t flex flex-col items-center justify-center gap-2 z-20 shrink-0 pb-safe">
         <div className="flex items-center gap-6 text-slate-600">
           <button onClick={() => changeScale(-0.2)} className="hover:text-blue-600 active:scale-90 transition">
