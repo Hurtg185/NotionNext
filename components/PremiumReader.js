@@ -1,22 +1,20 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronLeft, ChevronRight, Loader2, ZoomIn, ZoomOut,
-  List, X, AlertCircle, FileText, ScrollText, Grid, Check
+  List, X, AlertCircle, FileText, ScrollText, Grid
 } from 'lucide-react';
 
 const PDF_VERSION = '3.11.174';
 
 /* =================================================================
-   子组件：智能页面渲染器 (支持内存回收)
-   对于几百页的 PDF，这个组件是性能的关键。
+   子组件：智能页面渲染器 (含内存回收，防止大文件崩溃)
 ================================================================= */
-const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, isScrolling }) => {
+const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible }) => {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
-  // status: 'hidden' | 'loading' | 'rendered'
   const [status, setStatus] = useState('hidden'); 
   const renderTaskRef = useRef(null);
 
@@ -27,39 +25,23 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, isScrolling }) => {
     const observer = new IntersectionObserver(
       (entries) => {
         const entry = entries[0];
-        
-        // 1. 进入可视区域 (包括上下预加载区域 200%)
         if (entry.isIntersecting) {
-          if (status === 'hidden') {
-            renderPage();
-          }
-          // 通知父组件更新当前页码（仅当真正出现在屏幕中心时）
-          if (entry.intersectionRatio > 0.1 && onVisible) {
-             onVisible(pageNum);
-          }
-        } 
-        // 2. 滚出可视区域 (内存回收核心逻辑)
-        else {
-          // 如果已经渲染过，且滚远了，为了省内存，我们销毁它
+          if (status === 'hidden') renderPage();
+          if (entry.intersectionRatio > 0.1 && onVisible) onVisible(pageNum);
+        } else {
+          // 离开视口时销毁 Canvas，释放内存（大文件必须！）
           if (status === 'rendered') {
-            // 清空 Canvas 释放显存
             if (canvasRef.current) {
               const ctx = canvasRef.current.getContext('2d');
               ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
               canvasRef.current.width = 0; 
               canvasRef.current.height = 0;
             }
-            setStatus('hidden'); // 重置状态，下次回来重新画
+            setStatus('hidden');
           }
         }
       },
-      {
-        root: null,
-        // 🚀 关键优化：上下各预留 2 个屏幕的高度进行预加载
-        // 既保证滑动的流畅，又保证太远的页面能及时销毁
-        rootMargin: '200% 0px', 
-        threshold: 0.01 
-      }
+      { rootMargin: '200% 0px', threshold: 0.01 }
     );
 
     observer.observe(element);
@@ -72,39 +54,28 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, isScrolling }) => {
 
   const renderPage = async () => {
     if (!pdfDoc || !canvasRef.current) return;
-    
-    // 防止重复渲染
     if (renderTaskRef.current) renderTaskRef.current.cancel();
 
     setStatus('loading');
-
     try {
       const page = await pdfDoc.getPage(pageNum);
       const viewport = page.getViewport({ scale });
       const canvas = canvasRef.current;
       const context = canvas.getContext('2d');
-
       const dpr = window.devicePixelRatio || 1;
+      
       canvas.width = viewport.width * dpr;
       canvas.height = viewport.height * dpr;
-      
-      // 保持高清且大小正确
       canvas.style.width = '100%'; 
-      // 自动计算高度比例，防止布局抖动
       containerRef.current.style.aspectRatio = `${viewport.width} / ${viewport.height}`;
-
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       const renderTask = page.render({ canvasContext: context, viewport });
       renderTaskRef.current = renderTask;
-
       await renderTask.promise;
       setStatus('rendered');
     } catch (err) {
-      if (err.name !== 'RenderingCancelledException') {
-        console.error(`Page ${pageNum} render error`, err);
-        setStatus('hidden');
-      }
+      if (err.name !== 'RenderingCancelledException') setStatus('hidden');
     }
   };
 
@@ -113,7 +84,7 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, isScrolling }) => {
       ref={containerRef}
       id={`page-container-${pageNum}`}
       className="relative bg-white shadow-md mb-4 mx-auto transition-all"
-      style={{ width: '100%', minHeight: '200px' }} // 最小高度占位，防止滚动条跳动
+      style={{ width: '100%', minHeight: '200px' }}
     >
       {status !== 'rendered' && (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-50 text-slate-300">
@@ -126,7 +97,7 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, isScrolling }) => {
 };
 
 /* =================================================================
-   子组件：缩略图 (保持简单，低清渲染)
+   子组件：缩略图
 ================================================================= */
 const Thumbnail = ({ pdfDoc, pageNum, onClick, active }) => {
   const canvasRef = useRef(null);
@@ -135,12 +106,8 @@ const Thumbnail = ({ pdfDoc, pageNum, onClick, active }) => {
 
   useEffect(() => {
     const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && !loaded) {
-          renderThumb();
-        }
-      },
-      { rootMargin: '100% 0px' } // 缩略图也做懒加载，否则侧边栏会卡顿
+      (entries) => { if (entries[0].isIntersecting && !loaded) renderThumb(); },
+      { rootMargin: '100% 0px' }
     );
     if (containerRef.current) observer.observe(containerRef.current);
     return () => observer.disconnect();
@@ -149,42 +116,38 @@ const Thumbnail = ({ pdfDoc, pageNum, onClick, active }) => {
   const renderThumb = async () => {
     try {
       const page = await pdfDoc.getPage(pageNum);
-      const viewport = page.getViewport({ scale: 0.15 }); // 极低分辨率缩略图
+      const viewport = page.getViewport({ scale: 0.15 });
       const canvas = canvasRef.current;
       if (!canvas) return;
-      const ctx = canvas.getContext('2d');
       canvas.width = viewport.width;
       canvas.height = viewport.height;
-      await page.render({ canvasContext: ctx, viewport }).promise;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
       setLoaded(true);
     } catch(e) {}
   };
 
   return (
     <div 
-      ref={containerRef}
-      onClick={onClick}
+      ref={containerRef} onClick={onClick}
       className={`cursor-pointer rounded-lg overflow-hidden border-2 transition-all hover:scale-105 ${active ? 'border-blue-600 ring-2 ring-blue-100' : 'border-transparent hover:border-slate-200'}`}
     >
       <div className="bg-slate-100 aspect-[210/297] relative">
         <canvas ref={canvasRef} className="w-full h-full object-contain" />
-        <div className="absolute bottom-0 inset-x-0 bg-black/50 text-white text-[9px] text-center py-0.5">
-          {pageNum}
-        </div>
+        <div className="absolute bottom-0 inset-x-0 bg-black/50 text-white text-[9px] text-center py-0.5">{pageNum}</div>
       </div>
     </div>
   );
 };
 
 /* =================================================================
-   主组件
+   主组件 PremiumReader
 ================================================================= */
 export default function PremiumReader({ url, title, onClose }) {
   const [pdfDoc, setPdfDoc] = useState(null);
   const [pageNumber, setPageNumber] = useState(1);
   const [numPages, setNumPages] = useState(0);
   const [scale, setScale] = useState(1.0);
-  const [viewMode, setViewMode] = useState('scroll'); // 默认大文件使用滚动模式体验更好
+  const [viewMode, setViewMode] = useState('scroll');
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -196,7 +159,6 @@ export default function PremiumReader({ url, title, onClose }) {
 
   // 1. 初始化
   useEffect(() => {
-    // 读取本地进度
     const saved = localStorage.getItem(progressKey);
     if (saved) setPageNumber(parseInt(saved));
 
@@ -214,22 +176,31 @@ export default function PremiumReader({ url, title, onClose }) {
     init();
   }, [url]);
 
-  // 2. 加载 PDF (Fetch 模式)
+  // 2. 加载 PDF (优化版：开启流式加载，解决大文件卡死)
   const loadPDF = async () => {
     setLoading(true);
     try {
       const pdfjsLib = window.pdfjsLib || window['pdfjs-dist/build/pdf'];
       pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDF_VERSION}/pdf.worker.min.js`;
 
-      // 🔴 手动 Fetch 避免 Service Worker 206 错误
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("下载失败");
-      const buffer = await res.arrayBuffer();
+      // 🚀 核心修复：
+      // 1. 不再使用 fetch(url).arrayBuffer() (因为这会下载完整文件，大文件必死)
+      // 2. 加上 timestamp 参数，绕过 Service Worker 的缓存，解决 206 报错
+      // 3. 开启 rangeChunkSize，实现“读哪里下载哪里”
+      
+      const safeUrl = url.includes('?') 
+        ? `${url}&t=${Date.now()}` 
+        : `${url}?t=${Date.now()}`;
 
       const loadingTask = pdfjsLib.getDocument({
-        data: buffer,
+        url: safeUrl, 
         cMapUrl: `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDF_VERSION}/cmaps/`,
         cMapPacked: true,
+        
+        // ✅ 允许分段加载（秒开大文件的关键）
+        disableAutoFetch: false, 
+        disableStream: false,
+        rangeChunkSize: 65536 * 2, // 每次只下载 128KB，而不是 50MB
       });
 
       const doc = await loadingTask.promise;
@@ -239,19 +210,17 @@ export default function PremiumReader({ url, title, onClose }) {
       doc.getOutline().then(t => setOutline(t || [])).catch(()=>{});
     } catch (err) {
       console.error(err);
-      setError('无法打开文件，请刷新重试');
+      setError('加载失败，请检查网络或跨域设置');
     } finally {
       setLoading(false);
     }
   };
 
-  // 3. 翻页/跳转
   const handlePageChange = (newPage) => {
     const p = Math.min(Math.max(newPage, 1), numPages);
     setPageNumber(p);
     localStorage.setItem(progressKey, p.toString());
     
-    // 如果是滚动模式，自动滚到位置
     if (viewMode === 'scroll') {
       const el = document.getElementById(`page-container-${p}`);
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -282,9 +251,7 @@ export default function PremiumReader({ url, title, onClose }) {
             <span className="text-[9px] text-slate-400">{viewMode==='single'?'单页模式':'连续滚动'}</span>
           </div>
         </div>
-        
         <div className="flex items-center gap-2">
-           {/* 模式切换 */}
           <div className="flex bg-slate-100 rounded-lg p-0.5">
             <button onClick={()=>setViewMode('single')} className={`p-1.5 rounded ${viewMode==='single'?'bg-white shadow text-blue-600':'text-slate-400'}`}><FileText size={16}/></button>
             <button onClick={()=>setViewMode('scroll')} className={`p-1.5 rounded ${viewMode==='scroll'?'bg-white shadow text-blue-600':'text-slate-400'}`}><ScrollText size={16}/></button>
@@ -296,36 +263,23 @@ export default function PremiumReader({ url, title, onClose }) {
       {/* MAIN CONTENT */}
       <div className="flex-1 overflow-hidden relative flex flex-row bg-slate-200/50">
         {loading && <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/60 backdrop-blur-sm"><Loader2 className="animate-spin text-blue-500" size={32}/></div>}
-        {error && <div className="absolute inset-0 z-50 flex flex-col items-center justify-center text-red-500"><AlertCircle size={40}/><span>{error}</span></div>}
+        {error && <div className="absolute inset-0 z-50 flex flex-col items-center justify-center text-red-500 gap-2"><AlertCircle size={40}/><span className="text-xs">{error}</span></div>}
 
-        {/* --- 连续滚动模式 (高性能) --- */}
+        {/* 滚动模式 */}
         {viewMode === 'scroll' && (
           <div className="flex-1 overflow-y-auto custom-scrollbar px-2 sm:px-8 py-4 scroll-smooth">
              <div className="max-w-3xl mx-auto pb-20">
                {pdfDoc && Array.from({ length: numPages }, (_, i) => i + 1).map(n => (
-                 <PDFPageLayer 
-                   key={n} 
-                   pdfDoc={pdfDoc} 
-                   pageNum={n} 
-                   scale={scale} 
-                   onVisible={setPageNumber} // 滚动监听
-                 />
+                 <PDFPageLayer key={n} pdfDoc={pdfDoc} pageNum={n} scale={scale} onVisible={setPageNumber} />
                ))}
              </div>
           </div>
         )}
 
-        {/* --- 单页模式 --- */}
+        {/* 单页模式 */}
         {viewMode === 'single' && (
            <div className="flex-1 overflow-auto flex items-center justify-center p-4">
-              {pdfDoc && (
-                <PDFPageLayer 
-                   key={`single-${pageNumber}`} 
-                   pdfDoc={pdfDoc} 
-                   pageNum={pageNumber} 
-                   scale={scale} 
-                />
-              )}
+              {pdfDoc && <PDFPageLayer key={`single-${pageNumber}`} pdfDoc={pdfDoc} pageNum={pageNumber} scale={scale} />}
            </div>
         )}
 
@@ -352,7 +306,6 @@ export default function PremiumReader({ url, title, onClose }) {
                  </div>
                  <X onClick={()=>setSidebarOpen(false)} className="text-slate-400 cursor-pointer"/>
               </div>
-              
               <div className="flex-1 overflow-y-auto p-4 bg-white">
                 {sidebarTab === 'toc' ? (
                   <div className="space-y-1">
