@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronLeft,
   ChevronRight,
@@ -9,10 +9,10 @@ import {
   ZoomIn,
   ZoomOut,
   List,
-  AlertCircle
+  AlertCircle,
+  X
 } from 'lucide-react';
 
-// 锁定版本号，确保核心库、Worker 和 字体映射表 版本一致
 const PDF_VERSION = '3.11.174';
 
 export default function PremiumReader({ url, title, onClose }) {
@@ -22,16 +22,28 @@ export default function PremiumReader({ url, title, onClose }) {
   const [scale, setScale] = useState(1.2);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // 新增状态：目录和显示控制
+  const [outline, setOutline] = useState([]);
+  const [showToc, setShowToc] = useState(false);
 
   const canvasRef = useRef(null);
   const renderTaskRef = useRef(null);
-  const pdfRef = useRef(null); // 缓存 PDF 文档实例
+  const pdfRef = useRef(null);
+
+  // 进度保存的 Key
+  const progressKey = `pdf_progress_${url}`;
 
   /* ===============================
-     1. 初始化：加载 PDF.js 脚本
+     1. 初始化：加载脚本并获取历史进度
   =============================== */
   useEffect(() => {
-    // 如果全局对象已存在，直接加载 PDF
+    // 优先读取本地进度
+    const savedPage = localStorage.getItem(progressKey);
+    if (savedPage) {
+      setPageNumber(parseInt(savedPage, 10));
+    }
+
     if (window.pdfjsLib) {
       loadPDF();
       return;
@@ -39,26 +51,20 @@ export default function PremiumReader({ url, title, onClose }) {
 
     const script = document.createElement('script');
     script.src = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDF_VERSION}/pdf.min.js`;
-    script.onload = () => {
-      loadPDF();
-    };
+    script.onload = () => loadPDF();
     script.onerror = () => {
-      setError('PDF 组件加载失败，请检查网络');
+      setError('PDF 组件加载失败');
       setLoading(false);
     };
     document.head.appendChild(script);
 
     return () => {
-      // 组件卸载时取消渲染任务
-      if (renderTaskRef.current) {
-        renderTaskRef.current.cancel();
-      }
+      if (renderTaskRef.current) renderTaskRef.current.cancel();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
 
   /* ===============================
-     2. 核心：加载 PDF 文件
+     2. 加载 PDF 实例及提取目录
   =============================== */
   const loadPDF = async () => {
     setLoading(true);
@@ -66,60 +72,50 @@ export default function PremiumReader({ url, title, onClose }) {
 
     try {
       const pdfjsLib = window.pdfjsLib || window['pdfjs-dist/build/pdf'];
-
-      // 设置 Worker 地址
       pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDF_VERSION}/pdf.worker.min.js`;
 
-      // 配置加载任务
       const loadingTask = pdfjsLib.getDocument({
         url,
-        withCredentials: false, // 避免跨域携带 Cookie 问题
-        
-        // --- 🔴 中文支持关键配置 ---
-        // 指定字体映射表路径，解决中文显示为空白的问题
         cMapUrl: `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDF_VERSION}/cmaps/`,
         cMapPacked: true,
-        
-        // --- 🔴 稳定性配置 ---
-        // 配合 CF Worker 建议禁用流式传输，一次性获取或按需分块
-        disableStream: true, 
+        disableStream: true,
         disableAutoFetch: true,
-        rangeChunkSize: 65536 * 2, 
       });
 
       const pdfDoc = await loadingTask.promise;
       pdfRef.current = pdfDoc;
-
       setPdf(pdfDoc);
       setNumPages(pdfDoc.numPages);
-      setPageNumber(1);
 
-      // 渲染第一页
-      await renderPage(1, pdfDoc, scale);
+      // --- 🔴 提取目录逻辑 ---
+      try {
+        const pdfOutline = await pdfDoc.getOutline();
+        setOutline(pdfOutline || []);
+      } catch (e) {
+        console.log("此 PDF 无目录");
+      }
+
+      // 获取当前要渲染的页码（可能是初始 1，也可能是读取到的进度）
+      const savedPage = localStorage.getItem(progressKey);
+      const startPage = savedPage ? parseInt(savedPage, 10) : 1;
+      
+      await renderPage(startPage, pdfDoc, scale);
     } catch (err) {
       console.error('PDF Load Error:', err);
-      setError('无法读取文件 (Load Failed)');
+      setError('无法读取文件');
     } finally {
       setLoading(false);
     }
   };
 
   /* ===============================
-     3. 渲染页面逻辑
+     3. 渲染页面
   =============================== */
-  const renderPage = async (
-    num,
-    pdfDoc = pdfRef.current,
-    currentScale = scale
-  ) => {
+  const renderPage = async (num, pdfDoc = pdfRef.current, currentScale = scale) => {
     if (!pdfDoc || !canvasRef.current) return;
 
     setLoading(true);
-
-    // 如果有正在进行的渲染任务，取消它
-    if (renderTaskRef.current) {
-      renderTaskRef.current.cancel();
-    }
+    if (renderTaskRef.current) renderTaskRef.current.cancel();
 
     try {
       const page = await pdfDoc.getPage(num);
@@ -127,149 +123,161 @@ export default function PremiumReader({ url, title, onClose }) {
       const canvas = canvasRef.current;
       const context = canvas.getContext('2d');
 
-      // 处理高清屏 (Retina Display)
       const dpr = window.devicePixelRatio || 1;
       canvas.width = viewport.width * dpr;
       canvas.height = viewport.height * dpr;
-      
-      // CSS 样式设置实际显示大小
       canvas.style.width = `${viewport.width}px`;
       canvas.style.height = `${viewport.height}px`;
-
-      // 缩放 Context 以匹配高清屏
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      const renderContext = {
-        canvasContext: context,
-        viewport,
-      };
-
-      const renderTask = page.render(renderContext);
+      const renderTask = page.render({ canvasContext: context, viewport });
       renderTaskRef.current = renderTask;
-
       await renderTask.promise;
+      
+      // 渲染成功后保存进度
+      localStorage.setItem(progressKey, num.toString());
     } catch (error) {
-      if (error.name !== 'RenderingCancelledException') {
-        console.error('Render error:', error);
-      }
+      if (error.name !== 'RenderingCancelledException') console.error(error);
     } finally {
       setLoading(false);
     }
   };
 
   /* ===============================
-     4. 交互控制
+     4. 交互：翻页、缩放、目录跳转
   =============================== */
   const changePage = async (offset) => {
-    const newPage = pageNumber + offset;
-    if (newPage < 1 || newPage > numPages) return;
-
+    const newPage = Math.min(Math.max(pageNumber + offset, 1), numPages);
+    if (newPage === pageNumber) return;
     setPageNumber(newPage);
     await renderPage(newPage);
   };
 
   const changeScale = async (delta) => {
-    const newScale = Math.min(Math.max(scale + delta, 0.5), 3.0); // 限制缩放 0.5x ~ 3.0x
+    const newScale = Math.min(Math.max(scale + delta, 0.5), 3.0);
     setScale(newScale);
     await renderPage(pageNumber, pdfRef.current, newScale);
   };
 
-  /* ===============================
-     UI 渲染
-  =============================== */
+  // --- 🔴 目录跳转核心逻辑 ---
+  const jumpToOutline = async (item) => {
+    if (!item.dest) return;
+    try {
+      const pdfDoc = pdfRef.current;
+      // dest 可能是一个字符串引用或者一个数组
+      let dest = item.dest;
+      if (typeof dest === 'string') {
+        dest = await pdfDoc.getDestination(dest);
+      }
+      const pageIndex = await pdfDoc.getPageIndex(dest[0]);
+      const targetPage = pageIndex + 1;
+      
+      setPageNumber(targetPage);
+      setShowToc(false);
+      await renderPage(targetPage);
+    } catch (err) {
+      console.error("跳转失败", err);
+    }
+  };
+
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[200] bg-[#f8fafc] flex flex-col text-slate-800"
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[200] bg-[#f8fafc] flex flex-col text-slate-800 overflow-hidden"
     >
-      {/* --- Header --- */}
-      <header className="h-14 bg-white border-b flex items-center justify-between px-4 shadow-sm z-20">
-        <button onClick={onClose} className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition">
-          <ChevronLeft size={24} />
-        </button>
-        <div className="text-center max-w-[200px]">
-          <div className="text-sm font-bold truncate">{title}</div>
+      {/* Header */}
+      <header className="h-14 bg-white border-b flex items-center justify-between px-4 z-20 shrink-0">
+        <button onClick={onClose} className="p-2 -ml-2"><ChevronLeft size={24} /></button>
+        <div className="text-center max-w-[160px]">
+          <div className="text-xs font-bold truncate">{title}</div>
           <div className="text-[10px] text-slate-400 font-mono">
-            {loading ? 'Loading...' : `${pageNumber} / ${numPages}`}
+            {pageNumber} / {numPages}
           </div>
         </div>
-        <button className="p-2 hover:bg-slate-100 rounded-full transition">
-          <List size={20} />
-        </button>
+        <button onClick={() => setShowToc(true)} className="p-2"><List size={20} /></button>
       </header>
 
-      {/* --- Main Canvas Area --- */}
-      <div className="flex-1 overflow-auto bg-slate-200 flex justify-center p-4 relative">
-        {/* Loading Spinner */}
+      {/* Canvas Area */}
+      <div className="flex-1 overflow-auto bg-slate-200 flex justify-center p-4 relative custom-scrollbar">
         {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-slate-200/50 z-10 backdrop-blur-[1px]">
-            <div className="bg-white p-3 rounded-full shadow-lg">
-              <Loader2 className="animate-spin text-blue-600" size={32} />
-            </div>
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-200/50 z-10">
+            <Loader2 className="animate-spin text-blue-600" size={32} />
           </div>
         )}
 
-        {/* Error Message */}
         {error ? (
-          <div className="flex flex-col items-center justify-center text-slate-500 gap-2">
-            <AlertCircle size={40} className="text-red-400" />
-            <p className="text-sm font-medium">{error}</p>
-            <button 
-              onClick={() => loadPDF()} 
-              className="mt-2 text-xs bg-white border px-3 py-1 rounded shadow-sm hover:bg-slate-50"
-            >
-              重试
-            </button>
-          </div>
+          <div className="flex flex-col items-center justify-center gap-2"><AlertCircle className="text-red-400"/><p className="text-sm">{error}</p></div>
         ) : (
-          <canvas
-            ref={canvasRef}
-            className="bg-white shadow-lg"
-            style={{ maxWidth: '100%', display: 'block' }}
-          />
+          <canvas ref={canvasRef} className="bg-white shadow-lg h-fit" />
         )}
       </div>
 
-      {/* --- Footer Controls --- */}
-      <footer className="h-20 bg-white border-t flex flex-col items-center justify-center gap-2 z-20 pb-safe">
-        {/* Zoom Controls */}
-        <div className="flex items-center gap-6 text-slate-600">
-          <button onClick={() => changeScale(-0.2)} className="hover:text-blue-600 active:scale-90 transition">
-            <ZoomOut size={20} />
-          </button>
-          <span className="text-xs font-bold font-mono w-10 text-center">
-            {Math.round(scale * 100)}%
-          </span>
-          <button onClick={() => changeScale(0.2)} className="hover:text-blue-600 active:scale-90 transition">
-            <ZoomIn size={20} />
-          </button>
+      {/* Footer */}
+      <footer className="h-24 bg-white border-t flex flex-col items-center justify-center gap-2 shrink-0 pb-safe">
+        {/* 简易进度条 */}
+        <div className="w-full px-8 flex items-center gap-2">
+            <input 
+                type="range" min="1" max={numPages || 1} value={pageNumber} 
+                onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    setPageNumber(val);
+                    renderPage(val);
+                }}
+                className="w-full h-1 bg-slate-100 accent-blue-600 appearance-none rounded-lg"
+            />
         </div>
+        
+        <div className="flex items-center gap-10">
+          <div className="flex items-center gap-4 text-slate-400">
+            <button onClick={() => changeScale(-0.2)}><ZoomOut size={18}/></button>
+            <span className="text-[10px] font-bold text-slate-600">{Math.round(scale * 100)}%</span>
+            <button onClick={() => changeScale(0.2)}><ZoomIn size={18}/></button>
+          </div>
 
-        {/* Page Navigation */}
-        <div className="flex items-center gap-8">
-          <button
-            disabled={pageNumber <= 1}
-            onClick={() => changePage(-1)}
-            className="p-2 disabled:opacity-20 hover:bg-slate-100 rounded-full transition active:scale-90"
-          >
-            <ChevronLeft size={28} />
-          </button>
-          
-          <span className="text-xs font-black tracking-widest text-slate-800">
-            PAGE {pageNumber}
-          </span>
-          
-          <button
-            disabled={pageNumber >= numPages}
-            onClick={() => changePage(1)}
-            className="p-2 disabled:opacity-20 hover:bg-slate-100 rounded-full transition active:scale-90"
-          >
-            <ChevronRight size={28} />
-          </button>
+          <div className="flex items-center gap-8">
+            <button disabled={pageNumber <= 1} onClick={() => changePage(-1)} className="disabled:opacity-20"><ChevronLeft size={28}/></button>
+            <span className="text-xs font-black">PAGE {pageNumber}</span>
+            <button disabled={pageNumber >= numPages} onClick={() => changePage(1)} className="disabled:opacity-20"><ChevronRight size={28}/></button>
+          </div>
         </div>
       </footer>
+
+      {/* 🔴 侧边目录抽屉 (TOC Drawer) */}
+      <AnimatePresence>
+        {showToc && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setShowToc(false)}
+              className="fixed inset-0 bg-black/40 z-[210] backdrop-blur-sm"
+            />
+            <motion.aside
+              initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
+              className="fixed inset-y-0 left-0 w-72 bg-white shadow-2xl z-[220] flex flex-col"
+            >
+              <div className="p-4 border-b flex justify-between items-center">
+                <span className="font-bold text-sm uppercase tracking-widest text-slate-400">Contents</span>
+                <button onClick={() => setShowToc(false)} className="p-1"><X size={20}/></button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                {outline.length > 0 ? (
+                  outline.map((item, i) => (
+                    <div 
+                      key={i} 
+                      onClick={() => jumpToOutline(item)}
+                      className="py-2 px-3 hover:bg-slate-50 rounded cursor-pointer text-sm border-b border-slate-50 text-slate-600 active:text-blue-600 transition-colors"
+                    >
+                      {item.title}
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center text-slate-300 mt-10 text-xs">No Catalog Found</div>
+                )}
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
-              }
+                  }
