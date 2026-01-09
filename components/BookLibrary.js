@@ -29,7 +29,7 @@ const BOOKS_DATA = [
     id: 'b2',
     title: '实用口语 300 句',
     subTitle: 'လက်တွေ့သုံး စကားပြော', 
-    cover: 'https://images.unsplash.com/photo-1589829085413-56de8ae18c73?w=400&q=80',
+    cover: 'https://audio.886.best/chinese-vocab-audio/hsk1.pdf',
     pdfUrl: '',
     category: 'Conversation',
     level: 'Intermediate',
