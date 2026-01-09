@@ -7,12 +7,12 @@ import {
   List, X, AlertCircle
 } from 'lucide-react';
 
+// 使用 CDN 上的稳定版本
 const PDF_VERSION = '3.11.174';
-const RENDER_WINDOW = 3; // 只渲染前后 3 页
+const CDN_BASE = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDF_VERSION}`;
 
 /* =================================================================
-   子组件：页面渲染器 (Canvas + TextLayer)
-   简洁高效：离开窗口自动销毁，进入自动渲染
+   子组件：页面渲染器 (修复了缩放和文字复制)
 ================================================================= */
 const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
   const canvasRef = useRef(null);
@@ -21,11 +21,10 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
   const [status, setStatus] = useState('init'); 
   const renderTaskRef = useRef(null);
 
-  // 1. 监听可见性 (更新当前页码)
+  // 1. 监听可见性
   useEffect(() => {
     const element = containerRef.current;
     if (!element) return;
-
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && entries[0].intersectionRatio > 0.1 && onVisible) {
@@ -38,16 +37,15 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
     return () => observer.disconnect();
   }, [pageNum, onVisible]);
 
-  // 2. 核心渲染逻辑 (监听 scale 变化，解决缩放失效)
+  // 2. 渲染逻辑
   useEffect(() => {
-    // A. 销毁逻辑
     if (!shouldRender) {
+      // 销毁以释放内存
       if (status === 'rendered') {
         if (canvasRef.current) {
           const ctx = canvasRef.current.getContext('2d');
           ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-          canvasRef.current.width = 0;
-          canvasRef.current.height = 0;
+          canvasRef.current.width = 1; canvasRef.current.height = 1;
         }
         if (textLayerRef.current) textLayerRef.current.innerHTML = '';
         setStatus('init');
@@ -55,30 +53,30 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
       return;
     }
 
-    // B. 渲染逻辑 (当 pdfDoc / scale / shouldRender 变化时触发)
     const render = async () => {
       if (!containerRef.current || !pdfDoc) return;
       setStatus('loading');
 
       try {
         const page = await pdfDoc.getPage(pageNum);
-        const viewport = page.getViewport({ scale }); // 使用最新的 scale
+        const viewport = page.getViewport({ scale });
         
+        // --- A. 渲染 Canvas ---
         const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        const context = canvas.getContext('2d', { alpha: false }); // 关闭透明度提升性能
+        const context = canvas.getContext('2d', { alpha: false });
         const dpr = window.devicePixelRatio || 1;
         
-        // 设置高清画布
+        // 🔴 修复缩放：使用 viewport 的实际宽高，而不是 100%
         canvas.width = viewport.width * dpr;
         canvas.height = viewport.height * dpr;
-        canvas.style.width = '100%';
+        canvas.style.width = `${viewport.width}px`;   // 关键：显式设置像素宽
+        canvas.style.height = `${viewport.height}px`; // 关键：显式设置像素高
         
-        // 容器占位防止抖动
-        containerRef.current.style.aspectRatio = `${viewport.width} / ${viewport.height}`;
-        
-        // 文字层对齐
+        // 容器也同步大小
+        containerRef.current.style.width = `${viewport.width}px`;
+        containerRef.current.style.height = `${viewport.height}px`;
+
+        // 文字层同步大小
         if (textLayerRef.current) {
           textLayerRef.current.style.width = `${viewport.width}px`;
           textLayerRef.current.style.height = `${viewport.height}px`;
@@ -86,17 +84,15 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
 
         context.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-        // 取消上一次渲染
         if (renderTaskRef.current) {
           try { renderTaskRef.current.cancel(); } catch(e){}
         }
 
-        // 开始渲染
         const renderTask = page.render({ canvasContext: context, viewport });
         renderTaskRef.current = renderTask;
         await renderTask.promise;
 
-        // 渲染文字 (可选)
+        // --- B. 渲染文字层 (可复制) ---
         if (textLayerRef.current) {
           const textContent = await page.getTextContent();
           textLayerRef.current.innerHTML = '';
@@ -114,25 +110,26 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
       }
     };
 
-    render();
+    if (shouldRender && status === 'init') render();
+    
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shouldRender, pdfDoc, scale]); // 👈 关键：依赖 scale，变焦时自动重绘
+  }, [shouldRender, pdfDoc, scale]); // scale 变化时自动重绘
 
   return (
     <div 
       ref={containerRef}
       id={`page-container-${pageNum}`}
-      className="relative bg-white shadow-sm mb-3 mx-auto transition-all"
-      style={{ width: '100%', minHeight: '200px' }}
+      className="relative bg-white shadow-sm mb-4 mx-auto transition-all"
+      style={{ minHeight: '200px' }} // 初始占位
     >
       {shouldRender ? (
         <>
            {status !== 'rendered' && (
-            <div className="absolute inset-0 flex items-center justify-center bg-slate-50 text-slate-300">
+            <div className="absolute inset-0 flex items-center justify-center bg-slate-50 text-slate-300 z-10">
               <Loader2 className="animate-spin" size={24} />
             </div>
           )}
-          <canvas ref={canvasRef} className="block w-full h-auto" />
+          <canvas ref={canvasRef} className="block" />
           <div ref={textLayerRef} className="textLayer absolute inset-0 mix-blend-multiply opacity-50" />
         </>
       ) : (
@@ -151,7 +148,8 @@ export default function PremiumReader({ url, title, onClose }) {
   const [pdfDoc, setPdfDoc] = useState(null);
   const [pageNumber, setPageNumber] = useState(1);
   const [numPages, setNumPages] = useState(0);
-  const [scale, setScale] = useState(1.0);
+  const [scale, setScale] = useState(1.0); // 默认比例
+  const [isMobile, setIsMobile] = useState(false);
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -160,15 +158,21 @@ export default function PremiumReader({ url, title, onClose }) {
 
   const progressKey = `pdf_progress_${url}`;
 
-  // 1. 初始化
+  // 1. 初始化 (自动加载 CDN 脚本)
   useEffect(() => {
+    // 手机检测
+    if (window.innerWidth < 768) {
+      setIsMobile(true);
+      setScale(window.innerWidth / 600); // 手机根据屏幕宽度自动计算初始缩放
+    }
+
     const saved = localStorage.getItem(progressKey);
     if (saved) setPageNumber(parseInt(saved));
 
     const init = async () => {
       if (!window.pdfjsLib) {
         const script = document.createElement('script');
-        script.src = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDF_VERSION}/pdf.min.js`;
+        script.src = `${CDN_BASE}/pdf.min.js`;
         script.onload = loadPDF;
         script.onerror = () => { setError('核心库加载失败'); setLoading(false); };
         document.head.appendChild(script);
@@ -180,28 +184,24 @@ export default function PremiumReader({ url, title, onClose }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
 
-  // 2. 加载 PDF (针对手机大文件的黄金配置)
+  // 2. 加载 PDF (针对手机优化)
   const loadPDF = async () => {
     setLoading(true);
     try {
-      const pdfjsLib = window.pdfjsLib || window['pdfjs-dist/build/pdf'];
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDF_VERSION}/pdf.worker.min.js`;
+      const pdfjsLib = window.pdfjsLib;
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `${CDN_BASE}/pdf.worker.min.js`;
 
       const safeUrl = url.includes('?') ? `${url}&t=${Date.now()}` : `${url}?t=${Date.now()}`;
 
       const loadingTask = pdfjsLib.getDocument({
         url: safeUrl, 
-        cMapUrl: `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDF_VERSION}/cmaps/`,
+        cMapUrl: `${CDN_BASE}/cmaps/`, // 🔴 必须：解决中文乱码
         cMapPacked: true,
         
-        // 🚀 核心优化：
-        // 1. 512KB 分块：手机下载 4MB 太慢会超时，512KB 刚刚好，进度条跑得快
-        rangeChunkSize: 1024 * 512, 
-        // 2. 禁止自动预读：手机上不要在后台偷偷下载几十页，会卡死当前页
-        disableAutoFetch: true,
-        // 3. 允许流式：必须开启
+        // 🚀 手机端核心优化
+        rangeChunkSize: isMobile ? 1024 * 512 : 1024 * 1024 * 2, // 手机512KB, 电脑2MB
+        disableAutoFetch: true,  // 手机禁止自动预读
         disableStream: false,
-        // 4. 不下载内嵌字体：直接提升 30% 加载速度
         useSystemFonts: true,
       });
 
@@ -234,15 +234,14 @@ export default function PremiumReader({ url, title, onClose }) {
       const idx = await pdfDoc.getPageIndex(dest[0]);
       const p = idx + 1;
       setPageNumber(p);
-      localStorage.setItem(progressKey, p.toString());
       setSidebarOpen(false);
       document.getElementById(`page-container-${p}`)?.scrollIntoView({ behavior: 'smooth' });
     } catch(e){}
   };
 
-  // 缩放逻辑
+  // 缩放控制
   const changeScale = (delta) => {
-    setScale(prev => Math.min(3, Math.max(0.5, +(prev + delta).toFixed(1))));
+    setScale(prev => Math.min(3, Math.max(0.5, +(prev + delta).toFixed(2))));
   };
 
   return (
@@ -250,7 +249,7 @@ export default function PremiumReader({ url, title, onClose }) {
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-[100] bg-[#e2e8f0] flex flex-col text-slate-800 font-sans"
     >
-      {/* HEADER */}
+      {/* 头部导航 */}
       <header className="h-14 flex items-center justify-between px-4 z-30 shrink-0 bg-white/90 backdrop-blur border-b shadow-sm">
         <div className="flex items-center gap-2 overflow-hidden">
           <button onClick={onClose} className="p-2 -ml-2 text-slate-600"><ChevronLeft size={24}/></button>
@@ -264,24 +263,29 @@ export default function PremiumReader({ url, title, onClose }) {
         <button onClick={() => setSidebarOpen(true)} className="p-2"><List size={22}/></button>
       </header>
 
-      {/* MAIN CONTENT (滚动容器) */}
+      {/* 滚动阅读区 */}
       <div className="flex-1 overflow-hidden relative flex flex-row bg-slate-200/50">
         {loading && <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/60 backdrop-blur-sm"><Loader2 className="animate-spin text-blue-500" size={32}/></div>}
         {error && <div className="absolute inset-0 z-50 flex flex-col items-center justify-center text-red-500 gap-2"><AlertCircle size={40}/><span className="text-xs">{error}</span></div>}
 
         <div className="flex-1 overflow-y-auto custom-scrollbar px-2 sm:px-8 py-4 scroll-smooth">
-             <div className="max-w-3xl mx-auto pb-20">
+             {/* 
+                max-w-fit: 允许内容撑开宽度，这样放大时会出现横向滚动条，而不是挤压图片
+                min-h-full: 确保高度撑满
+             */}
+             <div className="max-w-fit min-h-full mx-auto pb-20 flex flex-col items-center">
                {pdfDoc && Array.from({ length: numPages }, (_, i) => {
                  const n = i + 1;
-                 // 窗口渲染：只渲染当前页前后 RENDER_WINDOW 页
-                 const shouldRender = Math.abs(pageNumber - n) <= RENDER_WINDOW;
+                 // 窗口渲染：手机渲染前后 1 页，电脑前后 3 页
+                 const windowSize = isMobile ? 1 : 3;
+                 const shouldRender = Math.abs(pageNumber - n) <= windowSize;
                  
                  return (
                    <PDFPageLayer 
                      key={n} 
                      pdfDoc={pdfDoc} 
                      pageNum={n} 
-                     scale={scale} // 传入 Scale，变化时自动重绘
+                     scale={scale} 
                      onVisible={setPageNumber}
                      shouldRender={shouldRender} 
                    />
@@ -292,20 +296,20 @@ export default function PremiumReader({ url, title, onClose }) {
 
         {/* 底部悬浮条 */}
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur shadow-2xl rounded-full px-5 py-2 flex items-center gap-4 z-20 border border-white/50">
-          <button onClick={() => changeScale(-0.2)}><ZoomOut size={18} className="text-slate-500"/></button>
-          <span className="text-xs font-black min-w-[30px] text-center">{Math.round(scale*100)}%</span>
-          <button onClick={() => changeScale(0.2)}><ZoomIn size={18} className="text-slate-500"/></button>
+          <button onClick={() => changeScale(-0.2)} className="active:scale-90 transition"><ZoomOut size={18} className="text-slate-500"/></button>
+          <span className="text-xs font-black min-w-[35px] text-center">{Math.round(scale*100)}%</span>
+          <button onClick={() => changeScale(0.2)} className="active:scale-90 transition"><ZoomIn size={18} className="text-slate-500"/></button>
         </div>
       </div>
 
-      {/* SIDEBAR (目录) */}
+      {/* 目录侧边栏 */}
       <AnimatePresence>
         {sidebarOpen && (
           <>
             <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} onClick={()=>setSidebarOpen(false)} className="fixed inset-0 bg-black/30 backdrop-blur-[1px] z-[150]" />
             <motion.aside initial={{x:'100%'}} animate={{x:0}} exit={{x:'100%'}} transition={{type:'spring',damping:25,stiffness:200}} className="absolute right-0 top-0 bottom-0 w-80 bg-white shadow-2xl z-[200] flex flex-col">
               <div className="h-14 border-b flex items-center justify-between px-4 bg-slate-50">
-                 <span className="text-xs font-bold uppercase text-slate-500">Contents</span>
+                 <span className="text-xs font-bold uppercase text-slate-500">Table of Contents</span>
                  <X onClick={()=>setSidebarOpen(false)} className="text-slate-400 cursor-pointer"/>
               </div>
               <div className="flex-1 overflow-y-auto p-4 bg-white">
@@ -321,6 +325,7 @@ export default function PremiumReader({ url, title, onClose }) {
       </AnimatePresence>
 
       <style jsx global>{`
+        /* 这里的样式必须有，用于文字层对齐 */
         .textLayer {
           position: absolute; inset: 0; line-height: 1.0; pointer-events: all;
         }
