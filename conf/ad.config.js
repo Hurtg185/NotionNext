@@ -3,18 +3,28 @@
  */
 module.exports = {
   // 谷歌广告
-  ADSENSE_GOOGLE_ID: process.env.NEXT_PUBLIC_ADSENSE_GOOGLE_ID || '', // 谷歌广告ID e.g ca-pub-xxxxxxxxxxxxxxxx
-  ADSENSE_GOOGLE_TEST: process.env.NEXT_PUBLIC_ADSENSE_GOOGLE_TEST || false, // 谷歌广告ID测试模式，这种模式获取假的测试广告，用于开发 https://www.tangly1024.com/article/local-dev-google-adsense
-  ADSENSE_GOOGLE_SLOT_IN_ARTICLE:
-    process.env.NEXT_PUBLIC_ADSENSE_GOOGLE_SLOT_IN_ARTICLE || '3806269138', // Google AdScene>广告>按单元广告>新建文章内嵌广告 粘贴html代码中的data-ad-slot值
-  ADSENSE_GOOGLE_SLOT_FLOW:
-    process.env.NEXT_PUBLIC_ADSENSE_GOOGLE_SLOT_FLOW || '1510444138', // Google AdScene>广告>按单元广告>新建信息流广告
-  ADSENSE_GOOGLE_SLOT_NATIVE:
-    process.env.NEXT_PUBLIC_ADSENSE_GOOGLE_SLOT_NATIVE || '4980048999', // Google AdScene>广告>按单元广告>新建原生广告
-  ADSENSE_GOOGLE_SLOT_AUTO:
-    process.env.NEXT_PUBLIC_ADSENSE_GOOGLE_SLOT_AUTO || '8807314373', // Google AdScene>广告>按单元广告>新建展示广告 （自动广告）
+  // 1. 填入你的发布商ID (从你的截图里看到的)
+  ADSENSE_GOOGLE_ID: 'ca-pub-5979923534004539', 
+  
+  // 2. 建议设为 false。如果是 true，则只显示占位方块，不显示真实广告。
+  ADSENSE_GOOGLE_TEST: false, 
 
-  // 万维广告
-  AD_WWADS_ID: process.env.NEXT_PUBLIC_WWAD_ID || null, // https://wwads.cn/ 创建您的万维广告单元ID
-  AD_WWADS_BLOCK_DETECT: process.env.NEXT_PUBLIC_WWADS_AD_BLOCK_DETECT || false // 是否开启WWADS广告屏蔽插件检测,开启后会在广告位上以文字提示 @see https://github.com/bytegravity/whitelist-wwads
+  // 3. 下面这四个 SLOT ID 需要你去 Google AdSense 后台「按单元广告」创建后获取
+  // 如果你还没创建，先空着或者用默认值，审核通过后再改
+  
+  // 对应：新建 -> 文章内嵌广告 (In-article ads)
+  ADSENSE_GOOGLE_SLOT_IN_ARTICLE: '你的文章内嵌广告SLOT_ID', 
+  
+  // 对应：新建 -> 信息流广告 (In-feed ads)
+  ADSENSE_GOOGLE_SLOT_FLOW: '你的信息流广告SLOT_ID', 
+  
+  // 对应：新建 -> 多重广告 (Multiplex ads) 原生广告单元
+  ADSENSE_GOOGLE_SLOT_NATIVE: '你的原生广告SLOT_ID', 
+  
+  // 对应：新建 -> 展示广告 (Display ads) —— 这个最常用，建议给背单词组件用这个
+  ADSENSE_GOOGLE_SLOT_AUTO: '你的展示广告SLOT_ID', 
+
+  // 万维广告 (如果你不用这个，保持默认或 null 即可)
+  AD_WWADS_ID: null,
+  AD_WWADS_BLOCK_DETECT: false 
 }
