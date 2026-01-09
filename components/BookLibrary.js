@@ -1,19 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ChevronLeft, Search, Sparkles, Heart, Plus, Link as LinkIcon, Download } from 'lucide-react';
+import { X, ChevronLeft, PlayCircle, Clock, BookOpen, Search, Sparkles, Star, Bookmark, ExternalLink, Download, Share2 } from 'lucide-react';
+import dynamic from 'next/dynamic';
 
-// =========================================
-// 0. 数据源
-// =========================================
+const PremiumReader = dynamic(() => import('./PremiumReader'), { 
+  ssr: false,
+  loading: () => (
+    <div className="fixed inset-0 z-[300] bg-slate-900/80 backdrop-blur-md flex items-center justify-center text-white">
+      <div className="w-8 h-8 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+    </div>
+  )
+});
+
 const BOOKS_DATA = [
   {
     id: 'b1',
     title: '汉语语法基础',
     subTitle: 'တရုတ်သဒ္ဒါအခြေခံ', 
     cover: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400&q=80',
-    pdfUrl: 'https://pdf.886.best/pdf/chinese-vocab-audio/hsk1.pdf', // 测试用 PDF
+    pdfUrl: 'https://pdf.886.best/pdf/chinese-vocab-audio/hsk1.pdf',
     category: 'Grammar',
     level: 'Beginner',
+    pages: 128,
     rating: 4.8,
     color: 'from-blue-500 to-cyan-400'
   },
@@ -21,10 +29,11 @@ const BOOKS_DATA = [
     id: 'b2',
     title: '实用口语 300 句',
     subTitle: 'လက်တွေ့သုံး စကားပြော', 
-    cover: 'https://images.unsplash.com/photo-1589829085413-56de8ae18c73?w=400&q=80',
+    cover: 'https://audio.886.best/chinese-vocab-audio/hsk1.pdf',
     pdfUrl: '',
     category: 'Conversation',
     level: 'Intermediate',
+    pages: 96,
     rating: 4.6,
     color: 'from-emerald-500 to-teal-400'
   },
@@ -36,6 +45,7 @@ const BOOKS_DATA = [
     pdfUrl: '',
     category: 'Exam',
     level: 'Advanced',
+    pages: 256,
     rating: 4.9,
     color: 'from-purple-500 to-pink-400'
   },
@@ -47,6 +57,7 @@ const BOOKS_DATA = [
     pdfUrl: '',
     category: 'Culture',
     level: 'All Levels',
+    pages: 180,
     rating: 4.7,
     color: 'from-amber-500 to-orange-400'
   },
@@ -58,6 +69,7 @@ const BOOKS_DATA = [
     pdfUrl: '',
     category: 'Business',
     level: 'Intermediate',
+    pages: 200,
     rating: 4.5,
     color: 'from-red-500 to-rose-400'
   },
@@ -69,6 +81,7 @@ const BOOKS_DATA = [
     pdfUrl: '',
     category: 'Writing',
     level: 'Beginner',
+    pages: 160,
     rating: 4.8,
     color: 'from-violet-500 to-indigo-400'
   }
@@ -76,269 +89,344 @@ const BOOKS_DATA = [
 
 const HISTORY_KEY = 'hsk-reader-meta';
 
-// =========================================
-// 1. PDF 阅读器组件 (修复版)
-// =========================================
-const PDFReader = ({ url, title, onClose }) => {
-  if (!url) {
-    return (
-      <div className="fixed inset-0 z-[200] bg-slate-900 flex flex-col items-center justify-center text-white">
-         <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-white/10 rounded-full"><X size={24} /></button>
-         <p className="text-slate-400 mb-4">该书籍暂无 PDF 资源</p>
-         <div className="text-xs text-slate-500">请联系管理员添加</div>
-      </div>
-    );
-  }
-
+/* =================================================================
+   豪华版 3D Book - 真实立体效果
+================================================================= */
+const Premium3DBook = ({ cover, title, subTitle, category, level, rating, color, onClick }) => {
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: '100%' }} 
-      animate={{ opacity: 1, y: 0 }} 
-      exit={{ opacity: 0, y: '100%' }}
-      className="fixed inset-0 z-[200] bg-slate-900 flex flex-col"
+    <div 
+      onClick={onClick}
+      className="group relative cursor-pointer perspective-1200 w-full aspect-[3/4] mx-auto"
     >
-      <div className="flex items-center justify-between px-4 py-3 bg-slate-800 border-b border-slate-700 shrink-0">
-        <h2 className="text-white text-sm font-bold truncate pr-4 max-w-[70%]">{title}</h2>
-        <div className="flex gap-3">
-          <a href={url} target="_blank" rel="noopener noreferrer" className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20">
-            <Download size={18} />
-          </a>
-          <button onClick={onClose} className="p-2 bg-white/10 rounded-full text-white hover:bg-red-500/80 transition-colors">
-            <X size={18} />
-          </button>
-        </div>
-      </div>
-      <div className="flex-1 w-full h-full bg-slate-100 relative">
-        <iframe 
-          src={url} 
-          className="w-full h-full border-0" 
-          title="PDF Viewer"
-        />
-      </div>
-    </motion.div>
-  );
-};
-
-// =========================================
-// 2. 极简书本组件 (无书脊，无标签)
-// =========================================
-const CleanBookCard = ({ cover, title, subTitle, color, onClick }) => {
-  return (
-    <div onClick={onClick} className="flex flex-col gap-2 w-full group cursor-pointer">
-      {/* 
-         封面区域 
-         perspective-0: 去掉强烈的透视
-         shadow-lg: 保留阴影增加层次
-      */}
-      <div className="relative w-full aspect-[0.7/1] z-0">
+      {/* 辉光阴影 */}
+      <div className={`absolute -bottom-4 left-2 right-2 h-6 bg-gradient-to-t ${color.replace('from-', 'from-').replace('to-', 'to-')}/30 blur-2xl rounded-full transition-all duration-700 ease-out group-hover:opacity-80 group-hover:scale-110 opacity-60`} />
+      
+      {/* 3D 书容器 */}
+      <div className="relative w-full h-full transition-all duration-700 ease-out transform-style-3d group-hover:translate-y-[-8px] group-hover:rotate-y-[-8deg] group-hover:rotate-x-[2deg]">
         
-        {/* 底部微弱彩色光晕 */}
-        <div className={`absolute -bottom-2 left-2 right-2 h-3 rounded-full blur-lg opacity-40 group-active:opacity-70 transition-all duration-300 bg-gradient-to-r ${color}`} />
-
-        {/* 
-           封面主体
-           active:scale-95: 点击时的微缩反馈
-        */}
-        <div className="relative w-full h-full rounded-md overflow-hidden bg-white shadow-md transition-transform duration-200 group-active:scale-95 border border-slate-100/50">
+        {/* 书脊装饰线 */}
+        <div className="absolute left-[-4px] top-4 bottom-4 w-1 bg-gradient-to-b from-white/40 via-white/10 to-transparent z-30 rounded-full" />
+        
+        {/* 封面 - 带立体浮雕效果 */}
+        <div className="absolute inset-0 rounded-lg overflow-hidden z-20 bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-sm shadow-[0_8px_32px_rgba(0,0,0,0.15)] border border-white/30 transform translate-z-[16px] group-hover:translate-z-[24px] transition-transform duration-700">
           
-          {/* 图片 */}
-          <img src={cover} alt={title} className="w-full h-full object-cover" />
+          {/* 渐变底色 */}
+          <div className={`absolute inset-0 bg-gradient-to-br ${color} opacity-90`} />
           
-          {/* 极其轻微的纸张高光 */}
-          <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent opacity-50 pointer-events-none" />
-
-          {/* 
-             (这里去掉了所有的标签、Icon、等级文字) 
-             只保留纯净的封面 
-          */}
+          {/* 封面图片 */}
+          <div className="absolute inset-3 rounded-lg overflow-hidden shadow-2xl">
+            <img 
+              src={cover} 
+              alt={title} 
+              className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
+            />
+            {/* 渐变蒙版 */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+          </div>
+          
+          {/* 标题装饰 */}
+          <div className="absolute bottom-4 left-4 right-4">
+            <div className="backdrop-blur-md bg-black/40 p-3 rounded-lg border border-white/20">
+              <h3 className="text-sm font-bold text-white truncate">{subTitle}</h3>
+              <p className="text-xs text-white/80 mt-0.5 truncate">{title}</p>
+            </div>
+          </div>
+          
+          {/* 3D 角标 */}
+          <div className="absolute top-3 right-3 bg-gradient-to-br from-white to-white/80 text-slate-900 text-[10px] font-black px-2 py-1 rounded shadow-lg transform rotate-3 border border-white/50">
+            {category}
+          </div>
+          
+          {/* 光泽效果 */}
+          <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/0 to-white/30 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
+          
+          {/* 烫金边框 */}
+          <div className="absolute inset-0 rounded-lg border-2 border-transparent group-hover:border-white/30 transition-all duration-500" />
         </div>
-      </div>
 
-      {/* 外部信息区 - 极简排版 */}
-      <div className="px-0.5 min-h-[2.5rem]">
-        <h3 className="text-[11px] font-bold text-slate-800 leading-[1.2] line-clamp-2 h-[2.4em]">
-          {subTitle}
-        </h3>
-        {/* 只在第二行显示中文标题，字体更小颜色更淡 */}
-        <p className="text-[9px] text-slate-400 truncate mt-0.5">{title}</p>
+        {/* 书页厚度 - 多层质感 */}
+        <div className="absolute top-[6px] bottom-[6px] right-[-12px] w-[16px] z-10">
+          <div className="absolute inset-0 bg-gradient-to-l from-slate-100 via-slate-50 to-slate-100 rounded-r-sm shadow-inner" />
+          <div className="absolute inset-0 flex flex-col justify-between py-2">
+            {Array.from({length: 25}).map((_, i) => (
+              <div key={i} className="h-px bg-gradient-to-r from-transparent via-slate-300/50 to-transparent mx-1" />
+            ))}
+          </div>
+        </div>
+        
+        {/* 书脊 - 立体弧形 */}
+        <div className="absolute top-[4px] bottom-[4px] left-[-8px] w-[10px] z-20">
+          <div className={`absolute inset-0 bg-gradient-to-r ${color} rounded-l-md shadow-lg`} />
+          <div className="absolute inset-0 bg-gradient-to-r from-white/30 via-transparent to-transparent opacity-30" />
+          
+          {/* 书脊标题 */}
+          <div className="absolute inset-0 flex items-center justify-center rotate-180" style={{ writingMode: 'vertical-rl' }}>
+            <span className="text-[8px] font-bold text-white/90 tracking-wider uppercase">{level}</span>
+          </div>
+        </div>
+
+        {/* 封底 - 带装饰纹理 */}
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg -z-10 translate-z-[-20px] shadow-xl">
+          <div className="absolute inset-2 rounded bg-gradient-to-br from-slate-700/50 to-slate-900/50 border border-slate-700/50" />
+          
+          {/* 出版社标志 */}
+          <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 text-center">
+            <div className="text-[10px] text-slate-500 font-bold tracking-widest">HSK PRESS</div>
+            <div className="text-[6px] text-slate-600 tracking-wider mt-0.5">PREMIUM EDITION</div>
+          </div>
+        </div>
+
+        {/* 悬停装饰 */}
+        <div className="absolute -top-2 -right-2 z-30 opacity-0 group-hover:opacity-100 transition-all duration-500">
+          <div className="bg-gradient-to-r from-yellow-400 to-amber-400 text-slate-900 text-[10px] font-black px-2 py-1 rounded-full shadow-lg flex items-center gap-1">
+            <Sparkles size={8} />
+            <span>READ</span>
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
-// =========================================
-// 3. 主界面
-// =========================================
-export default function BookLibrary() {
-  const [isOpen, setIsOpen] = useState(true);
+/* =================================================================
+   主组件 - 优化版
+================================================================= */
+export default function BookLibrary({ isOpen, onClose }) {
   const [selectedBook, setSelectedBook] = useState(null);
   const [history, setHistory] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('All');
 
-  const categories = ['All', 'Grammar', 'Conversation', 'Exam', 'Culture', 'Business'];
+  const categories = ['All', 'Grammar', 'Conversation', 'Exam', 'Culture', 'Business', 'Writing'];
 
   useEffect(() => {
-    // 模拟读取历史
     const allHistory = [];
     BOOKS_DATA.forEach(book => {
       const saved = localStorage.getItem(`${HISTORY_KEY}_${book.id}`);
-      if (saved) { allHistory.push({ ...book, ...JSON.parse(saved) }); }
+      if (saved) {
+        allHistory.push({ ...book, ...JSON.parse(saved) });
+      }
     });
-    // 如果没有历史记录，为了展示效果，默认把前三个加进去
-    if (allHistory.length === 0) {
-       setHistory(BOOKS_DATA.slice(0, 3));
-    } else {
-       setHistory(allHistory);
-    }
-  }, [selectedBook]);
+    setHistory(allHistory.sort((a, b) => new Date(b.lastRead) - new Date(a.lastRead)));
+  }, [selectedBook, isOpen]);
 
   const filteredBooks = selectedCategory === 'All' 
     ? BOOKS_DATA 
     : BOOKS_DATA.filter(book => book.category === selectedCategory);
 
-  if (!isOpen) return (
-    <div className="flex items-center justify-center h-screen bg-slate-100">
-      <button onClick={() => setIsOpen(true)} className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-xl">
-        打开图书馆
-      </button>
-    </div>
-  );
+  if (!isOpen) return null;
 
   return (
-    <>
-      {/* 注入全局样式：隐藏滚动条但保留功能 */}
-      <style>{`
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-      `}</style>
+    <motion.div 
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[110] flex justify-end"
+    >
+      <motion.div 
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-slate-900/60 backdrop-blur-[4px]"
+      />
 
-      <div className="fixed inset-0 z-[110] flex justify-end bg-slate-900/60 backdrop-blur-[4px]">
-        <motion.div
-          initial={{ x: '100%' }} animate={{ x: 0 }}
-          className="relative w-full h-full bg-slate-50 shadow-2xl flex flex-col overflow-hidden sm:max-w-md ml-auto"
-        >
-          {/* --- Header (增加网站链接和功能按钮) --- */}
-          <div className="relative shrink-0 bg-white z-20 border-b border-slate-100">
-            <div className="absolute inset-0 bg-slate-50/50" />
-            
-            <div className="relative z-10 px-4 pt-4 pb-2">
-              {/* Top Row: 网站链接 & 右侧按钮 */}
-              <div className="flex items-center justify-between mb-4">
-                <a 
-                  href="https://886.best" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-full text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                >
-                  <LinkIcon size={12} />
-                  <span className="text-[11px] font-bold tracking-tight">886.best</span>
-                </a>
+      <motion.div
+        initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+        className="relative w-full h-full bg-gradient-to-b from-slate-50 to-white shadow-2xl flex flex-col overflow-hidden sm:max-w-md ml-auto"
+      >
+        {/* --- 毛玻璃质感 Header --- */}
+        <div className="relative h-40 shrink-0 overflow-hidden">
+          <div className="absolute inset-0">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-purple-600/20 to-pink-600/20" />
+            <img 
+              src="https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=800&q=80&auto=format&fit=crop" 
+              className="w-full h-full object-cover opacity-30"
+              alt="Background"
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-slate-50 via-slate-50/80 to-transparent" />
+          </div>
 
-                <div className="flex gap-2">
-                  <button className="p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors">
-                    <Heart size={18} />
-                  </button>
-                  <button className="p-2 rounded-full bg-slate-800 text-white shadow-md active:scale-95 transition-transform">
-                    <Plus size={18} />
-                  </button>
-                </div>
-              </div>
+          <div className="relative z-10 h-full px-5 pt-5 pb-2 flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <button 
+                onClick={onClose} 
+                className="p-2 -ml-2 rounded-full bg-white/80 hover:bg-white backdrop-blur-lg text-slate-700 transition-all active:scale-95 shadow-lg border border-white/50"
+              >
+                <ChevronLeft size={24}/>
+              </button>
               
-              {/* Title Row */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <Sparkles size={16} className="text-amber-500" />
-                    <h2 className="text-xl font-black text-slate-800 tracking-tight">
-                      My Library
-                    </h2>
-                  </div>
-                  <p className="text-[10px] text-slate-400 font-medium pl-0.5">
-                    学习资源库
-                  </p>
-                </div>
-                <button className="p-2 text-slate-400">
-                  <Search size={20} />
+              <div className="flex gap-2">
+                <button className="p-2 rounded-full bg-white/80 hover:bg-white backdrop-blur-lg text-slate-700 transition-all shadow-lg border border-white/50">
+                  <Search size={18} />
+                </button>
+                <button className="p-2 rounded-full bg-white/80 hover:bg-white backdrop-blur-lg text-slate-700 transition-all shadow-lg border border-white/50">
+                  <Bookmark size={18} />
                 </button>
               </div>
             </div>
-
-            {/* Categories */}
-            <div className="px-4 pb-3">
-              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-                {categories.map(cat => (
-                  <button
-                    key={cat}
-                    onClick={() => setSelectedCategory(cat)}
-                    className={`px-3 py-1.5 rounded-full text-[10px] font-bold whitespace-nowrap transition-all ${
-                      selectedCategory === cat
-                        ? 'bg-slate-800 text-white shadow-md'
-                        : 'bg-white border border-slate-200 text-slate-500'
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
+            
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Sparkles size={16} className="text-amber-500" />
+                <h2 className="text-3xl font-black text-slate-800 drop-shadow-sm tracking-tight">
+                  Premium Library
+                </h2>
               </div>
+              <p className="text-xs text-slate-500 font-medium pl-0.5 opacity-90">
+                Discover {BOOKS_DATA.length} premium Chinese learning books
+              </p>
             </div>
           </div>
+        </div>
 
-          {/* --- Main Content (无滚动条) --- */}
-          <div className="flex-1 overflow-y-auto no-scrollbar p-4 pb-20 space-y-8 bg-slate-50">
-            
-            {/* 历史记录 (改成 Grid 3列) */}
-            {history.length > 0 && (
-              <section>
-                <div className="flex items-center justify-between mb-3 px-1">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">最近阅读</span>
-                </div>
-                
-                {/* 这里的 Grid 和下面保持一致：3列 */}
-                <div className="grid grid-cols-3 gap-x-3 gap-y-6">
-                  {history.map((book) => (
-                    <CleanBookCard 
-                      key={`hist-${book.id}`} 
-                      {...book} 
-                      onClick={() => setSelectedBook(book)} 
-                    />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* 全部书籍 Grid (3列) */}
-            <section>
-               <div className="flex items-center justify-between mb-3 px-1">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                    {selectedCategory} Books
-                  </span>
-                  <span className="text-[9px] text-slate-300">{filteredBooks.length} items</span>
-                </div>
-
-              <div className="grid grid-cols-3 gap-x-3 gap-y-6">
-                {filteredBooks.map((book) => (
-                  <CleanBookCard 
-                    key={book.id} 
-                    {...book} 
-                    onClick={() => setSelectedBook(book)} 
-                  />
-                ))}
-              </div>
-            </section>
+        {/* --- 分类过滤器 --- */}
+        <div className="px-5 pt-3">
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
+            {categories.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+                  selectedCategory === cat
+                    ? 'bg-slate-800 text-white shadow-lg'
+                    : 'bg-white/80 text-slate-600 hover:bg-white shadow-md border border-slate-200'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
           </div>
-        </motion.div>
+        </div>
 
-        {/* Reader Modal */}
-        <AnimatePresence>
-          {selectedBook && (
-            <PDFReader 
-              url={selectedBook.pdfUrl}
-              title={selectedBook.title}
-              onClose={() => setSelectedBook(null)} 
-            />
+        {/* --- 主要内容区域 --- */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pb-24 space-y-8">
+          
+          {/* 继续阅读区域 */}
+          {history.length > 0 && (
+            <section>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Clock size={14} className="text-blue-500" />
+                  <span className="text-xs font-bold uppercase tracking-widest text-slate-600">Continue Reading</span>
+                </div>
+                <span className="text-xs text-slate-400">{history.length} in progress</span>
+              </div>
+              
+              <motion.div 
+                layout
+                onClick={() => setSelectedBook(history[0])}
+                className="relative overflow-hidden rounded-2xl cursor-pointer shadow-2xl shadow-blue-500/10 hover:shadow-blue-500/20 transition-all duration-300 bg-white group"
+              >
+                {/* 装饰背景 */}
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-50/50 to-cyan-50/50" />
+                
+                <div className="relative p-4 flex items-center gap-4">
+                  <div className="relative h-20 w-14 flex-shrink-0 overflow-hidden rounded-lg shadow-xl group-hover:scale-105 transition-transform duration-300">
+                    <img src={history[0].cover} className="w-full h-full object-cover" alt=""/>
+                    <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-transparent" />
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="bg-gradient-to-r from-blue-500 to-cyan-400 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        CONTINUE
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-medium">
+                        Page {history[0].page || 1}
+                      </span>
+                    </div>
+                    
+                    <h3 className="font-bold text-base text-slate-800 truncate">{history[0].subTitle}</h3>
+                    <p className="text-xs text-slate-600 mt-0.5 truncate">{history[0].title}</p>
+                    
+                    {/* 进度条 */}
+                    <div className="mt-3">
+                      <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                        <span>Reading Progress</span>
+                        <span className="font-semibold">
+                          {Math.round((history[0].page / (history[0].numPages || 100)) * 100)}%
+                        </span>
+                      </div>
+                      <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${(history[0].page / (history[0].numPages || 100)) * 100}%` }}
+                          className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full relative"
+                        >
+                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
+                        </motion.div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform">
+                    <PlayCircle size={20} className="ml-0.5" />
+                  </div>
+                </div>
+              </motion.div>
+            </section>
           )}
-        </AnimatePresence>
-      </div>
-    </>
+
+          {/* 书籍网格 */}
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <BookOpen size={14} className="text-purple-500" />
+                <span className="text-xs font-bold uppercase tracking-widest text-slate-600">
+                  {selectedCategory} Books
+                </span>
+              </div>
+              <span className="text-xs text-slate-400">{filteredBooks.length} books</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              {filteredBooks.map((book) => (
+                <motion.div
+                  key={book.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="flex flex-col"
+                >
+                  <Premium3DBook {...book} onClick={() => setSelectedBook(book)} />
+                  
+                  {/* 书籍信息卡片 */}
+                  <div className="mt-2 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-sm border border-slate-200/50">
+                    <h4 className="text-xs font-bold text-slate-800 line-clamp-1">
+                      {book.subTitle}
+                    </h4>
+                    
+                    <div className="flex items-center justify-between mt-1">
+                      <div className="flex items-center gap-1">
+                        <Star size={10} className="text-amber-500 fill-amber-500" />
+                        <span className="text-[10px] text-slate-600 font-medium">{book.rating}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500">{book.pages}p</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full bg-gradient-to-r ${book.color} text-white font-bold`}>
+                        {book.level}
+                      </span>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        {/* 底部装饰 */}
+        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white to-transparent pointer-events-none" />
+      </motion.div>
+
+      {/* Reader */}
+      <AnimatePresence>
+        {selectedBook && (
+          <PremiumReader 
+            url={selectedBook.pdfUrl}
+            title={selectedBook.title}
+            onClose={() => setSelectedBook(null)} 
+          />
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
