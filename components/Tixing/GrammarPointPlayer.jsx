@@ -5,7 +5,7 @@ import { pinyin } from 'pinyin-pro';
 import ReactPlayer from 'react-player';
 import {
   FaPause, FaPlay, FaChevronRight, FaVolumeUp, 
-  FaExclamationTriangle, FaBookReader, FaRobot
+  FaExclamationTriangle, FaBookReader
 } from 'react-icons/fa';
 import { useAI } from '../AIConfigContext';
 
@@ -57,6 +57,9 @@ function useRobustTTS() {
   }, []);
 
   const play = useCallback(async (text, uniqueId, voiceOverride = null) => {
+    // 如果是表格内容或其他不需要朗读的，直接返回
+    if (!text || typeof text !== 'string') return;
+
     playSFX('click');
     if (playerState.activeId === uniqueId && audioRef.current) {
       if (audioRef.current.paused) {
@@ -114,8 +117,38 @@ function useRobustTTS() {
 }
 
 // =================================================================================
-// ===== 2. 文本渲染组件 =====
+// ===== 2. 文本与表格渲染组件 =====
 // =================================================================================
+
+// 简单的 Markdown 表格渲染器
+const MarkdownTable = ({ lines }) => {
+  if (!lines || lines.length === 0) return null;
+
+  // 过滤掉分隔行 (例如 |---|---| )
+  const dataRows = lines.filter(line => !line.match(/^\|\s*-+\s*\|/));
+
+  return (
+    <div style={{ overflowX: 'auto', marginBottom: '12px' }}>
+      <table style={styles.table}>
+        <tbody>
+          {dataRows.map((row, rIdx) => {
+            const cells = row.split('|').filter(c => c.trim() !== ''); // 简单的分割
+            return (
+              <tr key={rIdx} style={rIdx === 0 ? styles.tableHeaderRow : styles.tableRow}>
+                {cells.map((cell, cIdx) => (
+                  <td key={cIdx} style={styles.tableCell}>
+                    {cell.trim()}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
 const PinyinText = ({ text, onClick, color = '#000000', bold = false, strikethrough = false }) => {
   if (!text) return null;
   const displayable = text.replace(/\*\*|~~|\{\{|\}\}|###/g, '');
@@ -153,44 +186,74 @@ const PinyinText = ({ text, onClick, color = '#000000', bold = false, strikethro
   );
 };
 
+// 增强版渲染器：支持 Markdown 表格和富文本
 const RichTextRenderer = ({ content, onPlayText, activeTtsId }) => {
   if (!content) return null;
 
+  // 将内容按行拆分，处理表格逻辑
+  const lines = content.split('\n');
+  const nodes = [];
+  let tableBuffer = [];
+
+  const flushTable = () => {
+    if (tableBuffer.length > 0) {
+      nodes.push(<MarkdownTable key={`tbl-${nodes.length}`} lines={[...tableBuffer]} />);
+      tableBuffer = [];
+    }
+  };
+
+  lines.forEach((line, idx) => {
+    const trimmed = line.trim();
+    
+    // 简单的表格检测：如果行以 | 开头并以 | 结尾（可选），则视为表格行
+    if (trimmed.startsWith('|')) {
+      tableBuffer.push(trimmed);
+      return; // 继续收集表格行
+    } else {
+      flushTable(); // 遇到非表格行，先把之前的表格渲染出来
+    }
+
+    if (!trimmed) {
+      nodes.push(<div key={idx} style={{ height: '8px' }} />);
+      return;
+    }
+
+    if (trimmed.startsWith('###')) {
+      nodes.push(<h3 key={idx} style={styles.h3}>{trimmed.replace(/###\s?/, '')}</h3>);
+      return;
+    }
+
+    const segmentId = `seg_${idx}`;
+
+    nodes.push(
+      <div key={idx} style={styles.textRow}>
+        {trimmed.split(/(\*\*.*?\*\*|~~.*?~~|\{\{.*?\}\})/g).map((part, pIdx) => {
+          if (part.startsWith('**') && part.endsWith('**')) {
+            return (
+              <span key={pIdx} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ fontSize: '0.6rem', color: '#0000ff' }}>▪️</span>
+                <PinyinText text={part.slice(2, -2)} onClick={() => onPlayText(trimmed, segmentId)} color="#0000ff" bold={true} />
+              </span>
+            );
+          } 
+          if (part.startsWith('~~') && part.endsWith('~~')) {
+            return <PinyinText key={pIdx} text={part.slice(2, -2)} onClick={() => onPlayText(trimmed, segmentId)} color="#ef4444" strikethrough={true} />;
+          }
+          if (part.startsWith('{{') && part.endsWith('}}')) {
+            return <PinyinText key={pIdx} text={part.slice(2, -2)} onClick={() => onPlayText(trimmed, segmentId)} color="#eab308" bold={true} />;
+          }
+          
+          return <PinyinText key={pIdx} text={part} onClick={() => onPlayText(trimmed, segmentId)} />;
+        })}
+      </div>
+    );
+  });
+
+  flushTable(); // 处理结尾如果是表格的情况
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-      {content.split('\n').map((line, idx) => {
-        const trimmed = line.trim();
-        if (!trimmed) return <div key={idx} style={{ height: '8px' }} />;
-
-        if (trimmed.startsWith('###')) {
-          return <h3 key={idx} style={styles.h3}>{trimmed.replace(/###\s?/, '')}</h3>;
-        }
-
-        const segmentId = `seg_${idx}`;
-
-        return (
-          <div key={idx} style={styles.textRow}>
-            {trimmed.split(/(\*\*.*?\*\*|~~.*?~~|\{\{.*?\}\})/g).map((part, pIdx) => {
-              if (part.startsWith('**') && part.endsWith('**')) {
-                return (
-                  <span key={pIdx} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                    <span style={{ fontSize: '0.6rem', color: '#0000ff' }}>▪️</span>
-                    <PinyinText text={part.slice(2, -2)} onClick={() => onPlayText(trimmed, segmentId)} color="#0000ff" bold={true} />
-                  </span>
-                );
-              } 
-              if (part.startsWith('~~') && part.endsWith('~~')) {
-                return <PinyinText key={pIdx} text={part.slice(2, -2)} onClick={() => onPlayText(trimmed, segmentId)} color="#ef4444" strikethrough={true} />;
-              }
-              if (part.startsWith('{{') && part.endsWith('}}')) {
-                return <PinyinText key={pIdx} text={part.slice(2, -2)} onClick={() => onPlayText(trimmed, segmentId)} color="#eab308" bold={true} />;
-              }
-              
-              return <PinyinText key={pIdx} text={part} onClick={() => onPlayText(trimmed, segmentId)} />;
-            })}
-          </div>
-        );
-      })}
+      {nodes}
     </div>
   );
 };
@@ -209,17 +272,16 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
 
   const { play, stop, activeId } = useRobustTTS();
 
-  // 数据标准化 (增加容错读取)
+  // 数据标准化
   const normalizedPoints = useMemo(() => {
     if (!Array.isArray(grammarPoints)) return [];
     return grammarPoints.map((item, idx) => ({
       id: item.id || idx,
       title: item['语法标题'] || '',
-      pattern: item['句型结构'] || '',
+      pattern: item['句型结构'] || '', // 这里可能包含表格字符串
       videoUrl: item['视频链接'] || item.videoUrl || '',
       videoPoster: item['视频封面'] || item.poster || '', 
       explanationRaw: item['语法详解'] || '',
-      // ⬇️ 修改点：多尝试几个key，确保读到脚本
       script: item['讲解脚本'] || item['script'] || item['Teaching Script'] || '', 
       attention: item['注意事项'] || '',
       dialogues: (item['例句列表'] || []).map((ex, i) => {
@@ -237,16 +299,12 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
 
   const currentPoint = normalizedPoints[currentIndex];
 
-  // =================================================================================
-  // 核心逻辑：构造 AI 上下文 (重点修改：脚本置顶)
-  // =================================================================================
+  // 核心逻辑：构造 AI 上下文
   const constructFullAIContent = useCallback((point) => {
     if (!point) return '';
     
     let content = '';
 
-    // --- 🚨 重点修改：把脚本放在最最最前面，让 AI 第一眼就看到 ---
-    // 使用特殊的标记 <<<SCRIPT_MODE>>>，配合 AIContext 中的 Prompt
     if (point.script && point.script.length > 5) {
         content += `<<<SCRIPT_MODE_START>>>\n`;
         content += `${point.script}\n`;
@@ -254,7 +312,6 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
         content += `(系统指令：检测到上方有脚本。请忽略所有通用模板，直接扮演老师，用生动的语气讲出上面的脚本内容！)\n\n`;
         content += `=========================\n\n`;
     }
-    // --------------------------------------------------------
 
     content += `【语法标题】：${point.title}\n`;
     content += `【核心句型】：${point.pattern}\n\n`;
@@ -273,15 +330,6 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
     return content;
   }, []);
 
-  // 触发 AI 讲解
-  const handleAskAI = useCallback(() => {
-    if (!currentPoint) return;
-    playSFX('click');
-    const fullContent = constructFullAIContent(currentPoint);
-    const levelId = `${level.replace(/\s+/g, '').toLowerCase()}_grammar_${currentPoint.id}`;
-    triggerAI(currentPoint.title, fullContent, levelId);
-  }, [currentPoint, level, constructFullAIContent, triggerAI]);
-
   // 自动同步与触发逻辑
   useEffect(() => {
     if (currentPoint) {
@@ -295,10 +343,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
     }
   }, [currentIndex, currentPoint, isAiOpen, level, updatePageContext, triggerAI, constructFullAIContent]);
 
-  // =================================================================================
   // UI 交互
-  // =================================================================================
-
   useEffect(() => {
     const handleFsChange = () => {
       const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
@@ -345,9 +390,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
 
   return (
     <div style={styles.container}>
-      <button style={styles.aiFloatBtn} onClick={handleAskAI}>
-        <FaRobot /> AI 讲解
-      </button>
+      {/* AI 悬浮按钮已移除 */}
 
       {transitions((style, i) => {
         const gp = normalizedPoints[i];
@@ -359,11 +402,21 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
                 <h2 style={styles.title}>{gp.title}</h2>
 
                 <div style={styles.headerRow}>
+                  {/* 核心句型卡片：支持简单的 Markdown 表格检测 */}
                   <div style={styles.patternCard}>
                     <div style={styles.cardLabel}><FaBookReader /> 核心句型</div>
-                    <div onClick={() => play(gp.pattern, `pat_${gp.id}`)} style={styles.patternText}>
-                      <PinyinText text={gp.pattern} color="#1e40af" bold />
-                    </div>
+                    
+                    {gp.pattern && gp.pattern.includes('|') ? (
+                       // 如果包含表格符号，使用 MarkdownTable 渲染
+                       <div style={{ marginTop: '8px' }}>
+                         <MarkdownTable lines={gp.pattern.split('\n')} />
+                       </div>
+                    ) : (
+                       // 否则按普通文本/拼音渲染
+                       <div onClick={() => play(gp.pattern, `pat_${gp.id}`)} style={styles.patternText}>
+                         <PinyinText text={gp.pattern} color="#1e40af" bold />
+                       </div>
+                    )}
                   </div>
 
                   {gp.videoUrl ? (
@@ -371,6 +424,7 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
                       style={styles.videoBox} 
                       ref={playerContainerRef} 
                       onClick={handleVideoFullScreen}
+                      onContextMenu={(e) => e.preventDefault()} // 禁止右键
                     >
                       <ReactPlayer 
                         url={gp.videoUrl} 
@@ -378,7 +432,15 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
                         height="100%" 
                         playing={isVideoPlaying}
                         light={gp.videoPoster || true} 
-                        config={{ file: { attributes: { controlsList: 'nodownload' }}}} 
+                        // 禁用下载和画中画
+                        config={{ 
+                          file: { 
+                            attributes: { 
+                              controlsList: 'nodownload noplaybackrate', 
+                              disablePictureInPicture: true 
+                            } 
+                          }
+                        }} 
                       />
                       <div style={styles.videoOverlay}>点击全屏</div>
                     </div>
@@ -465,11 +527,33 @@ const GrammarPointPlayer = ({ grammarPoints, level = "HSK 1", onComplete }) => {
   );
 };
 
+// =================================================================================
+// ===== 样式定义 =====
+// =================================================================================
+
+// 生成水印SVG Data URI
+const watermarkSvg = `
+<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'>
+  <text x='50%' y='50%' font-size='16' fill='rgba(0,0,0,0.04)' 
+    transform='rotate(-30 100 100)' text-anchor='middle' font-family='Arial'>
+    更多资源尽在 886.best
+  </text>
+</svg>
+`.trim().replace(/\n/g, '');
+
 const styles = {
   container: { position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#fff' },
-  aiFloatBtn: { position: 'absolute', top: '12px', right: '16px', zIndex: 50, background: '#4f46e5', color: '#fff', border: 'none', borderRadius: '20px', padding: '6px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 4px 10px rgba(79, 70, 229, 0.3)', cursor: 'pointer', fontWeight: 'bold' },
   page: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'white' },
-  scrollContainer: { flex: 1, overflowY: 'auto', padding: '20px 16px 40px' },
+  
+  // 修改：添加水印背景
+  scrollContainer: { 
+    flex: 1, 
+    overflowY: 'auto', 
+    padding: '20px 16px 40px',
+    backgroundImage: `url("data:image/svg+xml;utf8,${encodeURIComponent(watermarkSvg)}")`,
+    backgroundRepeat: 'repeat'
+  },
+  
   contentWrapper: { maxWidth: '600px', margin: '0 auto' },
   title: { fontSize: '1.4rem', fontWeight: '800', textAlign: 'center', color: '#000', marginBottom: '20px' },
   h3: { fontSize: '1.1rem', color: '#000', borderLeft: '4px solid #3b82f6', paddingLeft: '10px', marginTop: '20px', marginBottom: '10px' },
@@ -483,7 +567,7 @@ const styles = {
   sectionHeader: { fontSize: '1rem', fontWeight: 'bold', marginBottom: '10px', color: '#000', display: 'flex', alignItems: 'center', gap: '6px' },
   textRow: { padding: '4px 0' },
   textBody: { fontSize: '1.05rem', color: '#000' },
-  attentionBox: { border: '1px dashed #ef4444', borderRadius: '12px', padding: '14px' },
+  attentionBox: { border: '1px dashed #ef4444', borderRadius: '12px', padding: '14px', backgroundColor: 'rgba(255,255,255,0.6)' },
   chatList: { display: 'flex', flexDirection: 'column', gap: '16px' },
   chatRow: { display: 'flex', gap: '10px' },
   chatAvatar: { width: 34, height: 34, borderRadius: '50%', border: '1px solid #eee' },
@@ -493,6 +577,12 @@ const styles = {
   tailR: { position: 'absolute', top: '12px', right: '-5px', borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '6px solid #eff6ff' },
   chatTranslation: { fontSize: '0.85rem', color: '#64748b', marginTop: '4px' },
   submitBtn: { width: '100%', background: '#000', color: 'white', border: 'none', padding: '14px 0', borderRadius: '30px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' },
+  
+  // 表格样式
+  table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', border: '1px solid #e2e8f0' },
+  tableRow: { borderBottom: '1px solid #e2e8f0', background: '#fff' },
+  tableHeaderRow: { background: '#f1f5f9', borderBottom: '2px solid #e2e8f0', fontWeight: 'bold' },
+  tableCell: { padding: '8px 12px', borderRight: '1px solid #e2e8f0', textAlign: 'left' },
 };
 
 if (typeof document !== 'undefined' && !document.getElementById('gp-player-style')) {
@@ -501,6 +591,8 @@ if (typeof document !== 'undefined' && !document.getElementById('gp-player-style
   style.innerHTML = `
     .active-scale:active { transform: scale(0.97); }
     video::-webkit-media-controls-enclosure { display: flex !important; }
+    video::-webkit-media-controls-download-button { display: none !important; } 
+    video::-internal-media-controls-download-button { display: none !important; }
   `;
   document.head.appendChild(style);
 }
