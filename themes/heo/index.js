@@ -78,7 +78,6 @@ const GoogleLoginModal = ({ open, onClose }) => {
     if (!open) setError('')
   }, [open])
 
-  // Escape 关闭 + 锁滚动
   useEffect(() => {
     if (!open || !isBrowser) return
 
@@ -96,7 +95,6 @@ const GoogleLoginModal = ({ open, onClose }) => {
     }
   }, [open, onClose])
 
-  // 打开弹窗时渲染 Google 按钮
   useEffect(() => {
     if (!open) return
     if (!isBrowser) return
@@ -114,12 +112,16 @@ const GoogleLoginModal = ({ open, onClose }) => {
         window.google.accounts.id.initialize({
           client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
           callback: async (response) => {
-            setError('')
-            const result = await handleGoogleCallback(response)
-            if (result?.success) {
-              onClose()
-            } else {
-              setError(result?.error || '登录失败，请重试')
+            try {
+              setError('')
+              const result = await handleGoogleCallback(response)
+              if (result?.success) {
+                onClose()
+              } else {
+                setError(result?.error || '登录失败，请重试')
+              }
+            } catch (err) {
+              setError('登录失败，请重试')
             }
           }
         })
@@ -142,12 +144,10 @@ const GoogleLoginModal = ({ open, onClose }) => {
 
   return (
     <div className='fixed inset-0 z-[999] flex items-center justify-center p-5'>
-      {/* 浅色遮罩：不使用暗色背景 */}
       <div
         className='absolute inset-0 bg-white/70 backdrop-blur-sm'
         onClick={onClose}
       />
-
       <div
         role='dialog'
         aria-modal='true'
@@ -188,15 +188,12 @@ const GoogleLoginModal = ({ open, onClose }) => {
   )
 }
 
-// =================================================================================
-// ======================  激活码卡片（在白色区里） =================================
-// =================================================================================
-
 const ActivationCard = () => {
   const { user, handleActivate, logout } = useAI()
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState('')
+  const [msgType, setMsgType] = useState('')
 
   if (!user) return null
 
@@ -204,14 +201,17 @@ const ActivationCard = () => {
     if (!code.trim()) return
     setLoading(true)
     setMsg('')
+    setMsgType('')
     const result = await handleActivate(code.trim())
     setLoading(false)
 
     if (result.success) {
-      setMsg(result.message)
+      setMsg(result.message || '激活成功')
+      setMsgType('success')
       setCode('')
     } else {
       setMsg(result.error || '验证失败')
+      setMsgType('error')
     }
   }
 
@@ -262,7 +262,9 @@ const ActivationCard = () => {
           </button>
         </div>
         {msg && (
-          <p className='text-[11px] mt-2 font-bold text-slate-700'>{msg}</p>
+          <p className={`text-[11px] mt-2 font-bold ${msgType === 'success' ? 'text-emerald-600' : 'text-rose-600'}`}>
+            {msg}
+          </p>
         )}
       </div>
     </div>
@@ -279,6 +281,7 @@ const PriceChartDisplay = () => { /* ... */ }
 const LayoutIndex = (props) => {
   const router = useRouter()
   const scrollableContainerRef = useRef(null)
+  const accountCardRef = useRef(null)
 
   const { user } = useAI()
   const [isLoginOpen, setIsLoginOpen] = useState(false)
@@ -298,6 +301,11 @@ const LayoutIndex = (props) => {
     router.push(router.pathname, undefined, { shallow: true })
   }, [router])
 
+  const handleAccountClick = () => {
+    if (!accountCardRef.current) return
+    accountCardRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   return (
     <div
       id='theme-heo'
@@ -309,23 +317,17 @@ const LayoutIndex = (props) => {
       <GoogleLoginModal open={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
 
       <div className='relative w-full max-w-md min-h-screen bg-white shadow-[0_20px_60px_rgba(15,23,42,0.14)] overflow-hidden border-x border-slate-100'>
-        {/* 轻量背景纹理（非暗色） */}
         <div className='absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_20%_10%,rgba(14,165,233,0.10),transparent_42%),radial-gradient(circle_at_80%_0%,rgba(99,102,241,0.10),transparent_40%)]' />
 
         <div
           ref={scrollableContainerRef}
           className='relative z-10 min-h-screen overflow-y-auto overscroll-y-contain custom-scrollbar'
         >
-          {/* 直接进入白色内容区：无顶部封面区 */}
+          {/* 顶部内容区已按需求移除，直接进入白色主内容 */}
           <div className='px-4 pt-6 pb-10'>
             <div className='rounded-[28px] bg-white border border-slate-100 shadow-sm overflow-hidden'>
-              <div className='p-5 bg-gradient-to-br from-white via-white to-sky-50'>
-                <p className='text-[12px] font-black text-slate-500 tracking-wide'>中缅文培训中心</p>
-                <p className='mt-1 text-[11px] font-semibold text-slate-600'>专业中缅双语教学，文化与机遇的桥梁。</p>
-              </div>
-
-              <div className='px-5 pb-5'>
-                <div className='mt-2 mb-4 flex items-center justify-between'>
+              <div className='px-5 pt-5 pb-5'>
+                <div className='mb-4 flex items-center justify-between gap-3'>
                   <div>
                     <h2 className='text-lg font-black text-slate-900 flex items-center gap-2'>
                       <GraduationCap size={20} className='text-sky-600' /> HSK 标准课程
@@ -333,11 +335,10 @@ const LayoutIndex = (props) => {
                     <p className='text-[11px] text-slate-500 mt-1 font-semibold'>从零基础到精通，系统化学习汉语。</p>
                   </div>
 
-                  {/* 你要的：登录在白色区标题行右侧；无私信按钮 */}
                   {!user ? (
                     <button
                       onClick={() => setIsLoginOpen(true)}
-                      className='px-3 py-2 rounded-2xl bg-gradient-to-r from-sky-600 to-indigo-600 text-white font-black text-[12px] shadow-sm hover:opacity-95 active:scale-95 transition'
+                      className='shrink-0 px-3 py-2 rounded-2xl bg-gradient-to-r from-sky-600 to-indigo-600 text-white font-black text-[12px] shadow-sm hover:opacity-95 active:scale-95 transition'
                       title='登录'
                     >
                       <span className='inline-flex items-center gap-2'>
@@ -345,13 +346,21 @@ const LayoutIndex = (props) => {
                       </span>
                     </button>
                   ) : (
-                    <div className='px-3 py-2 rounded-2xl bg-slate-100 text-slate-800 font-black text-[12px]'>
-                      已登录
-                    </div>
+                    <button
+                      onClick={handleAccountClick}
+                      className='shrink-0 px-3 py-2 rounded-2xl bg-slate-900 text-white font-black text-[12px] hover:bg-slate-800 active:scale-95 transition'
+                      title='账号'
+                    >
+                      <span className='inline-flex items-center gap-2'>
+                        <UserCircle size={16} /> 账号
+                      </span>
+                    </button>
                   )}
                 </div>
 
-                <ActivationCard />
+                <div ref={accountCardRef}>
+                  <ActivationCard />
+                </div>
 
                 <div className='mt-4'>
                   <HskContentBlock />
