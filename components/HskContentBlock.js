@@ -1,530 +1,641 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/router';
+import React, { useState, useCallback, useEffect } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/router'
 import {
-  Mic2, Music4, Layers, BookText, Lightbulb,
-  Sparkles, PlayCircle, Gem, MessageCircle,
-  Crown, Heart, ChevronRight, Star, BookOpen,
-  ChevronDown, ChevronUp, GraduationCap,
-  MessageSquareText, Headphones, Volume2, Globe, X,
-  Library
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import dynamic from 'next/dynamic';
-import { useSwipeable } from 'react-swipeable'; 
-
-// ==========================================
-// 1. 引入组件
-// ==========================================
+  Mic2,
+  Music4,
+  Layers,
+  BookText,
+  Lightbulb,
+  Sparkles,
+  PlayCircle,
+  Gem,
+  MessageCircle,
+  Crown,
+  Star,
+  BookOpen,
+  ChevronDown,
+  ChevronUp,
+  Headphones,
+  Volume2,
+  Globe,
+  X,
+  Library,
+  ChevronRight
+} from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import dynamic from 'next/dynamic'
+import { useSwipeable } from 'react-swipeable'
 
 // 引入全屏 AI 助手组件
-import AIChatDrawer from './AiChatAssistant';
+import AIChatDrawer from './AiChatAssistant'
 
-// 引入新的书籍组件
-import BookLibrary from '@/components/BookLibrary';
+// 引入书籍组件
+import BookLibrary from '@/components/BookLibrary'
 
-// 动态导入 WordCard 组件
-const WordCard = dynamic(
-  () => import('@/components/WordCard'),
-  { ssr: false }
-);
+// 词卡组件（仅客户端）
+const WordCard = dynamic(() => import('@/components/WordCard'), { ssr: false })
 
-// ==========================================
-// 2. 图标与辅助组件
-// ==========================================
-const MessengerIcon = ({ size = 24 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12 2C6.48 2 2 6.03 2 11C2 13.66 3.39 16.03 5.61 17.58V21.5C5.61 21.78 5.81 22 6.09 22.04C6.18 22.05 6.27 22.05 6.36 22.02L9.2 21.17C10.09 21.41 11.03 21.54 12 21.54C17.52 21.54 22 17.51 22 12.54C22 7.57 17.52 2 12 2ZM12.98 14.54L10.56 12.07L6.33 14.47C6.18 14.55 5.99 14.53 5.88 14.41C5.76 14.28 5.76 14.09 5.85 13.96L8.85 9.47C8.96 9.3 9.17 9.25 9.35 9.35L11.77 11.82L15.99 9.42C16.14 9.33 16.33 9.36 16.44 9.48C16.56 9.61 16.56 9.8 16.47 9.93L12.98 14.54Z" fill="#0084FF"/>
-  </svg>
-);
+// 词库数据（Next 14 推荐静态导入）
+import hsk1Words from '@/data/hsk/hsk1.json'
+import hsk2Words from '@/data/hsk/hsk2.json'
+
+const isBrowser = typeof window !== 'undefined'
 
 // ==========================================
-// 3. 全局配置与数据
+// 全局配置与数据
 // ==========================================
 
-const FB_CHAT_LINK = "https://m.me/61575187883357";
-const FAVORITES_STORAGE_KEY = 'framer-pinyin-favorites';
+const FB_CHAT_LINK = 'https://m.me/61575187883357'
+const FAVORITES_STORAGE_KEY = 'framer-pinyin-favorites'
 
 const getLevelPrice = (level) => {
-  const prices = { 
-    1: "10,000 Ks", 
-    2: "15,000 Ks", 
-    3: "20,000 Ks",
-    'SP': "30,000 Ks" 
-  };
-  return prices[level] || "Contact Us";
-};
+  const prices = {
+    1: '10,000 Ks',
+    2: '15,000 Ks',
+    3: '20,000 Ks',
+    SP: '30,000 Ks'
+  }
+  return prices[level] || 'Contact Us'
+}
+
+const getSingleQuery = (value) => (Array.isArray(value) ? value[0] : value)
 
 // 拼音数据
 const pinyinMain = [
   { id: 'initials', title: '声母', sub: 'ဗျည်း', href: '/pinyin/initials', icon: Mic2, color: 'text-blue-500', bg: 'bg-blue-50' },
   { id: 'finals', title: '韵母', sub: 'သရ', href: '/pinyin/finals', icon: Music4, color: 'text-emerald-500', bg: 'bg-emerald-50' },
   { id: 'whole', title: '整体', sub: 'အသံတွဲ', href: '/pinyin/whole', icon: Layers, color: 'text-purple-500', bg: 'bg-purple-50' },
-  { id: 'tones', title: '声调', sub: 'အသံ', href: '/pinyin/tones', icon: BookText, color: 'text-amber-500', bg: 'bg-amber-50' },
-];
+  { id: 'tones', title: '声调', sub: 'အသံ', href: '/pinyin/tones', icon: BookText, color: 'text-amber-500', bg: 'bg-amber-50' }
+]
 
 // HSK 课程数据
 const hskData = [
   {
-    level: 1, 
-    title: '入门 (Intro)', 
+    level: 1,
+    title: '入门 (Intro)',
     description: '掌握最常用词语和基本语法',
     descBurmese: 'အသုံးအများဆုံး စကားလုံးများနှင့် သဒ္ဒါ',
-    imageUrl: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800&q=80',
+    imageUrl: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=1200&q=80',
     lessons: [
-      { id: 1, title: '第 1 课 你好' }, { id: 2, title: '第 2 课 谢谢你' }, { id: 3, title: '第 3 课 你叫什么名字？' }, { id: 4, title: '第 4 课 她是我的汉语老师' }, { id: 5, title: '第 5 课 她女儿今年二十岁' },
-      { id: 6, title: '第 6 课 我会说汉语' }, { id: 7, title: '第 7 课 今天几号？' }, { id: 8, title: '第 8 课 我想喝茶' },
+      { id: 1, title: '第 1 课 你好' },
+      { id: 2, title: '第 2 课 谢谢你' },
+      { id: 3, title: '第 3 课 你叫什么名字？' },
+      { id: 4, title: '第 4 课 她是我的汉语老师' },
+      { id: 5, title: '第 5 课 她女儿今年二十岁' },
+      { id: 6, title: '第 6 课 我会说汉语' },
+      { id: 7, title: '第 7 课 今天几号？' },
+      { id: 8, title: '第 8 课 我想喝茶' }
     ]
   },
   {
-    level: 2, 
-    title: '基础 (Basic)', 
+    level: 2,
+    title: '基础 (Basic)',
     description: '就熟悉的日常话题进行交流',
     descBurmese: 'နေ့စဉ်သုံး စကားပြောများ',
-    imageUrl: 'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=800&q=80',
+    imageUrl: 'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=1200&q=80',
     lessons: [
-      { id: 1, title: '第 1 课 九月去北京旅游最好' }, { id: 2, title: '第 2 课 我每天六点起床' }, { id: 3, title: '第 3 课 左边那个红色的是我的' },
+      { id: 1, title: '第 1 课 九月去北京旅游最好' },
+      { id: 2, title: '第 2 课 我每天六点起床' },
+      { id: 3, title: '第 3 课 左边那个红色的是我的' }
     ]
   }
-];
+]
 
-// 核心生词数据加载
-let hskWordsData = {};
-try { hskWordsData[1] = require('@/data/hsk/hsk1.json'); } catch (e) { console.warn('HSK1 data missing'); }
-try { hskWordsData[2] = require('@/data/hsk/hsk2.json'); } catch (e) { console.warn('HSK2 data missing'); }
+const hskWordsData = {
+  1: hsk1Words || [],
+  2: hsk2Words || []
+}
 
 const checkIsFree = (level, lessonId) => {
-  if (level === 1) return lessonId <= 2;
-  return lessonId === 1;
-};
+  if (level === 1) return lessonId <= 2
+  return lessonId === 1
+}
 
 // ==========================================
-// 4. 核心子组件
+// 图标辅助组件
 // ==========================================
 
-// 会员弹窗
+const MessengerIcon = ({ size = 24 }) => (
+  <svg width={size} height={size} viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'>
+    <path
+      d='M12 2C6.48 2 2 6.03 2 11C2 13.66 3.39 16.03 5.61 17.58V21.5C5.61 21.78 5.81 22 6.09 22.04C6.18 22.05 6.27 22.05 6.36 22.02L9.2 21.17C10.09 21.41 11.03 21.54 12 21.54C17.52 21.54 22 17.51 22 12.54C22 7.57 17.52 2 12 2ZM12.98 14.54L10.56 12.07L6.33 14.47C6.18 14.55 5.99 14.53 5.88 14.41C5.76 14.28 5.76 14.09 5.85 13.96L8.85 9.47C8.96 9.3 9.17 9.25 9.35 9.35L11.77 11.82L15.99 9.42C16.14 9.33 16.33 9.36 16.44 9.48C16.56 9.61 16.56 9.8 16.47 9.93L12.98 14.54Z'
+      fill='#0084FF'
+    />
+  </svg>
+)
+
+// ==========================================
+// 核心子组件
+// ==========================================
+
 const MembershipModal = ({ isOpen, onClose, targetLevel }) => {
-  if (!isOpen) return null;
-  const price = getLevelPrice(targetLevel);
-  const isSpoken = targetLevel === 'SP';
+  if (!isOpen) return null
+  const price = getLevelPrice(targetLevel)
+  const isSpoken = targetLevel === 'SP'
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div className='fixed inset-0 z-[160] flex items-center justify-center p-4'>
       <motion.div
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
         onClick={onClose}
-        className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+        className='absolute inset-0 bg-slate-900/60 backdrop-blur-sm'
       />
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-        className="relative w-full max-w-sm bg-white rounded-[2rem] shadow-2xl overflow-hidden p-6"
+        initial={{ opacity: 0, y: 20, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 20, scale: 0.98 }}
+        className='relative w-full max-w-sm rounded-[1.8rem] bg-white p-6 shadow-2xl'
       >
-        <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full text-slate-400 hover:bg-slate-200 transition-colors">
-           <ChevronRight className="rotate-45" size={20} />
+        <button
+          onClick={onClose}
+          className='absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500'
+          aria-label='关闭'
+        >
+          <X size={18} />
         </button>
-        <div className="text-center mt-2">
-          <div className="bg-amber-100 w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3">
-            <Crown className="text-amber-600" size={28} />
+
+        <div className='mt-2 text-center'>
+          <div className='mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100'>
+            <Crown className='text-amber-600' size={28} />
           </div>
-          <h2 className="text-xl font-black text-slate-800">
-            {isSpoken ? "口语特训课程" : `HSK ${targetLevel}`}
+          <h2 className='text-xl font-black text-slate-800'>
+            {isSpoken ? '口语特训课程' : `HSK ${targetLevel}`}
           </h2>
-          <p className="text-slate-500 font-medium text-sm mt-1 mb-5">
-            {isSpoken ? "地道场景、谐音助记与 AI 评测" : "完整视频讲解与练习题"}
-            <br/>
-            <span className="text-xs text-slate-400">(အတန်းစုံလင်စွာ သင်ယူနိုင်ပါသည်)</span>
+          <p className='mb-5 mt-1 text-sm font-medium text-slate-500'>
+            {isSpoken ? '地道场景、谐音助记与 AI 评测' : '完整视频讲解与练习题'}
+            <br />
+            <span className='text-xs text-slate-400'>(အတန်းစုံလင်စွာ သင်ယူနိုင်ပါသည်)</span>
           </p>
-          <div className="bg-slate-50 p-4 rounded-2xl mb-5 border border-slate-100">
-            <p className="text-3xl font-black text-amber-500">{price}</p>
+          <div className='mb-5 rounded-2xl border border-slate-100 bg-slate-50 p-4'>
+            <p className='text-3xl font-black text-amber-500'>{price}</p>
           </div>
-          <a href={FB_CHAT_LINK} target="_blank" rel="noopener noreferrer"
-            className="w-full py-3.5 bg-[#0084FF] text-white rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg hover:bg-blue-600"
+          <a
+            href={FB_CHAT_LINK}
+            target='_blank'
+            rel='noopener noreferrer'
+            className='flex w-full items-center justify-center gap-2 rounded-xl bg-[#0084FF] py-3.5 font-bold text-white shadow-lg transition-all active:scale-95'
           >
-            <MessageCircle size={20} fill="currentColor" />
+            <MessageCircle size={20} fill='currentColor' />
             ဆက်သွယ်ရန် (Contact)
           </a>
         </div>
       </motion.div>
     </div>
-  );
-};
+  )
+}
 
-// 课程卡片组件
 const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
-  const router = useRouter();
-  const [isExpanded, setIsExpanded] = useState(false);
+  const router = useRouter()
+  const [isExpanded, setIsExpanded] = useState(false)
 
-  const handleLessonClick = (e, lesson) => {
-    const isFree = checkIsFree(level.level, lesson.id);
+  const handleLessonClick = (lesson) => {
+    const isFree = checkIsFree(level.level, lesson.id)
     if (!isFree) {
-      e.preventDefault();
-      onShowMembership(level.level);
-      return;
+      onShowMembership(level.level)
+      return
     }
-    router.push(`/hsk/${level.level}/lessons/${lesson.id}`);
-  };
+    router.push(`/hsk/${level.level}/lessons/${lesson.id}`)
+  }
 
   return (
-    <motion.div
+    <motion.section
       whileTap={{ scale: 0.995 }}
-      className="flex flex-col bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden relative z-10"
+      className='overflow-hidden rounded-[1.6rem] border border-slate-100 bg-white shadow-sm'
     >
-      <div className="h-36 relative">
-        <img src={level.imageUrl} className="w-full h-full object-cover" alt="" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-        <div className="absolute bottom-4 left-5 text-white">
-          <p className="text-[10px] font-bold text-cyan-300 uppercase tracking-widest mb-0.5">{level.title}</p>
-          <h2 className="text-2xl font-black">HSK {level.level}</h2>
-          <p className="text-[10px] text-slate-200 mt-1">{level.descBurmese}</p>
+      <div className='relative h-40'>
+        <img src={level.imageUrl} className='h-full w-full object-cover' alt={`HSK ${level.level}`} />
+        <div className='absolute inset-0 bg-gradient-to-t from-black/70 to-transparent' />
+        <div className='absolute bottom-4 left-5 text-white'>
+          <p className='mb-0.5 text-[10px] font-bold uppercase tracking-widest text-cyan-300'>{level.title}</p>
+          <h2 className='text-2xl font-black'>HSK {level.level}</h2>
+          <p className='mt-1 text-[10px] text-slate-200'>{level.descBurmese}</p>
         </div>
       </div>
 
-      <div className="p-4 space-y-2">
-        {(isExpanded ? level.lessons : level.lessons.slice(0, 3)).map(lesson => (
-          <div key={lesson.id} onClick={(e) => handleLessonClick(e, lesson)} className="flex items-center p-3 rounded-xl bg-slate-50 active:bg-slate-100 cursor-pointer transition-colors">
-            <div className={`p-1.5 rounded-full mr-3 ${checkIsFree(level.level, lesson.id) ? 'bg-cyan-100 text-cyan-600' : 'bg-amber-100 text-amber-600'}`}>
-              {checkIsFree(level.level, lesson.id) ? <PlayCircle size={14} fill="currentColor" /> : <Gem size={14} />}
+      <div className='space-y-2 p-4'>
+        {(isExpanded ? level.lessons : level.lessons.slice(0, 3)).map((lesson) => (
+          <button
+            key={lesson.id}
+            type='button'
+            onClick={() => handleLessonClick(lesson)}
+            className='flex w-full items-center rounded-xl bg-slate-50 p-3 text-left transition-colors active:bg-slate-100'
+          >
+            <div className={`mr-3 rounded-full p-1.5 ${checkIsFree(level.level, lesson.id) ? 'bg-cyan-100 text-cyan-600' : 'bg-amber-100 text-amber-600'}`}>
+              {checkIsFree(level.level, lesson.id) ? <PlayCircle size={14} fill='currentColor' /> : <Gem size={14} />}
             </div>
-            <span className="text-sm font-bold text-slate-700 truncate flex-grow">{lesson.title}</span>
-          </div>
+            <span className='flex-grow truncate text-sm font-bold text-slate-700'>{lesson.title}</span>
+          </button>
         ))}
       </div>
 
-      <div className="px-4 pb-5 pt-1 flex flex-col gap-3">
+      <div className='flex flex-col gap-3 px-4 pb-5 pt-1'>
         {level.lessons.length > 3 && (
           <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="w-full py-2.5 flex items-center justify-center text-xs font-bold text-slate-500 gap-1 bg-slate-50 border border-slate-100 rounded-xl hover:bg-slate-100 transition-colors active:scale-95"
+            type='button'
+            onClick={() => setIsExpanded((prev) => !prev)}
+            className='flex w-full items-center justify-center gap-1 rounded-xl border border-slate-100 bg-slate-50 py-2.5 text-xs font-bold text-slate-500 transition-colors hover:bg-slate-100 active:scale-95'
           >
-            {isExpanded ? 'See Less' : `View All ${level.lessons.length} Lessons`} 
+            {isExpanded ? 'See Less' : `View All ${level.lessons.length} Lessons`}
             {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </button>
         )}
 
         <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onVocabularyClick(level);
-          }}
-          className="relative z-20 w-full py-3 flex items-center justify-center gap-2 bg-gradient-to-r from-pink-50 to-rose-50 text-rose-500 rounded-xl font-black text-xs active:scale-95 transition-all border border-pink-100 hover:shadow-sm"
+          type='button'
+          onClick={() => onVocabularyClick(level)}
+          className='w-full rounded-xl border border-pink-100 bg-gradient-to-r from-pink-50 to-rose-50 py-3 text-xs font-black text-rose-500 transition-all active:scale-95'
         >
-          <BookOpen size={14} />
-          <span>核心生词</span>
-          <span className="text-[10px] opacity-70 font-normal ml-1">(ဝေါဟာရများ)</span>
+          <span className='inline-flex items-center gap-2'>
+            <BookOpen size={14} />
+            核心生词
+            <span className='ml-1 text-[10px] font-normal opacity-70'>(ဝေါဟာရများ)</span>
+          </span>
         </button>
       </div>
-    </motion.div>
-  );
-};
+    </motion.section>
+  )
+}
 
-// 拼音面板组件 (布局调整 + 书籍入口)
 const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection, onOpenTranslator, onOpenBooks }) => {
-  const router = useRouter();
+  const router = useRouter()
 
   return (
-    <div className="space-y-3">
-      {/* 第一行：4个基础功能 */}
-      <div className="grid grid-cols-4 gap-2">
+    <div className='space-y-3'>
+      <div className='grid grid-cols-4 gap-2'>
         {pinyinMain.map((item) => (
-          <Link key={item.id} href={item.href} passHref>
-            <a className={`flex flex-col items-center justify-center py-3 rounded-2xl ${item.bg} active:scale-95 transition-transform`}>
-              <div className="mb-1 bg-white p-1.5 rounded-full shadow-sm">
-                <item.icon size={16} className={item.color} />
-              </div>
-              <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
-                {item.title}<br/><span className="text-[8px] opacity-70">{item.sub}</span>
-              </span>
-            </a>
+          <Link
+            key={item.id}
+            href={item.href}
+            className={`flex flex-col items-center justify-center rounded-2xl py-3 transition-transform active:scale-95 ${item.bg}`}
+          >
+            <div className='mb-1 rounded-full bg-white p-1.5 shadow-sm'>
+              <item.icon size={16} className={item.color} />
+            </div>
+            <span className='text-center text-[10px] font-bold leading-tight text-slate-600'>
+              {item.title}
+              <br />
+              <span className='text-[8px] opacity-70'>{item.sub}</span>
+            </span>
           </Link>
         ))}
       </div>
 
-      {/* 第二行：发音技巧 (通栏) */}
-      <button 
+      <button
+        type='button'
         onClick={() => router.push('/pinyin/tips')}
-        className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl border border-orange-100/50 active:scale-95 transition-transform group"
+        className='group flex w-full items-center justify-between rounded-2xl border border-orange-100/50 bg-gradient-to-r from-orange-50 to-amber-50 px-4 py-3 transition-transform active:scale-95'
       >
-        <div className="flex items-center gap-3">
-          <div className="p-1.5 bg-white rounded-full text-orange-500 shadow-sm shrink-0">
-            <Lightbulb size={16} fill="currentColor" />
+        <div className='flex items-center gap-3'>
+          <div className='shrink-0 rounded-full bg-white p-1.5 text-orange-500 shadow-sm'>
+            <Lightbulb size={16} fill='currentColor' />
           </div>
-          <div className="text-left">
-            <span className="block text-xs font-black text-slate-700">发音技巧 (Tips)</span>
-            <span className="block text-[10px] text-slate-500 font-medium">အသံထွက်နည်းလမ်းများ</span>
+          <div className='text-left'>
+            <span className='block text-xs font-black text-slate-700'>发音技巧 (Tips)</span>
+            <span className='block text-[10px] font-medium text-slate-500'>အသံထွက်နည်းလမ်းများ</span>
           </div>
         </div>
-        <ChevronRight size={16} className="text-orange-300" />
+        <ChevronRight size={16} className='text-orange-300' />
       </button>
 
-      {/* ==================================================== */}
-      {/* AI 翻译 + 免费书籍 (并排) */}
-      {/* ==================================================== */}
-      <div className="grid grid-cols-2 gap-3">
-        {/* AI 翻译 */}
-        <button 
-          onClick={onOpenTranslator} 
-          className="flex flex-col items-center justify-center py-3 bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl active:scale-95 transition-transform"
+      <div className='grid grid-cols-2 gap-3'>
+        <button
+          type='button'
+          onClick={onOpenTranslator}
+          className='flex flex-col items-center justify-center rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 py-3 transition-transform active:scale-95'
         >
-          <div className="flex items-center gap-1.5 mb-1 text-blue-600">
-             <Globe size={16} />
-             <span className="text-xs font-black">AI 翻译</span>
+          <div className='mb-1 flex items-center gap-1.5 text-blue-600'>
+            <Globe size={16} />
+            <span className='text-xs font-black'>AI 翻译</span>
           </div>
-          <span className="text-[9px] text-slate-500">AI ဘာသာပြန်</span>
+          <span className='text-[9px] text-slate-500'>AI ဘာသာပြန်</span>
         </button>
 
-        {/* 免费书籍 (新功能) */}
-        <button 
-          onClick={onOpenBooks} 
-          className="flex flex-col items-center justify-center py-3 bg-gradient-to-br from-cyan-50 to-teal-50 border border-cyan-100 rounded-2xl active:scale-95 transition-transform"
+        <button
+          type='button'
+          onClick={onOpenBooks}
+          className='flex flex-col items-center justify-center rounded-2xl border border-cyan-100 bg-gradient-to-br from-cyan-50 to-teal-50 py-3 transition-transform active:scale-95'
         >
-          <div className="flex items-center gap-1.5 mb-1 text-cyan-700">
-             <Library size={16} />
-             <span className="text-xs font-black">免费书籍</span>
+          <div className='mb-1 flex items-center gap-1.5 text-cyan-700'>
+            <Library size={16} />
+            <span className='text-xs font-black'>免费书籍</span>
           </div>
-          <span className="text-[9px] text-slate-500">စာကြည့်တိုက်</span>
+          <span className='text-[9px] text-slate-500'>စာကြည့်တိုက်</span>
         </button>
       </div>
-      
-      {/* 第四行：双收藏按钮 */}
-      <div className="grid grid-cols-2 gap-3">
-        {/* 单词收藏 */}
-        <button 
+
+      <div className='grid grid-cols-2 gap-3'>
+        <button
+          type='button'
           onClick={onOpenCollection}
-          className="flex flex-col items-center justify-center py-3 bg-white border border-slate-100 rounded-2xl shadow-sm active:scale-95 transition-transform"
+          className='flex flex-col items-center justify-center rounded-2xl border border-slate-100 bg-white py-3 shadow-sm transition-transform active:scale-95'
         >
-          <div className="flex items-center gap-1.5 mb-1 text-slate-600">
-             <Star size={14} fill="currentColor"/>
-             <span className="text-xs font-black">单词收藏</span>
+          <div className='mb-1 flex items-center gap-1.5 text-slate-600'>
+            <Star size={14} fill='currentColor' />
+            <span className='text-xs font-black'>单词收藏</span>
           </div>
-          <span className="text-[9px] text-slate-400">မှတ်ထားသော စာလုံး</span>
+          <span className='text-[9px] text-slate-400'>မှတ်ထားသော စာလုံး</span>
         </button>
 
-        {/* 口语收藏 */}
-        <button 
+        <button
+          type='button'
           onClick={onOpenSpokenCollection}
-          className="flex flex-col items-center justify-center py-3 bg-white border border-slate-100 rounded-2xl shadow-sm active:scale-95 transition-transform"
+          className='flex flex-col items-center justify-center rounded-2xl border border-slate-100 bg-white py-3 shadow-sm transition-transform active:scale-95'
         >
-           <div className="flex items-center gap-1.5 mb-1 text-slate-600">
-             <Volume2 size={14} fill="currentColor"/>
-             <span className="text-xs font-black">口语收藏</span>
-           </div>
-           <span className="text-[9px] text-slate-400">မှတ်ထားသော စကားပြော</span>
+          <div className='mb-1 flex items-center gap-1.5 text-slate-600'>
+            <Volume2 size={14} fill='currentColor' />
+            <span className='text-xs font-black'>口语收藏</span>
+          </div>
+          <span className='text-[9px] text-slate-400'>မှတ်ထားသော စကားပြော</span>
         </button>
       </div>
     </div>
-  );
-};
+  )
+}
 
 // ==========================================
-// 5. 主页面入口
+// 主页面入口
 // ==========================================
 
 export default function HskPageClient() {
-  const router = useRouter();
-  const [activeHskWords, setActiveHskWords] = useState(null);
-  const [activeLevelTag, setActiveLevelTag] = useState(null);
-  const [membership, setMembership] = useState({ open: false, level: null });
-  
-  // 状态控制
-  const [isTranslatorOpen, setIsTranslatorOpen] = useState(false);
-  const [isBookLibraryOpen, setIsBookLibraryOpen] = useState(false);
+  const router = useRouter()
 
-  const isCardViewOpen = router.asPath.includes('#hsk-vocabulary');
+  const [activeHskWords, setActiveHskWords] = useState([])
+  const [activeLevelTag, setActiveLevelTag] = useState('hsk-vocab')
 
-  // ====================================================
-  // 手势控制逻辑
-  // ====================================================
-  
-  // 全局手势（处理页面级的滑动）
-  const swipeHandlers = useSwipeable({
-    onSwipedRight: (eventData) => {
-      // 如果 AI 翻译打开，右滑关闭 (这个逻辑现在由 AI 容器上的特定 Handler 辅助)
-      if (isTranslatorOpen) {
-        setIsTranslatorOpen(false);
-        return;
-      }
-      // 如果书籍库打开
-      if (isBookLibraryOpen) {
-        setIsBookLibraryOpen(false);
-        return;
-      }
-      // 如果生词卡片打开
-      if (isCardViewOpen) {
-        router.back();
-        return;
+  // 统一 overlay：translator | books | membership | null
+  const [activeOverlay, setActiveOverlay] = useState(null)
+  const [membershipLevel, setMembershipLevel] = useState(null)
+
+  const isCardViewOpen = router.asPath.includes('#hsk-vocabulary')
+  const isTranslatorOpen = activeOverlay === 'translator'
+  const isBookLibraryOpen = activeOverlay === 'books'
+  const isMembershipOpen = activeOverlay === 'membership'
+
+  // 打开 overlay 时 push 一条 history，让系统返回手势先关 overlay，不退站
+  const openOverlay = useCallback(
+    (overlayType, payload = null) => {
+      if (activeOverlay === overlayType) return
+      setActiveOverlay(overlayType)
+      setMembershipLevel(overlayType === 'membership' ? payload : null)
+
+      if (isBrowser) {
+        window.history.pushState({ overlay: overlayType }, '', window.location.href)
       }
     },
+    [activeOverlay]
+  )
+
+  // 关闭 overlay：优先走 history.back，和手势返回保持一致
+  const closeOverlay = useCallback(() => {
+    if (activeOverlay && isBrowser) {
+      window.history.back()
+      return
+    }
+    setActiveOverlay(null)
+    setMembershipLevel(null)
+  }, [activeOverlay])
+
+  // 监听浏览器返回（含安卓返回键 / iOS 返回手势）
+  useEffect(() => {
+    if (!isBrowser) return
+
+    const onPopState = () => {
+      if (activeOverlay) {
+        setActiveOverlay(null)
+        setMembershipLevel(null)
+      }
+    }
+
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [activeOverlay])
+
+  const overlaySwipeHandlers = useSwipeable({
+    onSwipedRight: () => closeOverlay(),
     trackMouse: true,
-    delta: 50,
-    preventScrollOnSwipe: false 
-  });
+    delta: 45,
+    preventScrollOnSwipe: false
+  })
 
-  // 专门为 AI Drawer 准备的手势 Wrapper
-  // 注意：如果 Drawer 是全屏覆盖，必须在 Drawer 外层直接绑定 swipe
-  const aiDrawerSwipeHandlers = useSwipeable({
-    onSwipedRight: () => setIsTranslatorOpen(false),
-    trackMouse: true
-  });
+  const handleSpokenGeneralClick = useCallback(() => {
+    router.push('/spoken')
+  }, [router])
 
-  // ====================================================
-  // 跳转逻辑
-  // ====================================================
-
-  const handleSpokenGeneralClick = useCallback((e) => {
-    if(e) e.preventDefault();
-    router.push('/spoken');
-  }, [router]);
-
-  const handleSpokenCollectionClick = useCallback((e) => {
-    if(e) e.preventDefault();
+  const handleSpokenCollectionClick = useCallback(() => {
     router.push({
       pathname: '/spoken',
       query: { filter: 'favorites' }
-    });
-  }, [router]);
+    })
+  }, [router])
 
-  const handleVocabularyClick = useCallback((level) => {
-    const levelNum = level?.level || 1;
-    const words = hskWordsData[levelNum] || [];
-    setActiveHskWords(words);
-    setActiveLevelTag(`hsk${levelNum}`);
-    router.push({ pathname: router.pathname, query: { ...router.query, level: levelNum }, hash: 'hsk-vocabulary' }, undefined, { shallow: true });
-  }, [router]);
+  const closeWordCard = useCallback(() => {
+    const base = router.asPath.split('#')[0]
+    router.replace(base, undefined, { shallow: true, scroll: false })
+  }, [router])
+
+  const getFavoriteWords = useCallback(() => {
+    if (!isBrowser) return []
+    try {
+      const raw = localStorage.getItem(FAVORITES_STORAGE_KEY)
+      const savedIds = raw ? JSON.parse(raw) : []
+      const allWords = [...(hskWordsData[1] || []), ...(hskWordsData[2] || [])]
+      return allWords.filter((word) =>
+        Array.isArray(savedIds) && savedIds.some((savedId) => String(savedId) === String(word.id))
+      )
+    } catch (e) {
+      return []
+    }
+  }, [])
+
+  const handleVocabularyClick = useCallback(
+    (level) => {
+      const levelNum = Number(level?.level || 1)
+      const words = hskWordsData[levelNum] || []
+
+      setActiveHskWords(words)
+      setActiveLevelTag(`hsk${levelNum}`)
+
+      const nextQuery = { ...router.query, level: String(levelNum) }
+      delete nextQuery.view
+
+      router.push(
+        { pathname: router.pathname, query: nextQuery, hash: 'hsk-vocabulary' },
+        undefined,
+        { shallow: true, scroll: false }
+      )
+    },
+    [router]
+  )
 
   const handleCollectionClick = useCallback(() => {
-    const savedIds = JSON.parse(localStorage.getItem(FAVORITES_STORAGE_KEY) || '[]');
-    const allWords = [ ...(hskWordsData[1] || []), ...(hskWordsData[2] || []) ];
-    const favoriteWords = allWords.filter(word => 
-      savedIds.some(savedId => String(savedId) === String(word.id))
-    );
+    const favoriteWords = getFavoriteWords()
 
-    if (favoriteWords.length === 0) {
-      alert("No saved words yet!\nမှတ်ထားသော စာလုံး မရှိသေးပါ");
-      return;
+    if (!favoriteWords.length) {
+      alert('No saved words yet!\nမှတ်ထားသော စာလုံး မရှိသေးပါ')
+      return
     }
 
-    setActiveHskWords(favoriteWords);
-    setActiveLevelTag('my-favorites-collection');
-    router.push({ pathname: router.pathname, hash: 'hsk-vocabulary' }, undefined, { shallow: true });
-  }, [router]);
+    setActiveHskWords(favoriteWords)
+    setActiveLevelTag('my-favorites-collection')
+
+    const nextQuery = { ...router.query, view: 'favorites' }
+    delete nextQuery.level
+
+    router.push(
+      { pathname: router.pathname, query: nextQuery, hash: 'hsk-vocabulary' },
+      undefined,
+      { shallow: true, scroll: false }
+    )
+  }, [getFavoriteWords, router])
+
+  // URL 直开 / 刷新时回填词卡数据
+  useEffect(() => {
+    if (!router.isReady || !isCardViewOpen) return
+
+    const levelParam = Number(getSingleQuery(router.query.level))
+    const viewParam = getSingleQuery(router.query.view)
+
+    if (Number.isFinite(levelParam) && hskWordsData[levelParam]) {
+      setActiveHskWords(hskWordsData[levelParam])
+      setActiveLevelTag(`hsk${levelParam}`)
+      return
+    }
+
+    if (viewParam === 'favorites') {
+      const favoriteWords = getFavoriteWords()
+      setActiveHskWords(favoriteWords)
+      setActiveLevelTag('my-favorites-collection')
+    }
+  }, [router.isReady, router.query.level, router.query.view, isCardViewOpen, getFavoriteWords])
 
   return (
-    // 绑定基础手势
-    <div {...swipeHandlers} className="min-h-screen bg-[#f8fafc] font-sans text-slate-900 pb-20 relative overflow-x-hidden max-w-md mx-auto shadow-2xl shadow-slate-200">
-      
-      <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-blue-50/50 to-transparent pointer-events-none" />
+    <div className='min-h-[100dvh] w-full overflow-x-hidden bg-[#f8fafc] pb-16 font-sans text-slate-900'>
+      <div className='pointer-events-none absolute left-0 right-0 top-0 h-44 bg-gradient-to-b from-blue-50/70 to-transparent' />
 
-      <header className="relative pt-4 px-4 pb-1 z-10">
-        <div className="flex justify-between items-center mb-3">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/80 backdrop-blur rounded-full border border-blue-100 shadow-sm">
-            <Sparkles size={12} className="text-blue-500" />
-            <span className="text-[10px] font-bold text-blue-800 uppercase">Premium Class</span>
+      <header className='relative z-10 px-4 pb-1 pt-4'>
+        <div className='mb-3 flex items-center justify-between'>
+          <div className='inline-flex items-center gap-1.5 rounded-full border border-blue-100 bg-white/80 px-3 py-1 backdrop-blur shadow-sm'>
+            <Sparkles size={12} className='text-blue-500' />
+            <span className='text-[10px] font-bold uppercase text-blue-800'>Premium Class</span>
           </div>
-          
-          <a href={FB_CHAT_LINK} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white rounded-full shadow-sm border border-slate-100 active:scale-95 transition-all"
+
+          <a
+            href={FB_CHAT_LINK}
+            target='_blank'
+            rel='noopener noreferrer'
+            className='flex items-center gap-1.5 rounded-full border border-slate-100 bg-white px-2.5 py-1.5 shadow-sm transition-all active:scale-95'
           >
             <MessengerIcon size={18} />
-            <span className="text-xs font-bold text-slate-700">Messenger</span>
+            <span className='text-xs font-bold text-slate-700'>Messenger</span>
           </a>
         </div>
 
-        <div className="bg-white rounded-[1.8rem] p-4 shadow-xl shadow-slate-200/60 border border-slate-50">
-          <PinyinSection 
-            onOpenCollection={handleCollectionClick} 
+        <div className='rounded-[1.6rem] border border-slate-100 bg-white p-4 shadow-lg shadow-slate-200/50'>
+          <PinyinSection
+            onOpenCollection={handleCollectionClick}
             onOpenSpokenCollection={handleSpokenCollectionClick}
-            onOpenTranslator={() => setIsTranslatorOpen(true)}
-            onOpenBooks={() => setIsBookLibraryOpen(true)}
+            onOpenTranslator={() => openOverlay('translator')}
+            onOpenBooks={() => openOverlay('books')}
           />
         </div>
       </header>
 
-      {/* 口语练习横图 */}
-      <div className="px-4 mt-4">
-        <div 
+      <section className='mt-4 px-4'>
+        <button
+          type='button'
           onClick={handleSpokenGeneralClick}
-          className="block relative h-28 w-full rounded-3xl overflow-hidden shadow-lg shadow-emerald-100 group active:scale-[0.98] transition-all cursor-pointer"
+          className='group relative block h-28 w-full cursor-pointer overflow-hidden rounded-3xl shadow-lg shadow-emerald-100 transition-all active:scale-[0.98]'
         >
-          <img 
-            src="https://images.unsplash.com/photo-1543269865-cbf427effbad?w=800&q=80" 
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-            alt="Oral Chinese" 
+          <img
+            src='https://images.unsplash.com/photo-1543269865-cbf427effbad?w=1200&q=80'
+            className='h-full w-full object-cover transition-transform duration-700 group-hover:scale-105'
+            alt='Oral Chinese'
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-emerald-600/90 via-emerald-600/40 to-transparent flex flex-col justify-center px-6">
-            <div className="flex items-center gap-2 text-emerald-100 mb-1">
+          <div className='absolute inset-0 flex flex-col justify-center bg-gradient-to-r from-emerald-600/90 via-emerald-600/40 to-transparent px-6 text-left'>
+            <div className='mb-1 flex items-center gap-2 text-emerald-100'>
               <Headphones size={16} />
-              <span className="text-[10px] font-bold uppercase tracking-widest">Oral Practice</span>
+              <span className='text-[10px] font-bold uppercase tracking-widest'>Oral Practice</span>
             </div>
-            <h3 className="text-xl font-black text-white">日常口语练习</h3>
-            <p className="text-emerald-50/90 text-xs font-medium font-burmese mt-0.5">နေ့စဉ်သုံး စကားပြော လေ့ကျင့်ခန်း</p>
+            <h3 className='text-xl font-black text-white'>日常口语练习</h3>
+            <p className='mt-0.5 text-xs font-medium text-emerald-50/90'>နေ့စဉ်သုံး စကားပြော လေ့ကျင့်ခန်း</p>
           </div>
-          <div className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/20 backdrop-blur rounded-full flex items-center justify-center text-white">
+          <div className='absolute right-4 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur'>
             <ChevronRight size={20} />
           </div>
-        </div>
-      </div>
+        </button>
+      </section>
 
-      <div className="max-w-2xl mx-auto px-4 relative z-10 mt-6 space-y-4">
-        <div className="flex items-center gap-2 px-1 opacity-70">
-          <BookText size={14} className="text-slate-500" />
-          <h2 className="text-xs font-black text-slate-600 uppercase tracking-wider">System Courses (သင်ရိုး)</h2>
+      <main className='relative z-10 mt-6 space-y-4 px-4 pb-10'>
+        <div className='flex items-center gap-2 px-1 opacity-70'>
+          <BookText size={14} className='text-slate-500' />
+          <h2 className='text-xs font-black uppercase tracking-wider text-slate-600'>
+            System Courses (သင်ရိုး)
+          </h2>
         </div>
 
-        <div className="grid grid-cols-1 gap-5 pb-10">
-          {hskData.map(level => (
+        <div className='grid grid-cols-1 gap-5'>
+          {hskData.map((level) => (
             <HskCard
               key={level.level}
               level={level}
               onVocabularyClick={handleVocabularyClick}
-              onShowMembership={(l) => setMembership({ open: true, level: l })}
+              onShowMembership={(l) => openOverlay('membership', l)}
             />
           ))}
         </div>
-      </div>
+      </main>
 
       {/* 会员弹窗 */}
       <AnimatePresence>
-        {membership.open && (
+        {isMembershipOpen && (
           <MembershipModal
-            isOpen={membership.open}
-            onClose={() => setMembership({ open: false, level: null })}
-            targetLevel={membership.level}
+            isOpen={isMembershipOpen}
+            onClose={closeOverlay}
+            targetLevel={membershipLevel}
           />
         )}
       </AnimatePresence>
 
-      {/* 
-         AI 翻译 Drawer 
-         修复：外层包裹 div 并绑定 aiDrawerSwipeHandlers，
-         确保在 Drawer 覆盖全屏时也能捕捉滑动事件
-      */}
-      {isTranslatorOpen && (
-        <div {...aiDrawerSwipeHandlers} className="fixed inset-0 z-[100]">
-           <AIChatDrawer 
-             isOpen={isTranslatorOpen} 
-             onClose={() => setIsTranslatorOpen(false)} 
-           />
-        </div>
-      )}
+      {/* AI 翻译：全屏 + 右滑返回 */}
+      <AnimatePresence>
+        {isTranslatorOpen && (
+          <motion.div
+            {...overlaySwipeHandlers}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className='fixed inset-0 z-[140] bg-white'
+          >
+            <AIChatDrawer isOpen={isTranslatorOpen} onClose={closeOverlay} />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* 新增：免费图书馆 Drawer */}
+      {/* 免费书籍：全屏 + 右滑返回 */}
       <AnimatePresence>
         {isBookLibraryOpen && (
-          <BookLibrary 
-            isOpen={isBookLibraryOpen}
-            onClose={() => setIsBookLibraryOpen(false)}
-          />
+          <motion.div
+            {...overlaySwipeHandlers}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className='fixed inset-0 z-[140] bg-white'
+          >
+            <BookLibrary isOpen={isBookLibraryOpen} onClose={closeOverlay} />
+          </motion.div>
         )}
       </AnimatePresence>
 
-      {/* 单词卡片 Drawer */}
+      {/* 单词词卡 */}
       <WordCard
         isOpen={isCardViewOpen}
         words={activeHskWords || []}
-        onClose={() => router.push(router.pathname, undefined, { shallow: true })}
+        onClose={closeWordCard}
         progressKey={activeLevelTag || 'hsk-vocab'}
       />
     </div>
-  );
+  )
 }
