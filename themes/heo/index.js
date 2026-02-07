@@ -1,8 +1,4 @@
-and then tool output appears maybe. Let's test.
 
-收到，这里是按你最新要求整理好的完整版本（顶部不要、私信不要、登录/账号放在 `HSK 标准课程` 右侧、浅色 Google 登录弹窗、去掉首页暗色背景）：
-
-```jsx
 // React & Next.js
 import { useRouter } from 'next/router'
 import { useEffect, useState, useRef, useCallback } from 'react'
