@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
@@ -7,7 +8,6 @@ import {
   Layers,
   BookText,
   Lightbulb,
-  Sparkles,
   PlayCircle,
   Gem,
   MessageCircle,
@@ -16,7 +16,6 @@ import {
   BookOpen,
   ChevronDown,
   ChevronUp,
-  Headphones,
   Volume2,
   Globe,
   X,
@@ -111,19 +110,6 @@ const checkIsFree = (level, lessonId) => {
   if (level === 1) return lessonId <= 2
   return lessonId === 1
 }
-
-// ==========================================
-// 图标辅助组件
-// ==========================================
-
-const MessengerIcon = ({ size = 24 }) => (
-  <svg width={size} height={size} viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'>
-    <path
-      d='M12 2C6.48 2 2 6.03 2 11C2 13.66 3.39 16.03 5.61 17.58V21.5C5.61 21.78 5.81 22 6.09 22.04C6.18 22.05 6.27 22.05 6.36 22.02L9.2 21.17C10.09 21.41 11.03 21.54 12 21.54C17.52 21.54 22 17.51 22 12.54C22 7.57 17.52 2 12 2ZM12.98 14.54L10.56 12.07L6.33 14.47C6.18 14.55 5.99 14.53 5.88 14.41C5.76 14.28 5.76 14.09 5.85 13.96L8.85 9.47C8.96 9.3 9.17 9.25 9.35 9.35L11.77 11.82L15.99 9.42C16.14 9.33 16.33 9.36 16.44 9.48C16.56 9.61 16.56 9.8 16.47 9.93L12.98 14.54Z'
-      fill='#0084FF'
-    />
-  </svg>
-)
 
 // ==========================================
 // 核心子组件
@@ -420,10 +406,6 @@ export default function HskPageClient() {
     preventScrollOnSwipe: false
   })
 
-  const handleSpokenGeneralClick = useCallback(() => {
-    router.push('/spoken')
-  }, [router])
-
   const handleSpokenCollectionClick = useCallback(() => {
     router.push({
       pathname: '/spoken',
@@ -516,23 +498,6 @@ export default function HskPageClient() {
       <div className='pointer-events-none absolute left-0 right-0 top-0 h-44 bg-gradient-to-b from-blue-50/70 to-transparent' />
 
       <header className='relative z-10 px-4 pb-1 pt-4'>
-        <div className='mb-3 flex items-center justify-between'>
-          <div className='inline-flex items-center gap-1.5 rounded-full border border-blue-100 bg-white/80 px-3 py-1 backdrop-blur shadow-sm'>
-            <Sparkles size={12} className='text-blue-500' />
-            <span className='text-[10px] font-bold uppercase text-blue-800'>Premium Class</span>
-          </div>
-
-          <a
-            href={FB_CHAT_LINK}
-            target='_blank'
-            rel='noopener noreferrer'
-            className='flex items-center gap-1.5 rounded-full border border-slate-100 bg-white px-2.5 py-1.5 shadow-sm transition-all active:scale-95'
-          >
-            <MessengerIcon size={18} />
-            <span className='text-xs font-bold text-slate-700'>Messenger</span>
-          </a>
-        </div>
-
         <div className='rounded-[1.6rem] border border-slate-100 bg-white p-4 shadow-lg shadow-slate-200/50'>
           <PinyinSection
             onOpenCollection={handleCollectionClick}
@@ -542,31 +507,6 @@ export default function HskPageClient() {
           />
         </div>
       </header>
-
-      <section className='mt-4 px-4'>
-        <button
-          type='button'
-          onClick={handleSpokenGeneralClick}
-          className='group relative block h-28 w-full cursor-pointer overflow-hidden rounded-3xl shadow-lg shadow-emerald-100 transition-all active:scale-[0.98]'
-        >
-          <img
-            src='https://images.unsplash.com/photo-1543269865-cbf427effbad?w=1200&q=80'
-            className='h-full w-full object-cover transition-transform duration-700 group-hover:scale-105'
-            alt='Oral Chinese'
-          />
-          <div className='absolute inset-0 flex flex-col justify-center bg-gradient-to-r from-emerald-600/90 via-emerald-600/40 to-transparent px-6 text-left'>
-            <div className='mb-1 flex items-center gap-2 text-emerald-100'>
-              <Headphones size={16} />
-              <span className='text-[10px] font-bold uppercase tracking-widest'>Oral Practice</span>
-            </div>
-            <h3 className='text-xl font-black text-white'>日常口语练习</h3>
-            <p className='mt-0.5 text-xs font-medium text-emerald-50/90'>နေ့စဉ်သုံး စကားပြော လေ့ကျင့်ခန်း</p>
-          </div>
-          <div className='absolute right-4 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur'>
-            <ChevronRight size={20} />
-          </div>
-        </button>
-      </section>
 
       <main className='relative z-10 mt-6 space-y-4 px-4 pb-10'>
         <div className='flex items-center gap-2 px-1 opacity-70'>
