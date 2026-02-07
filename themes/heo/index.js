@@ -1,3 +1,8 @@
+and then tool output appears maybe. Let's test.
+
+收到，这里是按你最新要求整理好的完整版本（顶部不要、私信不要、登录/账号放在 `HSK 标准课程` 右侧、浅色 Google 登录弹窗、去掉首页暗色背景）：
+
+```jsx
 // React & Next.js
 import { useRouter } from 'next/router'
 import { useEffect, useState, useRef, useCallback } from 'react'
@@ -60,18 +65,26 @@ const CustomScrollbarStyle = () => (
   <style jsx global>{`
     .custom-scrollbar::-webkit-scrollbar { width: 0px; height: 0px; }
     .custom-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    #theme-heo footer, #theme-heo .footer-wrapper, #theme-heo #footer,
-    #theme-heo .subscribe-box, #theme-heo #subscribe-wrapper,
-    #theme-heo .busuanzi_container_site_pv, #theme-heo .busuanzi_container_site_uv {
+
+    /* 只限制首页壳，避免影响其他页面/论坛 */
+    #theme-heo.heo-home footer,
+    #theme-heo.heo-home .footer-wrapper,
+    #theme-heo.heo-home #footer,
+    #theme-heo.heo-home .subscribe-box,
+    #theme-heo.heo-home #subscribe-wrapper,
+    #theme-heo.heo-home .busuanzi_container_site_pv,
+    #theme-heo.heo-home .busuanzi_container_site_uv {
       display: none !important;
     }
-    body { background-color: #f7f9fe; }
   `}</style>
 )
 
 const GoogleLoginModal = ({ open, onClose }) => {
   const { user, isGoogleLoaded, handleGoogleCallback } = useAI()
   const initializedRef = useRef(false)
+  const modalRef = useRef(null)
+  const closeBtnRef = useRef(null)
+  const lastActiveRef = useRef(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -81,45 +94,69 @@ const GoogleLoginModal = ({ open, onClose }) => {
   useEffect(() => {
     if (!open || !isBrowser) return
 
+    lastActiveRef.current = document.activeElement
+
     const onKeyDown = (e) => {
       if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKeyDown)
 
+      // 简单 focus trap，防止 Tab 跳到弹窗外
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusables = modalRef.current.querySelectorAll(
+          'button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'
+        )
+        if (!focusables.length) return
+
+        const first = focusables[0]
+        const last = focusables[focusables.length - 1]
+        const active = document.activeElement
+
+        if (e.shiftKey && active === first) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    setTimeout(() => closeBtnRef.current?.focus?.(), 0)
 
     return () => {
       window.removeEventListener('keydown', onKeyDown)
       document.body.style.overflow = prevOverflow
+      lastActiveRef.current?.focus?.()
     }
   }, [open, onClose])
 
   useEffect(() => {
-    if (!open) return
-    if (!isBrowser) return
-    if (user) return
-    if (!isGoogleLoaded) return
-    if (!window.google) return
+    if (!open || !isBrowser || user) return
+
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
+    if (!clientId) {
+      setError('缺少 NEXT_PUBLIC_GOOGLE_CLIENT_ID，无法使用 Google 登录')
+      return
+    }
+
+    if (!isGoogleLoaded || !window.google) return
 
     const container = document.getElementById('google-btn-container-modal')
     if (!container) return
-
-    container.innerHTML = ''
+    container.replaceChildren()
 
     try {
       if (!initializedRef.current) {
         window.google.accounts.id.initialize({
-          client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+          client_id: clientId,
           callback: async (response) => {
             try {
               setError('')
               const result = await handleGoogleCallback(response)
-              if (result?.success) {
-                onClose()
-              } else {
-                setError(result?.error || '登录失败，请重试')
-              }
+              if (result?.success) onClose()
+              else setError(result?.error || '登录失败，请重试')
             } catch (err) {
               setError('登录失败，请重试')
             }
@@ -144,27 +181,29 @@ const GoogleLoginModal = ({ open, onClose }) => {
 
   return (
     <div className='fixed inset-0 z-[999] flex items-center justify-center p-5'>
+      <div className='absolute inset-0 bg-white/70 backdrop-blur-sm' onClick={onClose} />
+
       <div
-        className='absolute inset-0 bg-white/70 backdrop-blur-sm'
-        onClick={onClose}
-      />
-      <div
+        ref={modalRef}
         role='dialog'
         aria-modal='true'
+        aria-labelledby='google-login-title'
+        aria-describedby='google-login-desc'
         className='relative w-full max-w-sm rounded-3xl bg-white shadow-[0_30px_80px_rgba(15,23,42,0.22)] border border-slate-100 overflow-hidden'
       >
         <div className='px-5 pt-5 pb-4 bg-gradient-to-br from-sky-50 via-white to-indigo-50'>
           <div className='flex items-start justify-between gap-3'>
             <div>
-              <p className='text-base font-black text-slate-900'>Google 登录</p>
-              <p className='text-[12px] text-slate-600 mt-1'>
+              <p id='google-login-title' className='text-base font-black text-slate-900'>Google 登录</p>
+              <p id='google-login-desc' className='text-[12px] text-slate-600 mt-1'>
                 一键登录，同步学习进度与解锁等级。
               </p>
             </div>
             <button
+              ref={closeBtnRef}
               onClick={onClose}
               className='shrink-0 w-9 h-9 rounded-full bg-white/80 border border-slate-200 flex items-center justify-center hover:bg-white'
-              aria-label='Close'
+              aria-label='关闭登录弹窗'
             >
               <X size={18} className='text-slate-700' />
             </button>
@@ -202,16 +241,22 @@ const ActivationCard = () => {
     setLoading(true)
     setMsg('')
     setMsgType('')
-    const result = await handleActivate(code.trim())
-    setLoading(false)
 
-    if (result.success) {
-      setMsg(result.message || '激活成功')
-      setMsgType('success')
-      setCode('')
-    } else {
-      setMsg(result.error || '验证失败')
+    try {
+      const result = await handleActivate(code.trim())
+      if (result?.success) {
+        setMsg(result.message || '激活成功')
+        setMsgType('success')
+        setCode('')
+      } else {
+        setMsg(result?.error || '验证失败')
+        setMsgType('error')
+      }
+    } catch (e) {
+      setMsg('网络异常，请稍后重试')
       setMsgType('error')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -280,10 +325,9 @@ const PriceChartDisplay = () => { /* ... */ }
 
 const LayoutIndex = (props) => {
   const router = useRouter()
-  const scrollableContainerRef = useRef(null)
   const accountCardRef = useRef(null)
-
   const { user } = useAI()
+
   const [isLoginOpen, setIsLoginOpen] = useState(false)
 
   const [wordCardData, setWordCardData] = useState(null)
@@ -291,42 +335,37 @@ const LayoutIndex = (props) => {
 
   useEffect(() => {
     if (!isBrowser) return
-    const syncHash = () => setIsWordFavoritesCardOpen(window.location.hash === '#favorite-words')
-    syncHash()
-    window.addEventListener('hashchange', syncHash)
-    return () => window.removeEventListener('hashchange', syncHash)
-  }, [])
+    setIsWordFavoritesCardOpen(router.asPath.includes('#favorite-words'))
+  }, [router.asPath])
 
   const handleCloseFavorites = useCallback(() => {
-    router.push(router.pathname, undefined, { shallow: true })
+    const base = router.asPath.split('#')[0]
+    router.replace(base, undefined, { shallow: true })
+    setIsWordFavoritesCardOpen(false)
   }, [router])
 
-  const handleAccountClick = () => {
-    if (!accountCardRef.current) return
-    accountCardRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
+  const handleAccountClick = useCallback(() => {
+    if (accountCardRef.current) {
+      accountCardRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [])
 
   return (
     <div
       id='theme-heo'
-      className={`${siteConfig('FONT_STYLE')} min-h-screen w-screen bg-gradient-to-b from-sky-50 via-white to-indigo-50 flex justify-center overflow-hidden`}
+      className={`${siteConfig('FONT_STYLE')} heo-home min-h-screen w-screen bg-gradient-to-b from-sky-50 via-white to-indigo-50 flex justify-center overflow-hidden`}
     >
       <Style />
       <CustomScrollbarStyle />
-
       <GoogleLoginModal open={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
 
-      <div className='relative w-full max-w-md min-h-screen bg-white shadow-[0_20px_60px_rgba(15,23,42,0.14)] overflow-hidden border-x border-slate-100'>
-        <div className='absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_20%_10%,rgba(14,165,233,0.10),transparent_42%),radial-gradient(circle_at_80%_0%,rgba(99,102,241,0.10),transparent_40%)]' />
+      <div className='relative w-full max-w-md min-h-screen bg-white border-x border-slate-100 shadow-[0_20px_60px_rgba(15,23,42,0.14)] overflow-hidden'>
+        <div className='absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_20%_10%,rgba(14,165,233,0.08),transparent_45%),radial-gradient(circle_at_80%_0%,rgba(99,102,241,0.08),transparent_42%)]' />
 
-        <div
-          ref={scrollableContainerRef}
-          className='relative z-10 min-h-screen overflow-y-auto overscroll-y-contain custom-scrollbar'
-        >
-          {/* 顶部内容区已按需求移除，直接进入白色主内容 */}
+        <div className='relative z-10 min-h-screen overflow-y-auto overscroll-y-contain custom-scrollbar'>
           <div className='px-4 pt-6 pb-10'>
-            <div className='rounded-[28px] bg-white border border-slate-100 shadow-sm overflow-hidden'>
-              <div className='px-5 pt-5 pb-5'>
+            <div className='rounded-[24px] border border-slate-100 bg-white shadow-sm'>
+              <main className='p-5'>
                 <div className='mb-4 flex items-center justify-between gap-3'>
                   <div>
                     <h2 className='text-lg font-black text-slate-900 flex items-center gap-2'>
@@ -376,7 +415,7 @@ const LayoutIndex = (props) => {
                     </span>
                   </button>
                 </div>
-              </div>
+              </main>
             </div>
           </div>
         </div>
@@ -404,11 +443,7 @@ const LayoutBase = (props) => {
   const router = useRouter()
   if (router.route === '/') return <LayoutIndex {...props} />
 
-  const headerSlot = (
-    <div className='max-w-md mx-auto w-full'>
-      <PostHeader {...props} isDarkMode={isDarkMode} />
-    </div>
-  )
+  const headerSlot = <div className='max-w-md mx-auto w-full'><PostHeader {...props} isDarkMode={isDarkMode} /></div>
 
   useEffect(() => { loadWowJS() }, [])
 
@@ -436,14 +471,6 @@ const LayoutCategoryIndex = (props) => { /* ... */ }
 const LayoutTagIndex = (props) => { /* ... */ }
 
 export {
-  Layout404,
-  LayoutArchive,
-  LayoutBase,
-  LayoutCategoryIndex,
-  LayoutIndex,
-  LayoutPostList,
-  LayoutSearch,
-  LayoutSlug,
-  LayoutTagIndex,
-  CONFIG as THEME_CONFIG
+  Layout404, LayoutArchive, LayoutBase, LayoutCategoryIndex, LayoutIndex,
+  LayoutPostList, LayoutSearch, LayoutSlug, LayoutTagIndex, CONFIG as THEME_CONFIG
 }
