@@ -14,8 +14,12 @@ import { useAI } from '@/components/AIConfigContext' // 确保路径正确
 
 // Icons
 import {
-  GraduationCap, Settings, LifeBuoy, Moon, Sun, UserCircle,
-  BookOpen, Sparkles, Gem
+  GraduationCap,
+  UserCircle,
+  BookOpen,
+  MessageCircle,
+  LogIn,
+  X
 } from 'lucide-react'
 import { HashTag } from '@/components/HeroIcons'
 
@@ -62,58 +66,127 @@ const CustomScrollbarStyle = () => (
     #theme-heo .busuanzi_container_site_pv, #theme-heo .busuanzi_container_site_uv {
       display: none !important;
     }
-    body { background-color: #0f172a; }
+    body { background-color: #f7f9fe; }
   `}</style>
 )
 
-// =================================================================================
-// ======================  核心组件: 顶部内联面板（非抽屉） =========================
-// =================================================================================
+const GoogleLoginModal = ({ open, onClose }) => {
+  const { user, isGoogleLoaded, handleGoogleCallback } = useAI()
+  const initializedRef = useRef(false)
 
-const HomePanel = () => {
-  const { isDarkMode, toggleDarkMode } = useGlobal()
-
-  // 从全局 Context 获取所有需要的状态和函数
-  const {
-    user,
-    isGoogleLoaded,
-    handleGoogleCallback,
-    handleActivate,
-    logout
-  } = useAI()
-
-  const [code, setCode] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [msg, setMsg] = useState('')
-
-  // 谷歌登录按钮渲染逻辑（不再依赖抽屉开关）
+  // Escape 关闭 + 锁滚动
   useEffect(() => {
-    if (!isBrowser || !window.google || user || !isGoogleLoaded) return
-    const container = document.getElementById('google-btn-container')
+    if (!open || !isBrowser) return
+
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [open, onClose])
+
+  // 打开弹窗时渲染 Google 按钮
+  useEffect(() => {
+    if (!open) return
+    if (!isBrowser) return
+    if (user) return
+    if (!isGoogleLoaded) return
+    if (!window.google) return
+
+    const container = document.getElementById('google-btn-container-modal')
     if (!container) return
 
     container.innerHTML = ''
+
     try {
-      window.google.accounts.id.initialize({
-        client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
-        callback: async response => {
-          const result = await handleGoogleCallback(response)
-          if (!result.success) setMsg(result.error)
-        }
-      })
+      if (!initializedRef.current) {
+        window.google.accounts.id.initialize({
+          client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+          callback: async (response) => {
+            await handleGoogleCallback(response)
+            // 登录成功后由 Context 更新 user，这里关闭弹窗
+            onClose()
+          }
+        })
+        initializedRef.current = true
+      }
 
       window.google.accounts.id.renderButton(container, {
-        theme: isDarkMode ? 'filled_black' : 'outline',
+        theme: 'outline',
         size: 'large',
-        width: '240',
+        width: '260',
         shape: 'pill'
       })
     } catch (e) {
       console.error('Google button render error:', e)
     }
-  }, [user, isDarkMode, isGoogleLoaded, handleGoogleCallback])
+  }, [open, user, isGoogleLoaded, handleGoogleCallback, onClose])
 
-  // 激活函数调用 Context 版本
+  if (!open) return null
+
+  return (
+    <div className='fixed inset-0 z-[999] flex items-center justify-center p-5'>
+      <div
+        className='absolute inset-0 bg-slate-900/20 backdrop-blur-sm'
+        onClick={onClose}
+      />
+
+      <div
+        role='dialog'
+        aria-modal='true'
+        className='relative w-full max-w-sm rounded-3xl bg-white shadow-2xl border border-slate-100 overflow-hidden'
+      >
+        <div className='px-5 pt-5 pb-4 bg-gradient-to-br from-sky-50 via-white to-indigo-50'>
+          <div className='flex items-start justify-between gap-3'>
+            <div>
+              <p className='text-base font-black text-slate-900'>登录 / 同步学习进度</p>
+              <p className='text-[12px] text-slate-600 mt-1'>
+                使用 Google 一键登录，自动同步解锁等级与学习记录。
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className='shrink-0 w-9 h-9 rounded-full bg-white/80 border border-slate-200 flex items-center justify-center hover:bg-white'
+              aria-label='Close'
+            >
+              <X size={18} className='text-slate-700' />
+            </button>
+          </div>
+
+          <div className='mt-4 rounded-2xl bg-white/80 border border-slate-200 p-4'>
+            {!isGoogleLoaded && (
+              <div className='text-center text-[12px] text-slate-500'>Google 登录加载中...</div>
+            )}
+            <div id='google-btn-container-modal' className='flex justify-center min-h-[44px]' />
+            <p className='mt-3 text-[10px] leading-relaxed text-slate-500'>
+              登录即表示你同意我们用于账号识别的基本信息（姓名、头像、邮箱），仅用于同步学习进度。
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// =================================================================================
+// ======================  激活码卡片（放在白色区里） ===============================
+// =================================================================================
+
+const ActivationCard = () => {
+  const { user, handleActivate, logout } = useAI()
+  const [code, setCode] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  if (!user) return null
+
   const onActivateClick = async () => {
     if (!code.trim()) return
     setLoading(true)
@@ -130,71 +203,58 @@ const HomePanel = () => {
   }
 
   return (
-    <section className='rounded-2xl border border-white/20 bg-white/90 dark:bg-gray-900/85 backdrop-blur-md p-4 shadow-xl'>
-      {!user ? (
-        <div className='flex flex-col items-center gap-4'>
-          <div className='flex items-center gap-3 w-full'>
-            <UserCircle size={40} className='text-gray-400' />
-            <div>
-              <p className='font-semibold text-base text-gray-800 dark:text-gray-100'>访客</p>
-              <p className='text-[10px] text-gray-500'>请登录以同步进度</p>
-            </div>
-          </div>
-          <div id='google-btn-container' className='scale-90 flex justify-center min-h-[40px]'></div>
-        </div>
-      ) : (
-        <div className='flex flex-col gap-4'>
-          <div className='flex items-center gap-3'>
-            {user.avatar_url ? (
-              <img src={user.avatar_url} alt='avatar' className='w-10 h-10 rounded-full border-2 border-white shadow-sm' />
-            ) : (
-              <UserCircle size={40} className='text-blue-500' />
-            )}
-            <div className='overflow-hidden'>
-              <p className='font-bold text-gray-800 dark:text-white truncate text-sm'>{user.name}</p>
-              <p className='text-[10px] text-blue-600 dark:text-blue-400 font-medium'>已解锁: {user.unlocked_levels || '无'}</p>
-            </div>
-          </div>
-
-          <div className='bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-600 shadow-sm'>
-            <label className='text-[10px] font-bold text-gray-400 uppercase mb-1 block'>激活码验证</label>
-            <input
-              type='text'
-              value={code}
-              onChange={e => setCode(e.target.value)}
-              placeholder='格式: H1-JHM-XXXX'
-              className='w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 text-xs mb-2 outline-none uppercase'
+    <div className='mt-4 rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-white to-sky-50 p-4 shadow-sm'>
+      <div className='flex items-center justify-between gap-3'>
+        <div className='flex items-center gap-3 min-w-0'>
+          {user.avatar_url ? (
+            <img
+              src={user.avatar_url}
+              alt='avatar'
+              className='w-9 h-9 rounded-full border border-white shadow-sm'
             />
-            <button
-              onClick={onActivateClick}
-              disabled={loading || !code.trim()}
-              className='w-full bg-blue-600 text-white py-1.5 rounded-lg text-xs font-medium disabled:opacity-60'
-            >
-              {loading ? '验证中...' : '立即激活'}
-            </button>
-            {msg && <p className={`text-[10px] mt-1 font-medium text-center ${msg.includes('✅') ? 'text-green-600' : 'text-red-500'}`}>{msg}</p>}
+          ) : (
+            <UserCircle size={34} className='text-sky-600' />
+          )}
+          <div className='min-w-0'>
+            <p className='text-sm font-black text-slate-900 truncate'>{user.name}</p>
+            <p className='text-[11px] text-sky-700 font-semibold'>
+              已解锁: {user.unlocked_levels || '无'}
+            </p>
           </div>
         </div>
-      )}
-
-      <nav className='mt-4 grid grid-cols-2 gap-2'>
-        <SmartLink href='/help' className='flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gray-100/80 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs'>
-          <LifeBuoy size={16} /> <span>帮助中心</span>
-        </SmartLink>
-        <SmartLink href='/settings' className='flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gray-100/80 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs'>
-          <Settings size={16} /> <span>设置</span>
-        </SmartLink>
-        <button onClick={toggleDarkMode} className='col-span-2 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gray-100/80 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs'>
-          {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
-          <span>{isDarkMode ? '日间模式' : '夜间模式'}</span>
+        <button
+          onClick={logout}
+          className='px-3 py-1.5 rounded-xl bg-slate-900 text-white text-[12px] font-bold hover:bg-slate-800'
+        >
+          退出
         </button>
-        {user && (
-          <button onClick={logout} className='col-span-2 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-red-50 text-red-600 text-xs'>
-            <span>退出登录</span>
+      </div>
+
+      <div className='mt-3'>
+        <label className='text-[10px] font-black text-slate-500 uppercase'>激活码验证</label>
+        <div className='mt-2 flex items-center gap-2'>
+          <input
+            type='text'
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder='格式: H1-JHM-XXXX'
+            className='flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-[12px] outline-none uppercase'
+          />
+          <button
+            onClick={onActivateClick}
+            disabled={loading || !code.trim()}
+            className='px-4 py-2 rounded-xl bg-sky-600 text-white text-[12px] font-black disabled:opacity-60 hover:bg-sky-700'
+          >
+            {loading ? '验证中' : '激活'}
           </button>
+        </div>
+        {msg && (
+          <p className={`text-[11px] mt-2 font-bold ${msg.includes('✅') ? 'text-emerald-600' : 'text-rose-600'}`}>
+            {msg}
+          </p>
         )}
-      </nav>
-    </section>
+      </div>
+    </div>
   )
 }
 
@@ -205,10 +265,13 @@ const PriceChartDisplay = () => { /* ... */ }
 // ======================  新主页布局 (手机端强制) ==================================
 // =================================================================================
 
-const LayoutIndex = props => {
+const LayoutIndex = (props) => {
   const router = useRouter()
   const [backgroundUrl, setBackgroundUrl] = useState('')
   const scrollableContainerRef = useRef(null)
+
+  const { user } = useAI()
+  const [isLoginOpen, setIsLoginOpen] = useState(false)
 
   const [wordCardData, setWordCardData] = useState(null)
   const [isWordFavoritesCardOpen, setIsWordFavoritesCardOpen] = useState(false)
@@ -234,46 +297,105 @@ const LayoutIndex = props => {
   }, [router])
 
   return (
-    <div id='theme-heo' className={`${siteConfig('FONT_STYLE')} h-screen w-screen bg-[#0f172a] flex justify-center overflow-hidden`}>
+    <div
+      id='theme-heo'
+      className={`${siteConfig('FONT_STYLE')} h-screen w-screen bg-gradient-to-b from-sky-50 via-white to-indigo-50 flex justify-center overflow-hidden`}
+    >
       <Style />
       <CustomScrollbarStyle />
 
-      <div className='relative w-full max-w-md h-full bg-black shadow-2xl overflow-hidden'>
+      <GoogleLoginModal open={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
+
+      <div className='relative w-full max-w-md h-full bg-white shadow-[0_20px_60px_rgba(15,23,42,0.18)] overflow-hidden border-x border-slate-100'>
+        {/* 顶部轻背景图（不做暗色蒙层） */}
         <div
-          className='absolute inset-0 z-0 bg-gray-900 bg-cover bg-center transition-opacity duration-1000'
+          className='absolute inset-0 z-0 bg-cover bg-center opacity-60'
           style={{ backgroundImage: backgroundUrl ? `url(${backgroundUrl})` : 'none' }}
         />
-        <div className='absolute inset-0 bg-black/50 backdrop-blur-[1px]'></div>
+        <div className='absolute inset-0 z-0 bg-gradient-to-b from-white/70 via-white/55 to-white' />
 
         <div ref={scrollableContainerRef} className='absolute inset-0 z-20 overflow-y-auto overscroll-y-contain custom-scrollbar'>
-          <div className='px-4 pt-16 pb-10'>
-            <div className='mb-6 flex flex-col items-center text-center text-white'>
-              <h1 className='text-2xl font-black tracking-tight mb-2 drop-shadow-lg'>中缅文培训中心</h1>
-              <div className='mb-4'>
-                <p className='text-xs font-bold opacity-90 mb-1'>专业中缅双语教学，文化与机遇的桥梁。</p>
-                <p className='text-[8px] font-bold text-blue-300 tracking-wider'>မြန်မာ-တရုတ် နှစ်ဘာသာစကား သင်ကြားရေး။</p>
+          {/* 顶部信息区 */}
+          <div className='pt-16 px-4'>
+            <div className='flex flex-col items-center text-center'>
+              <h1 className='text-2xl font-black tracking-tight text-slate-900'>中缅文培训中心</h1>
+              <div className='mt-2 mb-4'>
+                <p className='text-xs font-black text-slate-700'>专业中缅双语教学，文化与机遇的桥梁。</p>
+                <p className='text-[10px] font-black text-sky-700 tracking-wider mt-1'>
+                  မြန်မာ-တရုတ် နှစ်ဘာသာစကား သင်ကြားရေး။
+                </p>
               </div>
-              <PriceChartDisplay />
+              <div className='w-full'>
+                <PriceChartDisplay />
+              </div>
             </div>
+          </div>
 
-            <div className='mb-4'>
-              <HomePanel />
-            </div>
+          {/* 下面白色内容区（你要的：登录按钮在这里，且在“私信”右边） */}
+          <div className='mt-6 bg-white rounded-t-[32px] shadow-[0_-10px_30px_rgba(15,23,42,0.12)] pb-10 min-h-screen'>
+            <div className='w-10 h-1 bg-slate-200 rounded-full mx-auto my-4' />
 
-            {/* 底部整块白色背景容器已移除，仅保留内容区 */}
-            <main>
-              <div className='mb-4 flex items-center justify-between text-white'>
+            <main className='px-4'>
+              <div className='mb-4 flex items-center justify-between'>
                 <div>
-                  <h2 className='text-lg font-black flex items-center gap-2'>
-                    <GraduationCap size={20} className='text-blue-300' /> HSK 标准课程
+                  <h2 className='text-lg font-black text-slate-900 flex items-center gap-2'>
+                    <GraduationCap size={20} className='text-sky-600' /> HSK 标准课程
                   </h2>
-                  <p className='text-[10px] text-white/70 mt-1 font-medium'>从零基础到精通，系统化学习汉语。</p>
+                  <p className='text-[11px] text-slate-500 mt-1 font-semibold'>从零基础到精通，系统化学习汉语。</p>
                 </div>
-                <button onClick={() => router.push('/spoken')} className='p-2 bg-white/15 text-white rounded-xl active:scale-95 transition-all'>
-                  <BookOpen size={20} />
+
+                <div className='flex items-center gap-2'>
+                  <button
+                    onClick={() => router.push('/message')}
+                    className='px-3 py-2 rounded-2xl bg-slate-100 text-slate-800 font-black text-[12px] active:scale-95 transition'
+                    title='私信'
+                  >
+                    <span className='inline-flex items-center gap-2'>
+                      <MessageCircle size={16} /> 私信
+                    </span>
+                  </button>
+
+                  {!user ? (
+                    <button
+                      onClick={() => setIsLoginOpen(true)}
+                      className='px-3 py-2 rounded-2xl bg-sky-600 text-white font-black text-[12px] shadow-sm hover:bg-sky-700 active:scale-95 transition'
+                      title='登录'
+                    >
+                      <span className='inline-flex items-center gap-2'>
+                        <LogIn size={16} /> 登录
+                      </span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setIsLoginOpen(true)}
+                      className='px-3 py-2 rounded-2xl bg-slate-900 text-white font-black text-[12px] active:scale-95 transition'
+                      title='账号'
+                    >
+                      <span className='inline-flex items-center gap-2'>
+                        <UserCircle size={16} /> 账号
+                      </span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 登录后显示激活码/退出（都在白色区里） */}
+              <ActivationCard />
+
+              <div className='mt-4'>
+                <HskContentBlock />
+              </div>
+
+              <div className='mt-6'>
+                <button
+                  onClick={() => router.push('/spoken')}
+                  className='w-full py-3 rounded-2xl bg-gradient-to-r from-sky-600 to-indigo-600 text-white font-black'
+                >
+                  <span className='inline-flex items-center justify-center gap-2'>
+                    <BookOpen size={18} /> 进入口语课程
+                  </span>
                 </button>
               </div>
-              <HskContentBlock />
             </main>
           </div>
         </div>
@@ -295,18 +417,22 @@ const LayoutIndex = props => {
 // ====================== 其他页面布局 (保持不变) ===================================
 // =================================================================================
 
-const LayoutBase = props => {
+const LayoutBase = (props) => {
   const { children, slotTop, className } = props
   const { isDarkMode } = useGlobal()
   const router = useRouter()
   if (router.route === '/') return <LayoutIndex {...props} />
 
-  const headerSlot = <div className='max-w-md mx-auto w-full'><PostHeader {...props} isDarkMode={isDarkMode} /></div>
+  const headerSlot = (
+    <div className='max-w-md mx-auto w-full'>
+      <PostHeader {...props} isDarkMode={isDarkMode} />
+    </div>
+  )
 
   useEffect(() => { loadWowJS() }, [])
 
   return (
-    <div id='theme-heo' className={`${siteConfig('FONT_STYLE')} bg-[#0f172a] min-h-screen flex justify-center`}>
+    <div id='theme-heo' className={`${siteConfig('FONT_STYLE')} bg-[#f7f9fe] min-h-screen flex justify-center`}>
       <Style /> <CustomScrollbarStyle />
       <div className='w-full max-w-md bg-[#f7f9fe] dark:bg-[#18171d] shadow-2xl flex flex-col min-h-screen relative overflow-hidden'>
         {headerSlot}
@@ -329,6 +455,14 @@ const LayoutCategoryIndex = (props) => { /* ... */ }
 const LayoutTagIndex = (props) => { /* ... */ }
 
 export {
-  Layout404, LayoutArchive, LayoutBase, LayoutCategoryIndex, LayoutIndex,
-  LayoutPostList, LayoutSearch, LayoutSlug, LayoutTagIndex, CONFIG as THEME_CONFIG
+  Layout404,
+  LayoutArchive,
+  LayoutBase,
+  LayoutCategoryIndex,
+  LayoutIndex,
+  LayoutPostList,
+  LayoutSearch,
+  LayoutSlug,
+  LayoutTagIndex,
+  CONFIG as THEME_CONFIG
 }
