@@ -2,15 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  ChevronLeft,
-  Loader2,
-  ZoomIn,
-  ZoomOut,
-  List,
-  X,
-  AlertCircle
-} from 'lucide-react';
+import { ChevronLeft, Loader2, ZoomIn, ZoomOut, List, X, AlertCircle } from 'lucide-react';
 
 const PDF_VERSION = '3.11.174';
 const CDN_BASE = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDF_VERSION}`;
@@ -25,36 +17,29 @@ const getMobileFitScale = (screenWidth) => {
   return clamp((screenWidth - horizontalPadding) / 600, 0.6, 1.2);
 };
 
-const flattenOutlineItems = (items = [], level = 0) => {
-  return items.flatMap((item) => {
+const flattenOutlineItems = (items = [], level = 0) =>
+  items.flatMap((item) => {
     const node = {
       title: item?.title || 'Untitled',
       dest: item?.dest || null,
       url: item?.url || null,
       level
     };
-    const children = flattenOutlineItems(item?.items || [], level + 1);
-    return [node, ...children];
+    return [node, ...flattenOutlineItems(item?.items || [], level + 1)];
   });
-};
 
 const loadPdfJsFromCDN = () => {
   if (typeof window === 'undefined') {
     return Promise.reject(new Error('Window is not available'));
   }
 
-  if (window.pdfjsLib) {
-    return Promise.resolve(window.pdfjsLib);
-  }
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
 
   if (!pdfJsLoaderPromise) {
     pdfJsLoaderPromise = new Promise((resolve, reject) => {
       const existing = document.querySelector('script[data-pdfjs="cdn"]');
       if (existing) {
-        if (window.pdfjsLib) {
-          resolve(window.pdfjsLib);
-          return;
-        }
+        if (window.pdfjsLib) return resolve(window.pdfjsLib);
         existing.addEventListener('load', () => resolve(window.pdfjsLib), { once: true });
         existing.addEventListener('error', () => reject(new Error('PDF.js load failed')), { once: true });
         return;
@@ -91,9 +76,7 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
       canvas.style.height = '1px';
     }
 
-    if (textLayerRef.current) {
-      textLayerRef.current.innerHTML = '';
-    }
+    if (textLayerRef.current) textLayerRef.current.innerHTML = '';
 
     if (containerRef.current) {
       containerRef.current.style.width = '100%';
@@ -101,18 +84,16 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
     }
   }, []);
 
+  // 用中心带判断可见页（比 intersectionRatio 更稳）
   useEffect(() => {
     const element = containerRef.current;
     if (!element || !onVisible) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
-        const entry = entries[0];
-        if (entry?.isIntersecting && entry.intersectionRatio > 0.55) {
-          onVisible(pageNum);
-        }
+        if (entries[0]?.isIntersecting) onVisible(pageNum);
       },
-      { threshold: [0.55] }
+      { threshold: [0], rootMargin: '-45% 0px -45% 0px' }
     );
 
     observer.observe(element);
@@ -145,8 +126,8 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
 
         const viewport = page.getViewport({ scale });
         const canvas = canvasRef.current;
-        const container = containerRef.current;
         const textLayer = textLayerRef.current;
+        const container = containerRef.current;
         const context = canvas.getContext('2d', { alpha: false });
 
         if (!context) {
@@ -178,13 +159,8 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
           } catch (_) {}
         }
 
-        const task = page.render({
-          canvasContext: context,
-          viewport,
-          intent: 'display'
-        });
+        const task = page.render({ canvasContext: context, viewport, intent: 'display' });
         renderTaskRef.current = task;
-
         await task.promise;
         if (cancelled) return;
 
@@ -200,16 +176,12 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
             textDivs: []
           });
 
-          if (textTask?.promise) {
-            await textTask.promise;
-          }
+          if (textTask?.promise) await textTask.promise;
         }
 
         setStatus('rendered');
       } catch (err) {
-        if (!cancelled && err?.name !== 'RenderingCancelledException') {
-          setStatus('error');
-        }
+        if (!cancelled && err?.name !== 'RenderingCancelledException') setStatus('error');
       }
     };
 
@@ -267,7 +239,7 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
   const [pdfDoc, setPdfDoc] = useState(null);
   const [pageNumber, setPageNumber] = useState(1);
   const [numPages, setNumPages] = useState(0);
-  const [scale, setScale] = useState(1.0);
+  const [scale, setScale] = useState(1);
   const [isMobile, setIsMobile] = useState(false);
 
   const [loading, setLoading] = useState(true);
@@ -290,7 +262,7 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
     setPageNumber((prev) => (prev === visiblePage ? prev : visiblePage));
   }, []);
 
-  const scrollToPageWithRetry = useCallback((targetPage, smooth = false, retries = 12) => {
+  const scrollToPageWithRetry = useCallback((targetPage, smooth = false, retries = 16) => {
     const el = document.getElementById(`page-container-${targetPage}`);
     if (el) {
       el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' });
@@ -298,11 +270,8 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
     }
 
     if (retries > 0) {
-      window.setTimeout(() => {
-        scrollToPageWithRetry(targetPage, smooth, retries - 1);
-      }, 80);
+      window.setTimeout(() => scrollToPageWithRetry(targetPage, smooth, retries - 1), 90);
     }
-
     return false;
   }, []);
 
@@ -310,8 +279,9 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
     (page, pages) => {
       if (!url) return;
 
-      // 兼容旧逻辑
-      localStorage.setItem(progressKey, String(page));
+      try {
+        localStorage.setItem(progressKey, String(page));
+      } catch (_) {}
 
       if (metaKey) {
         let prev = {};
@@ -320,17 +290,19 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
           prev = raw ? JSON.parse(raw) : {};
         } catch (_) {}
 
-        localStorage.setItem(
-          metaKey,
-          JSON.stringify({
-            ...prev,
-            page,
-            numPages: pages || prev.numPages || 0,
-            lastRead: new Date().toISOString(),
-            url,
-            title
-          })
-        );
+        try {
+          localStorage.setItem(
+            metaKey,
+            JSON.stringify({
+              ...prev,
+              page,
+              numPages: pages || prev.numPages || 0,
+              lastRead: new Date().toISOString(),
+              url,
+              title
+            })
+          );
+        } catch (_) {}
       }
     },
     [metaKey, progressKey, title, url]
@@ -343,28 +315,29 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
   useEffect(() => {
     if (!url) return;
 
-    if (saveTimerRef.current) {
-      clearTimeout(saveTimerRef.current);
-    }
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
 
     saveTimerRef.current = window.setTimeout(() => {
       persistProgress(pageNumber, numPages);
     }, 500);
 
     return () => {
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current);
-      }
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, [pageNumber, numPages, persistProgress, url]);
 
-  // 卸载时强制写一次，防止最后一页丢失
   useEffect(() => {
     return () => {
       const latest = latestProgressRef.current;
       persistProgress(latest.page, latest.pages);
     };
   }, [persistProgress]);
+
+  useEffect(() => {
+    if (jumpTargetPage && pageNumber === jumpTargetPage) {
+      setJumpTargetPage(null);
+    }
+  }, [pageNumber, jumpTargetPage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -408,7 +381,6 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
 
       const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
-
       userZoomedRef.current = false;
       setScale(mobile ? getMobileFitScale(window.innerWidth) : 1);
 
@@ -418,17 +390,13 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
         try {
           const raw = localStorage.getItem(metaKey);
           const meta = raw ? JSON.parse(raw) : null;
-          if (meta?.page && Number.isFinite(meta.page)) {
-            savedPage = meta.page;
-          }
+          if (meta?.page && Number.isFinite(meta.page)) savedPage = meta.page;
         } catch (_) {}
       }
 
       if (savedPage === 1) {
         const legacy = Number.parseInt(localStorage.getItem(progressKey) || '1', 10);
-        if (Number.isFinite(legacy) && legacy > 0) {
-          savedPage = legacy;
-        }
+        if (Number.isFinite(legacy) && legacy > 0) savedPage = legacy;
       }
 
       setPageNumber(savedPage);
@@ -467,8 +435,7 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
         doc
           .getOutline()
           .then((items) => {
-            if (cancelled) return;
-            setOutline(flattenOutlineItems(items || []));
+            if (!cancelled) setOutline(flattenOutlineItems(items || []));
           })
           .catch(() => {
             if (!cancelled) setOutline([]);
@@ -478,8 +445,8 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
         setPageNumber(targetPage);
 
         restoreTimerRef.current = window.setTimeout(() => {
-          scrollToPageWithRetry(targetPage, false, 16);
-        }, 350);
+          scrollToPageWithRetry(targetPage, false, 20);
+        }, 450);
       } catch (err) {
         if (!cancelled) {
           console.error(err);
@@ -493,7 +460,6 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
     const handleResize = () => {
       const mobileNow = window.innerWidth < 768;
       setIsMobile(mobileNow);
-
       if (mobileNow && !userZoomedRef.current) {
         setScale(getMobileFitScale(window.innerWidth));
       }
@@ -528,9 +494,7 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
 
         if (!nextPage && typeof fallbackUrl === 'string' && fallbackUrl.includes('#page=')) {
           const parsed = Number.parseInt(fallbackUrl.split('#page=')[1], 10);
-          if (Number.isFinite(parsed) && parsed > 0) {
-            nextPage = parsed;
-          }
+          if (Number.isFinite(parsed) && parsed > 0) nextPage = parsed;
         }
 
         if (!nextPage) return;
@@ -540,12 +504,10 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
         setPageNumber(nextPage);
 
         requestAnimationFrame(() => {
-          scrollToPageWithRetry(nextPage, true, 20);
+          scrollToPageWithRetry(nextPage, true, 24);
         });
 
-        window.setTimeout(() => {
-          setJumpTargetPage(null);
-        }, 1500);
+        window.setTimeout(() => setJumpTargetPage(null), 4000);
       } catch (err) {
         console.error('Jump failed:', err);
       }
@@ -571,11 +533,7 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
     >
       <header className="h-14 flex items-center justify-between px-3 z-30 shrink-0 bg-white/90 border-b shadow-sm">
         <div className="flex items-center gap-1 overflow-hidden">
-          <button
-            onClick={onClose}
-            aria-label="Back"
-            className="p-2 -ml-1 text-slate-600 active:scale-95 transition"
-          >
+          <button onClick={onClose} aria-label="Back" className="p-2 -ml-1 text-slate-600">
             <ChevronLeft size={24} />
           </button>
           <div className="flex flex-col overflow-hidden">
@@ -586,11 +544,7 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
           </div>
         </div>
 
-        <button
-          onClick={() => setSidebarOpen(true)}
-          aria-label="Open table of contents"
-          className="p-2 active:scale-95 transition"
-        >
+        <button onClick={() => setSidebarOpen(true)} aria-label="Open table of contents" className="p-2">
           <List size={22} />
         </button>
       </header>
@@ -609,10 +563,7 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
           </div>
         )}
 
-        <div
-          className="flex-1 overflow-y-auto px-2 sm:px-8 py-3 scroll-smooth"
-          style={{ WebkitOverflowScrolling: 'touch' }}
-        >
+        <div className="flex-1 overflow-y-auto px-2 sm:px-8 py-3 scroll-smooth" style={{ WebkitOverflowScrolling: 'touch' }}>
           <div className="max-w-fit min-h-full mx-auto pb-20 flex flex-col items-center">
             {pdfDoc &&
               Array.from({ length: numPages }, (_, i) => {
@@ -635,19 +586,11 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
         </div>
 
         <div className="absolute bottom-5 left-1/2 -translate-x-1/2 bg-white/95 shadow-xl rounded-full px-4 py-2.5 flex items-center gap-3 z-20 border border-white/70">
-          <button
-            onClick={() => changeScale(-0.15)}
-            aria-label="Zoom out"
-            className="h-8 w-8 grid place-items-center rounded-full active:scale-90 transition"
-          >
+          <button onClick={() => changeScale(-0.15)} aria-label="Zoom out" className="h-8 w-8 grid place-items-center rounded-full">
             <ZoomOut size={18} className="text-slate-600" />
           </button>
           <span className="text-xs font-black min-w-[40px] text-center">{Math.round(scale * 100)}%</span>
-          <button
-            onClick={() => changeScale(0.15)}
-            aria-label="Zoom in"
-            className="h-8 w-8 grid place-items-center rounded-full active:scale-90 transition"
-          >
+          <button onClick={() => changeScale(0.15)} aria-label="Zoom in" className="h-8 w-8 grid place-items-center rounded-full">
             <ZoomIn size={18} className="text-slate-600" />
           </button>
         </div>
@@ -672,11 +615,7 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
             >
               <div className="h-14 border-b flex items-center justify-between px-4 bg-slate-50">
                 <span className="text-xs font-bold uppercase text-slate-500">Table of Contents</span>
-                <button
-                  onClick={() => setSidebarOpen(false)}
-                  aria-label="Close"
-                  className="p-1 text-slate-400 active:scale-95 transition"
-                >
+                <button onClick={() => setSidebarOpen(false)} aria-label="Close" className="p-1 text-slate-400">
                   <X size={20} />
                 </button>
               </div>
@@ -712,7 +651,6 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
           line-height: 1;
           pointer-events: auto;
         }
-
         .textLayer > span {
           color: transparent;
           position: absolute;
@@ -721,7 +659,6 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
           transform-origin: 0% 0%;
           pointer-events: auto;
         }
-
         ::selection {
           background: rgba(0, 100, 255, 0.2);
         }
