@@ -1,194 +1,164 @@
 import { siteConfig } from '@/lib/config'
-import { isBrowser } from '@/lib/utils'
+import { useGlobal } from '@/lib/global'
 import throttle from 'lodash.throttle'
+import SmartLink from '@/components/SmartLink'
 import { useRouter } from 'next/router'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import DarkModeButton from './DarkModeButton'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Menu, X } from 'lucide-react'
+import CONFIG from '../config'
+import ButtonRandomPost from './ButtonRandomPost'
+import CategoryGroup from './CategoryGroup'
 import Logo from './Logo'
 import { MenuListTop } from './MenuListTop'
-import RandomPostButton from './RandomPostButton'
-import ReadingProgress from './ReadingProgress'
 import SearchButton from './SearchButton'
-import SlideOver from './SlideOver'
+import SearchDrawer from './SearchDrawer'
+import SideBar from './SideBar'
+import SideBarDrawer from './SideBarDrawer'
+import TagGroups from './TagGroups'
 
-/**
- * 页头：顶部导航
- * @param {*} param0
- * @returns
- */
 const Header = props => {
-  const [fixedNav, setFixedNav] = useState(false)
-  const [textWhite, setTextWhite] = useState(false)
-  const [navBgWhite, setBgWhite] = useState(false)
-  const [activeIndex, setActiveIndex] = useState(0)
-
+  const searchDrawer = useRef()
+  const { tags, currentTag, categories, currentCategory } = props
+  const { locale } = useGlobal()
   const router = useRouter()
-  const slideOverRef = useRef()
 
-  const toggleMenuOpen = () => {
-    slideOverRef?.current?.toggleSlideOvers()
-  }
+  const [isOpen, setIsOpen] = useState(false)
+  const [isNavTransparent, setIsNavTransparent] = useState(true)
+  const [isNavHidden, setIsNavHidden] = useState(false)
 
-  /**
-   * 根据滚动条，切换导航栏样式
-   */
-  const scrollTrigger = useCallback(
-    throttle(() => {
-      const scrollS = window.scrollY
-      // 导航栏设置 白色背景
-      if (scrollS <= 1) {
-        setFixedNav(false)
-        setBgWhite(false)
-        setTextWhite(false)
+  const lastScrollRef = useRef(0)
 
-        // 文章详情页特殊处理
-        if (document?.querySelector('#post-bg')) {
-          setFixedNav(true)
-          setTextWhite(true)
-        }
-      } else {
-        // 向下滚动后的导航样式
-        setFixedNav(true)
-        setTextWhite(false)
-        setBgWhite(true)
-      }
-    }, 100)
+  const showSearchButton = siteConfig('HEXO_MENU_SEARCH', false, CONFIG)
+  const showRandomButton = siteConfig('HEXO_MENU_RANDOM', false, CONFIG)
+
+  const hideAccountButton = props?.hideAccountButtonOnHome
+
+  const toggleMenuOpen = () => setIsOpen(prev => !prev)
+  const toggleSideBarClose = () => setIsOpen(false)
+
+  const updateNavStyle = useCallback(() => {
+    if (typeof window === 'undefined') return
+
+    const scrollY = window.scrollY
+    const heroHeader = document.querySelector('#header')
+    const heroHeight = heroHeader?.clientHeight || 0
+
+    const inHero = heroHeader && (scrollY < 10 || scrollY < heroHeight - 50)
+    setIsNavTransparent(Boolean(inHero))
+
+    const shouldShow =
+      scrollY <= lastScrollRef.current || scrollY < 5 || (heroHeader && scrollY <= heroHeight + 100)
+
+    setIsNavHidden(!shouldShow)
+    lastScrollRef.current = scrollY
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const onScroll = throttle(updateNavStyle, 120)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    router.events.on('routeChangeComplete', onScroll)
+    onScroll()
+
+    return () => {
+      router.events.off('routeChangeComplete', onScroll)
+      window.removeEventListener('scroll', onScroll)
+      onScroll.cancel?.()
+    }
+  }, [router.events, updateNavStyle])
+
+  const searchDrawerSlot = useMemo(
+    () => (
+      <>
+        {categories && (
+          <section className='mt-8'>
+            <div className='text-sm flex flex-nowrap justify-between font-light px-2'>
+              <div className='text-gray-600 dark:text-gray-200'>
+                <i className='mr-2 fas fa-th-list' />
+                {locale.COMMON.CATEGORY}
+              </div>
+              <SmartLink
+                href='/category'
+                passHref
+                className='mb-3 text-gray-400 hover:text-black dark:text-gray-400 dark:hover:text-white hover:underline cursor-pointer'
+              >
+                {locale.COMMON.MORE} <i className='fas fa-angle-double-right' />
+              </SmartLink>
+            </div>
+            <CategoryGroup currentCategory={currentCategory} categories={categories} />
+          </section>
+        )}
+
+        {tags && (
+          <section className='mt-4'>
+            <div className='text-sm py-2 px-2 flex flex-nowrap justify-between font-light dark:text-gray-200'>
+              <div className='text-gray-600 dark:text-gray-200'>
+                <i className='mr-2 fas fa-tag' />
+                {locale.COMMON.TAGS}
+              </div>
+              <SmartLink
+                href='/tag'
+                passHref
+                className='text-gray-400 hover:text-black dark:hover:text-white hover:underline cursor-pointer'
+              >
+                {locale.COMMON.MORE} <i className='fas fa-angle-double-right' />
+              </SmartLink>
+            </div>
+            <div className='p-2'>
+              <TagGroups tags={tags} currentTag={currentTag} />
+            </div>
+          </section>
+        )}
+      </>
+    ),
+    [categories, currentCategory, currentTag, locale, tags]
   )
-  useEffect(() => {
-    scrollTrigger()
-  }, [router])
-
-  // 监听滚动
-  useEffect(() => {
-    window.addEventListener('scroll', scrollTrigger)
-    return () => {
-      window.removeEventListener('scroll', scrollTrigger)
-    }
-  }, [])
-
-  // 导航栏根据滚动轮播菜单内容
-  useEffect(() => {
-    let prevScrollY = 0
-    let ticking = false
-
-    const handleScroll = () => {
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          const currentScrollY = window.scrollY
-          if (currentScrollY > prevScrollY) {
-            setActiveIndex(1) // 向下滚动时设置activeIndex为1
-          } else {
-            setActiveIndex(0) // 向上滚动时设置activeIndex为0
-          }
-          prevScrollY = currentScrollY
-          ticking = false
-        })
-        ticking = true
-      }
-    }
-
-    if (isBrowser) {
-      window.addEventListener('scroll', handleScroll)
-    }
-
-    return () => {
-      if (isBrowser) {
-        window.removeEventListener('scroll', handleScroll)
-      }
-    }
-  }, [])
 
   return (
-    <>
-      <style jsx>{`
-        @keyframes fade-in-down {
-          0% {
-            opacity: 0.5;
-            transform: translateY(-30%);
-          }
-          100% {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
+    <div id='top-nav' className='z-40'>
+      <SearchDrawer cRef={searchDrawer} slot={searchDrawerSlot} />
 
-        @keyframes fade-in-up {
-          0% {
-            opacity: 0.5;
-            transform: translateY(30%);
-          }
-          100% {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        .fade-in-down {
-          animation: fade-in-down 0.3s ease-in-out;
-        }
-
-        .fade-in-up {
-          animation: fade-in-up 0.3s ease-in-out;
-        }
-      `}</style>
-
-      {/* fixed时留白高度 */}
-      {fixedNav && !document?.querySelector('#post-bg') && (
-        <div className='h-16'></div>
-      )}
-
-      {/* 顶部导航菜单栏 */}
-      <nav
-        id='nav'
-        className={`z-20 h-16 top-0 w-full duration-300 transition-all
-            ${fixedNav ? 'fixed' : 'relative bg-transparent'} 
-            ${textWhite ? 'text-white ' : 'text-black dark:text-white'}  
-            ${navBgWhite ? 'bg-white dark:bg-[#18171d] shadow' : 'bg-transparent'}`}>
-        <div className='flex h-full mx-auto justify-between items-center max-w-[86rem] px-6'>
-          {/* 左侧logo */}
-          <Logo {...props} />
-
-          {/* 中间菜单 */}
-          <div
-            id='nav-bar-swipe'
-            className={`hidden lg:flex flex-grow flex-col items-center justify-center h-full relative w-full`}>
-            <div
-              className={`absolute transition-all duration-700 ${activeIndex === 0 ? 'opacity-100 mt-0' : '-mt-20 opacity-0 invisible'}`}>
-              <MenuListTop {...props} />
-            </div>
-            <div
-              className={`absolute transition-all duration-700 ${activeIndex === 1 ? 'opacity-100 mb-0' : '-mb-20 opacity-0 invisible'}`}>
-              <h1 className='font-bold text-center text-light-400 dark:text-gray-400'>
-                {siteConfig('AUTHOR') || siteConfig('TITLE')}{' '}
-                {siteConfig('BIO') && <>|</>} {siteConfig('BIO')}
-              </h1>
-            </div>
+      <div
+        id='sticky-nav'
+        style={{ backdropFilter: 'blur(10px)' }}
+        className={`fixed inset-x-0 z-20 transform transition-all duration-300 ${
+          isNavHidden ? '-top-20' : 'top-0'
+        } ${
+          isNavTransparent
+            ? 'bg-transparent text-white border-transparent shadow-none'
+            : 'bg-white/88 text-slate-800 border-b border-slate-200 shadow-[0_6px_20px_rgba(15,23,42,0.08)] dark:bg-hexo-black-gray/88 dark:text-gray-100 dark:border-zinc-800'
+        }`}
+      >
+        <div className='w-full flex justify-between items-center px-3 py-2'>
+          <div className='flex'>
+            <Logo {...props} />
           </div>
 
-          {/* 右侧固定 */}
-          <div className='flex flex-shrink-0 justify-end items-center w-48'>
-            <RandomPostButton {...props} />
-            <SearchButton {...props} />
-            {!JSON.parse(siteConfig('THEME_SWITCH')) && (
-              <div className='hidden md:block'>
-                <DarkModeButton {...props} />
-              </div>
-            )}
-            <ReadingProgress />
+          <div className='mr-0.5 flex justify-end items-center gap-1'>
+            <div className='hidden lg:flex'>
+              <MenuListTop {...props} hideAccountButton={hideAccountButton} />
+            </div>
 
-            {/* 移动端菜单按钮 */}
-            <div
+            {showSearchButton && <SearchButton />}
+            {showRandomButton && <ButtonRandomPost {...props} />}
+
+            <button
               onClick={toggleMenuOpen}
-              className='flex lg:hidden w-8 justify-center items-center h-8 cursor-pointer'>
-              <i className='fas fa-bars' />
-            </div>
+              className='h-11 w-11 lg:hidden inline-flex items-center justify-center rounded-xl active:scale-95'
+              aria-label='Open menu'
+              type='button'
+            >
+              {isOpen ? <X size={18} /> : <Menu size={18} />}
+            </button>
           </div>
-
-          {/* 右边侧拉抽屉 */}
-          <SlideOver cRef={slideOverRef} {...props} />
         </div>
-      </nav>
-    </>
+      </div>
+
+      <SideBarDrawer isOpen={isOpen} onClose={toggleSideBarClose}>
+        <SideBar {...props} hideAccountButton={hideAccountButton} />
+      </SideBarDrawer>
+    </div>
   )
 }
 
