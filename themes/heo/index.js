@@ -1,4 +1,3 @@
-
 // React & Next.js
 import { useRouter } from 'next/router'
 import { useEffect, useState, useRef, useCallback } from 'react'
@@ -11,7 +10,7 @@ import { loadWowJS } from '@/lib/plugins/wow'
 import { useGlobal } from '@/lib/global'
 import { siteConfig } from '@/lib/config'
 import CONFIG from './config'
-import { useAI } from '@/components/AIConfigContext' // 确保路径正确
+import { useAI } from '@/components/AIConfigContext'
 
 // Icons
 import {
@@ -19,13 +18,14 @@ import {
   UserCircle,
   BookOpen,
   LogIn,
-  X
+  X,
+  MessageCircle,
+  MessageSquare,
+  Activity
 } from 'lucide-react'
-import { HashTag } from '@/components/HeroIcons'
 
 // Base Components
 import Comment from '@/components/Comment'
-import LazyImage from '@/components/LazyImage'
 import NotionPage from '@/components/NotionPage'
 import SmartLink from '@/components/SmartLink'
 import AISummary from '@/components/AISummary'
@@ -53,16 +53,11 @@ import HskContentBlock from '@/components/HskContentBlock'
 const WordCard = dynamic(() => import('@/components/WordCard'), { ssr: false })
 const isBrowser = typeof window !== 'undefined'
 
-// =================================================================================
-// ======================  辅助组件 & 工具函数  =====================================
-// =================================================================================
-
 const CustomScrollbarStyle = () => (
   <style jsx global>{`
     .custom-scrollbar::-webkit-scrollbar { width: 0px; height: 0px; }
     .custom-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-    /* 只限制首页壳，避免影响其他页面/论坛 */
     #theme-heo.heo-home footer,
     #theme-heo.heo-home .footer-wrapper,
     #theme-heo.heo-home #footer,
@@ -95,7 +90,6 @@ const GoogleLoginModal = ({ open, onClose }) => {
     const onKeyDown = (e) => {
       if (e.key === 'Escape') onClose()
 
-      // 简单 focus trap，防止 Tab 跳到弹窗外
       if (e.key === 'Tab' && modalRef.current) {
         const focusables = modalRef.current.querySelectorAll(
           'button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'
@@ -178,7 +172,6 @@ const GoogleLoginModal = ({ open, onClose }) => {
   return (
     <div className='fixed inset-0 z-[999] flex items-center justify-center p-5'>
       <div className='absolute inset-0 bg-white/70 backdrop-blur-sm' onClick={onClose} />
-
       <div
         ref={modalRef}
         role='dialog'
@@ -198,7 +191,7 @@ const GoogleLoginModal = ({ open, onClose }) => {
             <button
               ref={closeBtnRef}
               onClick={onClose}
-              className='shrink-0 w-9 h-9 rounded-full bg-white/80 border border-slate-200 flex items-center justify-center hover:bg-white'
+              className='shrink-0 w-9 h-9 rounded-full bg-white/80 border border-slate-200 flex items-center justify-center'
               aria-label='关闭登录弹窗'
             >
               <X size={18} className='text-slate-700' />
@@ -278,7 +271,7 @@ const ActivationCard = () => {
         </div>
         <button
           onClick={logout}
-          className='px-3 py-1.5 rounded-xl bg-slate-900 text-white text-[12px] font-bold hover:bg-slate-800'
+          className='px-3 py-1.5 rounded-xl bg-slate-900 text-white text-[12px] font-bold'
         >
           退出
         </button>
@@ -297,7 +290,7 @@ const ActivationCard = () => {
           <button
             onClick={onActivateClick}
             disabled={loading || !code.trim()}
-            className='px-4 py-2 rounded-xl bg-sky-600 text-white text-[12px] font-black disabled:opacity-60 hover:bg-sky-700'
+            className='px-4 py-2 rounded-xl bg-sky-600 text-white text-[12px] font-black disabled:opacity-60'
           >
             {loading ? '验证中' : '激活'}
           </button>
@@ -312,20 +305,45 @@ const ActivationCard = () => {
   )
 }
 
-// ... (PriceChartDisplay 组件保持不变) ...
-const PriceChartDisplay = () => { /* ... */ }
+const PriceChartDisplay = () => null
 
-// =================================================================================
-// ======================  新主页布局 (手机端强制) ==================================
-// =================================================================================
+const HOME_DOCK_ITEMS = [
+  { key: 'chat', label: '消息', href: 'https://bbs1.886.best/user/hurt/chats/1', icon: MessageCircle },
+  { key: 'forum', label: '论坛', href: 'https://bbs1.886.best/unread', icon: MessageSquare },
+  { key: 'feed', label: '动态', href: 'https://bbs1.886.best/groups/%E6%9C%8B%E5%8F%8B%E5%9C%88', icon: Activity },
+  { key: 'study', label: '学习', href: 'https://886.best', icon: GraduationCap }
+]
+
+const MobileHomeDock = () => {
+  return (
+    <nav className='fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-md px-3 pb-[max(env(safe-area-inset-bottom),10px)]'>
+      <div className='grid grid-cols-4 rounded-2xl border border-slate-200/80 bg-white/92 backdrop-blur-xl shadow-[0_14px_36px_rgba(15,23,42,.16)]'>
+        {HOME_DOCK_ITEMS.map((item) => {
+          const Icon = item.icon
+          const active = item.key === 'study'
+          return (
+            <a
+              key={item.key}
+              href={item.href}
+              className={`flex min-h-[62px] flex-col items-center justify-center gap-1 ${
+                active ? 'text-sky-600' : 'text-slate-500'
+              }`}
+            >
+              <Icon size={18} strokeWidth={2.2} />
+              <span className='text-[11px] font-black'>{item.label}</span>
+            </a>
+          )
+        })}
+      </div>
+    </nav>
+  )
+}
 
 const LayoutIndex = (props) => {
   const router = useRouter()
-  const accountCardRef = useRef(null)
   const { user } = useAI()
 
   const [isLoginOpen, setIsLoginOpen] = useState(false)
-
   const [wordCardData, setWordCardData] = useState(null)
   const [isWordFavoritesCardOpen, setIsWordFavoritesCardOpen] = useState(false)
 
@@ -340,12 +358,6 @@ const LayoutIndex = (props) => {
     setIsWordFavoritesCardOpen(false)
   }, [router])
 
-  const handleAccountClick = useCallback(() => {
-    if (accountCardRef.current) {
-      accountCardRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-  }, [])
-
   return (
     <div
       id='theme-heo'
@@ -359,7 +371,7 @@ const LayoutIndex = (props) => {
         <div className='absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_20%_10%,rgba(14,165,233,0.08),transparent_45%),radial-gradient(circle_at_80%_0%,rgba(99,102,241,0.08),transparent_42%)]' />
 
         <div className='relative z-10 min-h-screen overflow-y-auto overscroll-y-contain custom-scrollbar'>
-          <div className='px-4 pt-6 pb-10'>
+          <div className='px-4 pt-6 pb-28'>
             <div className='rounded-[24px] border border-slate-100 bg-white shadow-sm'>
               <main className='p-5'>
                 <div className='mb-4 flex items-center justify-between gap-3'>
@@ -367,13 +379,15 @@ const LayoutIndex = (props) => {
                     <h2 className='text-lg font-black text-slate-900 flex items-center gap-2'>
                       <GraduationCap size={20} className='text-sky-600' /> HSK 标准课程
                     </h2>
-                    <p className='text-[11px] text-slate-500 mt-1 font-semibold'>从零基础到精通，系统化学习汉语。</p>
+                    <p className='text-[11px] text-slate-500 mt-1 font-semibold'>
+                      从零基础到精通，系统化学习汉语。
+                    </p>
                   </div>
 
                   {!user ? (
                     <button
                       onClick={() => setIsLoginOpen(true)}
-                      className='shrink-0 px-3 py-2 rounded-2xl bg-gradient-to-r from-sky-600 to-indigo-600 text-white font-black text-[12px] shadow-sm hover:opacity-95 active:scale-95 transition'
+                      className='shrink-0 px-3 py-2 rounded-2xl bg-gradient-to-r from-sky-600 to-indigo-600 text-white font-black text-[12px] shadow-sm active:scale-95 transition'
                       title='登录'
                     >
                       <span className='inline-flex items-center gap-2'>
@@ -381,21 +395,15 @@ const LayoutIndex = (props) => {
                       </span>
                     </button>
                   ) : (
-                    <button
-                      onClick={handleAccountClick}
-                      className='shrink-0 px-3 py-2 rounded-2xl bg-slate-900 text-white font-black text-[12px] hover:bg-slate-800 active:scale-95 transition'
-                      title='账号'
-                    >
-                      <span className='inline-flex items-center gap-2'>
-                        <UserCircle size={16} /> 账号
+                    <div className='shrink-0 px-3 py-2 rounded-2xl border border-emerald-100 bg-emerald-50 text-emerald-700 text-[12px] font-black'>
+                      <span className='inline-flex items-center gap-1.5'>
+                        <UserCircle size={15} /> 已登录
                       </span>
-                    </button>
+                    </div>
                   )}
                 </div>
 
-                <div ref={accountCardRef}>
-                  <ActivationCard />
-                </div>
+                <ActivationCard />
 
                 <div className='mt-4'>
                   <HskContentBlock />
@@ -411,10 +419,14 @@ const LayoutIndex = (props) => {
                     </span>
                   </button>
                 </div>
+
+                <PriceChartDisplay />
               </main>
             </div>
           </div>
         </div>
+
+        <MobileHomeDock />
 
         {wordCardData && (
           <WordCard
@@ -429,28 +441,28 @@ const LayoutIndex = (props) => {
   )
 }
 
-// =================================================================================
-// ====================== 其他页面布局 (保持不变) ===================================
-// =================================================================================
-
 const LayoutBase = (props) => {
   const { children, slotTop, className } = props
-  const { isDarkMode } = useGlobal()
   const router = useRouter()
+
+  useEffect(() => {
+    loadWowJS()
+  }, [])
+
   if (router.route === '/') return <LayoutIndex {...props} />
-
-  const headerSlot = <div className='max-w-md mx-auto w-full'><PostHeader {...props} isDarkMode={isDarkMode} /></div>
-
-  useEffect(() => { loadWowJS() }, [])
 
   return (
     <div id='theme-heo' className={`${siteConfig('FONT_STYLE')} bg-[#f7f9fe] min-h-screen flex justify-center`}>
-      <Style /> <CustomScrollbarStyle />
+      <Style />
+      <CustomScrollbarStyle />
       <div className='w-full max-w-md bg-[#f7f9fe] dark:bg-[#18171d] shadow-2xl flex flex-col min-h-screen relative overflow-hidden'>
-        {headerSlot}
-        <main className='flex-grow w-full relative px-4 pb-10'>
+        <Header {...props} hideAccountButtonOnHome={false} />
+        <main className='flex-grow w-full relative px-4 pb-10 pt-16'>
           <div className='w-full mx-auto relative z-10'>
-            <div className={`w-full h-auto ${className || ''}`}>{slotTop}{children}</div>
+            <div className={`w-full h-auto ${className || ''}`}>
+              {slotTop}
+              {children}
+            </div>
           </div>
         </main>
       </div>
@@ -458,15 +470,180 @@ const LayoutBase = (props) => {
   )
 }
 
-const LayoutPostList = (props) => { /* ... */ }
-const LayoutSearch = (props) => { /* ... */ }
-const LayoutArchive = (props) => { /* ... */ }
-const LayoutSlug = (props) => { /* ... */ }
-const Layout404 = () => { /* ... */ }
-const LayoutCategoryIndex = (props) => { /* ... */ }
-const LayoutTagIndex = (props) => { /* ... */ }
+const LayoutPostList = (props) => {
+  return (
+    <div className='pt-4'>
+      <CategoryBar {...props} />
+      {siteConfig('POST_LIST_STYLE') === 'page'
+        ? <BlogPostListPage {...props} />
+        : <BlogPostListScroll {...props} />}
+    </div>
+  )
+}
+
+const LayoutSearch = (props) => {
+  const { keyword } = props
+  const router = useRouter()
+  const currentSearch = keyword || router?.query?.s
+
+  return (
+    <div className='pt-4'>
+      {!currentSearch
+        ? <SearchNav {...props} />
+        : (siteConfig('POST_LIST_STYLE') === 'page'
+            ? <BlogPostListPage {...props} />
+            : <BlogPostListScroll {...props} />)}
+    </div>
+  )
+}
+
+const LayoutArchive = (props) => {
+  const { archivePosts } = props
+  return (
+    <div className='pt-4 rounded-2xl border border-slate-100 bg-white p-4'>
+      {Object.keys(archivePosts || {}).map((archiveTitle) => (
+        <BlogPostArchive
+          key={archiveTitle}
+          posts={archivePosts[archiveTitle]}
+          archiveTitle={archiveTitle}
+        />
+      ))}
+    </div>
+  )
+}
+
+const LayoutSlug = (props) => {
+  const { post, lock, validPassword } = props
+  const router = useRouter()
+
+  useEffect(() => {
+    const waiting404 = Number(siteConfig('POST_WAITING_TIME_FOR_404', 3, CONFIG)) * 1000
+    if (post) return
+
+    const timer = setTimeout(() => {
+      if (isBrowser) {
+        const article = document.querySelector('#article-wrapper #notion-article')
+        if (!article) {
+          router.push('/404').catch(() => {})
+        }
+      }
+    }, waiting404)
+
+    return () => clearTimeout(timer)
+  }, [post, router])
+
+  return (
+    <div className='pt-4'>
+      <PostHeader {...props} />
+      <div className='rounded-2xl border border-slate-100 bg-white p-3 mt-3'>
+        {lock && <PostLock validPassword={validPassword} />}
+
+        {!lock && post && (
+          <>
+            <article id='article-wrapper' className='subpixel-antialiased'>
+              <section className='px-2'>
+                <ArticleExpirationNotice post={post} />
+                <AISummary post={post} />
+                <NotionPage post={post} />
+              </section>
+              <ShareBar post={post} />
+              <PostCopyright {...props} />
+              <PostRecommend {...props} />
+              <PostAdjacent {...props} />
+            </article>
+
+            {post?.toc?.length > 1 && <FloatTocButton post={post} />}
+            <div className='mt-4'>
+              <Comment frontMatter={post} />
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const Layout404 = () => {
+  const router = useRouter()
+  const { locale } = useGlobal()
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (isBrowser) {
+        const article = document.querySelector('#article-wrapper #notion-article')
+        if (!article) {
+          router.push('/').catch(() => {})
+        }
+      }
+    }, 3000)
+    return () => clearTimeout(timer)
+  }, [router])
+
+  return (
+    <div className='text-black w-full h-screen text-center justify-center content-center items-center flex flex-col'>
+      <div className='dark:text-gray-200'>
+        <h2 className='inline-block border-r-2 border-gray-600 mr-2 px-3 py-2 align-top'>404</h2>
+        <div className='inline-block text-left h-32 leading-10 items-center'>
+          <h2 className='m-0 p-0'>{locale.COMMON.NOT_FOUND}</h2>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const LayoutCategoryIndex = (props) => {
+  const { categoryOptions } = props
+  const { locale } = useGlobal()
+
+  return (
+    <div className='pt-4 rounded-2xl border border-slate-100 bg-white p-4'>
+      <div className='mb-4 font-bold text-slate-700'>{locale.COMMON.CATEGORY}</div>
+      <div className='flex flex-wrap gap-2'>
+        {categoryOptions?.map((category) => (
+          <SmartLink
+            key={category.name}
+            href={`/category/${category.name}`}
+            className='px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-100 text-sm'
+          >
+            {category.name} ({category.count})
+          </SmartLink>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+const LayoutTagIndex = (props) => {
+  const { tagOptions } = props
+  const { locale } = useGlobal()
+
+  return (
+    <div className='pt-4 rounded-2xl border border-slate-100 bg-white p-4'>
+      <div className='mb-4 font-bold text-slate-700'>{locale.COMMON.TAGS}</div>
+      <div className='flex flex-wrap gap-2'>
+        {tagOptions?.map((tag) => (
+          <SmartLink
+            key={tag.name}
+            href={`/tag/${tag.name}`}
+            className='px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-100 text-sm'
+          >
+            {tag.name} ({tag.count})
+          </SmartLink>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export {
-  Layout404, LayoutArchive, LayoutBase, LayoutCategoryIndex, LayoutIndex,
-  LayoutPostList, LayoutSearch, LayoutSlug, LayoutTagIndex, CONFIG as THEME_CONFIG
+  Layout404,
+  LayoutArchive,
+  LayoutBase,
+  LayoutCategoryIndex,
+  LayoutIndex,
+  LayoutPostList,
+  LayoutSearch,
+  LayoutSlug,
+  LayoutTagIndex,
+  CONFIG as THEME_CONFIG
 }
