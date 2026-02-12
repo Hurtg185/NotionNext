@@ -53,6 +53,15 @@ import HskContentBlock from '@/components/HskContentBlock'
 const WordCard = dynamic(() => import('@/components/WordCard'), { ssr: false })
 const isBrowser = typeof window !== 'undefined'
 
+// SSR 安全兜底，避免 useAI() 为 undefined 时解构报错
+const AI_SAFE = {
+  user: null,
+  isGoogleLoaded: false,
+  handleGoogleCallback: async () => ({ success: false, error: 'AI not ready' }),
+  handleActivate: async () => ({ success: false, error: 'AI not ready' }),
+  logout: () => {}
+}
+
 const CustomScrollbarStyle = () => (
   <style jsx global>{`
     .custom-scrollbar::-webkit-scrollbar { width: 0px; height: 0px; }
@@ -71,7 +80,11 @@ const CustomScrollbarStyle = () => (
 )
 
 const GoogleLoginModal = ({ open, onClose }) => {
-  const { user, isGoogleLoaded, handleGoogleCallback } = useAI()
+  const ai = useAI() || AI_SAFE
+  const user = ai.user || null
+  const isGoogleLoaded = !!ai.isGoogleLoaded
+  const handleGoogleCallback = ai.handleGoogleCallback || AI_SAFE.handleGoogleCallback
+
   const initializedRef = useRef(false)
   const modalRef = useRef(null)
   const closeBtnRef = useRef(null)
@@ -217,7 +230,11 @@ const GoogleLoginModal = ({ open, onClose }) => {
 }
 
 const ActivationCard = () => {
-  const { user, handleActivate, logout } = useAI()
+  const ai = useAI() || AI_SAFE
+  const user = ai.user || null
+  const handleActivate = ai.handleActivate || AI_SAFE.handleActivate
+  const logout = ai.logout || AI_SAFE.logout
+
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState('')
@@ -341,7 +358,8 @@ const MobileHomeDock = () => {
 
 const LayoutIndex = (props) => {
   const router = useRouter()
-  const { user } = useAI()
+  const ai = useAI() || AI_SAFE
+  const user = ai.user || null
 
   const [isLoginOpen, setIsLoginOpen] = useState(false)
   const [wordCardData, setWordCardData] = useState(null)
