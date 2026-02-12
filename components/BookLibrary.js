@@ -29,10 +29,10 @@ const BOOKS_DATA = [
   },
   {
     id: 'b3',
-    title: 'HSK 4级 标准教程',
-    subTitle: 'HSK 4 စံသင်ရိုး',
+    title: 'HSK 1级 标准教程',
+    subTitle: 'HSK 1 စံသင်ရိုး',
     cover: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=400&q=80',
-    pdfUrl: '',
+    pdfUrl: 'https://audio.886.best/chinese-vocab-audio/hsk1.pdf',
   },
   {
     id: 'b4',
