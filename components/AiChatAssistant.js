@@ -154,7 +154,6 @@ const compressImage = (file) => {
           const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
           resolve(dataUrl);
         };
-      };
     } catch (e) {
       reject(e);
     }
