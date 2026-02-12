@@ -25,6 +25,19 @@ const getMobileFitScale = (screenWidth) => {
   return clamp((screenWidth - horizontalPadding) / 600, 0.6, 1.2);
 };
 
+const flattenOutlineItems = (items = [], level = 0) => {
+  return items.flatMap((item) => {
+    const node = {
+      title: item?.title || 'Untitled',
+      dest: item?.dest || null,
+      url: item?.url || null,
+      level
+    };
+    const children = flattenOutlineItems(item?.items || [], level + 1);
+    return [node, ...children];
+  });
+};
+
 const loadPdfJsFromCDN = () => {
   if (typeof window === 'undefined') {
     return Promise.reject(new Error('Window is not available'));
@@ -38,6 +51,10 @@ const loadPdfJsFromCDN = () => {
     pdfJsLoaderPromise = new Promise((resolve, reject) => {
       const existing = document.querySelector('script[data-pdfjs="cdn"]');
       if (existing) {
+        if (window.pdfjsLib) {
+          resolve(window.pdfjsLib);
+          return;
+        }
         existing.addEventListener('load', () => resolve(window.pdfjsLib), { once: true });
         existing.addEventListener('error', () => reject(new Error('PDF.js load failed')), { once: true });
         return;
@@ -56,9 +73,6 @@ const loadPdfJsFromCDN = () => {
   return pdfJsLoaderPromise;
 };
 
-/* =================================================================
-   子组件：单页渲染层（移动端优化）
-================================================================= */
 const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
   const canvasRef = useRef(null);
   const textLayerRef = useRef(null);
@@ -77,7 +91,9 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
       canvas.style.height = '1px';
     }
 
-    if (textLayerRef.current) textLayerRef.current.innerHTML = '';
+    if (textLayerRef.current) {
+      textLayerRef.current.innerHTML = '';
+    }
 
     if (containerRef.current) {
       containerRef.current.style.width = '100%';
@@ -92,7 +108,7 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
     const observer = new IntersectionObserver(
       (entries) => {
         const entry = entries[0];
-        if (entry && entry.isIntersecting && entry.intersectionRatio > 0.55) {
+        if (entry?.isIntersecting && entry.intersectionRatio > 0.55) {
           onVisible(pageNum);
         }
       },
@@ -106,7 +122,7 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
   useEffect(() => {
     let cancelled = false;
 
-    const run = async () => {
+    const renderPage = async () => {
       if (!pdfDoc || !shouldRender || !canvasRef.current || !containerRef.current) {
         if (!shouldRender) {
           if (renderTaskRef.current) {
@@ -129,8 +145,8 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
 
         const viewport = page.getViewport({ scale });
         const canvas = canvasRef.current;
-        const textLayer = textLayerRef.current;
         const container = containerRef.current;
+        const textLayer = textLayerRef.current;
         const context = canvas.getContext('2d', { alpha: false });
 
         if (!context) {
@@ -138,8 +154,7 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
           return;
         }
 
-        const rawDpr = window.devicePixelRatio || 1;
-        const dpr = clamp(rawDpr, 1, 2);
+        const dpr = clamp(window.devicePixelRatio || 1, 1, 2);
 
         canvas.width = Math.floor(viewport.width * dpr);
         canvas.height = Math.floor(viewport.height * dpr);
@@ -163,17 +178,17 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
           } catch (_) {}
         }
 
-        const renderTask = page.render({
+        const task = page.render({
           canvasContext: context,
           viewport,
           intent: 'display'
         });
+        renderTaskRef.current = task;
 
-        renderTaskRef.current = renderTask;
-        await renderTask.promise;
+        await task.promise;
         if (cancelled) return;
 
-        if (textLayer && window.pdfjsLib && typeof window.pdfjsLib.renderTextLayer === 'function') {
+        if (textLayer && window.pdfjsLib?.renderTextLayer) {
           const textContent = await page.getTextContent();
           if (cancelled) return;
 
@@ -198,7 +213,7 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
       }
     };
 
-    run();
+    renderPage();
 
     return () => {
       cancelled = true;
@@ -248,9 +263,6 @@ const PDFPageLayer = ({ pdfDoc, pageNum, scale, onVisible, shouldRender }) => {
   );
 };
 
-/* =================================================================
-   主组件：PremiumReader
-================================================================= */
 export default function PremiumReader({ url, title, onClose, bookId }) {
   const [pdfDoc, setPdfDoc] = useState(null);
   const [pageNumber, setPageNumber] = useState(1);
@@ -262,54 +274,104 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
   const [error, setError] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [outline, setOutline] = useState([]);
+  const [jumpTargetPage, setJumpTargetPage] = useState(null);
 
   const loadingTaskRef = useRef(null);
   const pdfDocRef = useRef(null);
   const restoreTimerRef = useRef(null);
   const userZoomedRef = useRef(false);
+  const saveTimerRef = useRef(null);
+  const latestProgressRef = useRef({ page: 1, pages: 0 });
 
   const progressKey = useMemo(() => `pdf_progress_${encodeURIComponent(url || '')}`, [url]);
-  const metaKey = useMemo(
-    () => (bookId ? `${HISTORY_KEY}_${bookId}` : null),
-    [bookId]
-  );
+  const metaKey = useMemo(() => (bookId ? `${HISTORY_KEY}_${bookId}` : null), [bookId]);
 
   const handlePageVisible = useCallback((visiblePage) => {
     setPageNumber((prev) => (prev === visiblePage ? prev : visiblePage));
   }, []);
 
-  // 写入进度：兼容旧 key + 新 key
+  const scrollToPageWithRetry = useCallback((targetPage, smooth = false, retries = 12) => {
+    const el = document.getElementById(`page-container-${targetPage}`);
+    if (el) {
+      el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' });
+      return true;
+    }
+
+    if (retries > 0) {
+      window.setTimeout(() => {
+        scrollToPageWithRetry(targetPage, smooth, retries - 1);
+      }, 80);
+    }
+
+    return false;
+  }, []);
+
+  const persistProgress = useCallback(
+    (page, pages) => {
+      if (!url) return;
+
+      // 兼容旧逻辑
+      localStorage.setItem(progressKey, String(page));
+
+      if (metaKey) {
+        let prev = {};
+        try {
+          const raw = localStorage.getItem(metaKey);
+          prev = raw ? JSON.parse(raw) : {};
+        } catch (_) {}
+
+        localStorage.setItem(
+          metaKey,
+          JSON.stringify({
+            ...prev,
+            page,
+            numPages: pages || prev.numPages || 0,
+            lastRead: new Date().toISOString(),
+            url,
+            title
+          })
+        );
+      }
+    },
+    [metaKey, progressKey, title, url]
+  );
+
+  useEffect(() => {
+    latestProgressRef.current = { page: pageNumber, pages: numPages };
+  }, [pageNumber, numPages]);
+
   useEffect(() => {
     if (!url) return;
 
-    localStorage.setItem(progressKey, String(pageNumber));
-
-    if (metaKey) {
-      let prevMeta = {};
-      try {
-        const raw = localStorage.getItem(metaKey);
-        prevMeta = raw ? JSON.parse(raw) : {};
-      } catch (_) {}
-
-      localStorage.setItem(
-        metaKey,
-        JSON.stringify({
-          ...prevMeta,
-          page: pageNumber,
-          numPages: numPages || prevMeta.numPages || 0,
-          lastRead: new Date().toISOString(),
-          url
-        })
-      );
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
     }
-  }, [pageNumber, numPages, progressKey, url, metaKey]);
+
+    saveTimerRef.current = window.setTimeout(() => {
+      persistProgress(pageNumber, numPages);
+    }, 500);
+
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, [pageNumber, numPages, persistProgress, url]);
+
+  // 卸载时强制写一次，防止最后一页丢失
+  useEffect(() => {
+    return () => {
+      const latest = latestProgressRef.current;
+      persistProgress(latest.page, latest.pages);
+    };
+  }, [persistProgress]);
 
   useEffect(() => {
     let cancelled = false;
 
     const cleanupPdfObjects = () => {
       if (restoreTimerRef.current) {
-        window.clearTimeout(restoreTimerRef.current);
+        clearTimeout(restoreTimerRef.current);
         restoreTimerRef.current = null;
       }
 
@@ -334,6 +396,7 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
       setPdfDoc(null);
       setNumPages(0);
       setOutline([]);
+      setJumpTargetPage(null);
 
       cleanupPdfObjects();
 
@@ -353,8 +416,8 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
 
       if (metaKey) {
         try {
-          const metaRaw = localStorage.getItem(metaKey);
-          const meta = metaRaw ? JSON.parse(metaRaw) : null;
+          const raw = localStorage.getItem(metaKey);
+          const meta = raw ? JSON.parse(raw) : null;
           if (meta?.page && Number.isFinite(meta.page)) {
             savedPage = meta.page;
           }
@@ -362,9 +425,9 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
       }
 
       if (savedPage === 1) {
-        const oldProgress = Number.parseInt(localStorage.getItem(progressKey) || '1', 10);
-        if (Number.isFinite(oldProgress) && oldProgress > 0) {
-          savedPage = oldProgress;
+        const legacy = Number.parseInt(localStorage.getItem(progressKey) || '1', 10);
+        if (Number.isFinite(legacy) && legacy > 0) {
+          savedPage = legacy;
         }
       }
 
@@ -376,9 +439,8 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
 
         pdfjsLib.GlobalWorkerOptions.workerSrc = `${CDN_BASE}/pdf.worker.min.js`;
 
-        const safeUrl = url.includes('?') ? `${url}&t=${Date.now()}` : `${url}?t=${Date.now()}`;
         const loadingTask = pdfjsLib.getDocument({
-          url: safeUrl,
+          url,
           cMapUrl: `${CDN_BASE}/cmaps/`,
           cMapPacked: true,
           useSystemFonts: true,
@@ -402,18 +464,22 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
         setPdfDoc(doc);
         setNumPages(doc.numPages);
 
-        doc.getOutline()
+        doc
+          .getOutline()
           .then((items) => {
-            if (!cancelled) setOutline(items || []);
+            if (cancelled) return;
+            setOutline(flattenOutlineItems(items || []));
           })
-          .catch(() => {});
+          .catch(() => {
+            if (!cancelled) setOutline([]);
+          });
 
         const targetPage = clamp(savedPage, 1, doc.numPages);
         setPageNumber(targetPage);
 
         restoreTimerRef.current = window.setTimeout(() => {
-          document.getElementById(`page-container-${targetPage}`)?.scrollIntoView({ block: 'start' });
-        }, 220);
+          scrollToPageWithRetry(targetPage, false, 16);
+        }, 350);
       } catch (err) {
         if (!cancelled) {
           console.error(err);
@@ -441,31 +507,50 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
       window.removeEventListener('resize', handleResize);
       cleanupPdfObjects();
     };
-  }, [url, progressKey, metaKey]);
+  }, [url, metaKey, progressKey, scrollToPageWithRetry]);
 
   const jumpToDest = useCallback(
-    async (dest) => {
-      if (!pdfDoc || !dest) return;
+    async (dest, fallbackUrl) => {
+      if (!pdfDoc) return;
 
       try {
         let resolvedDest = dest;
+        let nextPage = null;
+
         if (typeof resolvedDest === 'string') {
           resolvedDest = await pdfDoc.getDestination(resolvedDest);
         }
-        if (!resolvedDest || !resolvedDest[0]) return;
 
-        const idx = await pdfDoc.getPageIndex(resolvedDest[0]);
-        const nextPage = idx + 1;
+        if (Array.isArray(resolvedDest) && resolvedDest[0]) {
+          const idx = await pdfDoc.getPageIndex(resolvedDest[0]);
+          nextPage = idx + 1;
+        }
 
-        setPageNumber(nextPage);
+        if (!nextPage && typeof fallbackUrl === 'string' && fallbackUrl.includes('#page=')) {
+          const parsed = Number.parseInt(fallbackUrl.split('#page=')[1], 10);
+          if (Number.isFinite(parsed) && parsed > 0) {
+            nextPage = parsed;
+          }
+        }
+
+        if (!nextPage) return;
+
         setSidebarOpen(false);
+        setJumpTargetPage(nextPage);
+        setPageNumber(nextPage);
 
-        document
-          .getElementById(`page-container-${nextPage}`)
-          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      } catch (_) {}
+        requestAnimationFrame(() => {
+          scrollToPageWithRetry(nextPage, true, 20);
+        });
+
+        window.setTimeout(() => {
+          setJumpTargetPage(null);
+        }, 1500);
+      } catch (err) {
+        console.error('Jump failed:', err);
+      }
     },
-    [pdfDoc]
+    [pdfDoc, scrollToPageWithRetry]
   );
 
   const changeScale = useCallback(
@@ -533,7 +618,7 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
               Array.from({ length: numPages }, (_, i) => {
                 const n = i + 1;
                 const windowSize = isMobile ? 1 : 3;
-                const shouldRender = Math.abs(pageNumber - n) <= windowSize;
+                const shouldRender = Math.abs(pageNumber - n) <= windowSize || n === jumpTargetPage;
 
                 return (
                   <PDFPageLayer
@@ -557,9 +642,7 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
           >
             <ZoomOut size={18} className="text-slate-600" />
           </button>
-          <span className="text-xs font-black min-w-[40px] text-center">
-            {Math.round(scale * 100)}%
-          </span>
+          <span className="text-xs font-black min-w-[40px] text-center">{Math.round(scale * 100)}%</span>
           <button
             onClick={() => changeScale(0.15)}
             aria-label="Zoom in"
@@ -603,9 +686,11 @@ export default function PremiumReader({ url, title, onClose, bookId }) {
                   {outline.length > 0 ? (
                     outline.map((item, i) => (
                       <button
-                        key={`${item.title}-${i}`}
-                        onClick={() => jumpToDest(item.dest)}
-                        className="w-full text-left py-3 px-2 hover:bg-slate-50 border-b border-slate-50 text-xs text-slate-600 truncate"
+                        key={`${item.title}-${i}-${item.level}`}
+                        onClick={() => jumpToDest(item.dest, item.url)}
+                        className="w-full text-left py-2.5 px-2 hover:bg-slate-50 border-b border-slate-50 text-xs text-slate-600 truncate"
+                        style={{ paddingLeft: `${8 + item.level * 12}px` }}
+                        title={item.title}
                       >
                         {item.title}
                       </button>
