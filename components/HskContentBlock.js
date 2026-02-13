@@ -1,160 +1,134 @@
-'use client';
-
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import {
-  Mic2,
-  Music4,
-  Layers,
-  BookText,
-  Lightbulb,
-  PlayCircle,
-  Gem,
-  MessageCircle,
-  Crown,
-  Star,
-  BookOpen,
-  ChevronDown,
-  ChevronUp,
-  Volume2,
-  Globe,
-  X,
-  Library,
-  ChevronRight,
-  Sparkles
+  Mic2, Music4, Layers, BookText, Lightbulb,
+  Sparkles, PlayCircle, Gem, MessageCircle,
+  Crown, Heart, ChevronRight, Star, BookOpen,
+  ChevronDown, ChevronUp, GraduationCap,
+  MessageSquareText, Headphones, Volume2, Globe // 引入新图标 Globe，替换 BrainCircuit
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
-import { useSwipeable } from 'react-swipeable';
 
-import AIChatDrawer from './AiChatAssistant';
-import BookLibrary from '@/components/BookLibrary';
+// 动态导入 WordCard 组件
+const WordCard = dynamic(
+  () => import('@/components/WordCard'),
+  { ssr: false }
+);
 
-const WordCard = dynamic(() => import('@/components/WordCard'), { ssr: false });
+// ==========================================
+// 0. 图标组件 (Messenger)
+// ==========================================
+const MessengerIcon = ({ size = 24 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 2C6.48 2 2 6.03 2 11C2 13.66 3.39 16.03 5.61 17.58V21.5C5.61 21.78 5.81 22 6.09 22.04C6.18 22.05 6.27 22.05 6.36 22.02L9.2 21.17C10.09 21.41 11.03 21.54 12 21.54C17.52 21.54 22 17.51 22 12.54C22 7.57 17.52 2 12 2ZM12.98 14.54L10.56 12.07L6.33 14.47C6.18 14.55 5.99 14.53 5.88 14.41C5.76 14.28 5.76 14.09 5.85 13.96L8.85 9.47C8.96 9.3 9.17 9.25 9.35 9.35L11.77 11.82L15.99 9.42C16.14 9.33 16.33 9.36 16.44 9.48C16.56 9.61 16.56 9.8 16.47 9.93L12.98 14.54Z" fill="#0084FF"/>
+  </svg>
+);
 
-import hsk1Words from '@/data/hsk/hsk1.json';
-import hsk2Words from '@/data/hsk/hsk2.json';
+// ==========================================
+// 1. 全局配置与数据
+// ==========================================
 
-const canUseDOM = () => typeof window !== 'undefined';
-
-const FB_CHAT_LINK = 'https://m.me/61575187883357';
+const FB_CHAT_LINK = "https://m.me/61575187883357";
 const FAVORITES_STORAGE_KEY = 'framer-pinyin-favorites';
 
 const getLevelPrice = (level) => {
-  const prices = {
-    1: '10,000 Ks',
-    2: '15,000 Ks',
-    3: '20,000 Ks',
-    SP: '30,000 Ks'
+  const prices = { 
+    1: "10,000 Ks", 
+    2: "15,000 Ks", 
+    3: "20,000 Ks",
+    'SP': "30,000 Ks" 
   };
-  return prices[level] || 'Contact Us';
+  return prices[level] || "Contact Us";
 };
 
-const getSingleQuery = (value) => (Array.isArray(value) ? value[0] : value);
-
+// 拼音数据 (双语/缅语)
 const pinyinMain = [
-  { id: 'initials', title: '声母', sub: 'ဗျည်း', href: '/pinyin/initials', icon: Mic2, color: 'text-blue-600', bg: 'from-blue-50 to-cyan-50' },
-  { id: 'finals', title: '韵母', sub: 'သရ', href: '/pinyin/finals', icon: Music4, color: 'text-emerald-600', bg: 'from-emerald-50 to-teal-50' },
-  { id: 'whole', title: '整体', sub: 'အသံတွဲ', href: '/pinyin/whole', icon: Layers, color: 'text-violet-600', bg: 'from-violet-50 to-fuchsia-50' },
-  { id: 'tones', title: '声调', sub: 'အသံ', href: '/pinyin/tones', icon: BookText, color: 'text-amber-600', bg: 'from-amber-50 to-orange-50' }
+  { id: 'initials', title: '声母', sub: 'ဗျည်း', href: '/pinyin/initials', icon: Mic2, color: 'text-blue-500', bg: 'bg-blue-50' },
+  { id: 'finals', title: '韵母', sub: 'သရ', href: '/pinyin/finals', icon: Music4, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+  { id: 'whole', title: '整体', sub: 'အသံတွဲ', href: '/pinyin/whole', icon: Layers, color: 'text-purple-500', bg: 'bg-purple-50' },
+  { id: 'tones', title: '声调', sub: 'အသံ', href: '/pinyin/tones', icon: BookText, color: 'text-amber-500', bg: 'bg-amber-50' },
 ];
 
+// HSK 课程数据
 const hskData = [
   {
-    level: 1,
-    title: '入门 (Intro)',
+    level: 1, 
+    title: '入门 (Intro)', 
     description: '掌握最常用词语和基本语法',
     descBurmese: 'အသုံးအများဆုံး စကားလုံးများနှင့် သဒ္ဒါ',
-    imageUrl: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=1200&q=80',
+    imageUrl: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800&q=80',
     lessons: [
-      { id: 1, title: '第 1 课 你好' },
-      { id: 2, title: '第 2 课 谢谢你' },
-      { id: 3, title: '第 3 课 你叫什么名字？' },
-      { id: 4, title: '第 4 课 她是我的汉语老师' },
-      { id: 5, title: '第 5 课 她女儿今年二十岁' },
-      { id: 6, title: '第 6 课 我会说汉语' },
-      { id: 7, title: '第 7 课 今天几号？' },
-      { id: 8, title: '第 8 课 我想喝茶' }
+      { id: 1, title: '第 1 课 你好' }, { id: 2, title: '第 2 课 谢谢你' }, { id: 3, title: '第 3 课 你叫什么名字？' }, { id: 4, title: '第 4 课 她是我的汉语老师' }, { id: 5, title: '第 5 课 她女儿今年二十岁' },
+      { id: 6, title: '第 6 课 我会说汉语' }, { id: 7, title: '第 7 课 今天几号？' }, { id: 8, title: '第 8 课 我想喝茶' },
     ]
   },
   {
-    level: 2,
-    title: '基础 (Basic)',
+    level: 2, 
+    title: '基础 (Basic)', 
     description: '就熟悉的日常话题进行交流',
     descBurmese: 'နေ့စဉ်သုံး စကားပြောများ',
-    imageUrl: 'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=1200&q=80',
+    imageUrl: 'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=800&q=80',
     lessons: [
-      { id: 1, title: '第 1 课 九月去北京旅游最好' },
-      { id: 2, title: '第 2 课 我每天六点起床' },
-      { id: 3, title: '第 3 课 左边那个红色的是我的' }
+      { id: 1, title: '第 1 课 九月去北京旅游最好' }, { id: 2, title: '第 2 课 我每天六点起床' }, { id: 3, title: '第 3 课 左边那个红色的是我的' },
     ]
   }
 ];
 
-const hskWordsData = {
-  1: hsk1Words || [],
-  2: hsk2Words || []
-};
+// 核心生词数据加载
+let hskWordsData = {};
+try { hskWordsData[1] = require('@/data/hsk/hsk1.json'); } catch (e) { console.warn('HSK1 data missing'); }
+try { hskWordsData[2] = require('@/data/hsk/hsk2.json'); } catch (e) { console.warn('HSK2 data missing'); }
 
 const checkIsFree = (level, lessonId) => {
   if (level === 1) return lessonId <= 2;
   return lessonId === 1;
 };
 
-const panelClass =
-  'rounded-[1.6rem] border border-slate-200/70 bg-white/90 backdrop-blur shadow-[0_10px_30px_rgba(15,23,42,0.08)]';
+// ==========================================
+// 2. 核心子组件
+// ==========================================
 
+// 会员弹窗
 const MembershipModal = ({ isOpen, onClose, targetLevel }) => {
   if (!isOpen) return null;
   const price = getLevelPrice(targetLevel);
   const isSpoken = targetLevel === 'SP';
 
   return (
-    <div className='fixed inset-0 z-[160] flex items-center justify-center p-4'>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         onClick={onClose}
-        className='absolute inset-0 bg-slate-900/60 backdrop-blur-sm'
+        className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
       />
       <motion.div
-        initial={{ opacity: 0, y: 20, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 20, scale: 0.98 }}
-        className='relative w-full max-w-sm rounded-[1.8rem] bg-white p-6 shadow-2xl'
+        initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+        className="relative w-full max-w-sm bg-white rounded-[2rem] shadow-2xl overflow-hidden p-6"
       >
-        <button
-          onClick={onClose}
-          className='absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500'
-          aria-label='关闭'
-        >
-          <X size={18} />
+        <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full text-slate-400 hover:bg-slate-200 transition-colors">
+           <ChevronRight className="rotate-45" size={20} />
         </button>
-
-        <div className='mt-2 text-center'>
-          <div className='mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100'>
-            <Crown className='text-amber-600' size={28} />
+        <div className="text-center mt-2">
+          <div className="bg-amber-100 w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Crown className="text-amber-600" size={28} />
           </div>
-          <h2 className='text-xl font-black text-slate-800'>{isSpoken ? '口语特训课程' : `HSK ${targetLevel}`}</h2>
-          <p className='mb-5 mt-1 text-sm font-medium text-slate-500'>
-            {isSpoken ? '地道场景、谐音助记与 AI 评测' : '完整视频讲解与练习题'}
-            <br />
-            <span className='text-xs text-slate-400'>(အတန်းစုံလင်စွာ သင်ယူနိုင်ပါသည်)</span>
+          <h2 className="text-xl font-black text-slate-800">
+            {isSpoken ? "口语特训课程" : `HSK ${targetLevel}`}
+          </h2>
+          <p className="text-slate-500 font-medium text-sm mt-1 mb-5">
+            {isSpoken ? "地道场景、谐音助记与 AI 评测" : "完整视频讲解与练习题"}
+            <br/>
+            <span className="text-xs text-slate-400">(အတန်းစုံလင်စွာ သင်ယူနိုင်ပါသည်)</span>
           </p>
-
-          <div className='mb-5 rounded-2xl border border-slate-100 bg-gradient-to-r from-amber-50 to-orange-50 p-4'>
-            <p className='text-3xl font-black text-amber-500'>{price}</p>
+          <div className="bg-slate-50 p-4 rounded-2xl mb-5 border border-slate-100">
+            <p className="text-3xl font-black text-amber-500">{price}</p>
           </div>
-
-          <a
-            href={FB_CHAT_LINK}
-            target='_blank'
-            rel='noopener noreferrer'
-            className='flex w-full items-center justify-center gap-2 rounded-xl bg-[#0084FF] py-3.5 font-bold text-white shadow-lg active:scale-95'
+          <a href={FB_CHAT_LINK} target="_blank" rel="noopener noreferrer"
+            className="w-full py-3.5 bg-[#0084FF] text-white rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg hover:bg-blue-600"
           >
-            <MessageCircle size={20} fill='currentColor' />
+            <MessageCircle size={20} fill="currentColor" />
             ဆက်သွယ်ရန် (Contact)
           </a>
         </div>
@@ -163,15 +137,15 @@ const MembershipModal = ({ isOpen, onClose, targetLevel }) => {
   );
 };
 
-const HskCard = ({ level, onVocabularyClick, onShowMembership, index }) => {
+// 课程卡片组件
+const HskCard = ({ level, onVocabularyClick, onShowMembership }) => {
   const router = useRouter();
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const freeCount = level.lessons.filter((l) => checkIsFree(level.level, l.id)).length;
-
-  const handleLessonClick = (lesson) => {
+  const handleLessonClick = (e, lesson) => {
     const isFree = checkIsFree(level.level, lesson.id);
     if (!isFree) {
+      e.preventDefault();
       onShowMembership(level.level);
       return;
     }
@@ -179,403 +153,296 @@ const HskCard = ({ level, onVocabularyClick, onShowMembership, index }) => {
   };
 
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 18 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.06, duration: 0.35 }}
-      className='overflow-hidden rounded-[1.6rem] border border-slate-100 bg-white shadow-sm'
+    <motion.div
+      whileTap={{ scale: 0.995 }}
+      className="flex flex-col bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden relative z-10"
     >
-      <div className='relative h-44'>
-        <img src={level.imageUrl} className='h-full w-full object-cover' alt={`HSK ${level.level}`} />
-        <div className='absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent' />
-
-        <div className='absolute left-4 top-4 flex items-center gap-2'>
-          <span className='rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-black text-slate-700'>
-            HSK {level.level}
-          </span>
-          <span className='rounded-full bg-cyan-400/90 px-2.5 py-1 text-[10px] font-black text-white'>
-            {freeCount} Free
-          </span>
-        </div>
-
-        <div className='absolute bottom-4 left-5 right-5 text-white'>
-          <p className='mb-0.5 text-[10px] font-bold uppercase tracking-widest text-cyan-300'>{level.title}</p>
-          <h2 className='text-2xl font-black'>HSK {level.level}</h2>
-          <p className='mt-1 text-[11px] text-slate-200'>{level.descBurmese}</p>
-          <p className='mt-0.5 text-[10px] text-slate-300'>{level.description}</p>
+      <div className="h-36 relative">
+        <img src={level.imageUrl} className="w-full h-full object-cover" alt="" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+        <div className="absolute bottom-4 left-5 text-white">
+          <p className="text-[10px] font-bold text-cyan-300 uppercase tracking-widest mb-0.5">{level.title}</p>
+          <h2 className="text-2xl font-black">HSK {level.level}</h2>
+          <p className="text-[10px] text-slate-200 mt-1">{level.descBurmese}</p>
         </div>
       </div>
 
-      <div className='space-y-2 p-4'>
-        {(isExpanded ? level.lessons : level.lessons.slice(0, 3)).map((lesson) => {
-          const free = checkIsFree(level.level, lesson.id);
-          return (
-            <button
-              key={lesson.id}
-              type='button'
-              onClick={() => handleLessonClick(lesson)}
-              className='flex min-h-[50px] w-full items-center rounded-xl border border-slate-100 bg-slate-50 p-3 text-left active:bg-slate-100'
-            >
-              <div className={`mr-3 rounded-full p-1.5 ${free ? 'bg-cyan-100 text-cyan-600' : 'bg-amber-100 text-amber-600'}`}>
-                {free ? <PlayCircle size={14} fill='currentColor' /> : <Gem size={14} />}
-              </div>
-              <span className='flex-grow truncate text-sm font-bold text-slate-700'>{lesson.title}</span>
-              <span className={`ml-2 rounded-full px-2 py-0.5 text-[9px] font-black ${free ? 'bg-cyan-50 text-cyan-600' : 'bg-amber-50 text-amber-600'}`}>
-                {free ? 'FREE' : 'PRO'}
-              </span>
-            </button>
-          );
-        })}
+      <div className="p-4 space-y-2">
+        {(isExpanded ? level.lessons : level.lessons.slice(0, 3)).map(lesson => (
+          <div key={lesson.id} onClick={(e) => handleLessonClick(e, lesson)} className="flex items-center p-3 rounded-xl bg-slate-50 active:bg-slate-100 cursor-pointer transition-colors">
+            <div className={`p-1.5 rounded-full mr-3 ${checkIsFree(level.level, lesson.id) ? 'bg-cyan-100 text-cyan-600' : 'bg-amber-100 text-amber-600'}`}>
+              {checkIsFree(level.level, lesson.id) ? <PlayCircle size={14} fill="currentColor" /> : <Gem size={14} />}
+            </div>
+            <span className="text-sm font-bold text-slate-700 truncate flex-grow">{lesson.title}</span>
+          </div>
+        ))}
       </div>
 
-      <div className='flex flex-col gap-3 px-4 pb-5 pt-1'>
+      <div className="px-4 pb-5 pt-1 flex flex-col gap-3">
         {level.lessons.length > 3 && (
           <button
-            type='button'
-            onClick={() => setIsExpanded((prev) => !prev)}
-            className='flex min-h-[42px] w-full items-center justify-center gap-1 rounded-xl border border-slate-100 bg-slate-50 py-2.5 text-xs font-bold text-slate-500 active:scale-[0.99]'
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="w-full py-2.5 flex items-center justify-center text-xs font-bold text-slate-500 gap-1 bg-slate-50 border border-slate-100 rounded-xl hover:bg-slate-100 transition-colors active:scale-95"
           >
-            {isExpanded ? 'See Less' : `View All ${level.lessons.length} Lessons`}
+            {isExpanded ? 'See Less' : `View All ${level.lessons.length} Lessons`} 
             {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </button>
         )}
 
         <button
-          type='button'
-          onClick={() => onVocabularyClick(level)}
-          className='min-h-[44px] w-full rounded-xl border border-pink-100 bg-gradient-to-r from-pink-50 to-rose-50 py-3 text-xs font-black text-rose-500 active:scale-[0.99]'
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onVocabularyClick(level);
+          }}
+          className="relative z-20 w-full py-3 flex items-center justify-center gap-2 bg-gradient-to-r from-pink-50 to-rose-50 text-rose-500 rounded-xl font-black text-xs active:scale-95 transition-all border border-pink-100 hover:shadow-sm"
         >
-          <span className='inline-flex items-center gap-2'>
-            <BookOpen size={14} />
-            核心生词
-            <span className='ml-1 text-[10px] font-normal opacity-70'>(ဝေါဟာရများ)</span>
-          </span>
+          <BookOpen size={14} />
+          <span>核心生词</span>
+          <span className="text-[10px] opacity-70 font-normal ml-1">(ဝေါဟာရများ)</span>
         </button>
       </div>
-    </motion.section>
+    </motion.div>
   );
 };
 
-const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection, onOpenTranslator, onOpenBooks }) => {
+// 拼音面板组件 (布局调整)
+const PinyinSection = ({ onOpenCollection, onOpenSpokenCollection }) => {
   const router = useRouter();
 
   return (
-    <div className='space-y-3'>
-      <div className='rounded-2xl border border-slate-100 bg-gradient-to-r from-slate-900 to-slate-800 p-4 text-white'>
-        <div className='flex items-start justify-between'>
-          <div>
-            <p className='text-[11px] font-bold uppercase tracking-widest text-cyan-300'>Learning Center</p>
-            <h1 className='mt-1 text-lg font-black'>HSK Mobile Hub</h1>
-            <p className='mt-1 text-[11px] text-slate-300'>အသံထွက်၊ စာလုံး၊ ဘာသာပြန်နှင့် စာကြည့်တိုက်</p>
-          </div>
-          <div className='rounded-xl bg-white/10 p-2 text-cyan-300'>
-            <Sparkles size={18} />
-          </div>
-        </div>
-      </div>
-
-      <div className='grid grid-cols-4 gap-2.5'>
+    <div className="space-y-3">
+      {/* 第一行：4个基础功能 */}
+      <div className="grid grid-cols-4 gap-2">
         {pinyinMain.map((item) => (
-          <Link
-            key={item.id}
-            href={item.href}
-            className={`flex min-h-[86px] flex-col items-center justify-center rounded-2xl border border-slate-100 bg-gradient-to-br ${item.bg} px-1.5 active:scale-[0.98]`}
-          >
-            <div className='mb-1.5 rounded-full bg-white p-1.5 shadow-sm'>
-              <item.icon size={16} className={item.color} />
-            </div>
-            <span className='text-center text-[10px] font-black leading-tight text-slate-700'>
-              {item.title}
-              <br />
-              <span className='text-[8px] font-semibold text-slate-500'>{item.sub}</span>
-            </span>
+          <Link key={item.id} href={item.href} passHref>
+            <a className={`flex flex-col items-center justify-center py-3 rounded-2xl ${item.bg} active:scale-95 transition-transform`}>
+              <div className="mb-1 bg-white p-1.5 rounded-full shadow-sm">
+                <item.icon size={16} className={item.color} />
+              </div>
+              <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
+                {item.title}<br/><span className="text-[8px] opacity-70">{item.sub}</span>
+              </span>
+            </a>
           </Link>
         ))}
       </div>
 
-      <button
-        type='button'
+      {/* 第二行：发音技巧 (通栏) */}
+      <button 
         onClick={() => router.push('/pinyin/tips')}
-        className='flex min-h-[52px] w-full items-center justify-between rounded-2xl border border-orange-100/50 bg-gradient-to-r from-orange-50 to-amber-50 px-4 py-3 active:scale-[0.99]'
+        className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl border border-orange-100/50 active:scale-95 transition-transform group"
       >
-        <div className='flex items-center gap-3'>
-          <div className='shrink-0 rounded-full bg-white p-1.5 text-orange-500 shadow-sm'>
-            <Lightbulb size={16} fill='currentColor' />
+        <div className="flex items-center gap-3">
+          <div className="p-1.5 bg-white rounded-full text-orange-500 shadow-sm shrink-0">
+            <Lightbulb size={16} fill="currentColor" />
           </div>
-          <div className='text-left'>
-            <span className='block text-xs font-black text-slate-700'>发音技巧 (Tips)</span>
-            <span className='block text-[10px] font-medium text-slate-500'>အသံထွက်နည်းလမ်းများ</span>
+          <div className="text-left">
+            <span className="block text-xs font-black text-slate-700">发音技巧 (Tips)</span>
+            <span className="block text-[10px] text-slate-500 font-medium">အသံထွက်နည်းလမ်းများ</span>
           </div>
         </div>
-        <ChevronRight size={16} className='text-orange-300' />
+        <ChevronRight size={16} className="text-orange-300" />
       </button>
 
-      <div className='grid grid-cols-2 gap-3'>
-        <button
-          type='button'
-          onClick={onOpenTranslator}
-          className='flex min-h-[76px] flex-col items-center justify-center rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 py-3 active:scale-[0.99]'
-        >
-          <div className='mb-1 flex items-center gap-1.5 text-blue-700'>
+      {/* ==================================================== */}
+      {/* 修改：AI 翻译入口 */}
+      {/* ==================================================== */}
+      <button 
+        onClick={() => router.push('/translator')} // 点击跳转到 /translator 页面
+        className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100/50 active:scale-95 transition-transform group"
+      >
+        <div className="flex items-center gap-3">
+          <div className="p-1.5 bg-white rounded-full text-blue-500 shadow-sm shrink-0">
             <Globe size={16} />
-            <span className='text-xs font-black'>AI 翻译</span>
           </div>
-          <span className='text-[9px] text-slate-500'>AI ဘာသာပြန်</span>
-        </button>
-
-        <button
-          type='button'
-          onClick={onOpenBooks}
-          className='flex min-h-[76px] flex-col items-center justify-center rounded-2xl border border-cyan-100 bg-gradient-to-br from-cyan-50 to-teal-50 py-3 active:scale-[0.99]'
-        >
-          <div className='mb-1 flex items-center gap-1.5 text-cyan-700'>
-            <Library size={16} />
-            <span className='text-xs font-black'>免费书籍</span>
+          <div className="text-left">
+            <span className="block text-xs font-black text-slate-700">AI 翻译 (Translator)</span>
+            <span className="block text-[10px] text-slate-500 font-medium">AI ဘာသာပြန်</span>
           </div>
-          <span className='text-[9px] text-slate-500'>စာကြည့်တိုက်</span>
-        </button>
-      </div>
-
-      <div className='grid grid-cols-2 gap-3'>
-        <button
-          type='button'
+        </div>
+        <ChevronRight size={16} className="text-blue-300" />
+      </button>
+      {/* ==================================================== */}
+      
+      {/* 第四行：双收藏按钮 */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* 单词收藏 */}
+        <button 
           onClick={onOpenCollection}
-          className='flex min-h-[72px] flex-col items-center justify-center rounded-2xl border border-slate-100 bg-white py-3 shadow-sm active:scale-[0.99]'
+          className="flex flex-col items-center justify-center py-3 bg-white border border-blue-100 rounded-2xl shadow-sm active:scale-95 transition-transform"
         >
-          <div className='mb-1 flex items-center gap-1.5 text-slate-700'>
-            <Star size={14} fill='currentColor' />
-            <span className='text-xs font-black'>单词收藏</span>
+          <div className="flex items-center gap-1.5 mb-1 text-blue-600">
+             <Star size={14} fill="currentColor"/>
+             <span className="text-xs font-black">单词收藏</span>
           </div>
-          <span className='text-[9px] text-slate-400'>မှတ်ထားသော စာလုံး</span>
+          <span className="text-[9px] text-slate-400">မှတ်ထားသော စာလုံး</span>
         </button>
 
-        <button
-          type='button'
+        {/* 口语收藏 */}
+        <button 
           onClick={onOpenSpokenCollection}
-          className='flex min-h-[72px] flex-col items-center justify-center rounded-2xl border border-slate-100 bg-white py-3 shadow-sm active:scale-[0.99]'
+          className="flex flex-col items-center justify-center py-3 bg-white border border-emerald-100 rounded-2xl shadow-sm active:scale-95 transition-transform"
         >
-          <div className='mb-1 flex items-center gap-1.5 text-slate-700'>
-            <Volume2 size={14} fill='currentColor' />
-            <span className='text-xs font-black'>口语收藏</span>
-          </div>
-          <span className='text-[9px] text-slate-400'>မှတ်ထားသော စကားပြော</span>
+           <div className="flex items-center gap-1.5 mb-1 text-emerald-600">
+             <Volume2 size={14} fill="currentColor"/>
+             <span className="text-xs font-black">口语收藏</span>
+           </div>
+           <span className="text-[9px] text-slate-400">မှတ်ထားသော စကားပြော</span>
         </button>
       </div>
     </div>
   );
 };
 
+// ==========================================
+// 3. 主页面入口
+// ==========================================
+
 export default function HskPageClient() {
   const router = useRouter();
-
-  const [activeHskWords, setActiveHskWords] = useState([]);
-  const [activeLevelTag, setActiveLevelTag] = useState('hsk-vocab');
-
-  const [activeOverlay, setActiveOverlay] = useState(null);
-  const [membershipLevel, setMembershipLevel] = useState(null);
+  const [activeHskWords, setActiveHskWords] = useState(null);
+  const [activeLevelTag, setActiveLevelTag] = useState(null);
+  const [membership, setMembership] = useState({ open: false, level: null });
 
   const isCardViewOpen = router.asPath.includes('#hsk-vocabulary');
-  const isTranslatorOpen = activeOverlay === 'translator';
-  const isBookLibraryOpen = activeOverlay === 'books';
-  const isMembershipOpen = activeOverlay === 'membership';
 
-  const openOverlay = useCallback((overlayType, payload = null) => {
-    setActiveOverlay((prev) => {
-      if (prev === overlayType) return prev;
-      if (canUseDOM()) {
-        window.history.pushState({ overlay: overlayType }, '', window.location.href);
-      }
-      return overlayType;
-    });
-    setMembershipLevel(overlayType === 'membership' ? payload : null);
-  }, []);
+  // ====================================================
+  // 修改处：将口语跳转拆分为两个函数
+  // ====================================================
 
-  const closeOverlay = useCallback(() => {
-    if (activeOverlay && canUseDOM()) {
-      window.history.back();
-      return;
-    }
-    setActiveOverlay(null);
-    setMembershipLevel(null);
-  }, [activeOverlay]);
+  // 1. 普通跳转：进入口语首页 (点击 Banner)
+  const handleSpokenGeneralClick = useCallback((e) => {
+    if(e) e.preventDefault();
+    router.push('/spoken');
+  }, [router]);
 
-  useEffect(() => {
-    if (!canUseDOM()) return;
-
-    const onPopState = () => {
-      setActiveOverlay(null);
-      setMembershipLevel(null);
-    };
-
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
-  }, []);
-
-  const overlaySwipeHandlers = useSwipeable({
-    onSwipedRight: () => closeOverlay(),
-    trackMouse: false,
-    delta: 45,
-    preventScrollOnSwipe: false
-  });
-
-  const handleSpokenCollectionClick = useCallback(() => {
+  // 2. 收藏跳转：进入口语收藏 (点击按钮)
+  // 通过 query 参数 filter=favorites 告诉目标页面显示收藏
+  const handleSpokenCollectionClick = useCallback((e) => {
+    if(e) e.preventDefault();
     router.push({
       pathname: '/spoken',
       query: { filter: 'favorites' }
     });
   }, [router]);
 
-  const closeWordCard = useCallback(() => {
-    const base = router.asPath.split('#')[0];
-    router.replace(base, undefined, { shallow: true, scroll: false });
+  // ====================================================
+
+  // 处理生词本点击逻辑
+  const handleVocabularyClick = useCallback((level) => {
+    const levelNum = level?.level || 1;
+    const words = hskWordsData[levelNum] || [];
+    setActiveHskWords(words);
+    setActiveLevelTag(`hsk${levelNum}`);
+    router.push({ pathname: router.pathname, query: { ...router.query, level: levelNum }, hash: 'hsk-vocabulary' }, undefined, { shallow: true });
   }, [router]);
 
-  const getFavoriteWords = useCallback(() => {
-    if (!canUseDOM()) return [];
-    try {
-      const raw = localStorage.getItem(FAVORITES_STORAGE_KEY);
-      const savedIds = raw ? JSON.parse(raw) : [];
-      const allWords = [...(hskWordsData[1] || []), ...(hskWordsData[2] || [])];
-      return allWords.filter(
-        (word) => Array.isArray(savedIds) && savedIds.some((savedId) => String(savedId) === String(word.id))
-      );
-    } catch (_) {
-      return [];
-    }
-  }, []);
-
-  const handleVocabularyClick = useCallback(
-    (level) => {
-      const levelNum = Number(level?.level || 1);
-      const words = hskWordsData[levelNum] || [];
-
-      setActiveHskWords(words);
-      setActiveLevelTag(`hsk${levelNum}`);
-
-      const nextQuery = { ...router.query, level: String(levelNum) };
-      delete nextQuery.view;
-
-      router.push({ pathname: router.pathname, query: nextQuery, hash: 'hsk-vocabulary' }, undefined, {
-        shallow: true,
-        scroll: false
-      });
-    },
-    [router]
-  );
-
+  // 处理生词收藏点击
   const handleCollectionClick = useCallback(() => {
-    const favoriteWords = getFavoriteWords();
+    const savedIds = JSON.parse(localStorage.getItem(FAVORITES_STORAGE_KEY) || '[]');
+    const allWords = [ ...(hskWordsData[1] || []), ...(hskWordsData[2] || []) ];
+    const favoriteWords = allWords.filter(word => 
+      savedIds.some(savedId => String(savedId) === String(word.id))
+    );
 
-    if (!favoriteWords.length) {
-      alert('No saved words yet!\nမှတ်ထားသော စာလုံး မရှိသေးပါ');
+    if (favoriteWords.length === 0) {
+      alert("No saved words yet!\nမှတ်ထားသော စာလုံး မရှိသေးပါ");
       return;
     }
 
     setActiveHskWords(favoriteWords);
     setActiveLevelTag('my-favorites-collection');
-
-    const nextQuery = { ...router.query, view: 'favorites' };
-    delete nextQuery.level;
-
-    router.push({ pathname: router.pathname, query: nextQuery, hash: 'hsk-vocabulary' }, undefined, {
-      shallow: true,
-      scroll: false
-    });
-  }, [getFavoriteWords, router]);
-
-  useEffect(() => {
-    if (!router.isReady || !isCardViewOpen) return;
-
-    const levelParam = Number(getSingleQuery(router.query.level));
-    const viewParam = getSingleQuery(router.query.view);
-
-    if (Number.isFinite(levelParam) && hskWordsData[levelParam]) {
-      setActiveHskWords(hskWordsData[levelParam]);
-      setActiveLevelTag(`hsk${levelParam}`);
-      return;
-    }
-
-    if (viewParam === 'favorites') {
-      const favoriteWords = getFavoriteWords();
-      setActiveHskWords(favoriteWords);
-      setActiveLevelTag('my-favorites-collection');
-    }
-  }, [router.isReady, router.query.level, router.query.view, isCardViewOpen, getFavoriteWords]);
+    router.push({ pathname: router.pathname, hash: 'hsk-vocabulary' }, undefined, { shallow: true });
+  }, [router]);
 
   return (
-    <div className='relative min-h-[100dvh] w-full overflow-x-hidden bg-[#f4f7fb] pb-16 font-sans text-slate-900'>
-      <div className='pointer-events-none absolute -left-20 -top-20 h-72 w-72 rounded-full bg-cyan-200/35 blur-3xl' />
-      <div className='pointer-events-none absolute right-[-80px] top-[180px] h-72 w-72 rounded-full bg-indigo-200/30 blur-3xl' />
-      <div className='pointer-events-none absolute bottom-0 left-0 right-0 h-52 bg-gradient-to-t from-slate-100/80 to-transparent' />
+    <div className="min-h-screen bg-[#f8fafc] font-sans text-slate-900 pb-20 relative overflow-x-hidden max-w-md mx-auto shadow-2xl shadow-slate-200">
+      
+      <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-blue-50/50 to-transparent pointer-events-none" />
 
-      <header className='relative z-10 px-4 pb-1 pt-4'>
-        <div className={`${panelClass} p-4`}>
-          <PinyinSection
-            onOpenCollection={handleCollectionClick}
+      <header className="relative pt-4 px-4 pb-1 z-10">
+        <div className="flex justify-between items-center mb-3">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/80 backdrop-blur rounded-full border border-blue-100 shadow-sm">
+            <Sparkles size={12} className="text-blue-500" />
+            <span className="text-[10px] font-bold text-blue-800 uppercase">Premium Class</span>
+          </div>
+          
+          {/* Messenger 风格按钮 */}
+          <a href={FB_CHAT_LINK} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white rounded-full shadow-sm border border-slate-100 active:scale-95 transition-all"
+          >
+            <MessengerIcon size={18} />
+            <span className="text-xs font-bold text-slate-700">Messenger</span>
+          </a>
+        </div>
+
+        <div className="bg-white rounded-[1.8rem] p-4 shadow-xl shadow-slate-200/60 border border-slate-50">
+          <PinyinSection 
+            onOpenCollection={handleCollectionClick} 
+            // 传递新的收藏跳转函数
             onOpenSpokenCollection={handleSpokenCollectionClick}
-            onOpenTranslator={() => openOverlay('translator')}
-            onOpenBooks={() => openOverlay('books')}
           />
         </div>
       </header>
 
-      <main className='relative z-10 mt-6 space-y-4 px-4 pb-10'>
-        <div className='flex items-center gap-2 px-1 opacity-75'>
-          <BookText size={14} className='text-slate-500' />
-          <h2 className='text-xs font-black uppercase tracking-wider text-slate-600'>System Courses (သင်ရိုး)</h2>
+      {/* 口语练习横图入口 (缅语化) - 使用普通跳转 */}
+      <div className="px-4 mt-4">
+        <div 
+          onClick={handleSpokenGeneralClick}
+          className="block relative h-28 w-full rounded-3xl overflow-hidden shadow-lg shadow-emerald-100 group active:scale-[0.98] transition-all cursor-pointer"
+        >
+          <img 
+            src="https://images.unsplash.com/photo-1543269865-cbf427effbad?w=800&q=80" 
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+            alt="Oral Chinese" 
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-emerald-600/90 via-emerald-600/40 to-transparent flex flex-col justify-center px-6">
+            <div className="flex items-center gap-2 text-emerald-100 mb-1">
+              <Headphones size={16} />
+              <span className="text-[10px] font-bold uppercase tracking-widest">Oral Practice</span>
+            </div>
+            <h3 className="text-xl font-black text-white">日常口语练习</h3>
+            <p className="text-emerald-50/90 text-xs font-medium font-burmese mt-0.5">နေ့စဉ်သုံး စကားပြော လေ့ကျင့်ခန်း</p>
+          </div>
+          <div className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/20 backdrop-blur rounded-full flex items-center justify-center text-white">
+            <ChevronRight size={20} />
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-2xl mx-auto px-4 relative z-10 mt-6 space-y-4">
+        <div className="flex items-center gap-2 px-1 opacity-70">
+          <BookText size={14} className="text-slate-500" />
+          <h2 className="text-xs font-black text-slate-600 uppercase tracking-wider">System Courses (သင်ရိုး)</h2>
         </div>
 
-        <div className='grid grid-cols-1 gap-5'>
-          {hskData.map((level, index) => (
+        <div className="grid grid-cols-1 gap-5 pb-10">
+          {hskData.map(level => (
             <HskCard
               key={level.level}
               level={level}
-              index={index}
               onVocabularyClick={handleVocabularyClick}
-              onShowMembership={(l) => openOverlay('membership', l)}
+              onShowMembership={(l) => setMembership({ open: true, level: l })}
             />
           ))}
         </div>
-      </main>
+      </div>
 
       <AnimatePresence>
-        {isMembershipOpen && (
-          <MembershipModal isOpen={isMembershipOpen} onClose={closeOverlay} targetLevel={membershipLevel} />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {isTranslatorOpen && (
-          <motion.div
-            {...overlaySwipeHandlers}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className='fixed inset-0 z-[140] bg-white'
-          >
-            <AIChatDrawer isOpen={isTranslatorOpen} onClose={closeOverlay} />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {isBookLibraryOpen && (
-          <motion.div
-            {...overlaySwipeHandlers}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className='fixed inset-0 z-[140] bg-white'
-          >
-            <BookLibrary isOpen={isBookLibraryOpen} onClose={closeOverlay} />
-          </motion.div>
+        {membership.open && (
+          <MembershipModal
+            isOpen={membership.open}
+            onClose={() => setMembership({ open: false, level: null })}
+            targetLevel={membership.level}
+          />
         )}
       </AnimatePresence>
 
       <WordCard
         isOpen={isCardViewOpen}
         words={activeHskWords || []}
-        onClose={closeWordCard}
+        onClose={() => router.push(router.pathname, undefined, { shallow: true })}
         progressKey={activeLevelTag || 'hsk-vocab'}
       />
     </div>
