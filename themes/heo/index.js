@@ -1,48 +1,30 @@
-// themes/heo/index.js  <-- 最终修复完整版：已解决滑动冲突问题
+/**
+ *   HEO 主题说明
+ *  > 主题设计者 [张洪](https://zhheo.com/)
+ *  > 主题开发者 [tangly1024](https://github.com/tangly1024)
+ *  > 此文件已根据用户需求进行定制修改，整合了新的主页布局及 Cloudflare D1 权限系统。
+ */
 
-// 保持您原始文件的所有 import 语句不变
-import Comment from '@/components/Comment'
-import { AdSlot } from '@/components/GoogleAdsense'
-import { HashTag } from '@/components/HeroIcons'
-import LazyImage from '@/components/LazyImage'
-import LoadingCover from '@/components/LoadingCover'
-import replaceSearchResult from '@/components/Mark'
-import NotionPage from '@/components/NotionPage'
-import WWAds from '@/components/WWAds'
-import { siteConfig } from '@/lib/config'
-import { useGlobal } from '@/lib/global'
-import { loadWowJS } from '@/lib/plugins/wow'
-import { isBrowser } from '@/lib/utils'
-import { Transition } from '@headlessui/react'
-import SmartLink from '@/components/SmartLink'
+// React & Next.js
 import { useRouter } from 'next/router'
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, Fragment } from 'react'
+import dynamic from 'next/dynamic'
+import Script from 'next/script' // <--- 新增：用于加载 Google 登录脚本
+
+// UI & Animation
+import { Transition, Dialog } from '@headlessui/react'
 import { useSwipeable } from 'react-swipeable'
+import { loadWowJS } from '@/lib/plugins/wow'
 
-// 依赖于您项目中的 themes/heo/components/ 文件夹
-import BlogPostArchive from './components/BlogPostArchive'
-import BlogPostListPage from './components/BlogPostListPage'
-import BlogPostListScroll from './components/BlogPostListScroll'
-import CategoryBar from './components/CategoryBar'
-import FloatTocButton from './components/FloatTocButton'
-import Footer from './components/Footer'
-import Header from './components/Header'
-import Hero from './components/Hero'
-import { NoticeBar } from './components/NoticeBar'
-import PostHeader from './components/PostHeader'
-import { PostLock } from './components/PostLock'
-import SearchNav from './components/SearchNav'
-import SideRight from './components/SideRight'
-
+// Global State & Config
+import { useGlobal } from '@/lib/global'
+import { siteConfig } from '@/lib/config'
 import CONFIG from './config'
-import { Style } from './style'
-import AISummary from '@/components/AISummary'
-import ArticleExpirationNotice from '@/components/ArticleExpirationNotice'
-import { FaTiktok, FaFacebook } from 'react-icons/fa'
+
+// Icons
+import { FaTiktok, FaFacebook, FaTelegramPlane } from 'react-icons/fa'
 import {
-    Newspaper,
     GraduationCap,
-    ClipboardCheck,
     BookOpen,
     Phone,
     MessageSquare,
@@ -55,29 +37,226 @@ import {
     Mic,
     Heart,
     List,
-    BookText
+    BookText,
+    SpellCheck2,
+    Type
 } from 'lucide-react'
-import { useAuth } from '@/lib/AuthContext'
-import dynamic from 'next/dynamic'
+import { HashTag } from '@/components/HeroIcons'
 
-// ✅ 导入我们所有新创建的内容块组件
-import HskContentBlock from '@/components/HskPageClient'
-import SpeakingContentBlock from '@/components/SpeakingContentBlock'
-import PracticeContentBlock from '@/components/PracticeContentBlock'
-import BooksContentBlock from '@/components/BooksContentBlock'
+// Base Components from NotionNext
+import Comment from '@/components/Comment'
+import { AdSlot } from '@/components/GoogleAdsense'
+import LazyImage from '@/components/LazyImage'
+import LoadingCover from '@/components/LoadingCover'
+import replaceSearchResult from '@/components/Mark'
+import NotionPage from '@/components/NotionPage'
+import SmartLink from '@/components/SmartLink'
+import WWAds from '@/components/WWAds'
+import AISummary from '@/components/AISummary'
+import ArticleExpirationNotice from '@/components/ArticleExpirationNotice'
+import ShareBar from '@/components/ShareBar'
 
-const AuthModal = dynamic(() => import('@/components/AuthModal'), { ssr: false })
+
+// Original HEO Theme Components (for other pages)
+import BlogPostArchive from './components/BlogPostArchive'
+import BlogPostListPage from './components/BlogPostListPage'
+import BlogPostListScroll from './components/BlogPostListScroll'
+import CategoryBar from './components/CategoryBar'
+import FloatTocButton from './components/FloatTocButton'
+import Footer from './components/Footer'
+import Header from './components/Header'
+import Hero from './components/Hero'
+import LatestPostsGroup from './components/LatestPostsGroup'
+import { NoticeBar } from './components/NoticeBar'
+import PostAdjacent from './components/PostAdjacent'
+import PostCopyright from './components/PostCopyright'
+import PostHeader from './components/PostHeader'
+import { PostLock } from './components/PostLock'
+import PostRecommend from './components/PostRecommend'
+import SearchNav from './components/SearchNav'
+import SideRight from './components/SideRight'
+import { Style } from './style'
+
+// Custom Content Block Components for the new homepage
+import PinyinContentBlock from '@/components/PinyinContentBlock'
+import WordsContentBlock from '@/components/WordsContentBlock'
+// import KouyuPage from '@/components/kouyu'
+import HskContentBlock from '@/components/HskContentBlock'
+
+// Dynamically imported heavy components for the new homepage
 const GlosbeSearchCard = dynamic(() => import('@/components/GlosbeSearchCard'), { ssr: false })
-const ShortSentenceCard = dynamic(() => import('@/components/ShortSentenceCard'), { ssr: false })
+//const ShortSentenceCard = dynamic(() => import('@/components/ShortSentenceCard'), { ssr: false })
 const WordCard = dynamic(() => import('@/components/WordCard'), { ssr: false })
 
+// Helper function to check if running in browser
+const isBrowser = typeof window !== 'undefined';
 
 // =================================================================================
-// ====================== ✅ 高级拖拽侧边栏组件 (保持不变) ✅ ========================
+// ======================  辅助组件 & 工具函数  ========================
 // =================================================================================
+
+// 滚动条样式
+const CustomScrollbarStyle = () => (
+    <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(150, 150, 150, 0.3); border-radius: 10px; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(100, 100, 100, 0.4); }
+    `}</style>
+);
+
+// 激活码校验逻辑 (第一道防线 - 省流关键)
+const validateActivationCode = (code) => {
+    if (!code) return { isValid: false, error: "请输入激活码" };
+    const trimmedCode = code.trim().toUpperCase();
+    
+    // 1. 核心标识检查
+    if (!trimmedCode.includes('-JHM-')) {
+        return { isValid: false, error: "格式错误 (缺少标识)" };
+    }
+    
+    const parts = trimmedCode.split('-');
+    if (parts.length < 3) {
+        return { isValid: false, error: "激活码不完整" };
+    }
+
+    // 2. 等级白名单检查 (根据你的业务调整)
+    const VALID_LEVELS = ['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'H7-9'];
+    if (!VALID_LEVELS.includes(parts[0])) {
+        return { isValid: false, error: `不支持的等级: ${parts[0]}` };
+    }
+
+    return { isValid: true, level: parts[0] };
+};
+
+// =================================================================================
+// ======================  核心组件: 智能侧边栏 (HomeSidebar)  =====================
+// =================================================================================
+
 const HomeSidebar = ({ isOpen, onClose, sidebarX, isDragging }) => {
   const { isDarkMode, toggleDarkMode } = useGlobal();
   const sidebarWidth = 288;
+  const router = useRouter(); 
+
+  // --- 状态管理 ---
+  const [user, setUser] = useState(null);
+  const [code, setCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [isGoogleLoaded, setIsGoogleLoaded] = useState(false); // Google SDK 加载状态
+
+  // --- 1. 初始化：检查本地缓存 ---
+  useEffect(() => {
+    const cachedUser = localStorage.getItem('hsk_user');
+    if (cachedUser) {
+      try {
+        setUser(JSON.parse(cachedUser));
+      } catch (e) {
+        console.error("Local storage error", e);
+        localStorage.removeItem('hsk_user');
+      }
+    }
+  }, []);
+
+  // --- 2. Google 登录回调 ---
+  const handleGoogleCallback = async (response) => {
+    try {
+      // 请求后端验证 Token 并获取/注册用户信息
+      const res = await fetch('/api/verify-google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: response.credential }),
+      });
+      
+      if (!res.ok) throw new Error('Login failed');
+      
+      const userData = await res.json();
+      // 登录成功：更新状态 + 写入缓存
+      setUser(userData);
+      localStorage.setItem('hsk_user', JSON.stringify(userData));
+      setMsg('');
+    } catch (err) {
+      console.error(err);
+      setMsg('登录失败，请刷新重试');
+    }
+  };
+
+  // --- 3. 渲染 Google 按钮 ---
+  useEffect(() => {
+    // 仅在 SDK 加载完成、用户未登录且侧边栏打开时渲染按钮
+    if (window.google && !user && isOpen) {
+      try {
+        window.google.accounts.id.initialize({
+          client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID, // ⚠️ 确保 .env.local 已配置
+          callback: handleGoogleCallback,
+          auto_select: false,
+        });
+        window.google.accounts.id.renderButton(
+          document.getElementById('google-btn-container'),
+          { 
+              theme: isDarkMode ? 'filled_black' : 'outline', 
+              size: 'large', 
+              width: '240',
+              shape: 'pill'
+          }
+        );
+      } catch (e) {
+        console.error("Google button render error:", e);
+      }
+    }
+  }, [user, isOpen, isDarkMode, isGoogleLoaded]);
+
+  // --- 4. 激活逻辑 (省流核心) ---
+  const handleActivate = async () => {
+    setMsg('');
+    
+    // [省流] 前端 JS 纯计算校验，不符合规则坚决不发请求
+    const validation = validateActivationCode(code);
+    if (!validation.isValid) {
+      setMsg(`❌ ${validation.error}`);
+      return;
+    }
+
+    // [省流] 检查本地已拥有的权限
+    if (user.unlocked_levels && user.unlocked_levels.split(',').includes(validation.level)) {
+      setMsg(`⚠️ 您已经解锁了 ${validation.level}`);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/activate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email, code: code.trim().toUpperCase() }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setMsg(`❌ ${data.error}`);
+      } else {
+        setMsg(`✅ 成功解锁 ${data.level}！`);
+        setCode('');
+        // 更新用户信息
+        const updatedUser = { ...user, unlocked_levels: data.new_unlocked_levels };
+        setUser(updatedUser);
+        localStorage.setItem('hsk_user', JSON.stringify(updatedUser));
+      }
+    } catch (e) {
+      setMsg('❌ 网络错误');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- 5. 退出登录 ---
+  const handleLogout = () => {
+      localStorage.removeItem('hsk_user');
+      setUser(null);
+      setMsg('');
+      setCode('');
+  };
 
   const sidebarLinks = [
     { icon: <Settings size={20} />, text: '通用设置', href: '/settings' },
@@ -88,39 +267,108 @@ const HomeSidebar = ({ isOpen, onClose, sidebarX, isDragging }) => {
 
   return (
     <>
+      {/* 异步加载 Google Identity Services */}
+      <Script 
+        src="https://accounts.google.com/gsi/client" 
+        strategy="lazyOnload" 
+        onLoad={() => setIsGoogleLoaded(true)}
+      />
+
       <div
         className={`fixed inset-0 bg-black z-30 transition-opacity duration-300 ${isOpen ? 'opacity-50' : 'opacity-0 pointer-events-none'}`}
         onClick={onClose}
         style={{ opacity: isOpen ? 0.5 : (sidebarX + sidebarWidth) / sidebarWidth * 0.5 }}
       />
       <div
-        className={`fixed inset-y-0 left-0 w-72 bg-white/95 dark:bg-gray-900/95 backdrop-blur-lg shadow-2xl z-40 transform ${transitionClass}`}
+        className={`fixed inset-y-0 left-0 w-72 bg-white/95 dark:bg-gray-900/95 backdrop-blur-lg shadow-2xl z-40 transform ${transitionClass} overflow-y-auto custom-scrollbar`}
         style={{ transform: `translateX(${sidebarX}px)` }}
       >
-        <div className="flex flex-col h-full">
-            <div className="p-6 flex items-center gap-4 border-b dark:border-gray-700">
-                <UserCircle size={48} className="text-gray-500" />
-                <div>
-                    <p className="font-semibold text-lg text-gray-800 dark:text-gray-100">访客</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">欢迎来到本站</p>
-                </div>
+        <div className="flex flex-col min-h-full">
+            
+            {/* --- 用户信息区域 --- */}
+            <div className="p-6 border-b dark:border-gray-700 bg-gray-50/50 dark:bg-black/20">
+                {!user ? (
+                    /* 未登录视图 */
+                    <div className="flex flex-col items-center gap-4 animate-fade-in">
+                         <div className="flex items-center gap-3 w-full mb-2">
+                            <UserCircle size={48} className="text-gray-400" />
+                            <div>
+                                <p className="font-semibold text-lg text-gray-800 dark:text-gray-100">访客</p>
+                                <p className="text-xs text-gray-500">请登录以同步进度</p>
+                            </div>
+                        </div>
+                        {/* Google 按钮挂载点 */}
+                        <div id="google-btn-container" className="w-full flex justify-center min-h-[40px]"></div>
+                    </div>
+                ) : (
+                    /* 已登录视图 */
+                    <div className="flex flex-col gap-4 animate-fade-in">
+                        <div className="flex items-center gap-3">
+                            {user.avatar_url ? (
+                                <img src={user.avatar_url} alt="avatar" className="w-12 h-12 rounded-full border-2 border-white shadow-sm" />
+                            ) : (
+                                <UserCircle size={48} className="text-blue-500" />
+                            )}
+                            <div className="overflow-hidden">
+                                <p className="font-bold text-gray-800 dark:text-white truncate">{user.name}</p>
+                                <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                                   已解锁: {user.unlocked_levels || '无'}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* 激活码输入框 */}
+                        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-600 shadow-sm">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">课程激活</label>
+                            <input
+                                type="text"
+                                value={code}
+                                onChange={(e) => setCode(e.target.value)}
+                                placeholder="HSK1-JHM-XXXX"
+                                className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 text-sm mb-2 focus:ring-2 focus:ring-blue-500 outline-none uppercase transition-all"
+                            />
+                            <button
+                                onClick={handleActivate}
+                                disabled={loading || !code}
+                                className="w-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white py-1.5 rounded-lg text-sm font-medium transition-all disabled:bg-gray-400 disabled:scale-100"
+                            >
+                                {loading ? '验证中...' : '立即激活'}
+                            </button>
+                            {msg && <p className={`text-xs mt-2 font-medium text-center ${msg.includes('✅') ? 'text-green-600' : 'text-red-500'}`}>{msg}</p>}
+                        </div>
+                    </div>
+                )}
             </div>
+
+            {/* --- 菜单链接 --- */}
             <nav className="flex-grow p-4 space-y-2">
                 {sidebarLinks.map((link, index) => (
-                    <SmartLink key={index} href={link.href} className="flex items-center gap-4 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors">
+                    <SmartLink key={index} href={link.href} className="flex items-center gap-4 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                         {link.icon}
                         <span className="font-medium">{link.text}</span>
                     </SmartLink>
                 ))}
             </nav>
-            <div className="p-4 border-t dark:border-gray-700">
+            
+            {/* --- 底部操作 --- */}
+            <div className="p-4 border-t dark:border-gray-700 space-y-2">
                 <button
                     onClick={toggleDarkMode}
-                    className="w-full flex items-center gap-4 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors"
+                    className="w-full flex items-center gap-4 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                 >
                     {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-                    <span className="font-medium">{isDarkMode ? '切换到日间模式' : '切换到夜间模式'}</span>
+                    <span className="font-medium">{isDarkMode ? '切换日间模式' : '切换夜间模式'}</span>
                 </button>
+
+                {user && (
+                    <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-4 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    >
+                        <i className="fas fa-sign-out-alt w-5 text-center text-lg"></i>
+                        <span className="font-medium">退出登录</span>
+                    </button>
+                )}
             </div>
         </div>
       </div>
@@ -128,100 +376,13 @@ const HomeSidebar = ({ isOpen, onClose, sidebarX, isDragging }) => {
   );
 };
 
-
-/**
- * 基础布局
- */
-const LayoutBase = props => {
-  const { children, slotTop, className } = props
-  const { fullWidth, isDarkMode } = useGlobal()
-  const router = useRouter()
-
-  if (router.route === '/') { return <>{children}</> }
-
-  const headerSlot = (
-    <header>
-      <Header {...props} />
-      {fullWidth || props.post ? null : <PostHeader {...props} isDarkMode={isDarkMode} />}
-    </header>
-  )
-
-  const slotRight = router.route === '/404' || fullWidth ? null : <SideRight {...props} />
-  const maxWidth = fullWidth ? 'max-w-[96rem] mx-auto' : 'max-w-[86rem]'
-
-  useEffect(() => { loadWowJS() }, [])
-
-  return (
-    <div id='theme-heo' className={`${siteConfig('FONT_STYLE')} bg-[#f7f9fe] dark:bg-[#18171d] h-full min-h-screen flex flex-col scroll-smooth`}>
-      <Style />
-      {headerSlot}
-      <main id='wrapper-outer' className={`flex-grow w-full ${maxWidth} mx-auto relative md:px-5`}>
-        <div id='container-inner' className='w-full mx-auto lg:flex justify-center relative z-10'>
-          <div className={`w-full h-auto ${className || ''}`}>{slotTop}{children}</div>
-          <div className='lg:px-2'></div>
-          <div className='hidden xl:block'>{slotRight}</div>
-        </div>
-      </main>
-      <Footer />
-      {siteConfig('HEO_LOADING_COVER', true, CONFIG) && <LoadingCover />}
-    </div>
-  )
-}
-
-// 纤细滚动条样式
-const CustomScrollbarStyle = () => (
-    <style jsx global>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(150, 150, 150, 0.3); border-radius: 10px; }
-        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(100, 100, 100, 0.4); }
-    `}</style>
-);
-
-
 // =================================================================================
-// ====================== 主页专用的底部导航栏 (保持不变) ========================
+// ======================  其他辅助组件 (ActionButtons, ContactPanel)  =============
 // =================================================================================
-const BottomNavBar = () => {
-    const navItems = [
-        { href: '/', icon: 'fas fa-home', label: '主页', auth: false },
-        { href: '/ai-assistant', icon: 'fas fa-robot', label: 'AI助手', auth: false },
-        { href: '/community', icon: 'fas fa-users', label: '社区', auth: true },
-        { href: '/messages', icon: 'fas fa-comment-dots', label: '消息', auth: true },
-        { href: '/profile', icon: 'fas fa-user', label: '我', auth: true },
-    ];
-    const router = useRouter();
-    const { user, authLoading } = useAuth();
-    const [showLoginModal, setShowLoginModal] = useState(false);
 
-    const handleLinkClick = (e, item) => {
-        if (item.auth && !authLoading && !user) {
-            e.preventDefault();
-            setShowLoginModal(true);
-        }
-    };
-
-    return (
-        <>
-            <AuthModal show={showLoginModal} onClose={() => setShowLoginModal(false)} />
-            <nav className='fixed bottom-0 left-0 right-0 h-16 bg-white/80 dark:bg-black/80 backdrop-blur-lg shadow-[0_-2px_10px_rgba(0,0,0,0.1)] z-50 flex justify-around items-center'>
-                {navItems.map(item => (
-                    <SmartLink key={item.href} href={item.href} onClick={(e) => handleLinkClick(e, item)} className={`flex flex-col items-center justify-center w-1/5 ${authLoading && item.auth ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                        <i className={`${item.icon} text-xl ${router.pathname === item.href ? 'text-blue-500' : 'text-gray-500'}`}></i>
-                        <span className={`text-xs mt-1 ${router.pathname === item.href ? 'text-blue-500' : 'text-gray-500'}`}>{item.label}</span>
-                    </SmartLink>
-                ))}
-            </nav>
-        </>
-    );
-};
-
-// =================================================================================
-// ====================== 快捷操作按钮组件 (保持不变) ========================
-// =================================================================================
-const ActionButtons = ({ onOpenFavorites }) => {
+const ActionButtons = ({ onOpenFavorites, onOpenContact }) => {
   const actions = [
-    { icon: <Phone size={24} />, text: '联系我们', type: 'link', href: 'tel:YOUR_PHONE_NUMBER', color: 'from-blue-500 to-sky-500' },
+    { icon: <Phone size={24} />, text: '联系我们', type: 'contact', color: 'from-blue-500 to-sky-500' },
     { icon: <MessageSquare size={24} />, text: '在线客服', type: 'link', href: '#', color: 'from-green-500 to-emerald-500' },
     { icon: <Users size={24} />, text: '加入社群', type: 'link', href: '#', color: 'from-purple-500 to-indigo-500' },
     { icon: <Heart size={24} />, text: '收藏单词', type: 'words', color: 'from-orange-500 to-amber-500' },
@@ -231,53 +392,75 @@ const ActionButtons = ({ onOpenFavorites }) => {
   return (
     <div className="grid grid-cols-3 gap-4 px-4">
       {actions.map((action, index) => {
-        const content = (
-          <>
-            <div className="mb-2">{action.icon}</div>
-            <span className="text-sm font-semibold">{action.text}</span>
-          </>
-        );
+        const content = ( <> <div className="mb-2">{action.icon}</div> <span className="text-sm font-semibold">{action.text}</span> </> );
         const className = `flex flex-col items-center justify-center p-4 rounded-xl shadow-lg hover:shadow-xl text-white bg-gradient-to-br ${action.color} transition-all duration-300 transform hover:-translate-y-1 w-full`;
-
+        
         if (action.type === 'link') {
-          return (
-            <a key={index} href={action.href} className={className}>
-              {content}
-            </a>
-          );
+          return ( <a key={index} href={action.href} className={className}> {content} </a> );
         }
-
-        return (
-          <button key={index} onClick={() => onOpenFavorites(action.type)} className={className}>
-            {content}
-          </button>
-        );
+        if (action.type === 'contact') {
+          return ( <button key={index} onClick={onOpenContact} className={className}> {content} </button> );
+        }
+        return ( <button key={index} onClick={() => onOpenFavorites(action.type)} className={className}> {content} </button> );
       })}
     </div>
   );
 };
 
+const ContactPanel = ({ isOpen, onClose }) => {
+    const socialLinks = [
+        { name: 'Facebook', href: 'https://www.facebook.com/share/1ErXyBbrZ1', icon: <FaFacebook size={32} />, color: 'text-blue-600' },
+        { name: 'TikTok', href: 'https://www.tiktok.com/@mmzh.onlione?_r=1&_t=ZS-91OzyDddPu8', icon: <FaTiktok size={32} />, color: 'text-black dark:text-white' },
+        { name: 'Telegram', href: 'https://t.me/hurt8888', icon: <FaTelegramPlane size={32} />, color: 'text-sky-500' }
+    ];
 
-// =================================================================================
-// ====================== IndexedDB 辅助函数 (保持不变) ========================
-// =================================================================================
+    return (
+        <Transition show={isOpen} as={Fragment}>
+            <Dialog as="div" className="relative z-50" onClose={onClose}>
+                <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
+                    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
+                </Transition.Child>
+                <div className="fixed inset-0 overflow-y-auto">
+                    <div className="flex min-h-full items-center justify-center p-4 text-center">
+                        <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100" leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95">
+                            <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 p-6 text-left align-middle shadow-xl transition-all">
+                                <Dialog.Title as="h3" className="text-lg font-bold leading-6 text-gray-900 dark:text-gray-100">联系我们</Dialog.Title>
+                                <div className="mt-4"><p className="text-sm text-gray-500 dark:text-gray-400">通过以下方式与我们取得联系，我们期待您的咨询。</p></div>
+                                <div className="mt-6 space-y-4">
+                                    {socialLinks.map(link => (
+                                        <a key={link.name} href={link.href} target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 p-4 rounded-lg bg-gray-100 dark:bg-gray-700/50 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                                            <div className={link.color}>{link.icon}</div>
+                                            <div><p className="font-semibold text-gray-800 dark:text-gray-200">{link.name}</p><p className="text-xs text-gray-500 dark:text-gray-400">点击跳转</p></div>
+                                        </a>
+                                    ))}
+                                </div>
+                                <div className="mt-6">
+                                    <button type="button" className="inline-flex justify-center rounded-md border border-transparent bg-blue-100 dark:bg-blue-900/50 px-4 py-2 text-sm font-medium text-blue-900 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-900 focus:outline-none w-full" onClick={onClose}>关闭</button>
+                                </div>
+                            </Dialog.Panel>
+                        </Transition.Child>
+                    </div>
+                </div>
+            </Dialog>
+        </Transition>
+    );
+};
+
+// IndexedDB Helper Functions
 const DB_NAME = 'ChineseLearningDB';
 const SENTENCE_STORE_NAME = 'favoriteSentences';
-const WORD_STORE_NAME = 'favoriteWords'; // 单词收藏存储名
+const WORD_STORE_NAME = 'favoriteWords';
 
 function openDB() {
   return new Promise((resolve, reject) => {
+    if (!isBrowser) return resolve(null);
     const request = indexedDB.open(DB_NAME, 1);
     request.onerror = () => reject('数据库打开失败');
     request.onsuccess = () => resolve(request.result);
     request.onupgradeneeded = (e) => {
       const db = e.target.result;
-      if (!db.objectStoreNames.contains(SENTENCE_STORE_NAME)) {
-        db.createObjectStore(SENTENCE_STORE_NAME, { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains(WORD_STORE_NAME)) {
-        db.createObjectStore(WORD_STORE_NAME, { keyPath: 'id' });
-      }
+      if (!db.objectStoreNames.contains(SENTENCE_STORE_NAME)) db.createObjectStore(SENTENCE_STORE_NAME, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains(WORD_STORE_NAME)) db.createObjectStore(WORD_STORE_NAME, { keyPath: 'id' });
     };
   });
 }
@@ -285,6 +468,7 @@ function openDB() {
 async function getAllFavorites(storeName) {
     try {
         const db = await openDB();
+        if (!db) return [];
         const tx = db.transaction(storeName, 'readonly');
         const store = tx.objectStore(storeName);
         return new Promise((resolve, reject) => {
@@ -299,32 +483,43 @@ async function getAllFavorites(storeName) {
 }
 
 
-/**
- * 首页 - 终极融合版 (已应用所有修改)
- */
+// =================================================================================
+// ======================  新主页布局 (LayoutIndex) ========================
+// =================================================================================
 const LayoutIndex = props => {
-  const router = useRouter(); 
-  const { books, speakingCourses, sentenceCards, allWords } = props;
+  const router = useRouter();
 
-  const tabs = [
-    { name: '文章', icon: <Newspaper size={22} /> },
-    { name: 'HSK', icon: <GraduationCap size={22} /> },
-    { name: '口语', icon: <Mic size={22} /> },
-    { name: '练习', icon: <ClipboardCheck size={22} /> },
-    { name: '书籍', icon: <BookOpen size={22} /> }
+  const allTabs = [
+    { name: '拼音', key: 'pinyin', icon: <Type size={22} /> },
+    { name: '单词', key: 'words', icon: <BookText size={22} /> },
+    { name: 'HSK', key: 'hsk', icon: <GraduationCap size={22} /> },
+    { name: '口语', key: 'speaking', icon: <Mic size={22} /> },
+    { name: '语法', key: 'grammar', icon: <SpellCheck2 size={22} /> }
   ];
   
-  const [activeTab, setActiveTab] = useState(tabs[0].name);
-  const [backgroundUrl, setBackgroundUrl] = useState('');
+  const [activeTabKey, setActiveTabKey] = useState('pinyin'); 
+
+  useEffect(() => {
+    if (router.isReady) {
+      const tabFromQuery = router.query.tab;
+      const validTab = allTabs.find(t => t.key === tabFromQuery);
+      setActiveTabKey(validTab ? validTab.key : allTabs[0].key);
+    }
+  }, [router.isReady, router.query.tab]);
   
+  const handleTabChange = (key) => {
+    router.push(`/?tab=${key}`, undefined, { shallow: true });
+    setActiveTabKey(key);
+  };
+
+  const [backgroundUrl, setBackgroundUrl] = useState('');
   const scrollableContainerRef = useRef(null);
   const stickySentinelRef = useRef(null);
   const lastScrollY = useRef(0);
-  const ticking = useRef(false);
   const [isStickyActive, setIsStickyActive] = useState(false);
   const [isNavVisible, setIsNavVisible] = useState(true);
-  const mainContentRef = useRef(null); // ✅ 新增：为 main 内容区创建 ref
-
+  const mainContentRef = useRef(null);
+  
   const sidebarWidth = 288;
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [sidebarX, setSidebarX] = useState(-sidebarWidth);
@@ -334,25 +529,24 @@ const LayoutIndex = props => {
 
   const [sentenceCardData, setSentenceCardData] = useState(null);
   const [wordCardData, setWordCardData] = useState(null);
-  const isSentenceFavoritesCardOpen = router.asPath.includes('#favorite-sentences');
-  const isWordFavoritesCardOpen = router.asPath.includes('#favorite-words');
-
+  const isSentenceFavoritesCardOpen = isBrowser ? window.location.hash === '#favorite-sentences' : false;
+  const isWordFavoritesCardOpen = isBrowser ? window.location.hash === '#favorite-words' : false;
+  const [isContactPanelOpen, setIsContactPanelOpen] = useState(false);
+  
   const handleOpenFavorites = useCallback(async (type) => {
     if (type === 'sentences') {
         const sentences = await getAllFavorites(SENTENCE_STORE_NAME);
-        if (sentences && sentences.length > 0) {
+        if (sentences?.length > 0) {
             setSentenceCardData(sentences.map(s => ({ id: s.id, sentence: s.chinese, translation: s.burmese, pinyin: s.pinyin, imageUrl: s.imageUrl })));
-            setWordCardData(null);
-            router.push(router.asPath + '#favorite-sentences', undefined, { shallow: true });
+            router.push('#favorite-sentences', undefined, { shallow: true });
         } else {
             alert('您还没有收藏任何短句。');
         }
     } else if (type === 'words') {
         const words = await getAllFavorites(WORD_STORE_NAME);
-        if (words && words.length > 0) {
+        if (words?.length > 0) {
             setWordCardData(words);
-            setSentenceCardData(null);
-            router.push(router.asPath + '#favorite-words', undefined, { shallow: true });
+            router.push('#favorite-words', undefined, { shallow: true });
         } else {
             alert('您还没有收藏任何单词。');
         }
@@ -362,132 +556,119 @@ const LayoutIndex = props => {
   }, [router]); 
 
   const handleCloseFavorites = useCallback(() => {
-    setSentenceCardData(null);
-    setWordCardData(null);
-    if (window.location.hash.includes('#favorite')) {
-        router.back();
-    }
+    router.push(router.pathname, undefined, { shallow: true });
   }, [router]);
 
   useEffect(() => {
-    const container = scrollableContainerRef.current;
-    if (!container) return;
-
-    const threshold = 10;
-    const handleScroll = () => {
-      if (!isStickyActive) {
-          lastScrollY.current = container.scrollTop;
-          return;
-      }
-      
-      const currentY = container.scrollTop;
-      
-      if (!ticking.current) {
-        window.requestAnimationFrame(() => {
-          const diff = currentY - lastScrollY.current;
-          if (Math.abs(diff) > threshold) {
-            if (diff > 0) {
-              setIsNavVisible(false);
-            } else {
-              setIsNavVisible(true);
-            }
-          }
-          lastScrollY.current = currentY;
-          ticking.current = false;
-        });
-        ticking.current = true;
-      }
-    };
-    container.addEventListener('scroll', handleScroll, { passive: true });
-
-    const observer = new IntersectionObserver(
-        ([entry]) => {
-            setIsStickyActive(!entry.isIntersecting);
-            if(entry.isIntersecting) {
-              setIsNavVisible(true);
-            }
-        },
-        { rootMargin: '0px', threshold: 0 }
-    );
-    const currentSentinel = stickySentinelRef.current;
-    if (currentSentinel) observer.observe(currentSentinel);
-    
-    const handlePopState = () => {
-      const hash = window.location.hash;
-      if (!hash.includes('favorite-sentences') && !hash.includes('favorite-words')) {
+    const handlePopStateFavorites = () => {
+      if (!window.location.hash.startsWith('#favorite')) {
         setSentenceCardData(null);
         setWordCardData(null);
       }
     };
-    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('popstate', handlePopStateFavorites);
+
     const backgrounds = [
         'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto-format&fit-crop&q=80&w=2070',
         'https://images.unsplash.com/photo-1519681393784-d120267933ba?auto-format&fit-crop&q=80&w=2070'
     ];
     setBackgroundUrl(backgrounds[Math.floor(Math.random() * backgrounds.length)]);
 
+    const container = scrollableContainerRef.current;
+    if (!container) return;
+
+    let ticking = false;
+    const handleScroll = () => {
+      if (!isStickyActive) {
+          lastScrollY.current = container.scrollTop;
+          return;
+      }
+      const currentY = container.scrollTop;
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const diff = currentY - lastScrollY.current;
+          if (Math.abs(diff) > 10) {
+            setIsNavVisible(diff <= 0);
+          }
+          lastScrollY.current = currentY;
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    
+    const observer = new IntersectionObserver(
+        ([entry]) => {
+            const shouldBeSticky = !entry.isIntersecting && entry.boundingClientRect.top < 0;
+            setIsStickyActive(shouldBeSticky);
+            if (!shouldBeSticky) setIsNavVisible(true);
+        }, { threshold: 0 }
+    );
+      
+    const currentSentinel = stickySentinelRef.current;
+    if (currentSentinel) observer.observe(currentSentinel);
+    
     return () => { 
         container.removeEventListener('scroll', handleScroll);
         if (currentSentinel) observer.unobserve(currentSentinel);
-        window.removeEventListener('popstate', handlePopState);
+        window.removeEventListener('popstate', handlePopStateFavorites);
     };
-  }, [isStickyActive]);
-
-  // ✅ 已修改：解决手势冲突
-  const handleTouchStart = (e) => {
-    // 如果触摸点在主内容区内，则不触发侧边栏逻辑，让内容区的滑动优先
-    if (!isSidebarOpen && mainContentRef.current && mainContentRef.current.contains(e.target)) {
-        return;
-    }
-
-    const startX = e.touches[0].clientX;
-    const screenWidth = window.innerWidth;
-    
-    if (!isSidebarOpen && startX > screenWidth * 0.4) return;
-
-    touchStartX.current = startX;
-    currentSidebarX.current = sidebarX;
-    setIsDragging(true);
-  };
-
-  const handleTouchMove = (e) => {
-    if (!isDragging || touchStartX.current === null) return;
-    const currentX = e.touches[0].clientX;
-    const deltaX = currentX - touchStartX.current;
-    let newX = currentSidebarX.current + deltaX;
-    newX = Math.max(-sidebarWidth, Math.min(newX, 0));
-    setSidebarX(newX);
-  };
-
-  const handleTouchEnd = () => {
-    if (!isDragging || touchStartX.current === null) return;
-    setIsDragging(false);
-    touchStartX.current = null;
-    if (sidebarX < -sidebarWidth / 2) {
-        closeSidebar();
-    } else {
-        openSidebar();
-    }
-  };
+  }, [isStickyActive, router]);
 
   const contentSwipeHandlers = useSwipeable({
       onSwipedLeft: () => {
-          const currentIndex = tabs.findIndex(t => t.name === activeTab);
-          if (currentIndex < tabs.length - 1) setActiveTab(tabs[currentIndex + 1].name);
+          const currentIndex = allTabs.findIndex(t => t.key === activeTabKey);
+          if (currentIndex !== -1 && currentIndex < allTabs.length - 1) {
+              handleTabChange(allTabs[currentIndex + 1].key);
+          }
       },
       onSwipedRight: () => {
-          const currentIndex = tabs.findIndex(t => t.name === activeTab);
-          if (currentIndex > 0) setActiveTab(tabs[currentIndex - 1].name);
+          const currentIndex = allTabs.findIndex(t => t.key === activeTabKey);
+          if (currentIndex > 0) {
+              handleTabChange(allTabs[currentIndex - 1].key);
+          }
       },
-      disabled: isDragging,
       preventDefaultTouchmoveEvent: true,
       trackMouse: true,
       delta: 50
   });
 
+  const handleTouchStart = (e) => {
+    if (!isSidebarOpen && mainContentRef.current?.contains(e.target)) return;
+    const startX = e.touches[0].clientX;
+    if (!isSidebarOpen && startX > window.innerWidth * 0.4) return;
+    touchStartX.current = startX;
+    currentSidebarX.current = sidebarX;
+    setIsDragging(true);
+  };
+  const handleTouchMove = (e) => {
+    if (!isDragging || touchStartX.current === null) return;
+    const deltaX = e.touches[0].clientX - touchStartX.current;
+    const newX = Math.max(-sidebarWidth, Math.min(currentSidebarX.current + deltaX, 0));
+    setSidebarX(newX);
+  };
+  const handleTouchEnd = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    touchStartX.current = null;
+    if (sidebarX < -sidebarWidth / 2) closeSidebar();
+    else openSidebar();
+  };
   const openSidebar = () => { setIsSidebarOpen(true); setSidebarX(0); };
   const closeSidebar = () => { setIsSidebarOpen(false); setSidebarX(-sidebarWidth); };
-  const PostListComponent = siteConfig('POST_LIST_STYLE') === 'page' ? BlogPostListPage : BlogPostListScroll;
+  
+  const renderTabButtons = () => allTabs.map(tab => (
+    <button key={tab.key} onClick={() => handleTabChange(tab.key)} className={`flex flex-col items-center justify-center w-1/4 pt-2.5 pb-1.5 transition-colors duration-300 focus:outline-none ${activeTabKey === tab.key ? 'text-blue-500' : 'text-gray-500 dark:text-gray-400'}`}>
+        {tab.icon}
+        <span className='text-xs font-semibold mt-1'>{tab.name}</span>
+        <div className={`w-6 h-0.5 mt-1 rounded-full transition-all duration-300 ${activeTabKey === tab.key ? 'bg-blue-500' : 'bg-transparent'}`}></div>
+    </button>
+  ));
+
+  if (!activeTabKey) {
+    return <div id='theme-heo' className={`${siteConfig('FONT_STYLE')} h-screen w-screen bg-black flex flex-col overflow-hidden`}></div>;
+  }
 
   return (
     <div id='theme-heo' className={`${siteConfig('FONT_STYLE')} h-screen w-screen bg-black flex flex-col overflow-hidden`}>
@@ -508,105 +689,108 @@ const LayoutIndex = props => {
                     <h1 className='text-4xl font-extrabold' style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>中缅文培训中心</h1>
                     <p className='mt-2 text-lg w-full md:w-2/3' style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.7)' }}>在这里可以写很长的价格介绍、Slogan 或者其他描述文字。</p>
                     <div className='mt-4 grid grid-cols-3 grid-rows-2 gap-2 h-40'>
-                        <a href="#" className='col-span-1 row-span-1 rounded-xl overflow-hidden relative group bg-cover bg-center' style={{ backgroundImage: "url('/img/tiktok.jpg')" }}><div className='absolute top-1 left-1 bg-pink-500 text-white text-[8px] font-bold px-1 py-0.25 rounded'>LIVE</div><div className='absolute bottom-1 right-1 p-1 flex flex-col items-end text-white text-right'><FaTiktok size={18}/><span className='text-[10px] mt-0.5 font-semibold'>直播订阅</span></div></a>
-                        <a href="#" className='col-span-1 row-start-2 rounded-xl overflow-hidden relative group bg-cover bg-center' style={{ backgroundImage: "url('/img/facebook.jpg')" }}><div className='absolute top-1 left-1 bg-blue-600 text-white text-[8px] font-bold px-1 py-0.25 rounded'>LIVE</div><div className='absolute bottom-1 right-1 p-1 flex flex-col items-end text-white text-right'><FaFacebook size={18}/><span className='text-[10px] mt-0.5 font-semibold'>直播订阅</span></div></a>
-                        <div className='col-span-2 col-start-2 row-span-2 rounded-xl overflow-hidden bg-black'><iframe width="100%" height="100%" src="https://www.youtube.com/embed/jfKfPfyJRdk?autoplay=1&mute=1&loop=1&playlist=jfKfPfyJRdk" title="YouTube" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe></div>
+                        <a href="https://www.tiktok.com/@mmzh.onlione?_r=1&_t=ZS-91OzyDddPu8" target="_blank" rel="noopener noreferrer" className='col-span-1 row-span-1 rounded-xl overflow-hidden relative group bg-cover bg-center' style={{ backgroundImage: "url('/img/tiktok.jpg')" }}><div className='absolute top-1 left-1 bg-pink-500 text-white text-[8px] font-bold px-1 py-0.25 rounded'>LIVE</div><div className='absolute bottom-1 right-1 p-1 flex flex-col items-end text-white text-right'><FaTiktok size={18}/><span className='text-[10px] mt-0.5 font-semibold'>直播订阅</span></div></a>
+                        <a href="https://www.facebook.com/share/1ErXyBbrZ1" target="_blank" rel="noopener noreferrer" className='col-span-1 row-start-2 rounded-xl overflow-hidden relative group bg-cover bg-center' style={{ backgroundImage: "url('/img/facebook.jpg')" }}><div className='absolute top-1 left-1 bg-blue-600 text-white text-[8px] font-bold px-1 py-0.25 rounded'>LIVE</div><div className='absolute bottom-1 right-1 p-1 flex flex-col items-end text-white text-right'><FaFacebook size={18}/><span className='text-[10px] mt-0.5 font-semibold'>直播订阅</span></div></a>
+                        <div className='col-span-2 col-start-2 row-span-2 rounded-xl overflow-hidden bg-black'><iframe title="YouTube" width="100%" height="100%" src="https://www.you999tube.com/embed/your_video_id_here" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe></div>
                     </div>
                 </div>
             </div>
 
             <div ref={scrollableContainerRef} className='absolute inset-0 z-20 overflow-y-auto overscroll-y-contain custom-scrollbar'>
                 <div className='h-[40vh] flex-shrink-0' />
-                <div className='relative bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl pb-24 min-h-[calc(60vh+1px)]'>
+                <div className='relative bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl pb-6 min-h-[calc(60vh+1px)]'>
                     
                     <div className='bg-violet-50 dark:bg-gray-800 rounded-t-2xl'>
                         <div className='pt-6'>
                            <div className='px-4 mb-6'><GlosbeSearchCard /></div>
-                           <div className='pb-6'><ActionButtons onOpenFavorites={handleOpenFavorites} /></div>
+                           <div className='pb-6'><ActionButtons onOpenFavorites={handleOpenFavorites} onOpenContact={() => setIsContactPanelOpen(true)} /></div>
                         </div>
-
                         <div ref={stickySentinelRef}></div>
-
-                        <div className={`${isStickyActive ? 'invisible' : ''} border-b border-violet-200 dark:border-gray-700`}>
-                            <div className='flex justify-around'>
-                               {tabs.map(tab => (
-                               <button key={tab.name} onClick={() => setActiveTab(tab.name)} className={`flex flex-col items-center justify-center w-1/5 pt-2.5 pb-1.5 transition-colors duration-300 focus:outline-none ${activeTab === tab.name ? 'text-blue-500' : 'text-gray-500 dark:text-gray-400'}`}>
-                                   {tab.icon}
-                                   <span className='text-xs font-semibold mt-1'>{tab.name}</span>
-                                   <div className={`w-6 h-0.5 mt-1 rounded-full transition-all duration-300 ${activeTab === tab.name ? 'bg-blue-500' : 'bg-transparent'}`}></div>
-                               </button>
-                               ))}
-                           </div>
+                        
+                        <div className={`${isStickyActive ? 'opacity-0 pointer-events-none h-0 overflow-hidden' : ''} border-b border-violet-200 dark:border-gray-700 transition-all duration-200`}>
+                            <div className='flex justify-around'>{renderTabButtons()}</div>
                        </div>
                     </div>
 
-                    <div className={`transition-transform duration-300 ease-in-out ${isStickyActive ? 'fixed w-full top-0 z-30' : 'hidden'} ${isNavVisible ? 'translate-y-0' : '-translate-y-full'}`}>
-                        <div className='bg-violet-50/80 dark:bg-gray-800/80 backdrop-blur-lg border-b border-violet-200 dark:border-gray-700'>
-                            <div className='flex justify-around max-w-[86rem] mx-auto'>
-                                {tabs.map(tab => (
-                                <button key={tab.name} onClick={() => setActiveTab(tab.name)} className={`flex flex-col items-center justify-center w-1/5 pt-2.5 pb-1.5 transition-colors duration-300 focus:outline-none ${activeTab === tab.name ? 'text-blue-500' : 'text-gray-500 dark:text-gray-400'}`}>
-                                    {tab.icon}
-                                    <span className='text-xs font-semibold mt-1'>{tab.name}</span>
-                                    <div className={`w-6 h-0.5 mt-1 rounded-full transition-all duration-300 ${activeTab === tab.name ? 'bg-blue-500' : 'bg-transparent'}`}></div>
-                                </button>
-                                ))}
-                            </div>
+                    <div className={`transition-transform duration-300 ease-in-out fixed w-full top-0 z-30 ${isStickyActive ? 'block' : 'hidden'} ${isNavVisible ? 'translate-y-0' : '-translate-y-full'}`}>
+                        <div className='bg-violet-50/95 dark:bg-gray-800/95 backdrop-blur-lg border-b border-violet-200 dark:border-gray-700 shadow-sm'>
+                            <div className='flex justify-around max-w-[86rem] mx-auto'>{renderTabButtons()}</div>
                         </div>
                     </div>
                     
-                    {/* ✅ 已修改：为 main 添加 ref */}
                     <main ref={mainContentRef} {...contentSwipeHandlers}>
-                        {tabs.map(tab => (
-                            <div key={tab.name} className={`${activeTab === tab.name ? 'block' : 'hidden'}`}>
-                                <div className='p-4'> 
-                                    {tab.name === '文章' && <PostListComponent {...props} />}
-                                    {tab.name === 'HSK' && <HskContentBlock words={allWords} />}
-                                    {tab.name === '口语' && <SpeakingContentBlock speakingCourses={speakingCourses} sentenceCards={sentenceCards} />}
-                                    {tab.name === '练习' && <PracticeContentBlock />}
-                                    {tab.name === '书籍' && <BooksContentBlock notionBooks={books} />}
-                                </div>
-                            </div>
-                        ))}
+                        <div className='p-4'>
+                            {activeTabKey === 'pinyin' && <PinyinContentBlock />}
+                            {activeTabKey === 'words' && <WordsContentBlock />}
+                            {activeTabKey === 'speaking' && <KouyuPage />}
+                            {/* HSK 和 语法 的内容组件可以按需添加 */}
+                            {activeTabKey === 'hsk' && <HskContentBlock />}
+                            {/* {activeTabKey === 'grammar' && <GrammarContentBlock />} */}
+                        </div>
                     </main>
                 </div>
             </div>
-            
-            <BottomNavBar />
+            {/* 底部导航栏已移除 */}
         </div>
 
-        <ShortSentenceCard
-            sentences={sentenceCardData || []}
-            isOpen={isSentenceFavoritesCardOpen}
-            onClose={handleCloseFavorites}
-            progressKey="favorites-sentences" 
-        />
-        <WordCard
-            words={wordCardData || []}
-            isOpen={isWordFavoritesCardOpen}
-            onClose={handleCloseFavorites}
-            progressKey="favorites-words" 
-        />
+        {sentenceCardData && <ShortSentenceCard sentences={sentenceCardData} isOpen={isSentenceFavoritesCardOpen} onClose={handleCloseFavorites} progressKey="favorites-sentences" />}
+        {wordCardData && <WordCard words={wordCardData} isOpen={isWordFavoritesCardOpen} onClose={handleCloseFavorites} progressKey="favorites-words" />}
+        <ContactPanel isOpen={isContactPanelOpen} onClose={() => setIsContactPanelOpen(false)} />
     </div>
   );
 };
 
+// =================================================================================
+// ====================== 其他页面布局 (保持 HEO 主题原有功能) ========================
+// =================================================================================
 
-// =========================================================================
-// =============  其他所有组件，保持原样，一字不漏  ===================
-// =========================================================================
+const LayoutBase = props => {
+  const { children, slotTop, className } = props
+  const { fullWidth, isDarkMode } = useGlobal()
+  const router = useRouter()
+  
+  // 首页布局由 LayoutIndex 接管，不使用 LayoutBase
+  if (router.route === '/') {
+    return <LayoutIndex {...props} />
+  }
 
-const LayoutPostList = props => {
+  const headerSlot = (
+    <header>
+      <Header {...props} />
+      {router.route === '/' ? <Hero {...props} /> : null}
+      {fullWidth ? null : <PostHeader {...props} isDarkMode={isDarkMode} />}
+    </header>
+  )
+
+  const slotRight = router.route === '/404' || fullWidth ? null : <SideRight {...props} />
+  const maxWidth = fullWidth ? 'max-w-[96rem] mx-auto' : 'max-w-[86rem]'
+  const HEO_LOADING_COVER = siteConfig('HEO_LOADING_COVER', true, CONFIG)
+
+  useEffect(() => { loadWowJS() }, [])
+
   return (
-    <div id='post-outer-wrapper' className='px-5  md:px-0'>
-      <CategoryBar {...props} />
-      {siteConfig('POST_LIST_STYLE') === 'page' ? (
-        <BlogPostListPage {...props} />
-      ) : (
-        <BlogPostListScroll {...props} />
-      )}
+    <div id='theme-heo' className={`${siteConfig('FONT_STYLE')} bg-[#f7f9fe] dark:bg-[#18171d] h-full min-h-screen flex flex-col scroll-smooth`}>
+      <Style />
+      {headerSlot}
+      <main id='wrapper-outer' className={`flex-grow w-full ${maxWidth} mx-auto relative md:px-5`}>
+        <div id='container-inner' className='w-full mx-auto lg:flex justify-center relative z-10'>
+          <div className={`w-full h-auto ${className || ''}`}>{slotTop}{children}</div>
+          <div className='lg:px-2'></div>
+          <div className='hidden xl:block'>{slotRight}</div>
+        </div>
+      </main>
+      <Footer />
+      {HEO_LOADING_COVER && <LoadingCover />}
     </div>
   )
 }
+
+const LayoutPostList = props => (
+    <div id='post-outer-wrapper' className='px-5  md:px-0'>
+      <CategoryBar {...props} />
+      {siteConfig('POST_LIST_STYLE') === 'page' ? <BlogPostListPage {...props} /> : <BlogPostListScroll {...props} />}
+    </div>
+)
 
 const LayoutSearch = props => {
   const { keyword } = props
@@ -624,18 +808,15 @@ const LayoutSearch = props => {
       }, 100)
     }
   }, [currentSearch])
+
   return (
-    <div currentSearch={currentSearch}>
+    <div>
       <div id='post-outer-wrapper' className='px-5 md:px-0'>
         {!currentSearch ? (
           <SearchNav {...props} />
         ) : (
           <div id='posts-wrapper'>
-            {siteConfig('POST_LIST_STYLE') === 'page' ? (
-              <BlogPostListPage {...props} />
-            ) : (
-              <BlogPostListScroll {...props} />
-            )}
+            {siteConfig('POST_LIST_STYLE') === 'page' ? <BlogPostListPage {...props} /> : <BlogPostListScroll {...props} />}
           </div>
         )}
       </div>
@@ -645,7 +826,6 @@ const LayoutSearch = props => {
 
 const LayoutArchive = props => {
   const { archivePosts } = props
-  const { locale } = useGlobal()
   return (
     <div className='p-5 rounded-xl border dark:border-gray-600 max-w-6xl w-full bg-white dark:bg-[#1e1e1e]'>
       <CategoryBar {...props} border={false} />
@@ -665,25 +845,13 @@ const LayoutArchive = props => {
 const LayoutSlug = props => {
   const { post, lock, validPassword } = props
   const { locale, fullWidth } = useGlobal()
-  const [hasCode, setHasCode] = useState(false)
-
-  useEffect(() => {
-    const hasCode = document.querySelectorAll('[class^="language-"]').length > 0
-    setHasCode(hasCode)
-  }, [])
-
-  const commentEnable =
-    siteConfig('COMMENT_TWIKOO_ENV_ID') || siteConfig('COMMENT_WALINE_SERVER_URL') ||
-    siteConfig('COMMENT_VALINE_APP_ID') || siteConfig('COMMENT_GISCUS_REPO') ||
-    siteConfig('COMMENT_CUSDIS_APP_ID') || siteConfig('COMMENT_UTTERRANCES_REPO') ||
-    siteConfig('COMMENT_GITALK_CLIENT_ID') || siteConfig('COMMENT_WEBMENTION_ENABLE')
-
   const router = useRouter()
+  
   useEffect(() => {
     if (!post) {
       setTimeout(() => {
         if (isBrowser) {
-          const article = document.querySelector('#article-wrapper #notion-article')
+          const article = document.getElementById('notion-article')
           if (!article) {
             router.push('/404').then(() => console.warn('找不到页面', router.asPath))
           }
@@ -692,30 +860,31 @@ const LayoutSlug = props => {
     }
   }, [post, router])
 
+  const commentEnable = siteConfig('COMMENT_TWIKOO_ENV_ID') || siteConfig('COMMENT_WALINE_SERVER_URL') || siteConfig('COMMENT_VALINE_APP_ID') || siteConfig('COMMENT_GISCUS_REPO') || siteConfig('COMMENT_CUSDIS_APP_ID') || siteConfig('COMMENT_UTTERRANCES_REPO') || siteConfig('COMMENT_GITALK_CLIENT_ID') || siteConfig('COMMENT_WEBMENTION_ENABLE')
+
   return (
     <>
-      <div
-        className={`article h-full w-full ${fullWidth ? '' : 'xl:max-w-5xl'} ${hasCode ? 'xl:w-[73.15vw]' : ''}  bg-white dark:bg-[#18171d] dark:border-gray-600 lg:hover:shadow lg:border rounded-2xl lg:px-2 lg:py-4 `}>
+      <div className={`w-full ${fullWidth ? '' : 'xl:max-w-5xl lg:hover:shadow lg:border'} lg:px-2 lg:py-4 bg-white dark:bg-[#18171d] dark:border-gray-600 rounded-2xl`}>
         {lock && <PostLock validPassword={validPassword} />}
         {!lock && post && (
-          <div className='mx-auto md:w-full md:px-5'>
-            <article id='article-wrapper' itemScope itemType='https://schema.org/Movie'>
-              <section className='wow fadeInUp p-5 justify-center mx-auto' data-wow-delay='.2s'>
-                <ArticleExpirationNotice post={post} />
-                <AISummary aiSummary={post.aiSummary} />
-                <WWAds orientation='horizontal' className='w-full' />
-                {post && <NotionPage post={post} />}
-                <WWAds orientation='horizontal' className='w-full' />
-              </section>
+          <div id="article-wrapper" className='px-5'>
+            <article itemScope itemType='https://schema.org/Article'>
+              <ArticleExpirationNotice post={post} />
+              <AISummary aiSummary={post.aiSummary} />
+              <WWAds orientation='horizontal' className='w-full' />
+              {post && <NotionPage post={post} />}
+              <WWAds orientation='horizontal' className='w-full' />
+              <ShareBar post={post} />
+              <PostCopyright {...props} />
+              <PostRecommend {...props} />
+              <PostAdjacent {...props} />
             </article>
-            {fullWidth ? null : (
-              <div className={`${commentEnable && post ? '' : 'hidden'}`}>
+            {commentEnable && (
+              <div className='px-5'>
                 <hr className='my-4 border-dashed' />
                 <div className='py-2'><AdSlot /></div>
-                <div className='duration-200 overflow-x-auto px-5'>
-                  <div className='text-2xl dark:text-white'><i className='fas fa-comment mr-1' />{locale.COMMON.COMMENTS}</div>
-                  <Comment frontMatter={post} className='' />
-                </div>
+                <div className='text-2xl dark:text-white'><i className='fas fa-comment mr-1' />{locale.COMMON.COMMENTS}</div>
+                <Comment frontMatter={post} />
               </div>
             )}
           </div>
@@ -726,20 +895,14 @@ const LayoutSlug = props => {
   )
 }
 
-const Layout404 = () => {
-  const { onLoading, fullWidth } = useGlobal()
+const Layout404 = (props) => {
+  const { onLoading } = useGlobal()
   return (
-    <main id='wrapper-outer' className={`flex-grow ${fullWidth ? '' : 'max-w-4xl'} w-screen mx-auto px-5`}>
-      <div id='error-wrapper' className={'w-full mx-auto justify-center'}>
+    <div id='error-wrapper' className='w-full mx-auto justify-center'>
         <Transition
-          show={!onLoading}
-          appear={true}
-          enter='transition ease-in-out duration-700 transform order-first'
-          enterFrom='opacity-0 translate-y-16'
-          enterTo='opacity-100'
-          leave='transition ease-in-out duration-300 transform'
-          leaveFrom='opacity-100 translate-y-0'
-          leaveTo='opacity-0 -translate-y-16'
+          show={!onLoading} appear={true}
+          enter='transition ease-in-out duration-700 transform order-first' enterFrom='opacity-0 translate-y-16' enterTo='opacity-100'
+          leave='transition ease-in-out duration-300 transform' leaveFrom='opacity-100 translate-y-0' leaveTo='opacity-0 -translate-y-16'
           unmount={false}>
           <div className='error-content flex flex-col md:flex-row w-full mt-12 h-[30rem] md:h-96 justify-center items-center bg-white dark:bg-[#1B1C20] border dark:border-gray-800 rounded-3xl'>
             <LazyImage className='error-img h-60 md:h-full p-4' src={'https://bu.dusays.com/2023/03/03/6401a7906aa4a.gif'}></LazyImage>
@@ -749,9 +912,12 @@ const Layout404 = () => {
               <SmartLink href='/'><button className='bg-blue-500 py-2 px-4 text-white shadow rounded-lg hover:bg-blue-600 hover:shadow-md duration-200 transition-all'>回到主页</button></SmartLink>
             </div>
           </div>
+           {/* 404页面底部显示最新文章 */}
+           <div className='mt-12'>
+              <LatestPostsGroup {...props} />
+            </div>
         </Transition>
-      </div>
-    </main>
+    </div>
   )
 }
 
